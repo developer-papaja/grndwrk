@@ -64,13 +64,11 @@
           x-model="$store.gw.capture"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Capture a thought. ? for a question, ! for a decision"
+          placeholder="Type a thought and press Enter. Start with ? for a question or ! for a decision"
           class="min-w-0 flex-1 bg-transparent py-1 text-sm text-fog placeholder:text-fog/35 focus:outline-none"
         />
       </div>
-      <p class="mt-2 text-center text-[11px] text-fog/35">
-        N capture · L link · Delete remove · Esc back
-      </p>
+      <p id="hint" class="mt-2 text-center text-xs text-fog/45" x-text="$store.gw.hint"></p>
     </form>
     </div>
 
@@ -138,6 +136,11 @@
               </select>
             </label>
           </div>
+
+          <p x-show="$store.gw.selected.extra?.topic" class="-mt-1 text-xs text-fog/50">
+            Topic: <span class="text-fog/75" x-text="$store.gw.selected.extra?.topic"></span>
+            <span class="text-fog/35">(set in the file for now)</span>
+          </p>
 
           <div>
             <span class="label">Altitude: 5 is abstract, 1 is concrete</span>

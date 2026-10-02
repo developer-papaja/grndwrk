@@ -1,6 +1,6 @@
 import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
-import { GridHelper, Group, Mesh, MeshLambertMaterial, SphereGeometry } from 'three'
+import { GridHelper, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, SphereGeometry } from 'three'
 import type { GNode } from '../../src/shared/types'
 
 const COLORS = {
@@ -12,6 +12,7 @@ const COLORS = {
   label: 'rgba(223, 227, 234, 0.82)',
   labelSelected: '#ffffff',
   link: 'rgba(160, 170, 185, 0.28)',
+  topic: 'rgba(223, 227, 234, 0.32)',
   linkSelected: 'rgba(240, 236, 200, 0.75)',
 }
 const RADIUS = 4
@@ -22,6 +23,7 @@ interface GraphNode {
   title: string
   links: string[]
   error?: string
+  topic?: string
   x?: number
   y?: number
   z?: number
@@ -43,6 +45,9 @@ export interface SceneView {
 }
 
 const geometry = new SphereGeometry(RADIUS, 20, 14)
+// An invisible, larger sphere around each orb, so small orbs are easy to click.
+const hitGeometry = new SphereGeometry(RADIUS * 2.4, 12, 8)
+const hitMaterial = new MeshBasicMaterial({ colorWrite: false, depthWrite: false })
 
 export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: string) => void; onBackgroundClick: () => void }) {
   let view: SceneView = { nodes: [], selectedId: null, linkMode: false }
@@ -64,6 +69,8 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     .onBackgroundClick(() => handlers.onBackgroundClick())
 
   graph.d3Force('gravity', gravity(0.04))
+  graph.d3Force('topic', topicPull(0.1))
+  graph.onEngineTick(() => placeTopicLabels())
   // Frame the map once it first settles. After that the camera is yours.
   let framed = false
   graph.onEngineStop(() => {
@@ -96,7 +103,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     n.label.material.depthWrite = false
     // Sprites break the library's click picking, and the sphere is the target anyway.
     n.label.raycast = () => {}
-    group.add(n.mesh, n.label)
+    group.add(n.mesh, n.label, new Mesh(hitGeometry, hitMaterial))
     style(n)
     return group
   }
@@ -136,12 +143,15 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       g.title = n.title
       g.links = [...n.links]
       g.error = n.error
+      g.topic = topicOf(n)
       return g
     })
 
     // Only hand the graph new data when nodes or links were added or removed.
     // That keeps the layout calm while titles are typed.
-    const nextStructure = [...ids].sort().join(',') + '#' + [...seen].sort().join(',')
+    // Topics count as structure too, so a new topic sets the layout moving again.
+    const topics = nodes.map((n) => `${n.id}:${n.topic ?? ''}`).sort().join(',')
+    const nextStructure = [...ids].sort().join(',') + '#' + [...seen].sort().join(',') + '#' + topics
     if (nextStructure !== structure) {
       structure = nextStructure
       graph.graphData({ nodes, links })
@@ -167,6 +177,50 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
    * A gentle pull toward the middle. Without it, unlinked thoughts push each
    * other away until they drift out of view.
    */
+  /** Each topic gets its own spot, and its nodes drift there. */
+  function topicPull(strength: number) {
+    let nodes: GraphNode[] = []
+    const force = (alpha: number) => {
+      const anchors = topicAnchors(nodes)
+      // Until altitude sets height (Phase 2), also keep each group at one height.
+      const middles = new Map([...groups(nodes)].map(([t, members]) => [t, centroid(members).y]))
+      for (const n of nodes) {
+        const a = n.topic ? anchors.get(n.topic) : undefined
+        if (!a) continue
+        n.vx = (n.vx ?? 0) + (a.x - (n.x ?? 0)) * strength * alpha
+        n.vz = (n.vz ?? 0) + (a.z - (n.z ?? 0)) * strength * alpha
+        n.vy = (n.vy ?? 0) + ((middles.get(n.topic!) ?? 0) - (n.y ?? 0)) * strength * alpha
+      }
+    }
+    force.initialize = (ns: GraphNode[]) => (nodes = ns)
+    return force
+  }
+
+  // One faint name floating above each topic group.
+  const topicLabels = new Map<string, SpriteText>()
+  function placeTopicLabels() {
+    const live = groups(graph.graphData().nodes)
+    for (const [topic, label] of topicLabels) {
+      if (live.has(topic)) continue
+      graph.scene().remove(label)
+      topicLabels.delete(topic)
+    }
+    for (const [topic, members] of live) {
+      let label = topicLabels.get(topic)
+      if (!label) {
+        label = new SpriteText(topic, 6, COLORS.topic)
+        label.fontFace = 'Inter, system-ui, sans-serif'
+        label.material.depthWrite = false
+        label.raycast = () => {}
+        topicLabels.set(topic, label)
+        graph.scene().add(label)
+      }
+      const c = centroid(members)
+      const top = Math.max(...members.map((n) => n.y ?? 0))
+      label.position.set(c.x, top + 18, c.z)
+    }
+  }
+
   function gravity(strength: number) {
     let nodes: GraphNode[] = []
     const force = (alpha: number) => {
@@ -187,5 +241,39 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     return graph.graph2ScreenCoords(n.x, n.y!, n.z!)
   }
 
-  return { render, screenPosition }
+  return { render, screenPosition, graph }
+}
+
+function topicOf(n: GNode): string | undefined {
+  const t = n.extra?.topic
+  return typeof t === 'string' && t.trim() ? t.trim().toLowerCase() : undefined
+}
+
+function groups(nodes: GraphNode[]): Map<string, GraphNode[]> {
+  const out = new Map<string, GraphNode[]>()
+  for (const n of nodes) {
+    if (!n.topic || n.x === undefined) continue
+    out.set(n.topic, [...(out.get(n.topic) ?? []), n])
+  }
+  return out
+}
+
+/**
+ * Topics sorted by name, side by side from left to right. A row reads clearly
+ * from the front, where a ring would hide topics behind each other.
+ */
+function topicAnchors(nodes: GraphNode[]): Map<string, { x: number; z: number }> {
+  const topics = [...new Set(nodes.map((n) => n.topic).filter((t): t is string => !!t))].sort()
+  const spacing = 170
+  return new Map(topics.map((t, i) => [t, { x: (i - (topics.length - 1) / 2) * spacing, z: 0 }]))
+}
+
+function centroid(nodes: GraphNode[]) {
+  const sum = { x: 0, y: 0, z: 0 }
+  for (const n of nodes) {
+    sum.x += n.x ?? 0
+    sum.y += n.y ?? 0
+    sum.z += n.z ?? 0
+  }
+  return { x: sum.x / nodes.length, y: sum.y / nodes.length, z: sum.z / nodes.length }
 }

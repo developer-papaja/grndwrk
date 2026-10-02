@@ -50,6 +50,15 @@ export const state = Alpine.reactive({
   get selected(): GNode | null {
     return this.selectedId ? (this.nodes[this.selectedId] ?? null) : null
   },
+  /** One plain sentence under the capture bar about what you can do right now. */
+  get hint(): string {
+    const sel = this.selected
+    if (this.mode === 'link') return 'Click orbs to link or unlink them. Press Esc when you are done.'
+    if (sel?.error) return 'This file cannot be read. Fix it in your editor and it updates here.'
+    if (sel) return 'New thoughts link to the open one. Press L, then click orbs to link them. Esc closes.'
+    if (this.count === 0) return 'Your first thought can be anything. Press Enter to add it.'
+    return 'Click an orb to open it. Drag to turn the map, scroll to zoom. Press N to type from anywhere.'
+  },
   get linkedNodes(): GNode[] {
     const sel = this.selected
     if (!sel) return []

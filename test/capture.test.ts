@@ -12,9 +12,9 @@ describe('parseCapture', () => {
   it('trims extra spaces around and after the prefix', () => {
     expect(parseCapture('   ?    Why now  ')).toEqual({ title: 'Why now', type: 'question' })
   })
-  it('only treats the prefix as a prefix when a space follows', () => {
-    expect(parseCapture('?why')).toEqual({ title: '?why' })
-    expect(parseCapture('!important')).toEqual({ title: '!important' })
+  it('reads the prefix without a space too', () => {
+    expect(parseCapture('?why')).toEqual({ title: 'why', type: 'question' })
+    expect(parseCapture('!I think the orbs must look better')).toEqual({ title: 'I think the orbs must look better', type: 'decision' })
   })
   it('returns null when nothing is left', () => {
     expect(parseCapture('')).toBeNull()
