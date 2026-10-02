@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Groundwork</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%225%22 fill=%22%23c9c98a%22/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="bg-ink text-fog antialiased">
+    <div id="scene" class="fixed inset-0"></div>
+
+    <div
+      x-data
+      class="pointer-events-none fixed left-4 top-4 flex items-center gap-3 text-sm"
+    >
+      <span class="font-medium tracking-wide text-fog/90" x-text="$store.gw.project.name || 'Groundwork'"></span>
+      <span
+        class="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-fog/70"
+      >
+        <span
+          class="size-2 rounded-full"
+          :class="$store.gw.live ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'"
+        ></span>
+        <span x-text="$store.gw.live ? 'live' : 'connecting'"></span>
+        <span class="text-fog/40">·</span>
+        <span x-text="$store.gw.count + ($store.gw.count === 1 ? ' node' : ' nodes')"></span>
+      </span>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

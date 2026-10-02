@@ -1,0 +1,17 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #0e1116;
+  --color-fog: #dfe3ea;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+[x-cloak] {
+  display: none !important;
+}

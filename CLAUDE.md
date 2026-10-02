@@ -1,0 +1,148 @@
+# Groundwork (working name)
+
+## What this is
+
+A dev tool you install in a project repo to kick off a new product. You explore the product idea as a 3D mind map in the browser, and the tool tells you whether you have enough to start building, what is missing, and what to add before you start. Everything is stored as plain files inside the project so Claude Code can read and act on it.
+
+This is step one of a larger idea: an exploratory layer in the dev stack, in the spirit of Ray or the Symfony profiler. Later steps will write into the same folder: a progress page that traces every page back to the user stories behind it and argues when the page and its stories disagree, annotating the running product, interviewing colleagues about their feedback, and a "where should I focus" view. Keep the data model general enough for that, but do not build those parts now. The one exception is stories: the kickoff already produces them, so the chain from idea to story to code exists from day one.
+
+## Principles
+
+- **Lives in the project.** No accounts, no cloud, no database. The `.groundwork/` folder is the source of truth.
+- **Human readable and diffable.** One node per markdown file. A person should be able to read the folder without the UI.
+- **Capture is fast and loose.** Only a title is required. Never block capture with validation or forms.
+- **Space means something.** 3D is not decoration. Position carries meaning (see Spatial model).
+- **Claude thinks, the UI captures.** Evaluation and writing happen through Claude Code commands that read and write files. The UI captures, displays and reacts to file changes. No API key in v1.
+
+## How it runs
+
+From the root of any project:
+
+```
+npx groundwork init   # creates .groundwork/ and copies Claude Code commands
+npx groundwork        # starts local server and opens the browser
+```
+
+The local server serves the UI, exposes a small REST API for nodes, and watches `.groundwork/`. Changes made on disk (by Claude Code or by hand) are pushed to the browser live via server-sent events. Default port 7777.
+
+During development of the tool itself, use `npm link` to run it inside a real project.
+
+## Stack
+
+- Node + TypeScript
+- Vite for the UI
+- `3d-force-graph` (built on three.js) for the scene, with `three-spritetext` for labels. Drop down to raw three.js only if the library blocks something we need.
+- UI panels: Alpine.js + Tailwind (preferred), no heavy framework
+- `gray-matter` for frontmatter, `chokidar` for file watching
+
+## Data model
+
+```
+.groundwork/
+  project.md            # name, one-line purpose, project type
+  nodes/
+    <id>.md             # one node per file
+  stories/
+    <id>.md             # one user story per file, first written by /brief
+  readiness/
+    checklist.md        # what "ready" means for this project, editable
+    report.md           # written by /readiness, shown in the UI
+    gaps.json           # ghost nodes for the UI, written by /readiness
+  outputs/
+    brief.md            # written by /brief
+    CLAUDE.starter.md   # starting context for building the actual product
+```
+
+A node file:
+
+```md
+---
+id: n_8f2k
+type: idea
+title: Booking should feel like texting
+altitude: 4
+links: [n_2a9d, n_7c11]
+status: open
+created: 2026-10-02
+---
+Free text. Thoughts, references, half-formed questions.
+```
+
+- **type:** idea, audience, flow, feature, content, design, constraint, question, decision, reference
+- **altitude:** 1 to 5. 5 is abstract (vision, feeling, principle), 1 is concrete (a field, a button, a specific screen).
+- **status:** open, settled, parked
+- **links:** undirected in v1. Store on both nodes.
+- **id:** short, random, stable. Never derived from the title.
+
+`gaps.json` shape:
+
+```json
+[
+  {
+    "id": "gap_typography",
+    "area": "design",
+    "title": "No typography decided",
+    "why": "Prompts will invent a type scale per screen",
+    "near": ["n_3k1a"],
+    "severity": "blocking"
+  }
+]
+```
+
+A story file:
+
+```md
+---
+id: s_k3f9
+title: Book a desk in three steps
+status: not-started
+from: [n_2a9d, n_7c11]
+applies_to: []
+created: 2026-10-02
+---
+As someone arriving at the office, I want to book a desk in three steps,
+so that booking never feels like a chore.
+
+## Acceptance
+- Booking takes at most three steps from the start page
+- The booked desk is visible without opening a menu
+```
+
+- **status:** not-started, partial, done
+- **from:** the map nodes the story came from. Every story must have at least one. This is the link back to the reasoning.
+- **applies_to:** routes or component paths in the product. Empty at kickoff, filled in as the product is built.
+- **id:** same pattern as nodes. Stories are cited by id in commits and code comments, so ids must never change.
+
+Decisions stay as nodes with `type: decision`. Stories reference them through `from`.
+
+## Spatial model
+
+- **Y axis is altitude.** Abstract nodes float high, concrete nodes sit low. Changing a node's altitude visibly moves it.
+- **Horizontal position comes from the force layout.** Linked nodes pull together into clusters.
+- **Color shows type.** Keep the palette calm and readable on a dark background.
+- **Status shows as weight.** Settled is solid, open is normal, parked is dimmed.
+- **Readiness gaps are ghost nodes.** Translucent, outlined, placed near the cluster they relate to, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
+
+## Interaction
+
+- Orbit, zoom, pan with the mouse.
+- Click a node: the camera flies to it and a side panel opens. All text editing happens in the 2D panel, never inside the 3D scene.
+- A quick capture bar is always available. Type and press Enter to create a node. Prefixes are optional: `? ` makes a question, `! ` makes a decision.
+- Keys: `N` new node (linked to the selection if any), `L` link mode, `[` and `]` move altitude, `/` search, `Delete` remove, `Esc` deselect.
+
+## Claude Code commands
+
+Shipped with the package in `commands/` and copied into the host project's `.claude/commands/` on init.
+
+- **/readiness** reads `project.md`, all nodes and `checklist.md`. Judges each checklist area as missing, thin or enough, relative to the project type. Writes `report.md` and `gaps.json`. Ends with a clear verdict: ready to build, ready to prototype, or not ready, plus the smallest set of things to add.
+- **/challenge** looks at the thinnest areas and writes a few sharp question nodes into the map. This is the seed of the later interview feature.
+- **/brief** writes `outputs/brief.md`, `outputs/CLAUDE.starter.md` and the first set of stories in `stories/`, one file each, every story linked to the nodes it came from. If readiness has blocking gaps, it says so at the top instead of hiding them.
+- **/review** (later phase, do not build yet) reads a page's code and its stories and writes arguments: drift, orphans, conflicts, and requests that contradict earlier decisions. See PLAN.md Phase 6.
+
+## Conventions
+
+- Never write outside `.groundwork/` in the host project, except `.claude/commands/` during init.
+- The UI must handle files being created, changed or deleted externally at any time.
+- Keep it small. Prefer removing a feature over making capture slower.
+- `CLAUDE.starter.md` must tell the product's Claude Code to cite story ids in commit messages, add the id in a short code comment where a story shapes behavior, update `applies_to` and `status` when it builds against a story, and ask before building something no story covers.
+- Generated text (reports, briefs, questions) is plain and direct. Do not use the dash characters "–" or "—"; rewrite the sentence instead.
