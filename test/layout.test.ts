@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { altitudeY, ALTITUDE_STEP, COLUMN_SPACING, CROSS_TOPIC_PULL, linkStrength, topicColumns, wrapLabel } from '../ui/src/layout.js'
+import { ageFractions, ageOpacity, altitudeY, ALTITUDE_STEP, COLUMN_SPACING, CROSS_TOPIC_PULL, DEPTH_RANGE, depthZ, linkStrength, topicColumns, wrapLabel } from '../ui/src/layout.js'
 import { flatten, groupForList } from '../ui/src/list.js'
 import type { GNode } from '../src/shared/types.js'
 
@@ -62,5 +62,22 @@ describe('wrapLabel', () => {
     const long = wrapLabel('I think that most things that are clicked open like a panel or something')
     expect(long.split('\n')).toHaveLength(2)
     expect(long.endsWith('…')).toBe(true)
+  })
+})
+
+describe('age and depth', () => {
+  it('ranks by last change, newest first, and counts unsaved nodes as newest', () => {
+    const ages = ageFractions([
+      { id: 'old', modified: '2026-10-01T10:00:00Z' },
+      { id: 'mid', modified: '2026-10-02T10:00:00Z' },
+      { id: 'new' },
+    ])
+    expect([ages.get('new'), ages.get('mid'), ages.get('old')]).toEqual([0, 0.5, 1])
+  })
+  it('puts the newest in front and dims the oldest a little', () => {
+    expect(depthZ(0)).toBe(DEPTH_RANGE)
+    expect(depthZ(1)).toBe(-DEPTH_RANGE)
+    expect(ageOpacity(0)).toBe(1)
+    expect(ageOpacity(1)).toBeCloseTo(0.6)
   })
 })

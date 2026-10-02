@@ -64,11 +64,11 @@ export const state = Alpine.reactive({
   /** One plain sentence under the capture bar about what you can do right now. */
   get hint(): string {
     const sel = this.selected
-    if (this.mode === 'link') return 'Click orbs to link or unlink them. Press Esc when you are done.'
+    if (this.mode === 'link') return 'Click cards to link or unlink them. Press Esc when you are done.'
     if (sel?.error) return 'This file cannot be read. Fix it in your editor and it updates here.'
     if (sel) return 'New thoughts link to the open one and join its topic. [ and ] change altitude. L links. Esc closes.'
     if (this.count === 0) return 'Your first thought can be anything. Press Enter to add it.'
-    return 'Click an orb to open it. Press / for the list, F to fit the map, N to type from anywhere.'
+    return 'Click a card to open it. Dots are cards without room: hover to read them. / searches, F fits the map.'
   },
   /** Existing topic names, for suggestions in the panel. */
   get topicNames(): string[] {

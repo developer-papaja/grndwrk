@@ -68,6 +68,13 @@ describe('NodeStore', () => {
     expect(await file('n_bad1')).toBe('---\ntitle: a: b\n---\nkeep me\n')
   })
 
+  it('reports when each file last changed', async () => {
+    const a = (await store.create({ title: 'A' })).upserted[0]
+    const listed = await store.get(a.id)
+    expect(Date.now() - Date.parse(listed.modified!)).toBeLessThan(5000)
+    expect(await file(a.id)).not.toContain('modified')
+  })
+
   it('sets and clears a topic', async () => {
     const a = (await store.create({ title: 'A', topic: ' navigation ' })).upserted[0]
     expect(a.topic).toBe('navigation')

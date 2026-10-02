@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { NODE_TYPES, STATUSES, type GNode, type NodeInput } from '../shared/types.js'
 import { DEFAULTS, isValidId, oneOf, parseNode, serializeNode, toAltitude, today } from './frontmatter.js'
@@ -43,7 +43,10 @@ export class NodeStore {
       const id = file.slice(0, -3)
       if (!isValidId(id)) continue
       try {
-        nodes.push(parseNode(id, await readFile(join(this.dir, file), 'utf8')))
+        const path = join(this.dir, file)
+        const node = parseNode(id, await readFile(path, 'utf8'))
+        node.modified = (await stat(path)).mtime.toISOString()
+        nodes.push(node)
       } catch {
         // Deleted between readdir and readFile.
       }

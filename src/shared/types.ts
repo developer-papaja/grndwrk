@@ -30,6 +30,8 @@ export interface GNode {
   extra: Record<string, unknown>
   /** Set when the file could not be parsed. Such nodes are read only. */
   error?: string
+  /** When the file last changed on disk (ISO). Read from the file system, never written. */
+  modified?: string
 }
 
 /** Fields a client may send when creating or updating a node. */

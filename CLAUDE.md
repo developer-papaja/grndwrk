@@ -121,9 +121,11 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 
 - **Y axis is altitude.** Abstract nodes float high, concrete nodes sit low, each altitude on its own faint guide line. Changing a node's altitude visibly moves it.
 - **X axis is topic.** Each topic gets a column, left to right by name, with nodes without a topic in a "no topic" column at the right. Topics are the main grouping.
-- **Depth and spread within a column come from the force layout.** Links inside a topic pull nodes together. Links across topics are allowed but drawn faint and pull weakly, so they never merge two groups.
-- **Color shows type.** Keep the palette calm and readable on a dark background.
-- **Status shows as weight.** Settled is solid, open is normal, parked is dimmed.
+- **Z axis is time.** The most recently changed nodes (by the file's modified time) sit in front, untouched ones sink back and are a little dimmer.
+- **Spread within a row comes from the force layout.** Links inside a topic pull nodes together. Links across topics are allowed but drawn faint and pull weakly, so they never merge two groups.
+- **Nodes are word cards.** The title on a small dark card, the same size on screen at any zoom. A card with no room shows as a dot until hovered or zoomed in.
+- **Color shows type,** as a thin edge on the card. Keep the palette calm and readable on a dark background.
+- **Status shows as weight.** Settled has an outline in its type color, open is normal, parked is dimmed.
 - **Readiness gaps are ghost nodes.** Translucent, outlined, placed near the cluster they relate to, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
 
 ## Interaction

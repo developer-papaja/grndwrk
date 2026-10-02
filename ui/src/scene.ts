@@ -1,27 +1,27 @@
 import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
-import {
-  BufferGeometry,
-  Group,
-  Line,
-  LineBasicMaterial,
-  Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
-  PerspectiveCamera,
-  SphereGeometry,
-  Sprite,
-  Vector3,
-} from 'three'
+import { BufferGeometry, Group, Line, LineBasicMaterial, PerspectiveCamera, Sprite, SpriteMaterial, Vector3 } from 'three'
 import type { GNode, NodeType, Status } from '../../src/shared/types'
-import { ALTITUDE_WORDS, altitudeY, linkStrength, topicColumns, topicKey, wrapLabel, type Column } from './layout'
+import { dotTexture, drawCard, type CardState } from './cards'
+import {
+  ageFractions,
+  ageOpacity,
+  ALTITUDE_WORDS,
+  altitudeY,
+  depthZ,
+  linkStrength,
+  topicColumns,
+  topicKey,
+  type Column,
+} from './layout'
 import { SCENE_COLORS, TYPE_COLORS } from './palette'
 
-const RADIUS = 4
 /** How close the camera comes when it flies to a node. */
 const FLY_DISTANCE = 280
-/** Sideways room for one label, between nodes on the same line of a column. */
+/** Sideways room between nodes on the same line of a column. */
 const ROW_GAP = 80
+/** A card with no room shows as a dot this many pixels wide. */
+const DOT_PX = 10
 
 interface GraphNode {
   id: string
@@ -32,17 +32,21 @@ interface GraphNode {
   links: string[]
   topic: string
   error?: string
+  /** 0 for the most recently changed node, 1 for the oldest. */
+  age: number
   x?: number
   y?: number
   z?: number
   vx?: number
   vy?: number
   vz?: number
-  /** Height is pinned to altitude. fy eases toward it so a change is visible. */
+  /** Height is pinned to altitude and depth to age. Both ease, so changes are visible. */
   fy?: number
-  mesh?: Mesh<SphereGeometry, MeshStandardMaterial>
-  halo?: Mesh<SphereGeometry, MeshBasicMaterial>
-  label?: SpriteText
+  fz?: number
+  card?: Sprite
+  dot?: Sprite
+  cardKey?: string
+  cardSize?: { w: number; h: number }
 }
 interface GraphLink {
   source: string | GraphNode
@@ -55,10 +59,12 @@ export interface SceneView {
   linkMode: boolean
 }
 
+/** Where a node can be clicked on screen right now: its card, or its dot. */
+type Hit = { id: string; x1: number; x2: number; y1: number; y2: number }
+
 /**
- * Text that keeps the same size on screen at any zoom, so labels stay readable
- * in the overview. Height is a fraction of the view, roughly: 0.011 is about 13px
- * on a 900px tall window.
+ * Text that keeps the same size on screen at any zoom. Height is a fraction of
+ * the view: 0.011 is about 13px on a 900px tall window.
  */
 function makeText(text: string, height: number, color: string): SpriteText {
   const t = new SpriteText(text, height, color)
@@ -67,17 +73,17 @@ function makeText(text: string, height: number, color: string): SpriteText {
   t.material.sizeAttenuation = false
   t.material.depthWrite = false
   t.material.transparent = true
-  // Sprites break the library's click picking, and they are never the target.
   t.raycast = () => {}
   return t
 }
 
-const geometry = new SphereGeometry(RADIUS, 24, 16)
-// A faint shell around settled nodes, so settled reads as solid and done.
-const haloGeometry = new SphereGeometry(RADIUS * 1.55, 20, 14)
-// An invisible, larger sphere around each orb, so small orbs are easy to click.
-const hitGeometry = new SphereGeometry(RADIUS * 1.7, 12, 8)
-const hitMaterial = new MeshBasicMaterial({ colorWrite: false, depthWrite: false })
+/** A sprite that keeps its pixel size and always draws on top of links. */
+function screenSprite(order: number): Sprite {
+  const sprite = new Sprite(new SpriteMaterial({ sizeAttenuation: false, depthTest: false, depthWrite: false, transparent: true }))
+  sprite.renderOrder = order
+  sprite.raycast = () => {}
+  return sprite
+}
 
 export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: string) => void; onBackgroundClick: () => void }) {
   let view: SceneView = { nodes: [], selectedId: null, linkMode: false }
@@ -86,27 +92,21 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   let columns = new Map<string, Column>()
   let hoveredId: string | null = null
   let lastSelected: string | null = null
+  let hits: Hit[] = []
 
   // The constructor type does not carry node and link types, so give them here.
   const graph = (new ForceGraph3D(el, { controlType: 'orbit' }) as unknown as ForceGraph3DInstance<GraphNode, GraphLink>)
     .backgroundColor(SCENE_COLORS.background)
     .showNavInfo(false)
-    // Position comes from altitude and topic, not from dragging. Node drag
-    // also crashes the orbit controls in this three.js version when a drag ends.
+    // Clicks and hover are decided here, from where cards are on screen.
+    .enablePointerInteraction(false)
     .enableNodeDrag(false)
-    .nodeLabel(() => '')
     .nodeThreeObject((n) => buildObject(n))
     .linkWidth((l) => (touchesSelected(l) ? 1.1 : 0.6))
     .linkOpacity(1)
     .linkColor((l) => linkColor(l))
-    .onNodeHover((n) => {
-      hoveredId = n?.id ?? null
-      el.style.cursor = view.linkMode ? 'crosshair' : n ? 'pointer' : ''
-    })
 
-  // The library drops a click when the pointer moves even one pixel while
-  // pressed, which happens on most real clicks. Decide clicks here instead:
-  // under 5 pixels of movement is a click on whatever is under the pointer.
+  // Under 5 pixels of movement while pressed is a click. More is turning the map.
   let down: { x: number; y: number } | null = null
   el.addEventListener('pointerdown', (e) => {
     if (e.button === 0) down = { x: e.clientX, y: e.clientY }
@@ -116,22 +116,29 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y)
     down = null
     if (moved > 5) return
-    const id = orbAt(e.clientX, e.clientY) ?? hoveredId
+    const id = pick(e.clientX, e.clientY)
     if (id) handlers.onNodeClick(id)
     else handlers.onBackgroundClick()
   })
+  el.addEventListener('pointermove', (e) => {
+    if (down) return
+    hoveredId = pick(e.clientX, e.clientY)
+    el.style.cursor = view.linkMode ? 'crosshair' : hoveredId ? 'pointer' : ''
+  })
+  el.addEventListener('pointerleave', () => (hoveredId = null))
 
-  /** The orb closest to a screen point, if one is within reach. Orbs win over labels. */
-  function orbAt(clientX: number, clientY: number): string | null {
+  /** The card under a screen point, or the nearest dot within reach. */
+  function pick(clientX: number, clientY: number): string | null {
     const rect = el.getBoundingClientRect()
+    const x = clientX - rect.left
+    const y = clientY - rect.top
     let best: string | null = null
-    let bestDist = 16
-    for (const n of graph.graphData().nodes) {
-      if (n.x === undefined) continue
-      const p = graph.graph2ScreenCoords(n.x, n.y!, n.z!)
-      const d = Math.hypot(p.x - (clientX - rect.left), p.y - (clientY - rect.top))
+    let bestDist = Infinity
+    for (const h of hits) {
+      if (x < h.x1 - 4 || x > h.x2 + 4 || y < h.y1 - 4 || y > h.y2 + 4) continue
+      const d = Math.hypot(x - (h.x1 + h.x2) / 2, y - (h.y1 + h.y2) / 2)
       if (d < bestDist) {
-        best = n.id
+        best = h.id
         bestDist = d
       }
     }
@@ -146,8 +153,8 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   controls.minPolarAngle = Math.PI * 0.18
   controls.maxPolarAngle = Math.PI * 0.62
 
-  // Frame the map once, shortly after the first nodes arrive. Height and
-  // columns are fixed, so the shape is clear long before the layout settles.
+  // Frame the map once, shortly after the first nodes arrive. Height, columns
+  // and depth are fixed, so the shape is clear long before the layout settles.
   // After that the camera is yours.
   let framed = false
   function frameOnce() {
@@ -190,97 +197,97 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
 
   function buildObject(n: GraphNode) {
     const group = new Group()
-    n.mesh = new Mesh(
-      geometry,
-      new MeshStandardMaterial({ roughness: 0.5, metalness: 0.05, transparent: true, emissiveIntensity: 0.22 }),
-    )
-    n.halo = new Mesh(haloGeometry, new MeshBasicMaterial({ transparent: true, opacity: 0.12, depthWrite: false }))
-    n.halo.raycast = () => {}
-    n.label = makeText('', 0.011, SCENE_COLORS.label)
-    // People click the words, so a visible label counts as part of its node.
-    const label = n.label
-    label.raycast = (raycaster, hits) => {
-      if (label.material.opacity > 0.2) Sprite.prototype.raycast.call(label, raycaster, hits)
-    }
-    // Hang the text below its anchor point, which sits just under the orb.
-    n.label.center.set(0.5, 1.15)
-    group.add(n.mesh, n.halo, n.label, new Mesh(hitGeometry, hitMaterial))
+    // The library draws links at render order 10, so cards and dots go above that.
+    n.card = screenSprite(21)
+    n.dot = screenSprite(20)
+    n.dot.visible = false
+    group.add(n.card, n.dot)
+    n.cardKey = undefined
     style(n)
     return group
   }
 
-  /** Update one node's look in place. No layout work happens here. */
+  /** Redraw a node's card when something it shows has changed. */
   function style(n: GraphNode) {
-    if (!n.mesh || !n.label || !n.halo) return
-    const selected = n.id === view.selectedId
-    const linked = !!view.selectedId && n.links.includes(view.selectedId)
+    if (!n.card || !n.dot) return
+    const state: CardState =
+      n.id === view.selectedId ? 'selected' : view.selectedId && n.links.includes(view.selectedId) ? 'linked' : 'normal'
     const color = n.error ? SCENE_COLORS.error : TYPE_COLORS[n.type]
-    const parked = n.status === 'parked'
-    const scale = (selected ? 1.4 : 1) * (parked ? 0.8 : 1)
-
-    n.mesh.material.color.set(color)
-    n.mesh.material.emissive.set(color)
-    n.mesh.material.emissiveIntensity = selected ? 0.55 : linked ? 0.35 : 0.2
-    n.mesh.material.opacity = parked ? 0.35 : 1
-    n.mesh.scale.setScalar(scale)
-    n.halo.visible = n.status === 'settled'
-    n.halo.material.color.set(color)
-    n.halo.scale.setScalar(scale)
-
-    const title = n.error ? `${n.id}.md (cannot read)` : n.title
-    n.label.text = wrapLabel(title)
-    n.label.position.y = -(RADIUS * scale + 1)
+    const title = n.error ? `${n.id}.md cannot be read` : n.title
+    const key = [title, color, state, n.status].join('|')
+    if (key === n.cardKey) return
+    n.cardKey = key
+    const card = drawCard({ title, color, state, settled: n.status === 'settled', error: !!n.error })
+    const material = n.card.material
+    material.map?.dispose()
+    material.map = card.texture
+    material.needsUpdate = true
+    n.cardSize = { w: card.width, h: card.height }
+    n.dot.material.map = dotTexture(color)
+    n.dot.material.needsUpdate = true
   }
 
-  /** Every frame: ease heights toward altitude, and fade far labels. */
+  /** Every frame: ease height and depth toward their targets, and place cards. */
   function frame() {
     for (const n of graph.graphData().nodes) {
-      const target = altitudeY(n.altitude)
-      if (n.fy === undefined) n.fy = target
-      else if (Math.abs(n.fy - target) > 0.1) n.fy += (target - n.fy) * 0.12
-      else n.fy = target
+      n.fy = ease(n.fy, altitudeY(n.altitude))
+      n.fz = ease(n.fz, depthZ(n.age))
     }
-    fadeLabels()
+    placeCards()
     requestAnimationFrame(frame)
   }
   requestAnimationFrame(frame)
 
+  function ease(current: number | undefined, target: number): number {
+    if (current === undefined || Math.abs(current - target) < 0.1) return target
+    return current + (target - current) * 0.12
+  }
+
   /**
-   * Labels keep their size on screen, so they never fade with distance.
-   * A label that would cover one already shown is hidden. The selected node, its links and the hovered node go
-   * first, then higher altitudes. Hover or zoom in to see a hidden one.
+   * Cards keep their size on screen. A card that would cover one already shown
+   * becomes a dot until there is room: the selected node, its links and the
+   * hovered node go first, then the most recent, then higher altitudes.
    */
-  function fadeLabels() {
+  function placeCards() {
     const camera = graph.camera() as PerspectiveCamera
-    const width = el.clientWidth
     const pxPerUnit = el.clientHeight / (2 * Math.tan((camera.fov * Math.PI) / 360))
-    const nodes = graph.graphData().nodes.filter((n) => n.label && n.x !== undefined)
     const isFocus = (n: GraphNode) =>
       n.id === view.selectedId || n.id === hoveredId || (!!view.selectedId && n.links.includes(view.selectedId))
-    nodes.sort((a, b) => Number(isFocus(b)) - Number(isFocus(a)) || b.altitude - a.altitude)
-    const placed: { x1: number; x2: number; y1: number; y2: number }[] = []
-    for (const n of nodes) {
-      const focus = isFocus(n)
-      let opacity = focus ? 1 : n.status === 'parked' ? 0.5 : 0.9
+    const nodes = graph
+      .graphData()
+      .nodes.filter((n) => n.card && n.cardSize && n.x !== undefined)
+      .sort((a, b) => Number(isFocus(b)) - Number(isFocus(a)) || a.age - b.age || b.altitude - a.altitude)
 
-      // The label's box on screen. It hangs under the orb, and a fixed-size
-      // sprite covers scale / (2 tan(fov / 2)) of the view's height.
+    const shown: Hit[] = []
+    const dots: Hit[] = []
+    for (const n of nodes) {
       const p = graph.graph2ScreenCoords(n.x!, n.y!, n.z!)
-      const h = (n.label!.scale.y * pxPerUnit) * 0.9
-      const w = (n.label!.scale.x * pxPerUnit) * 0.9
-      const box = { x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y + 4, y2: p.y + 4 + h }
-      const offscreen = box.x2 < 0 || box.x1 > width
-      const covered = placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
-      if (covered && !focus) opacity = 0
-      else if (!offscreen && opacity > 0.05) placed.push(box)
-      n.label!.material.opacity = opacity
+      const { w, h } = n.cardSize!
+      const box = { id: n.id, x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - h / 2, y2: p.y + h / 2 }
+      const covered = shown.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
+      const asCard = isFocus(n) || !covered
+      const opacity = isFocus(n) ? 1 : ageOpacity(n.age) * (n.status === 'parked' ? 0.45 : 1)
+
+      n.card!.visible = asCard
+      n.dot!.visible = !asCard
+      if (asCard) {
+        n.card!.scale.set(w / pxPerUnit, h / pxPerUnit, 1)
+        n.card!.material.opacity = opacity
+        shown.push(box)
+      } else {
+        n.dot!.scale.set(DOT_PX / pxPerUnit, DOT_PX / pxPerUnit, 1)
+        n.dot!.material.opacity = opacity
+        dots.push({ id: n.id, x1: p.x - 8, x2: p.x + 8, y1: p.y - 8, y2: p.y + 8 })
+      }
     }
+    hits = [...shown, ...dots]
   }
 
   function render(next: SceneView) {
     view = next
     const existing = new Map(graph.graphData().nodes.map((n) => [n.id, n]))
     const ids = new Set(next.nodes.map((n) => n.id))
+    const ages = ageFractions(next.nodes)
     columns = topicColumns(next.nodes)
 
     const links: GraphLink[] = []
@@ -303,14 +310,16 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       g.links = [...n.links]
       g.topic = topicKey(n.topic)
       g.error = n.error
+      g.age = ages.get(n.id) ?? 0
       return g
     })
 
     // Only hand the graph new data when nodes or links were added or removed.
     // That keeps the layout calm while titles are typed.
     const nextStructure = [...ids].sort().join(',') + '#' + [...seen].sort().join(',')
-    // Altitude and topic move nodes, so a change there wakes the layout up.
-    const nextLayout = nodes.map((n) => `${n.id}:${n.topic}:${n.altitude}`).sort().join(',')
+    // A topic change moves a node sideways, so it wakes the layout up. Height
+    // and depth are eased every frame and need no layout work.
+    const nextLayout = nodes.map((n) => `${n.id}:${n.topic}`).sort().join(',')
     if (nextStructure !== structure) {
       structure = nextStructure
       layoutKey = nextLayout
@@ -341,20 +350,30 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     })
   }
 
-  /** Start a new node next to a node it links to, or in its own column at its height. */
+  /** Start a new node next to a node it links to, or in its own column, at its height and depth. */
   function place(n: GNode, existing: Map<string, GraphNode>): GraphNode {
-    const g: GraphNode = { id: n.id, title: n.title, type: n.type, status: n.status, altitude: n.altitude, links: n.links, topic: topicKey(n.topic) }
+    const g: GraphNode = {
+      id: n.id,
+      title: n.title,
+      type: n.type,
+      status: n.status,
+      altitude: n.altitude,
+      links: n.links,
+      topic: topicKey(n.topic),
+      age: 0,
+    }
     const jitter = () => (Math.random() - 0.5) * 30
     const anchor = n.links.map((l) => existing.get(l)).find((a) => a?.x !== undefined)
     g.x = (anchor?.x ?? columns.get(g.topic)?.x ?? 0) + jitter()
     g.y = g.fy = altitudeY(n.altitude)
-    g.z = (anchor?.z ?? 0) + jitter()
+    g.z = g.fz = depthZ(0)
     return g
   }
 
   /**
-   * Height is pinned to altitude (see frame). Sideways, a soft pull draws nodes
-   * into their topic's column, and depth gets a light pull back to the middle.
+   * Height and depth are pinned (see frame). Sideways, a soft pull draws nodes
+   * into their topic's column, and nodes on the same line of a column push
+   * apart so their cards have room.
    */
   function layoutForce() {
     let nodes: GraphNode[] = []
@@ -362,10 +381,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       for (const n of nodes) {
         const colX = columns.get(n.topic)?.x ?? 0
         n.vx = (n.vx ?? 0) + (colX - (n.x ?? 0)) * 0.035 * alpha
-        n.vz = (n.vz ?? 0) - (n.z ?? 0) * 0.08 * alpha
       }
-      // Nodes on the same line of the same column push apart sideways, so
-      // their labels do not sit on top of each other when seen from the front.
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const a = nodes[i]
@@ -409,7 +425,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     }
     for (const col of columns.values()) {
       const label = makeText(col.name, 0.016, SCENE_COLORS.topic)
-      label.position.set(col.x, altitudeY(5) + 32, 0)
+      label.position.set(col.x, altitudeY(5) + 40, 0)
       topicLabels.add(label)
     }
   }
@@ -428,7 +444,10 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   function fit() {
     const nodes = graph.graphData().nodes.filter((n) => n.x !== undefined)
     if (nodes.length === 0) return
-    const c = nodes.reduce((sum, n) => ({ x: sum.x + n.x! / nodes.length, y: sum.y + n.y! / nodes.length, z: sum.z + n.z! / nodes.length }), { x: 0, y: 0, z: 0 })
+    const c = nodes.reduce(
+      (sum, n) => ({ x: sum.x + n.x! / nodes.length, y: sum.y + n.y! / nodes.length, z: sum.z + n.z! / nodes.length }),
+      { x: 0, y: 0, z: 0 },
+    )
     const d = graph.camera().position.distanceTo(new Vector3(c.x, c.y, c.z))
     graph.cameraPosition({ x: c.x, y: c.y + d * 0.18, z: c.z + d }, c, 0)
     requestAnimationFrame(() => graph.zoomToFit(600, 120))

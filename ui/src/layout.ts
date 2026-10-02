@@ -74,3 +74,28 @@ export function wrapLabel(title: string): string {
   }
   return lines.join('\n')
 }
+
+/** How far in front of and behind the middle the newest and oldest nodes sit. */
+export const DEPTH_RANGE = 120
+
+/**
+ * How old each node is compared to the others: 0 for the most recently
+ * changed, 1 for the one untouched the longest. A node with no time yet
+ * (just created) counts as newest.
+ */
+export function ageFractions(nodes: { id: string; modified?: string }[]): Map<string, number> {
+  const time = (n: { modified?: string }) => (n.modified ? Date.parse(n.modified) : Number.POSITIVE_INFINITY)
+  const sorted = [...nodes].sort((a, b) => time(b) - time(a))
+  const last = Math.max(1, sorted.length - 1)
+  return new Map(sorted.map((n, i) => [n.id, sorted.length === 1 ? 0 : i / last]))
+}
+
+/** Newest in front, toward the camera. Oldest at the back. */
+export function depthZ(age: number): number {
+  return (0.5 - age) * 2 * DEPTH_RANGE
+}
+
+/** Older cards are a little dimmer, so time also reads from straight in front. */
+export function ageOpacity(age: number): number {
+  return 1 - 0.4 * age
+}
