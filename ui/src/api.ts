@@ -1,11 +1,19 @@
 import type { GNode, NodeInput, ServerEvent } from '../../src/shared/types'
 
+export const OFFLINE_MESSAGE = "Can't reach Groundwork. Is `groundwork` still running in your terminal?"
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  let res: Response
+  try {
+    res = await fetch(path, {
+      method,
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch {
+    // fetch only throws when no server answered at all.
+    throw new Error(OFFLINE_MESSAGE)
+  }
   if (!res.ok) {
     const msg = await res.json().then((j) => j.error, () => null)
     throw new Error(msg ?? `${method} ${path} failed (${res.status})`)
