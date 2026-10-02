@@ -1,79 +1,63 @@
 import Alpine from 'alpinejs'
-import ForceGraph3D from '3d-force-graph'
-import { GridHelper } from 'three'
-import type { GNode, ServerEvent } from '../../src/shared/types'
 import { fetchNodes, fetchProject, subscribe } from './api'
+import { bindKeys } from './keys'
+import { createScene } from './scene'
+import { onNodesChange, state } from './state'
 
-const nodes = new Map<string, GNode>()
-
-const store = Alpine.reactive({
-  live: false,
-  count: 0,
-  project: {} as Record<string, unknown>,
+const scene = createScene(document.getElementById('scene')!, {
+  onNodeClick: (id) => {
+    if (state.mode === 'link' && state.selectedId && id !== state.selectedId) void state.toggleLink(id)
+    else state.select(id)
+  },
+  onBackgroundClick: () => {
+    if (state.mode !== 'link') state.select(null)
+  },
 })
-Alpine.store('gw', store)
+
+// Redraw at most once per frame, however many events arrive.
+let queued = false
+onNodesChange(() => {
+  if (queued) return
+  queued = true
+  requestAnimationFrame(() => {
+    queued = false
+    scene.render({
+      nodes: Object.values(Alpine.raw(state.nodes)),
+      selectedId: state.selectedId,
+      linkMode: state.mode === 'link',
+    })
+  })
+})
+
+// A handle for poking at the map from the browser console.
+Object.assign(window, { groundwork: { state, scene } })
+
+bindKeys(() => document.querySelector<HTMLInputElement>('#capture'))
 Alpine.start()
 
-const graph = new ForceGraph3D(document.getElementById('scene')!, { controlType: 'orbit' })
-  .backgroundColor('#0e1116')
-  .showNavInfo(false)
-  .nodeLabel('title')
-
-// A faint floor so orbiting reads even before there are nodes.
-const floor = new GridHelper(400, 20, 0x2a313c, 0x1a1f27)
-floor.position.y = -120
-graph.scene().add(floor)
-graph.cameraPosition({ x: 0, y: 60, z: 320 })
-
-window.addEventListener('resize', () => graph.width(window.innerWidth).height(window.innerHeight))
-
-/** Phase 1 replaces this with real node rendering. For now, show what is on disk. */
-function render() {
-  store.count = nodes.size
-  const seen = new Set<string>()
-  const links: { source: string; target: string }[] = []
-  for (const n of nodes.values()) {
-    for (const l of n.links) {
-      const key = [n.id, l].sort().join('|')
-      if (!nodes.has(l) || seen.has(key)) continue
-      seen.add(key)
-      links.push({ source: n.id, target: l })
-    }
-  }
-  // Keep existing node objects so the layout does not jump on every update.
-  const previous = new Map(graph.graphData().nodes.map((n) => [n.id as string, n]))
-  graph.graphData({
-    nodes: [...nodes.values()].map((n) => Object.assign(previous.get(n.id) ?? {}, n)),
-    links,
-  })
-}
-
-function apply(event: ServerEvent) {
-  if (event.type === 'node:upsert') nodes.set(event.node.id, event.node)
-  else if (event.type === 'node:delete') nodes.delete(event.id)
-  else if (event.type === 'file:change' && event.path === 'project.md') void loadProject()
-  render()
-}
-
-async function loadProject() {
-  store.project = await fetchProject()
-}
-
 async function reload() {
-  nodes.clear()
-  for (const n of await fetchNodes()) nodes.set(n.id, n)
-  render()
+  try {
+    state.replaceAll(await fetchNodes())
+  } catch (err) {
+    state.flash(err instanceof Error ? err.message : String(err))
+  }
 }
 
 subscribe({
   // On every (re)connect, fetch the full list, since events may have been missed while offline.
   onOpen: () => {
-    store.live = true
+    state.live = true
     void reload()
-    void loadProject()
+    void fetchProject().then((p) => (state.project = p))
   },
   onError: () => {
-    store.live = false
+    state.live = false
   },
-  onEvent: apply,
+  onEvent: (event) => {
+    if (event.type === 'node:upsert') state.upsert(event.node)
+    else if (event.type === 'node:delete') state.removeLocal(event.id)
+    else if (event.type === 'file:change' && event.path === 'project.md') {
+      void fetchProject().then((p) => (state.project = p))
+    }
+  },
 })

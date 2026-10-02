@@ -2,7 +2,24 @@
 
 @theme {
   --color-ink: #0e1116;
+  --color-panel: #161b22;
   --color-fog: #dfe3ea;
+}
+
+@layer components {
+  .field {
+    @apply rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-fog placeholder:text-fog/30 focus:border-white/25 focus:outline-none;
+  }
+  .label {
+    @apply mb-1 block text-[11px] tracking-wide text-fog/45 uppercase;
+  }
+}
+
+/* Center bars in the space left of the side panel while it is open. */
+@media (min-width: 900px) {
+  .with-panel {
+    padding-right: calc(360px + 2rem);
+  }
 }
 
 html,
@@ -10,6 +27,10 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
+}
+
+select.field option {
+  background: var(--color-panel);
 }
 
 [x-cloak] {
