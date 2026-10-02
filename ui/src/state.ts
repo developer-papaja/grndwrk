@@ -48,7 +48,7 @@ export const state = Alpine.reactive({
   captureLinked: true,
   editing: null as DraftField | null,
   draft: { title: '', topic: '', type: 'idea', altitude: 3, status: 'open', body: '' } as Draft,
-  listOpen: false,
+  listOpen: readListOpen(),
   query: '',
   listIndex: 0,
   note: '',
@@ -204,14 +204,25 @@ export const state = Alpine.reactive({
   },
 
   // List and search
+  /** `/`: show the list if it is collapsed and put the cursor in search. */
   openList() {
-    this.listOpen = true
+    this.setListOpen(true)
     this.listIndex = 0
     focusWhenVisible('search')
   },
-  closeList() {
-    this.listOpen = false
+  setListOpen(open: boolean) {
+    this.listOpen = open
+    if (!open) this.query = ''
+    try {
+      localStorage.setItem('groundwork.listOpen', open ? '1' : '0')
+    } catch {
+      // Storage can be blocked. The list still works, it just forgets.
+    }
+  },
+  /** Esc in search clears it and gives the keys back to the map. */
+  leaveSearch() {
     this.query = ''
+    this.listIndex = 0
   },
   moveList(delta: number) {
     const count = this.listRows.length
@@ -269,6 +280,15 @@ export const state = Alpine.reactive({
     noteTimer = setTimeout(() => (this.note = ''), 4000)
   },
 })
+
+/** The list is open unless the person collapsed it last time. */
+function readListOpen(): boolean {
+  try {
+    return localStorage.getItem('groundwork.listOpen') !== '0'
+  } catch {
+    return true
+  }
+}
 
 /** Focus a field once it is on screen. Panels slide in, so it can take a few frames. */
 function focusWhenVisible(id: string, tries = 20) {

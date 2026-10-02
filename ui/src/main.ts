@@ -32,6 +32,13 @@ onNodesChange(() => {
 // A handle for poking at the map from the browser console.
 Object.assign(window, { groundwork: { state, scene } })
 
+// Give the map the room next to the list on wide screens.
+Alpine.effect(() => {
+  const open = state.listOpen
+  const wide = window.innerWidth >= 900
+  scene.setLeftInset(open && wide ? 332 : 0)
+})
+
 bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
   fit: () => state.fit(),
 })

@@ -10,6 +10,7 @@ import {
   MeshStandardMaterial,
   PerspectiveCamera,
   SphereGeometry,
+  Sprite,
   Vector3,
 } from 'three'
 import type { GNode, NodeType, Status } from '../../src/shared/types'
@@ -17,9 +18,6 @@ import { ALTITUDE_WORDS, altitudeY, linkStrength, topicColumns, topicKey, wrapLa
 import { SCENE_COLORS, TYPE_COLORS } from './palette'
 
 const RADIUS = 4
-/** Labels are fully visible up to NEAR from the camera and gone beyond FAR. */
-const LABEL_NEAR = 700
-const LABEL_FAR = 1600
 /** How close the camera comes when it flies to a node. */
 const FLY_DISTANCE = 280
 /** Sideways room for one label, between nodes on the same line of a column. */
@@ -101,12 +99,44 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     .linkWidth((l) => (touchesSelected(l) ? 1.1 : 0.6))
     .linkOpacity(1)
     .linkColor((l) => linkColor(l))
-    .onNodeClick((n) => handlers.onNodeClick(n.id))
     .onNodeHover((n) => {
       hoveredId = n?.id ?? null
       el.style.cursor = view.linkMode ? 'crosshair' : n ? 'pointer' : ''
     })
-    .onBackgroundClick(() => handlers.onBackgroundClick())
+
+  // The library drops a click when the pointer moves even one pixel while
+  // pressed, which happens on most real clicks. Decide clicks here instead:
+  // under 5 pixels of movement is a click on whatever is under the pointer.
+  let down: { x: number; y: number } | null = null
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button === 0) down = { x: e.clientX, y: e.clientY }
+  })
+  el.addEventListener('pointerup', (e) => {
+    if (!down || e.button !== 0) return
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y)
+    down = null
+    if (moved > 5) return
+    const id = orbAt(e.clientX, e.clientY) ?? hoveredId
+    if (id) handlers.onNodeClick(id)
+    else handlers.onBackgroundClick()
+  })
+
+  /** The orb closest to a screen point, if one is within reach. Orbs win over labels. */
+  function orbAt(clientX: number, clientY: number): string | null {
+    const rect = el.getBoundingClientRect()
+    let best: string | null = null
+    let bestDist = 16
+    for (const n of graph.graphData().nodes) {
+      if (n.x === undefined) continue
+      const p = graph.graph2ScreenCoords(n.x, n.y!, n.z!)
+      const d = Math.hypot(p.x - (clientX - rect.left), p.y - (clientY - rect.top))
+      if (d < bestDist) {
+        best = n.id
+        bestDist = d
+      }
+    }
+    return best
+  }
 
   graph.d3Force('layout', layoutForce())
   graph.d3Force('center', null)
@@ -126,7 +156,14 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     setTimeout(fit, 1200)
   }
   graph.cameraPosition({ x: 0, y: 90, z: 460 })
-  window.addEventListener('resize', () => graph.width(window.innerWidth).height(window.innerHeight))
+  // The map sits beside the list, like a canvas next to a layers panel.
+  let leftInset = 0
+  function setLeftInset(px: number) {
+    leftInset = px
+    el.style.left = `${px}px`
+    graph.width(window.innerWidth - px).height(window.innerHeight)
+  }
+  window.addEventListener('resize', () => setLeftInset(leftInset))
 
   const guides = new Group()
   const topicLabels = new Group()
@@ -160,6 +197,11 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     n.halo = new Mesh(haloGeometry, new MeshBasicMaterial({ transparent: true, opacity: 0.12, depthWrite: false }))
     n.halo.raycast = () => {}
     n.label = makeText('', 0.011, SCENE_COLORS.label)
+    // People click the words, so a visible label counts as part of its node.
+    const label = n.label
+    label.raycast = (raycaster, hits) => {
+      if (label.material.opacity > 0.2) Sprite.prototype.raycast.call(label, raycaster, hits)
+    }
     // Hang the text below its anchor point, which sits just under the orb.
     n.label.center.set(0.5, 1.15)
     group.add(n.mesh, n.halo, n.label, new Mesh(hitGeometry, hitMaterial))
@@ -204,13 +246,12 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   requestAnimationFrame(frame)
 
   /**
-   * Labels fade out with distance, and a label that would cover one already
-   * shown is hidden. The selected node, its links and the hovered node go
+   * Labels keep their size on screen, so they never fade with distance.
+   * A label that would cover one already shown is hidden. The selected node, its links and the hovered node go
    * first, then higher altitudes. Hover or zoom in to see a hidden one.
    */
   function fadeLabels() {
     const camera = graph.camera() as PerspectiveCamera
-    const cam = camera.position
     const width = el.clientWidth
     const pxPerUnit = el.clientHeight / (2 * Math.tan((camera.fov * Math.PI) / 360))
     const nodes = graph.graphData().nodes.filter((n) => n.label && n.x !== undefined)
@@ -220,10 +261,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     const placed: { x1: number; x2: number; y1: number; y2: number }[] = []
     for (const n of nodes) {
       const focus = isFocus(n)
-      const d = cam.distanceTo(new Vector3(n.x, n.y, n.z))
-      const t = Math.min(1, Math.max(0, (d - LABEL_NEAR) / (LABEL_FAR - LABEL_NEAR)))
-      const base = n.status === 'parked' ? 0.5 : 0.9
-      let opacity = focus ? 1 : base * (1 - t)
+      let opacity = focus ? 1 : n.status === 'parked' ? 0.5 : 0.9
 
       // The label's box on screen. It hangs under the orb, and a fixed-size
       // sprite covers scale / (2 tan(fov / 2)) of the view's height.
@@ -363,7 +401,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     for (let a = 1; a <= 5; a++) {
       const y = altitudeY(a)
       guides.add(new Line(new BufferGeometry().setFromPoints([new Vector3(left, y, 0), new Vector3(right, y, 0)]), material))
-      const word = makeText(`${a} ${ALTITUDE_WORDS[a]}`, 0.0095, SCENE_COLORS.guideText)
+      const word = makeText(ALTITUDE_WORDS[a], 0.0095, SCENE_COLORS.guideText)
       // Right aligned against the start of the line.
       word.center.set(1.05, 0.5)
       word.position.set(left, y, 0)
@@ -386,8 +424,14 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     graph.cameraPosition({ x: pos.x, y: pos.y, z: pos.z }, { x: target.x, y: target.y, z: target.z }, 600)
   }
 
+  /** Back to the overview: straight on, slightly from above, everything in view. */
   function fit() {
-    graph.zoomToFit(600, 120)
+    const nodes = graph.graphData().nodes.filter((n) => n.x !== undefined)
+    if (nodes.length === 0) return
+    const c = nodes.reduce((sum, n) => ({ x: sum.x + n.x! / nodes.length, y: sum.y + n.y! / nodes.length, z: sum.z + n.z! / nodes.length }), { x: 0, y: 0, z: 0 })
+    const d = graph.camera().position.distanceTo(new Vector3(c.x, c.y, c.z))
+    graph.cameraPosition({ x: c.x, y: c.y + d * 0.18, z: c.z + d }, c, 0)
+    requestAnimationFrame(() => graph.zoomToFit(600, 120))
   }
 
   /** Where a node is on screen, for debugging and browser tests. */
@@ -397,7 +441,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     return graph.graph2ScreenCoords(n.x, n.y!, n.z!)
   }
 
-  return { render, fit, flyTo, screenPosition, graph }
+  return { render, fit, flyTo, setLeftInset, screenPosition, graph }
 }
 
 function disposeObject(obj: object) {

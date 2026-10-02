@@ -23,8 +23,8 @@
         id="list-button"
         class="pointer-events-auto rounded-full border border-white/10 px-3 py-1 text-xs text-fog/70 hover:bg-white/5 hover:text-fog"
         :class="$store.gw.listOpen && 'bg-white/10 text-fog'"
-        @click="$store.gw.listOpen ? $store.gw.closeList() : $store.gw.openList()"
-      >List</button>
+        @click="$store.gw.setListOpen(!$store.gw.listOpen)"
+       x-text="$store.gw.listOpen ? 'Hide list' : 'Show list'"></button>
       <button
         id="fit-button"
         class="pointer-events-auto rounded-full border border-white/10 px-3 py-1 text-xs text-fog/70 hover:bg-white/5 hover:text-fog"
@@ -36,8 +36,6 @@
     <aside
       x-cloak
       x-show="$store.gw.listOpen"
-      x-transition:enter="transition duration-150"
-      x-transition:enter-start="-translate-x-4 opacity-0"
       class="fixed bottom-4 left-4 top-14 flex w-[min(300px,calc(100vw-2rem))] flex-col rounded-xl border border-white/10 bg-panel/95 text-sm shadow-2xl shadow-black/40 backdrop-blur"
     >
       <div class="border-b border-white/5 p-3">
@@ -48,7 +46,7 @@
           @keydown.down.prevent="$store.gw.moveList(1)"
           @keydown.up.prevent="$store.gw.moveList(-1)"
           @keydown.enter.prevent="$store.gw.chooseRow()"
-          @keydown.escape.prevent.stop="$store.gw.closeList(); $event.target.blur()"
+          @keydown.escape.prevent.stop="$store.gw.leaveSearch(); $event.target.blur()"
           autocomplete="off"
           spellcheck="false"
           placeholder="Search titles, notes and topics"
@@ -84,7 +82,7 @@
           </section>
         </template>
       </div>
-      <p class="border-t border-white/5 px-3 py-2 text-[11px] text-fog/40">Up and down to move, Enter to open, Esc to close.</p>
+      <p class="border-t border-white/5 px-3 py-2 text-[11px] text-fog/40">Press / to search. Up and down to move, Enter to open.</p>
     </aside>
 
     <!-- Link mode banner -->

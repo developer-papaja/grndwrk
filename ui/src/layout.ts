@@ -1,7 +1,7 @@
 /** Where things sit in the map. Pure functions, so the rules are easy to test. */
 
 /** Height between two altitude levels. */
-export const ALTITUDE_STEP = 45
+export const ALTITUDE_STEP = 70
 /** Sideways distance between topic columns. */
 export const COLUMN_SPACING = 240
 /** How much a link that crosses topics pulls, compared to one inside a topic. */
