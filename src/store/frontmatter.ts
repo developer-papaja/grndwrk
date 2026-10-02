@@ -1,7 +1,7 @@
 import matter from 'gray-matter'
 import { NODE_TYPES, STATUSES, type GNode, type NodeType, type Status } from '../shared/types.js'
 
-const KNOWN_KEYS = ['id', 'type', 'title', 'altitude', 'links', 'status', 'created'] as const
+const KNOWN_KEYS = ['id', 'type', 'title', 'topic', 'altitude', 'links', 'status', 'created'] as const
 
 export const DEFAULTS = {
   type: 'idea' as NodeType,
@@ -31,6 +31,7 @@ export function parseNode(id: string, raw: string): GNode {
       id,
       type: DEFAULTS.type,
       title: id,
+      topic: '',
       altitude: DEFAULTS.altitude,
       links: [],
       status: DEFAULTS.status,
@@ -50,6 +51,7 @@ export function parseNode(id: string, raw: string): GNode {
     id,
     type: oneOf(data.type, NODE_TYPES, DEFAULTS.type),
     title: toText(data.title) || id,
+    topic: toText(data.topic),
     altitude: toAltitude(data.altitude),
     links: toLinks(data.links, id),
     status: oneOf(data.status, STATUSES, DEFAULTS.status),
@@ -64,6 +66,7 @@ export function serializeNode(node: GNode): string {
     `id: ${node.id}`,
     `type: ${node.type}`,
     `title: ${scalar(node.title)}`,
+    ...(node.topic ? [`topic: ${scalar(node.topic)}`] : []),
     `altitude: ${node.altitude}`,
     `links: [${node.links.join(', ')}]`,
     `status: ${node.status}`,

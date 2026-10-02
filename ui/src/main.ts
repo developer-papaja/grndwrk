@@ -2,7 +2,7 @@ import Alpine from 'alpinejs'
 import { fetchNodes, fetchProject, subscribe } from './api'
 import { bindKeys } from './keys'
 import { createScene } from './scene'
-import { onNodesChange, state } from './state'
+import { onFit, onNodesChange, state } from './state'
 
 const scene = createScene(document.getElementById('scene')!, {
   onNodeClick: (id) => {
@@ -32,7 +32,10 @@ onNodesChange(() => {
 // A handle for poking at the map from the browser console.
 Object.assign(window, { groundwork: { state, scene } })
 
-bindKeys(() => document.querySelector<HTMLInputElement>('#capture'))
+bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
+  fit: () => state.fit(),
+})
+onFit(() => scene.fit())
 Alpine.start()
 
 async function reload() {

@@ -50,6 +50,14 @@ describe('parseNode', () => {
     expect(n).toMatchObject({ altitude: 5, type: 'idea', status: 'settled', links: ['n_dddd'] })
   })
 
+  it('reads topic and writes it right after the title, only when set', () => {
+    const n = parseNode('n_tttt', '---\ntitle: x\naltitude: 2\ntopic: Look and feel\n---\n')
+    expect(n.topic).toBe('Look and feel')
+    expect(n.extra).toEqual({})
+    expect(serializeNode(n)).toContain('title: x\ntopic: Look and feel\naltitude: 2\n')
+    expect(serializeNode({ ...n, topic: '' })).not.toContain('topic:')
+  })
+
   it('keeps unknown keys through a write', () => {
     const raw = '---\ntitle: x\nsource: interview\nweight: 2\n---\nbody\n'
     const out = serializeNode(parseNode('n_eeee', raw))

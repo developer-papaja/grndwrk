@@ -20,6 +20,9 @@
   .with-panel {
     padding-right: calc(360px + 2rem);
   }
+  .with-list {
+    padding-left: calc(300px + 2rem);
+  }
 }
 
 html,

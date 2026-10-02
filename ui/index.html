@@ -19,14 +19,80 @@
         <span class="text-fog/40">·</span>
         <span id="count" x-text="$store.gw.count + ($store.gw.count === 1 ? ' node' : ' nodes')"></span>
       </span>
+      <button
+        id="list-button"
+        class="pointer-events-auto rounded-full border border-white/10 px-3 py-1 text-xs text-fog/70 hover:bg-white/5 hover:text-fog"
+        :class="$store.gw.listOpen && 'bg-white/10 text-fog'"
+        @click="$store.gw.listOpen ? $store.gw.closeList() : $store.gw.openList()"
+      >List</button>
+      <button
+        id="fit-button"
+        class="pointer-events-auto rounded-full border border-white/10 px-3 py-1 text-xs text-fog/70 hover:bg-white/5 hover:text-fog"
+        @click="$store.gw.fit()"
+      >Fit map</button>
     </div>
+
+    <!-- List -->
+    <aside
+      x-cloak
+      x-show="$store.gw.listOpen"
+      x-transition:enter="transition duration-150"
+      x-transition:enter-start="-translate-x-4 opacity-0"
+      class="fixed bottom-4 left-4 top-14 flex w-[min(300px,calc(100vw-2rem))] flex-col rounded-xl border border-white/10 bg-panel/95 text-sm shadow-2xl shadow-black/40 backdrop-blur"
+    >
+      <div class="border-b border-white/5 p-3">
+        <input
+          id="search"
+          x-model="$store.gw.query"
+          @input="$store.gw.listIndex = 0"
+          @keydown.down.prevent="$store.gw.moveList(1)"
+          @keydown.up.prevent="$store.gw.moveList(-1)"
+          @keydown.enter.prevent="$store.gw.chooseRow()"
+          @keydown.escape.prevent.stop="$store.gw.closeList(); $event.target.blur()"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Search titles, notes and topics"
+          class="field w-full"
+        />
+      </div>
+      <div class="flex-1 overflow-y-auto p-2" id="list">
+        <p x-show="$store.gw.listRows.length === 0" class="p-2 text-xs text-fog/40">Nothing matches.</p>
+        <template x-for="group in $store.gw.listGroups" :key="group.key">
+          <section class="mb-3">
+            <h3 class="flex items-baseline justify-between px-2 pb-1 text-[11px] uppercase tracking-wide text-fog/45">
+              <span x-text="group.name"></span>
+              <span
+                class="normal-case tracking-normal"
+                :class="group.total <= 2 ? 'text-amber-200/70' : 'text-fog/35'"
+                x-text="group.total + (group.total === 1 ? ' node' : ' nodes') + (group.total <= 2 ? ', thin' : '')"
+              ></span>
+            </h3>
+            <template x-for="n in group.nodes" :key="n.id">
+              <button
+                class="flex w-full items-baseline gap-2 rounded-md px-2 py-1 text-left"
+                :class="[
+                  $store.gw.listRows[$store.gw.listIndex]?.id === n.id ? 'bg-white/10 text-fog' : 'text-fog/75 hover:bg-white/5',
+                  $store.gw.selectedId === n.id && 'ring-1 ring-white/20'
+                ]"
+                @click="$store.gw.chooseRow(n.id)"
+              >
+                <span class="w-3 shrink-0 text-[11px] text-fog/35" x-text="n.altitude"></span>
+                <span class="min-w-0 flex-1 truncate" x-text="n.title"></span>
+                <span class="shrink-0 text-[11px] text-fog/35" x-text="n.type"></span>
+              </button>
+            </template>
+          </section>
+        </template>
+      </div>
+      <p class="border-t border-white/5 px-3 py-2 text-[11px] text-fog/40">Up and down to move, Enter to open, Esc to close.</p>
+    </aside>
 
     <!-- Link mode banner -->
     <div
       x-cloak
       x-show="$store.gw.mode === 'link'"
       class="pointer-events-none fixed inset-x-0 top-4 flex justify-center px-4"
-      :class="$store.gw.selected && 'with-panel'"
+      :class="{ 'with-panel': $store.gw.selected, 'with-list': $store.gw.listOpen }"
     >
       <div id="link-banner" class="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-1.5 text-xs text-amber-100">
         Link mode: click nodes to link or unlink them from
@@ -44,12 +110,12 @@
     ></div>
 
     <!-- Capture bar -->
-    <div class="pointer-events-none fixed inset-x-0 bottom-6 flex justify-center px-4" :class="$store.gw.selected && 'with-panel'">
+    <div class="pointer-events-none fixed inset-x-0 bottom-6 flex justify-center px-4" :class="{ 'with-panel': $store.gw.selected, 'with-list': $store.gw.listOpen }">
     <form class="pointer-events-auto w-full max-w-[640px]" @submit.prevent="$store.gw.submitCapture()">
       <div class="flex items-center gap-2 rounded-xl border border-white/10 bg-panel/95 px-3 py-2 shadow-2xl shadow-black/40 backdrop-blur focus-within:border-white/25">
         <template x-if="$store.gw.selected && !$store.gw.selected.error && $store.gw.captureLinked">
           <span class="flex max-w-[45%] shrink-0 items-center gap-1 rounded-md bg-white/8 py-0.5 pl-2 pr-1 text-xs text-fog/70">
-            <span class="truncate">linked to: <span x-text="$store.gw.selected.title"></span></span>
+            <span class="truncate">linked to: <span x-text="$store.gw.selected.title"></span><template x-if="$store.gw.selected.topic"><span> · topic: <span x-text="$store.gw.selected.topic"></span></span></template></span>
             <button
               type="button"
               class="rounded px-1 text-fog/50 hover:bg-white/10 hover:text-fog"
@@ -137,13 +203,27 @@
             </label>
           </div>
 
-          <p x-show="$store.gw.selected.extra?.topic" class="-mt-1 text-xs text-fog/50">
-            Topic: <span class="text-fog/75" x-text="$store.gw.selected.extra?.topic"></span>
-            <span class="text-fog/35">(set in the file for now)</span>
-          </p>
+          <label class="block">
+            <span class="label">Topic</span>
+            <input
+              id="field-topic"
+              list="topic-names"
+              x-model="$store.gw.draft.topic"
+              @input="$store.gw.edit('topic')"
+              @focus="$store.gw.focusField('topic')"
+              @blur="$store.gw.blurField('topic')"
+              @keydown.enter.prevent="$event.target.blur()"
+              autocomplete="off"
+              placeholder="No topic yet"
+              class="field w-full"
+            />
+            <datalist id="topic-names">
+              <template x-for="t in $store.gw.topicNames" :key="t"><option :value="t"></option></template>
+            </datalist>
+          </label>
 
           <div>
-            <span class="label">Altitude: 5 is abstract, 1 is concrete</span>
+            <span class="label">Altitude: 5 abstract, 1 concrete. Keys [ and ]</span>
             <div class="flex gap-1" id="field-altitude">
               <template x-for="a in [1, 2, 3, 4, 5]" :key="a">
                 <button

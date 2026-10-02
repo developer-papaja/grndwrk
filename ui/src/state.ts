@@ -3,12 +3,15 @@ import type { GNode, NodeType, Status } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, updateNode } from './api'
 import { parseCapture } from './capture'
+import { topicColumns } from './layout'
+import { flatten, groupForList, type ListGroup } from './list'
 
-export type DraftField = 'title' | 'type' | 'altitude' | 'status' | 'body'
-const FIELDS: DraftField[] = ['title', 'type', 'altitude', 'status', 'body']
+export type DraftField = 'title' | 'topic' | 'type' | 'altitude' | 'status' | 'body'
+const FIELDS: DraftField[] = ['title', 'topic', 'type', 'altitude', 'status', 'body']
 
 interface Draft {
   title: string
+  topic: string
   type: NodeType
   altitude: number
   status: Status
@@ -29,6 +32,11 @@ export function onNodesChange(fn: () => void) {
   onChange = fn
 }
 
+let fitHandler: () => void = () => {}
+export function onFit(fn: () => void) {
+  fitHandler = fn
+}
+
 export const state = Alpine.reactive({
   live: false,
   project: {} as Record<string, unknown>,
@@ -39,7 +47,10 @@ export const state = Alpine.reactive({
   capture: '',
   captureLinked: true,
   editing: null as DraftField | null,
-  draft: { title: '', type: 'idea', altitude: 3, status: 'open', body: '' } as Draft,
+  draft: { title: '', topic: '', type: 'idea', altitude: 3, status: 'open', body: '' } as Draft,
+  listOpen: false,
+  query: '',
+  listIndex: 0,
   note: '',
   types: NODE_TYPES,
   statuses: STATUSES,
@@ -55,9 +66,19 @@ export const state = Alpine.reactive({
     const sel = this.selected
     if (this.mode === 'link') return 'Click orbs to link or unlink them. Press Esc when you are done.'
     if (sel?.error) return 'This file cannot be read. Fix it in your editor and it updates here.'
-    if (sel) return 'New thoughts link to the open one. Press L, then click orbs to link them. Esc closes.'
+    if (sel) return 'New thoughts link to the open one and join its topic. [ and ] change altitude. L links. Esc closes.'
     if (this.count === 0) return 'Your first thought can be anything. Press Enter to add it.'
-    return 'Click an orb to open it. Drag to turn the map, scroll to zoom. Press N to type from anywhere.'
+    return 'Click an orb to open it. Press / for the list, F to fit the map, N to type from anywhere.'
+  },
+  /** Existing topic names, for suggestions in the panel. */
+  get topicNames(): string[] {
+    return [...topicColumns(Object.values(this.nodes)).values()].filter((c) => c.key).map((c) => c.name)
+  },
+  get listGroups(): ListGroup[] {
+    return groupForList(Object.values(this.nodes), this.query)
+  },
+  get listRows(): GNode[] {
+    return flatten(this.listGroups)
   },
   get linkedNodes(): GNode[] {
     const sel = this.selected
@@ -114,10 +135,11 @@ export const state = Alpine.reactive({
     const parsed = parseCapture(this.capture)
     if (!parsed) return
     const raw = this.capture
-    const links = this.selectedId && this.captureLinked ? [this.selectedId] : []
+    const linkTo = this.selected && !this.selected.error && this.captureLinked ? this.selected : null
     this.capture = ''
     try {
-      this.upsert(await createNode({ ...parsed, links }))
+      // A thought linked to the open node joins its topic too.
+      this.upsert(await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '' }))
     } catch (err) {
       // Give the text back so nothing typed is lost.
       if (!this.capture) this.capture = raw
@@ -167,6 +189,39 @@ export const state = Alpine.reactive({
     for (const f of [...pending]) void this.flush(f)
   },
 
+  /** `[` and `]`: move the open node one altitude step. */
+  nudgeAltitude(delta: number) {
+    const sel = this.selected
+    if (!sel || sel.error) return
+    const next = Math.min(5, Math.max(1, this.draft.altitude + delta))
+    if (next === this.draft.altitude) return
+    this.draft.altitude = next
+    this.edit('altitude', true)
+  },
+
+  fit() {
+    fitHandler()
+  },
+
+  // List and search
+  openList() {
+    this.listOpen = true
+    this.listIndex = 0
+    focusWhenVisible('search')
+  },
+  closeList() {
+    this.listOpen = false
+    this.query = ''
+  },
+  moveList(delta: number) {
+    const count = this.listRows.length
+    if (count) this.listIndex = (this.listIndex + delta + count) % count
+  },
+  chooseRow(id?: string) {
+    const row = id ? this.nodes[id] : this.listRows[this.listIndex]
+    if (row) this.select(row.id)
+  },
+
   // Links
   toggleLinkMode() {
     if (!this.selected || this.selected.error) return
@@ -214,6 +269,13 @@ export const state = Alpine.reactive({
     noteTimer = setTimeout(() => (this.note = ''), 4000)
   },
 })
+
+/** Focus a field once it is on screen. Panels slide in, so it can take a few frames. */
+function focusWhenVisible(id: string, tries = 20) {
+  const el = document.getElementById(id)
+  if (el && el.offsetParent !== null) return el.focus()
+  if (tries > 0) requestAnimationFrame(() => focusWhenVisible(id, tries - 1))
+}
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)

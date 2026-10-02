@@ -5,7 +5,7 @@ function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-export function bindKeys(captureInput: () => HTMLInputElement | null) {
+export function bindKeys(captureInput: () => HTMLInputElement | null, actions: { fit: () => void }) {
   window.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return
 
@@ -25,6 +25,20 @@ export function bindKeys(captureInput: () => HTMLInputElement | null) {
       case 'L':
         state.toggleLinkMode()
         break
+      case '/':
+        e.preventDefault()
+        state.openList()
+        break
+      case '[':
+        state.nudgeAltitude(-1)
+        break
+      case ']':
+        state.nudgeAltitude(1)
+        break
+      case 'f':
+      case 'F':
+        actions.fit()
+        break
       case 'Delete':
       case 'Backspace':
         e.preventDefault()
@@ -32,7 +46,8 @@ export function bindKeys(captureInput: () => HTMLInputElement | null) {
         break
       case 'Escape':
         if (state.mode === 'link') state.toggleLinkMode()
-        else state.select(null)
+        else if (state.selectedId) state.select(null)
+        else if (state.listOpen) state.closeList()
         break
     }
   })

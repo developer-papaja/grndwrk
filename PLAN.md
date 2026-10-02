@@ -22,11 +22,12 @@ One phase per Claude Code session. Start each in plan mode, commit when the done
 
 ## Phase 2: Space that means something
 
-- Y axis locked to altitude, `[` and `]` move nodes
-- Type colors, status weights, readable labels at distance
-- Camera fly-to on select, search with `/`
+- Y axis locked to altitude, `[` and `]` move nodes, faint altitude guide lines with words
+- X axis by topic: `topic` field, topic columns, `/topics` command (changed after first real use: topics, not links, are the main grouping)
+- Type colors, status weights, labels readable at any zoom
+- Camera fly-to on select, `F` to fit, `/` opens a list grouped by topic with search
 
-**Done when:** looking at the map, you can tell at a glance where the abstract thinking is, where the concrete detail is, and which areas are empty.
+**Done when:** looking at the map, you can tell at a glance where the abstract thinking is, where the concrete detail is, which topics exist and which are thin.
 
 ## Phase 3: Readiness
 

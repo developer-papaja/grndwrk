@@ -68,6 +68,14 @@ describe('NodeStore', () => {
     expect(await file('n_bad1')).toBe('---\ntitle: a: b\n---\nkeep me\n')
   })
 
+  it('sets and clears a topic', async () => {
+    const a = (await store.create({ title: 'A', topic: ' navigation ' })).upserted[0]
+    expect(a.topic).toBe('navigation')
+    expect(await file(a.id)).toContain('title: A\ntopic: navigation\n')
+    await store.update(a.id, { topic: '' })
+    expect(await file(a.id)).not.toContain('topic:')
+  })
+
   it('normalizes bad input instead of failing', async () => {
     const n = (await store.create({ title: 'x', altitude: 12, type: 'nope' as never })).upserted[0]
     expect(n).toMatchObject({ altitude: 5, type: 'idea' })

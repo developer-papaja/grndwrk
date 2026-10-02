@@ -60,6 +60,7 @@ A node file:
 id: n_8f2k
 type: idea
 title: Booking should feel like texting
+topic: booking
 altitude: 4
 links: [n_2a9d, n_7c11]
 status: open
@@ -69,9 +70,10 @@ Free text. Thoughts, references, half-formed questions.
 ```
 
 - **type:** idea, audience, flow, feature, content, design, constraint, question, decision, reference
+- **topic:** optional. Groups nodes sideways in the map. Plain words, matched regardless of case. Set by hand, in the panel, or by `/topics`.
 - **altitude:** 1 to 5. 5 is abstract (vision, feeling, principle), 1 is concrete (a field, a button, a specific screen).
 - **status:** open, settled, parked
-- **links:** undirected in v1. Store on both nodes.
+- **links:** undirected in v1. Store on both nodes. Links mostly stay inside a topic; topics do the grouping.
 - **id:** short, random, stable. Never derived from the title.
 
 `gaps.json` shape:
@@ -117,8 +119,9 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 
 ## Spatial model
 
-- **Y axis is altitude.** Abstract nodes float high, concrete nodes sit low. Changing a node's altitude visibly moves it.
-- **Horizontal position comes from the force layout.** Linked nodes pull together into clusters.
+- **Y axis is altitude.** Abstract nodes float high, concrete nodes sit low, each altitude on its own faint guide line. Changing a node's altitude visibly moves it.
+- **X axis is topic.** Each topic gets a column, left to right by name, with nodes without a topic in a "no topic" column at the right. Topics are the main grouping.
+- **Depth and spread within a column come from the force layout.** Links inside a topic pull nodes together. Links across topics are allowed but drawn faint and pull weakly, so they never merge two groups.
 - **Color shows type.** Keep the palette calm and readable on a dark background.
 - **Status shows as weight.** Settled is solid, open is normal, parked is dimmed.
 - **Readiness gaps are ghost nodes.** Translucent, outlined, placed near the cluster they relate to, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
@@ -127,13 +130,17 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 
 - Orbit, zoom, pan with the mouse.
 - Click a node: the camera flies to it and a side panel opens. All text editing happens in the 2D panel, never inside the 3D scene.
-- A quick capture bar is always available. Type and press Enter to create a node. Prefixes are optional: `? ` makes a question, `! ` makes a decision.
-- Keys: `N` new node (linked to the selection if any), `L` link mode, `[` and `]` move altitude, `/` search, `Delete` remove, `Esc` deselect.
+- A quick capture bar is always available. Type and press Enter to create a node. Prefixes are optional: `?` makes a question, `!` makes a decision, with or without a space after.
+- A new node captured while a node is selected links to it and takes its topic.
+- `/` opens the list: every node grouped by topic, with counts that show thin topics. Typing filters, Enter opens.
+- Keys: `N` new node (linked to the selection if any), `L` link mode, `[` and `]` move altitude, `/` list and search, `F` fit the map, `Delete` remove (press twice), `Esc` back.
+- Words, not icons, in the UI.
 
 ## Claude Code commands
 
 Shipped with the package in `commands/` and copied into the host project's `.claude/commands/` on init.
 
+- **/topics** reads all nodes and writes `topic:` into them: three to seven topics, reusing existing ones, never touching titles or notes. Ends with which topics look thin.
 - **/readiness** reads `project.md`, all nodes and `checklist.md`. Judges each checklist area as missing, thin or enough, relative to the project type. Writes `report.md` and `gaps.json`. Ends with a clear verdict: ready to build, ready to prototype, or not ready, plus the smallest set of things to add.
 - **/challenge** looks at the thinnest areas and writes a few sharp question nodes into the map. This is the seed of the later interview feature.
 - **/brief** writes `outputs/brief.md`, `outputs/CLAUDE.starter.md` and the first set of stories in `stories/`, one file each, every story linked to the nodes it came from. If readiness has blocking gaps, it says so at the top instead of hiding them.
