@@ -1,0 +1,79 @@
+[
+  {
+    "id": "gap_kickoff_flow",
+    "area": "core flows",
+    "title": "The kickoff flow from init to a deliverable",
+    "why": "Without the steps written down, nothing checks that capture, readiness and the brief join up into one way forward.",
+    "near": ["n_scwj", "n_5dqs", "n_ax4k"],
+    "severity": "blocking",
+    "page": "Product",
+    "topic": "flows",
+    "altitude": 3
+  },
+  {
+    "id": "gap_scope",
+    "area": "scope",
+    "title": "Anything decided not to build",
+    "why": "Without it, every new idea in the map looks like part of the first version.",
+    "near": ["n_0so7"],
+    "severity": "important",
+    "page": "Product",
+    "topic": "scope",
+    "altitude": 3
+  },
+  {
+    "id": "gap_commit_map",
+    "area": "setup for building with claude",
+    "title": "The map and commands committed to git",
+    "why": "Until .groundwork/ and .claude/ are committed, the history of decisions is not kept, and /decisions has no trail to point back to.",
+    "near": ["n_ax4k"],
+    "severity": "important",
+    "page": "Product",
+    "topic": "working with claude",
+    "altitude": 2
+  },
+  {
+    "id": "gap_type_scale",
+    "area": "design foundation",
+    "title": "Type scale and spacing",
+    "why": "Each new panel picks its own sizes, so the interface drifts a little with every change.",
+    "near": ["n_bz8p", "n_wv4e"],
+    "severity": "important",
+    "page": "Feedback",
+    "topic": "look and feel",
+    "altitude": 2
+  },
+  {
+    "id": "gap_design_refs",
+    "area": "setup for building with claude",
+    "title": "A place for documents and references",
+    "why": "Images can live in a node, but documents and reference sets still live only in sessions.",
+    "near": ["n_a6nn", "n_bz8p"],
+    "severity": "nice",
+    "page": "Feedback",
+    "topic": "look and feel",
+    "altitude": 2
+  },
+  {
+    "id": "gap_npm_name",
+    "area": "constraints",
+    "title": "npm name and license, for when it is shared",
+    "why": "\"groundwork\" is taken on npm. It does not matter while this is internal, but it will the day someone else installs it.",
+    "near": [],
+    "severity": "nice",
+    "page": "Product",
+    "topic": "constraints",
+    "altitude": 3
+  },
+  {
+    "id": "gap_lint",
+    "area": "setup for building with claude",
+    "title": "Lint and format config",
+    "why": "Without one, style is held only by habit and each session formats a little differently.",
+    "near": [],
+    "severity": "nice",
+    "page": "Product",
+    "topic": "working with claude",
+    "altitude": 1
+  }
+]
