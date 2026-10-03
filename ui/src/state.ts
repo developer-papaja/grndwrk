@@ -28,6 +28,8 @@ const pending = new Set<DraftField>()
 /** Deletes started here, so their live event is not reported as a deletion on disk. */
 const deleting = new Set<string>()
 export const ALL = '*'
+/** Nodes with edits that failed to save, retried after a reconnect. */
+const unsaved = new Set<string>()
 const freshTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let deleteTimer: ReturnType<typeof setTimeout> | undefined
 let noteTimer: ReturnType<typeof setTimeout> | undefined
@@ -58,6 +60,7 @@ export const state = Alpine.reactive({
   currentPage: readStored<string>('groundwork.page', ALL),
   addingPage: false,
   reply: '',
+  sending: false,
   newPage: '',
   listOpen: readStored('groundwork.listOpen', true),
   detailsMinimized: readStored('groundwork.detailsMinimized', false),
@@ -174,6 +177,9 @@ export const state = Alpine.reactive({
   },
 
   select(id: string | null) {
+    if (this.selectedId && unsaved.has(this.selectedId) && this.selectedId !== id) {
+      this.flash('Some edits on the last card were not saved. Groundwork is offline.')
+    }
     this.flushAll()
     this.selectedId = id
     this.deleteArmed = false
@@ -260,13 +266,20 @@ export const state = Alpine.reactive({
       if (this.draft[f] === value && !timers.has(f)) pending.delete(f)
       this.upsert(node)
     } catch (err) {
-      pending.delete(f)
-      this.flash(errorText(err))
-      this.syncDraft()
+      // Keep what was typed. It is saved again when the connection is back.
+      unsaved.add(id)
+      this.flash(`Not saved yet: ${errorText(err)}`)
     }
   },
   flushAll() {
     for (const f of [...pending]) void this.flush(f)
+  },
+  /** After a reconnect: save whatever could not be saved while offline. */
+  retryUnsaved() {
+    if (this.selectedId && unsaved.has(this.selectedId)) {
+      unsaved.clear()
+      this.flushAll()
+    }
   },
 
   /** `[` and `]`: move the open node one altitude step. */
@@ -320,12 +333,28 @@ export const state = Alpine.reactive({
     }
     return true
   },
-  sendReply() {
+  /** Add a reply to the thread. The text stays in the box until it is saved. */
+  async sendReply() {
     const text = this.reply.trim()
-    if (!text || !this.selected) return
-    this.draft.body = appendEntry(this.draft.body, 'you', text, new Date().toISOString().slice(0, 10))
-    this.reply = ''
-    this.edit('body', true)
+    const id = this.selectedId
+    if (!text || !id || this.sending) return
+    const body = appendEntry(this.draft.body, 'you', text, new Date().toISOString().slice(0, 10))
+    this.sending = true
+    try {
+      clearTimeout(timers.get('body'))
+      timers.delete('body')
+      const node = await updateNode(id, { body })
+      pending.delete('body')
+      if (this.selectedId === id) {
+        this.draft.body = body
+        this.reply = ''
+      }
+      this.upsert(node)
+    } catch (err) {
+      this.flash(`Reply not saved: ${errorText(err)}`)
+    } finally {
+      this.sending = false
+    }
   },
   /** Open the next card with a question, moving to its page if needed. */
   nextQuestion() {

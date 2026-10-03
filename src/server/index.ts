@@ -39,7 +39,15 @@ export async function startServer({ gwDir, port, dev }: StartOptions): Promise<{
     })
     ui = vite.middlewares
   } else {
-    ui = sirv(join(PACKAGE_ROOT, 'dist', 'ui'), { single: true, dev: false })
+    ui = sirv(join(PACKAGE_ROOT, 'dist', 'ui'), {
+      single: true,
+      dev: false,
+      // The page must always be fresh, or a browser keeps running an old
+      // build after an update. Built assets have hashed names and never change.
+      setHeaders: (res, pathname) => {
+        res.setHeader('Cache-Control', pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache')
+      },
+    })
   }
 
   const actualPort = await listen(server, port)

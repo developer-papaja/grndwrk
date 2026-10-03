@@ -60,6 +60,7 @@ subscribe({
   // On every (re)connect, fetch the full list, since events may have been missed while offline.
   onOpen: () => {
     state.live = true
+    state.retryUnsaved()
     void reload()
     void fetchProject().then((p) => (state.project = p))
   },
