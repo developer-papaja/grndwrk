@@ -84,3 +84,10 @@ describe('scalar', () => {
     }
   })
 })
+
+describe('topic_by', () => {
+  it('stays right after the topic', () => {
+    const n = parseNode('n_tbtb', '---\ntitle: x\naltitude: 2\ntopic: nav\ncreated: 2026-10-03\ntopic_by: claude\n---\n')
+    expect(serializeNode(n)).toContain('title: x\ntopic: nav\ntopic_by: claude\naltitude: 2\n')
+  })
+})

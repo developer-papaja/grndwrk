@@ -67,12 +67,15 @@ export function serializeNode(node: GNode): string {
     `type: ${node.type}`,
     `title: ${scalar(node.title)}`,
     ...(node.topic ? [`topic: ${scalar(node.topic)}`] : []),
+    // Who set the topic sits next to it, so the pair reads together.
+    ...(node.topic && typeof node.extra.topic_by === 'string' ? [`topic_by: ${scalar(node.extra.topic_by)}`] : []),
     `altitude: ${node.altitude}`,
     `links: [${node.links.join(', ')}]`,
     `status: ${node.status}`,
     `created: ${node.created}`,
   ]
   for (const [k, v] of Object.entries(node.extra)) {
+    if (k === 'topic_by') continue
     lines.push(`${scalar(k)}: ${typeof v === 'string' ? scalar(v) : JSON.stringify(v instanceof Date ? v.toISOString().slice(0, 10) : v)}`)
   }
   return `---\n${lines.join('\n')}\n---\n${node.body}`

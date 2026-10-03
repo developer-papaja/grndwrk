@@ -83,6 +83,17 @@ describe('NodeStore', () => {
     expect(await file(a.id)).not.toContain('topic:')
   })
 
+  it('makes a topic your own when you set it, dropping the mark that Claude set it', async () => {
+    const a = (await store.create({ title: 'A' })).upserted[0]
+    await writeFile(join(root, 'nodes', `${a.id}.md`), (await file(a.id)).replace('title: A\n', 'title: A\ntopic: guess\ntopic_by: claude\n'))
+    await store.update(a.id, { altitude: 4 })
+    expect(await file(a.id)).toContain('topic_by: claude')
+    await store.update(a.id, { topic: 'mine' })
+    const after = await file(a.id)
+    expect(after).toContain('topic: mine')
+    expect(after).not.toContain('topic_by')
+  })
+
   it('normalizes bad input instead of failing', async () => {
     const n = (await store.create({ title: 'x', altitude: 12, type: 'nope' as never })).upserted[0]
     expect(n).toMatchObject({ altitude: 5, type: 'idea' })

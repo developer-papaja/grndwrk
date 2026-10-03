@@ -10,6 +10,15 @@
   .field {
     @apply rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-fog placeholder:text-fog/30 focus:border-white/25 focus:outline-none;
   }
+  .tool {
+    @apply rounded-md px-2 py-1 text-fog/60 hover:bg-white/8 hover:text-fog;
+  }
+  .tool-on {
+    @apply bg-amber-300/15 text-amber-100;
+  }
+  .tool-danger {
+    @apply bg-rose-400/20 text-rose-100;
+  }
   .label {
     @apply mb-1 block text-[11px] tracking-wide text-fog/45 uppercase;
   }

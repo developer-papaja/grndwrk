@@ -3,7 +3,7 @@ import type { GNode, NodeType, Status } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, updateNode } from './api'
 import { parseCapture, sameTitle } from './capture'
-import { topicColumns } from './layout'
+import { ALTITUDE_WORDS, topicColumns } from './layout'
 import { flatten, groupForList, type ListGroup } from './list'
 
 export type DraftField = 'title' | 'topic' | 'type' | 'altitude' | 'status' | 'body'
@@ -59,6 +59,7 @@ export const state = Alpine.reactive({
   listIndex: 0,
   note: '',
   types: NODE_TYPES,
+  altitudeWords: ALTITUDE_WORDS,
   statuses: STATUSES,
 
   get count() {
@@ -66,15 +67,6 @@ export const state = Alpine.reactive({
   },
   get selected(): GNode | null {
     return this.selectedId ? (this.nodes[this.selectedId] ?? null) : null
-  },
-  /** One plain sentence under the capture bar about what you can do right now. */
-  get hint(): string {
-    const sel = this.selected
-    if (this.mode === 'link') return 'Click cards to link or unlink them. Press Esc when you are done.'
-    if (sel?.error) return 'This file cannot be read. Fix it in your editor and it updates here.'
-    if (sel) return 'New thoughts link to the open one and join its topic. [ and ] change altitude. L links. Esc closes.'
-    if (this.count === 0) return 'Your first thought can be anything. Press Enter to add it.'
-    return 'Click a card to open it. Hover a dot to read it. Hold space and drag to pan. / searches, F fits the map.'
   },
   /** Existing topic names, for suggestions in the panel. */
   get topicNames(): string[] {

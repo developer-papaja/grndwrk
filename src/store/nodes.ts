@@ -99,6 +99,11 @@ export class NodeStore {
       if (input.title !== undefined && !input.title.trim()) throw new BadInput('A title is required')
 
       const next: GNode = { ...current, ...clean(input), links: [...current.links] }
+      // A topic set here is the person's own. Claude may only revise topics it set itself.
+      if (input.topic !== undefined) {
+        const { topic_by: _, ...rest } = current.extra
+        next.extra = rest
+      }
       if (input.links) next.links = [...new Set(input.links)].filter((l) => l !== id && byId.has(l))
       byId.set(id, next)
       return this.writeWithLinks(byId, next, current.links)
