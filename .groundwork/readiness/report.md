@@ -20,7 +20,7 @@ Still ready to prototype, but closer. Purpose is now clear and the design and ac
 
 **Constraints: thin.** n_mcjp makes clear it is an internal tool for now, which makes the npm name and license much less urgent. They only matter when you share it. No deadline is stated, which is fine for an internal tool.
 
-**Setup for building with Claude: thin.** CLAUDE.md, PLAN.md, commands and tests are in place. .groundwork/ and .claude/ are still not committed to git. n_a6nn asks for the tool to hold images and documents so design references are not lost in sessions. Images can already be pasted into a node's notes; documents cannot yet, so the references gap stays open as a small one. No lint or format config.
+**Setup for building with Claude: thin.** CLAUDE.md, PLAN.md, commands and tests are in place. The map and commands are now committed (f984704). n_a6nn asks for the tool to hold images and documents so design references are not lost in sessions. Images can already be pasted into a node's notes; documents cannot yet, so the references gap stays open as a small one. No lint or format config.
 
 **Open questions: enough.** No thread question is waiting. n_dtmw ("a better way to keep check on what has been answered and not") is feedback on the tool itself, not a question about the product.
 
@@ -28,5 +28,4 @@ Still ready to prototype, but closer. Purpose is now clear and the design and ac
 
 1. Write the kickoff flow as steps, from `groundwork init` to the deliverable n_scwj describes.
 2. Name at least one thing the first version will not do, in the map.
-3. Commit .groundwork/ and .claude/ to git.
-4. Decide a type scale and spacing, even a simple one, and write it down where Claude Code reads it.
+3. Decide a type scale and spacing, even a simple one, and write it down where Claude Code reads it.
