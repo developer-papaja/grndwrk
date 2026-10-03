@@ -59,11 +59,23 @@
         <template x-for="group in $store.gw.listGroups" :key="group.key">
           <section class="mb-2">
             <button
-              class="flex w-full items-baseline justify-between rounded-md px-2 py-1 text-[11px] uppercase tracking-wide text-fog/45 hover:bg-white/5"
+              class="flex w-full items-center justify-between rounded-md px-2 py-1 text-[11px] uppercase tracking-wide text-fog/45 hover:bg-white/5"
               @click="$store.gw.toggleGroup(group.key)"
               :aria-expanded="!$store.gw.isCollapsed(group.key)"
             >
-              <span><span class="inline-block w-3 text-fog/35" x-text="$store.gw.isCollapsed(group.key) ? '▸' : '▾'"></span><span x-text="group.name"></span></span>
+              <span class="flex items-center gap-1">
+                <!-- Heroicons chevron-right, 20 solid (MIT). Turns down when the group is open. -->
+                <svg
+                  class="size-3.5 shrink-0 text-fog/35 transition-transform duration-150"
+                  :class="!$store.gw.isCollapsed(group.key) && 'rotate-90'"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" />
+                </svg>
+                <span x-text="group.name"></span>
+              </span>
               <span
                 class="normal-case tracking-normal"
                 :class="group.total <= 2 ? 'text-amber-200/70' : 'text-fog/35'"
