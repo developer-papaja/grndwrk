@@ -106,10 +106,19 @@ Entries are `**Claude asks**`, `**Claude**` or `**You**`, a dot and a date. A qu
     "title": "No typography decided",
     "why": "Prompts will invent a type scale per screen",
     "near": ["n_3k1a"],
-    "severity": "blocking"
+    "severity": "blocking",
+    "page": "Product",
+    "topic": "look and feel",
+    "altitude": 2
   }
 ]
 ```
+
+- **severity:** blocking, important or nice.
+- **page, topic, altitude:** where the ghost card sits. A topic only gaps point at still gets a column, so an empty area shows.
+- **answered_by:** set from the map when a ghost is answered (the answer becomes a node). `/readiness` checks that node and drops the gap when it closes it. Keep gap ids stable across runs.
+
+`report.md` has `verdict:` (ready to build, ready to prototype, not ready) and `checked:` in its frontmatter, then the areas and the smallest set of things to add.
 
 A story file:
 
@@ -166,7 +175,7 @@ Shipped with the package in `commands/` and copied into the host project's `.cla
 - **/import <file>** turns a document, such as a brief or a list of user stories, into nodes with the source line quoted in each.
 - **/topics** reads all nodes and writes `topic:` into them: three to seven topics, reusing existing ones, never touching titles or notes. Ends with which topics look thin.
 - **/readiness** reads `project.md`, all nodes and `checklist.md`. Judges each checklist area as missing, thin or enough, relative to the project type. Writes `report.md` and `gaps.json`. Ends with a clear verdict: ready to build, ready to prototype, or not ready, plus the smallest set of things to add.
-- **/challenge** looks at the thinnest areas and writes a few sharp question nodes into the map. This is the seed of the later interview feature.
+- **/challenge** looks at the thinnest areas and asks three to five choice forcing questions: in the thread of the thought they concern, or as a new question node where an area is empty. This is the seed of the later interview feature.
 - **/brief** writes `outputs/brief.md`, `outputs/CLAUDE.starter.md` and the first set of stories in `stories/`, one file each, every story linked to the nodes it came from. If readiness has blocking gaps, it says so at the top instead of hiding them.
 - **/review** (later phase, do not build yet) reads a page's code and its stories and writes arguments: drift, orphans, conflicts, and requests that contradict earlier decisions. See PLAN.md Phase 6.
 

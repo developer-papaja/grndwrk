@@ -29,11 +29,12 @@ One phase per Claude Code session. Start each in plan mode, commit when the done
 
 **Done when:** looking at the map, you can tell at a glance where the abstract thinking is, where the concrete detail is, which topics exist and which are thin.
 
-## Phase 3: Readiness
+## Phase 3: Readiness (done)
 
 - Write `/readiness` and `/challenge` as Claude Code commands
 - UI shows `report.md` in a panel and `gaps.json` as ghost nodes
 - Answering a ghost node creates a real node and marks the gap for re-check
+- Built with: threads for /challenge questions, a "Setup for building with Claude" checklist area (from the insights idea in the map), a verdict pill and the report in the right panel
 
 **Done when:** running `/readiness` on a real idea gives a verdict you agree with, and the ghost nodes point at things you actually had not thought about.
 
