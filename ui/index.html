@@ -50,6 +50,22 @@
             <span class="size-1.5 rounded-full bg-question"></span>
             <span x-text="$store.gw.questionIds.length + ($store.gw.questionIds.length === 1 ? ' question for you' : ' questions for you')"></span>
           </button>
+          <button
+            x-show="$store.gw.readiness?.report"
+            id="verdict"
+            class="mt-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs"
+            :class="{
+              'bg-emerald-400/15 text-emerald-300 hover:bg-emerald-400/25': $store.gw.readiness?.report?.verdict === 'ready to build',
+              'bg-accent/15 text-sky-300 hover:bg-accent/25': $store.gw.readiness?.report?.verdict === 'ready to prototype',
+              'bg-question/15 text-question hover:bg-question/25': !['ready to build', 'ready to prototype'].includes($store.gw.readiness?.report?.verdict)
+            }"
+            title="Open the readiness report"
+            @click="$store.gw.openReport()"
+            x-text="$store.gw.verdictLabel"
+          ></button>
+          <p x-show="$store.gw.readiness && !$store.gw.readiness.report" class="mt-2 text-[11px] leading-snug text-fog/40">
+            Readiness not checked yet. Run /readiness in Claude Code.
+          </p>
         </div>
         <button id="list-button" class="icon-btn" title="Hide panel" @click="$store.gw.setListOpen(false)">
           <svg class="size-5"><use href="#i-panel" /></svg>
@@ -139,11 +155,10 @@
                 <svg class="size-4 shrink-0 text-fog/40 transition-transform duration-150" :class="!$store.gw.isCollapsed(group.key) && 'rotate-90'"><use href="#i-chevron" /></svg>
                 <span x-text="group.name"></span>
               </span>
-              <span
-                class="text-xs"
-                :class="group.total <= 2 ? 'text-amber-200/70' : 'text-fog/35'"
-                x-text="group.total <= 2 ? group.total + ', thin' : group.total"
-              ></span>
+              <span class="flex items-center gap-2 text-xs">
+                <span x-show="$store.gw.missingIn(group.key)" class="text-rose-300/80" x-text="$store.gw.missingIn(group.key) + ' missing'"></span>
+                <span :class="group.total <= 2 ? 'text-amber-200/70' : 'text-fog/35'" x-text="group.total <= 2 ? group.total + ', thin' : group.total"></span>
+              </span>
             </button>
             <template x-for="n in $store.gw.isCollapsed(group.key) ? [] : group.nodes" :key="n.id">
               <button
@@ -250,13 +265,13 @@
     <!-- Details: docked on the right, or a small pill when minimized -->
     <button
       x-cloak
-      x-show="$store.gw.selected && $store.gw.detailsMinimized"
+      x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.reportOpen) && $store.gw.detailsMinimized"
       id="details-tab"
       class="fixed right-3 top-3 flex max-w-[280px] items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-black/20"
       title="Show details"
       @click="$store.gw.setDetailsMinimized(false)"
     >
-      <span class="truncate text-fog/85" x-text="$store.gw.selected?.title"></span>
+      <span class="truncate text-fog/85" x-text="$store.gw.reportOpen ? 'Readiness report' : $store.gw.selectedGap ? 'Missing: ' + $store.gw.selectedGap.title : $store.gw.selected?.title"></span>
       <span class="icon-btn"><svg class="size-5"><use href="#i-panel-right" /></svg></span>
     </button>
 
@@ -266,12 +281,12 @@
       class="fixed inset-y-0 right-0 flex w-[360px] max-w-full flex-col border-l border-line bg-panel text-[13px]"
     >
       <div class="flex items-center justify-between px-4 py-3">
-        <span class="font-semibold text-fog">Details</span>
+        <span class="font-semibold text-fog" x-text="$store.gw.reportOpen ? 'Readiness' : $store.gw.selectedGap ? 'Missing' : 'Details'"></span>
         <span class="-mr-1.5 flex items-center">
           <button id="minimize" class="icon-btn" title="Minimize" @click="$store.gw.setDetailsMinimized(true)">
             <svg class="size-5"><use href="#i-panel-right" /></svg>
           </button>
-          <button class="icon-btn" title="Close ( Esc )" @click="$store.gw.select(null)">
+          <button class="icon-btn" title="Close ( Esc )" @click="$store.gw.closePanel()">
             <svg class="size-5"><use href="#i-close" /></svg>
           </button>
         </span>
@@ -279,6 +294,62 @@
       <div class="border-t border-line"></div>
 
       <div class="flex-1 overflow-y-auto p-4">
+        <template x-if="$store.gw.reportOpen && $store.gw.readiness?.report">
+          <div id="report">
+            <p class="mb-3 text-xs text-fog/45" x-text="'Checked ' + $store.gw.readiness.report.checked + ' · ' + $store.gw.readiness.gaps.length + ' gaps'"></p>
+            <div class="report" x-html="$store.gw.reportHtml"></div>
+            <p class="mt-4 text-xs text-fog/40">Run /readiness in Claude Code to check again, or /challenge for questions on the thinnest parts.</p>
+          </div>
+        </template>
+
+        <template x-if="$store.gw.selectedGap">
+          <div class="flex flex-col gap-4" id="gap">
+            <div>
+              <span
+                class="inline-block rounded px-1.5 py-0.5 text-[11px] font-medium"
+                :class="{ 'bg-rose-400/15 text-rose-300': $store.gw.selectedGap.severity === 'blocking', 'bg-question/15 text-question': $store.gw.selectedGap.severity === 'important', 'bg-white/10 text-fog/60': $store.gw.selectedGap.severity === 'nice' }"
+                x-text="$store.gw.selectedGap.severity"
+              ></span>
+              <span class="ml-1 text-[11px] text-fog/45" x-text="$store.gw.selectedGap.area"></span>
+              <h2 class="mt-2 text-[15px] font-semibold leading-snug text-fog" x-text="$store.gw.selectedGap.title"></h2>
+            </div>
+            <div>
+              <span class="label">Why it matters</span>
+              <p class="text-fog/80" x-text="$store.gw.selectedGap.why"></p>
+            </div>
+            <div x-show="$store.gw.selectedGap.near.some((id) => $store.gw.nodes[id])">
+              <span class="label">Near</span>
+              <template x-for="id in $store.gw.selectedGap.near.filter((id) => $store.gw.nodes[id])" :key="id">
+                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.select(id)">
+                  <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[$store.gw.nodes[id].type] }"></span>
+                  <span class="truncate" x-text="$store.gw.nodes[id].title"></span>
+                </button>
+              </template>
+            </div>
+            <template x-if="$store.gw.selectedGap.answered_by">
+              <div class="rounded-lg border border-line px-3 py-2 text-fog/70">
+                <span class="label mb-1">Answered by</span>
+                <button class="block w-full text-left text-accent hover:underline" @click="$store.gw.select($store.gw.selectedGap.answered_by)" x-text="$store.gw.nodes[$store.gw.selectedGap.answered_by]?.title ?? $store.gw.selectedGap.answered_by"></button>
+                <p class="mt-1.5 text-xs text-fog/45">Run /readiness in Claude Code to check whether this closes the gap.</p>
+              </div>
+            </template>
+            <form x-show="!$store.gw.selectedGap.answered_by" @submit.prevent="$store.gw.answerGap()">
+              <span class="label">Your answer becomes a thought here</span>
+              <textarea
+                id="gap-answer"
+                rows="3"
+                x-model="$store.gw.gapAnswer"
+                @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerGap() }"
+                placeholder="For example: Inter, 13px base, 1.25 scale"
+                class="field w-full resize-none"
+              ></textarea>
+              <div class="mt-1.5 flex justify-end">
+                <button id="gap-add" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()">Add to map</button>
+              </div>
+            </form>
+          </div>
+        </template>
+
         <template x-if="$store.gw.selected?.error">
           <div class="space-y-3">
             <h2 class="font-medium text-rose-200" x-text="$store.gw.selected.id + '.md cannot be read'"></h2>

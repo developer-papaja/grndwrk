@@ -55,7 +55,7 @@ export function bindKeys(captureInput: () => HTMLInputElement | null, actions: {
         break
       case 'Escape':
         if (state.mode === 'link') state.toggleLinkMode()
-        else if (state.selectedId) state.select(null)
+        else if (state.selectedId || state.selectedGapId || state.reportOpen) state.closePanel()
         break
     }
   })

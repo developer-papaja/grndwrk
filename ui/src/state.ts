@@ -1,10 +1,11 @@
 import Alpine from 'alpinejs'
-import type { GNode, NodeType, Status } from '../../src/shared/types'
+import type { Gap, GNode, NodeType, Readiness, Status } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, savePages, updateNode, uploadImage } from './api'
+import { createNode, deleteNode, fetchReadiness, markGapAnswered, savePages, updateNode, uploadImage } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseCapture, sameTitle } from './capture'
+import { marked } from 'marked'
 import { ALTITUDE_WORDS, topicColumns } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
@@ -63,6 +64,11 @@ export const state = Alpine.reactive({
   addingPage: false,
   reply: '',
   sending: false,
+  readiness: null as Readiness | null,
+  /** The right panel shows the readiness report instead of a card. */
+  reportOpen: false,
+  selectedGapId: null as string | null,
+  gapAnswer: '',
   /** Shown under the reply box: what happened to the last reply. */
   replyStatus: '',
   newPage: '',
@@ -139,7 +145,32 @@ export const state = Alpine.reactive({
     return flatten(this.listGroups.filter((g) => !this.isCollapsed(g.key)))
   },
   get detailsVisible(): boolean {
-    return !!this.selected && !this.detailsMinimized
+    return (!!this.selected || !!this.selectedGap || this.reportOpen) && !this.detailsMinimized
+  },
+  get selectedGap(): Gap | null {
+    return this.readiness?.gaps.find((g) => g.id === this.selectedGapId) ?? null
+  },
+  /** Gaps on the page in view. Everything on All. */
+  get visibleGaps(): Gap[] {
+    const gaps = this.readiness?.gaps ?? []
+    if (this.onAll) return gaps
+    return gaps.filter((g) => samePage(g.page || this.pageNames[0], this.currentPage))
+  },
+  /** Open gaps per topic, for the counts in the list. */
+  missingIn(topicKey: string): number {
+    return this.visibleGaps.filter((g) => !g.answered_by && (g.topic ?? '').trim().toLowerCase() === topicKey).length
+  },
+  /** The report as HTML. It is a local file written by /readiness, shown as is. */
+  get reportHtml(): string {
+    const body = this.readiness?.report?.body ?? ''
+    return marked.parse(body, { async: false }) as string
+  },
+  get verdictLabel(): string {
+    const r = this.readiness
+    if (!r?.report) return ''
+    const blocking = r.gaps.filter((g) => g.severity === 'blocking' && !g.answered_by).length
+    const verdict = r.report.verdict ?? 'checked'
+    return verdict.charAt(0).toUpperCase() + verdict.slice(1) + (blocking ? ` · ${blocking} blocking` : '')
   },
   /**
    * The space between the side panels, for bars that float over the map.
@@ -180,7 +211,58 @@ export const state = Alpine.reactive({
     onChange()
   },
 
+  async loadReadiness() {
+    try {
+      this.readiness = await fetchReadiness()
+      onChange()
+    } catch {
+      // Offline: the next reconnect loads it.
+    }
+  },
+  /** Close whatever the right panel shows. */
+  closePanel() {
+    this.select(null)
+    this.reportOpen = false
+    onChange()
+  },
+  openReport() {
+    this.select(null)
+    this.reportOpen = true
+    this.setDetailsMinimized(false)
+  },
+  selectGap(id: string) {
+    this.select(null)
+    this.selectedGapId = id
+    this.gapAnswer = ''
+    this.setDetailsMinimized(false)
+    onChange()
+  },
+  /** Answer a ghost: the answer becomes a real thought where the gap was, and the gap is marked for a re-check. */
+  async answerGap() {
+    const gap = this.selectedGap
+    const title = this.gapAnswer.trim()
+    if (!gap || !title) return
+    try {
+      const links = gap.near.filter((id) => this.nodes[id])
+      const node = await createNode({ title, topic: gap.topic ?? '', page: gap.page ?? '', altitude: gap.altitude ?? 3, links })
+      this.upsert(node)
+      this.markFresh(node.id)
+      this.readiness = await markGapAnswered(gap.id, node.id)
+      this.gapAnswer = ''
+      this.flash('Added to the map. Run /readiness to check again.')
+      onChange()
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+
   select(id: string | null) {
+    if (id) {
+      this.reportOpen = false
+    }
+    if (this.selectedGapId) {
+      this.selectedGapId = null
+    }
     // Each card keeps its own half typed reply, so an answer never lands on the wrong card.
     if (this.selectedId !== id) {
       if (this.selectedId) replyDrafts.set(this.selectedId, this.reply)

@@ -1,8 +1,8 @@
 import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
 import { BufferGeometry, Group, Line, LineBasicMaterial, MOUSE, PerspectiveCamera, Sprite, SpriteMaterial, Vector3 } from 'three'
-import type { GNode, NodeType, Status } from '../../src/shared/types'
-import { dotTexture, drawCard, type CardState } from './cards'
+import type { Gap, GNode, NodeType, Status } from '../../src/shared/types'
+import { dotTexture, drawCard, drawGhost, ringTexture, SEVERITY_COLORS, type CardState } from './cards'
 import {
   ageFractions,
   ageOpacity,
@@ -62,6 +62,19 @@ export interface SceneView {
   linkMode: boolean
   /** Just added or just pointed at. Shown as a highlighted card for a moment. */
   freshIds: string[]
+  /** What /readiness found missing, on the page in view. Drawn as ghost cards. */
+  gaps: Gap[]
+  selectedGapId: string | null
+}
+
+/** A gap drawn in the map. Ghosts are not part of the layout: they sit where their topic and altitude say. */
+interface GhostView {
+  gap: Gap
+  card: Sprite
+  dot: Sprite
+  key?: string
+  size?: { w: number; h: number }
+  pos: Vector3
 }
 
 /** Where a node can be clicked on screen right now: its card, or its dot. */
@@ -91,7 +104,9 @@ function screenSprite(order: number): Sprite {
 }
 
 export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: string) => void; onBackgroundClick: () => void }) {
-  let view: SceneView = { nodes: [], selectedId: null, linkMode: false, freshIds: [] }
+  let view: SceneView = { nodes: [], selectedId: null, linkMode: false, freshIds: [], gaps: [], selectedGapId: null }
+  const ghosts = new Map<string, GhostView>()
+  const ghostLayer = new Group()
   let structure = ''
   let layoutKey = ''
   let columns = new Map<string, Column>()
@@ -191,7 +206,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
 
   const guides = new Group()
   const topicLabels = new Group()
-  graph.scene().add(guides, topicLabels)
+  graph.scene().add(guides, topicLabels, ghostLayer)
 
   function linkEnds(l: GraphLink): [GraphNode | undefined, GraphNode | undefined] {
     const byId = (v: string | GraphNode) => (typeof v === 'string' ? graph.graphData().nodes.find((n) => n.id === v) : v)
@@ -256,6 +271,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       n.fy = ease(n.fy, levelY(n.altitude))
       n.fz = ease(n.fz, depthZ(n.age))
     }
+    placeGhosts()
     placeCards()
     requestAnimationFrame(frame)
   }
@@ -307,7 +323,87 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
         dots.push({ id: n.id, x1: p.x - 8, x2: p.x + 8, y1: p.y - 8, y2: p.y + 8 })
       }
     }
-    hits = [...shown, ...dots]
+    // Ghosts come after every real card, so they never push one aside.
+    const ghostHits: Hit[] = []
+    for (const g of ghosts.values()) {
+      if (!g.size) continue
+      const p = graph.graph2ScreenCoords(g.pos.x, g.pos.y, g.pos.z)
+      const { w, h } = g.size
+      const box = { id: `gap:${g.gap.id}`, x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - h / 2, y2: p.y + h / 2 }
+      const selected = g.gap.id === view.selectedGapId
+      const hovered = hoveredId === box.id
+      // A blocking gap always shows in full: it is the thing to see first.
+      const blocking = g.gap.severity === 'blocking' && !g.gap.answered_by
+      const covered = shown.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
+      const asCard = selected || hovered || blocking || !covered
+      g.card.visible = asCard
+      g.dot.visible = !asCard
+      if (asCard) {
+        g.card.scale.set(w / pxPerUnit, h / pxPerUnit, 1)
+        shown.push(box)
+        ghostHits.push(box)
+      } else {
+        g.dot.scale.set((DOT_PX + 4) / pxPerUnit, (DOT_PX + 4) / pxPerUnit, 1)
+        ghostHits.push({ id: box.id, x1: p.x - 8, x2: p.x + 8, y1: p.y - 8, y2: p.y + 8 })
+      }
+    }
+    hits = [...shown.filter((b) => !b.id.startsWith('gap:')), ...dots, ...ghostHits]
+  }
+
+  /**
+   * Put each ghost in its topic's column at its altitude, a little behind the
+   * real cards. Without a topic it sits beside the thoughts it is near.
+   * Ghosts sharing a spot line up next to each other.
+   */
+  function placeGhosts() {
+    const nodes = new Map(graph.graphData().nodes.map((n) => [n.id, n]))
+    const taken = new Map<string, number>()
+    for (const g of ghosts.values()) {
+      const near = g.gap.near.map((id) => nodes.get(id)).filter((n): n is GraphNode => !!n && n.x !== undefined)
+      const col = g.gap.topic ? columns.get(topicKey(g.gap.topic)) : undefined
+      const baseX = col ? col.x : near.length ? near.reduce((s, n) => s + n.x!, 0) / near.length + 60 : 0
+      const altitude = g.gap.altitude ?? 3
+      const spot = `${Math.round(baseX)}:${altitude}`
+      const i = taken.get(spot) ?? 0
+      taken.set(spot, i + 1)
+      g.pos.set(baseX + (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * 120, levelY(altitude), depthZ(1) - 30)
+      g.card.position.copy(g.pos)
+      g.dot.position.copy(g.pos)
+    }
+  }
+
+  function renderGhosts() {
+    const keep = new Set(view.gaps.map((g) => g.id))
+    for (const [id, g] of ghosts) {
+      if (keep.has(id)) continue
+      ghostLayer.remove(g.card, g.dot)
+      g.card.material.map?.dispose()
+      g.card.material.dispose()
+      g.dot.material.dispose()
+      ghosts.delete(id)
+    }
+    for (const gap of view.gaps) {
+      let g = ghosts.get(gap.id)
+      if (!g) {
+        g = { gap, card: screenSprite(19), dot: screenSprite(18), pos: new Vector3() }
+        g.dot.visible = false
+        ghostLayer.add(g.card, g.dot)
+        ghosts.set(gap.id, g)
+      }
+      g.gap = gap
+      const selected = gap.id === view.selectedGapId
+      const key = [gap.title, gap.severity, !!gap.answered_by, selected].join('|')
+      if (key !== g.key) {
+        g.key = key
+        const card = drawGhost({ title: gap.title, severity: gap.severity, answered: !!gap.answered_by, selected })
+        g.card.material.map?.dispose()
+        g.card.material.map = card.texture
+        g.card.material.needsUpdate = true
+        g.size = { w: card.width, h: card.height }
+        g.dot.material.map = ringTexture(SEVERITY_COLORS[gap.severity])
+        g.dot.material.needsUpdate = true
+      }
+    }
   }
 
   function render(next: SceneView) {
@@ -315,7 +411,8 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     const existing = new Map(graph.graphData().nodes.map((n) => [n.id, n]))
     const ids = new Set(next.nodes.map((n) => n.id))
     const ages = ageFractions(next.nodes)
-    columns = topicColumns(next.nodes)
+    // A topic only gaps point at still gets a column: that is how an empty area shows.
+    columns = topicColumns([...next.nodes, ...next.gaps.filter((g) => g.topic).map((g) => ({ topic: g.topic }))])
     step = altitudeStep(columns.size, el.clientWidth / Math.max(1, el.clientHeight))
 
     const links: GraphLink[] = []
@@ -360,6 +457,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       graph.d3ReheatSimulation()
     }
     for (const n of nodes) style(n)
+    renderGhosts()
     graph.linkColor(graph.linkColor())
     drawGuides()
     frameOnce()
@@ -394,7 +492,9 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     }
     const jitter = () => (Math.random() - 0.5) * 30
     const anchor = n.links.map((l) => existing.get(l)).find((a) => a?.x !== undefined)
-    g.x = (anchor?.x ?? columns.get(g.topic)?.x ?? 0) + jitter()
+    // Its own topic's column first; the node it links to only when it has no topic.
+    const column = g.topic ? columns.get(g.topic) : undefined
+    g.x = (column?.x ?? anchor?.x ?? 0) + jitter()
     g.y = g.fy = levelY(n.altitude)
     g.z = g.fz = depthZ(0)
     return g

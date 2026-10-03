@@ -38,6 +38,23 @@
   }
 }
 
+/* The readiness report, rendered from markdown. */
+.report h2 {
+  @apply mb-2 mt-5 text-[13px] font-semibold text-fog;
+}
+.report p {
+  @apply mb-2.5 leading-relaxed text-fog/80;
+}
+.report strong {
+  @apply font-semibold text-fog;
+}
+.report ol {
+  @apply mb-2.5 list-decimal space-y-1.5 pl-5 text-fog/80;
+}
+.report ul {
+  @apply mb-2.5 list-disc space-y-1.5 pl-5 text-fog/80;
+}
+
 html,
 body {
   height: 100%;

@@ -7,6 +7,7 @@ import { onFit, onNodesChange, state } from './state'
 
 const scene = createScene(document.getElementById('scene')!, {
   onNodeClick: (id) => {
+    if (id.startsWith('gap:')) return state.selectGap(id.slice(4))
     if (state.mode === 'link' && state.selectedId && id !== state.selectedId) void state.toggleLink(id)
     else state.select(id)
   },
@@ -27,6 +28,8 @@ onNodesChange(() => {
       selectedId: state.selectedId,
       linkMode: state.mode === 'link',
       freshIds: [...state.freshIds],
+      gaps: Alpine.raw(state.visibleGaps).map((g) => Alpine.raw(g)),
+      selectedGapId: state.selectedGapId,
     })
   })
 })
@@ -64,6 +67,7 @@ const handlers = {
     state.retryUnsaved()
     void reload()
     void fetchProject().then((p) => (state.project = p))
+    void state.loadReadiness()
   },
   onError: () => {
     state.live = false
@@ -73,6 +77,8 @@ const handlers = {
     else if (event.type === 'node:delete') state.removeLocal(event.id)
     else if (event.type === 'file:change' && event.path === 'project.md') {
       void fetchProject().then((p) => (state.project = p))
+    } else if (event.type === 'file:change' && event.path.startsWith('readiness/')) {
+      void state.loadReadiness()
     }
   },
 }

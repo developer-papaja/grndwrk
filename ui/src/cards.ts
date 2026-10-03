@@ -95,6 +95,70 @@ export function drawCard(look: CardLook): Card {
   return { texture, width, height }
 }
 
+export const SEVERITY_COLORS = { blocking: '#f07a8c', important: '#f5b942', nice: '#9ba6b9' }
+
+/**
+ * Something /readiness found missing, drawn as a ghost: a dashed outline in
+ * the severity's color, no fill to speak of, and "Missing:" in front.
+ * Once answered it fades and says so.
+ */
+export function drawGhost(look: { title: string; severity: keyof typeof SEVERITY_COLORS; answered: boolean; selected: boolean }): Card {
+  const color = SEVERITY_COLORS[look.severity]
+  const label = look.answered ? 'Answered: ' : 'Missing: '
+  const lines = wrapLabel(label + look.title).split('\n')
+  measure.font = FONT
+  const textWidth = Math.max(...lines.map((l) => measure.measureText(l).width))
+  const width = Math.ceil(textWidth + PAD_X * 2)
+  const height = PAD_Y * 2 + lines.length * LINE
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width * SCALE
+  canvas.height = height * SCALE
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(SCALE, SCALE)
+  ctx.globalAlpha = look.answered ? 0.5 : 1
+
+  ctx.beginPath()
+  ctx.roundRect(1, 1, width - 2, height - 2, 6)
+  ctx.fillStyle = look.selected ? 'rgba(44, 44, 44, 0.95)' : 'rgba(30, 30, 30, 0.7)'
+  ctx.fill()
+  ctx.setLineDash([4, 3])
+  ctx.lineWidth = look.selected ? 2 : 1.5
+  ctx.strokeStyle = color
+  ctx.stroke()
+
+  ctx.font = FONT
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = color
+  lines.forEach((line, i) => ctx.fillText(line, PAD_X, PAD_Y + LINE * i + LINE / 2 + 0.5))
+
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  texture.generateMipmaps = false
+  texture.minFilter = LinearFilter
+  return { texture, width, height }
+}
+
+/** A hollow ring: a ghost with no room right now. Hollow, so it never reads as a thought. */
+const rings = new Map<string, CanvasTexture>()
+export function ringTexture(color: string): CanvasTexture {
+  let t = rings.get(color)
+  if (t) return t
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = 32
+  const ctx = canvas.getContext('2d')!
+  ctx.beginPath()
+  ctx.arc(16, 16, 10, 0, Math.PI * 2)
+  ctx.setLineDash([5, 3])
+  ctx.lineWidth = 3.5
+  ctx.strokeStyle = color
+  ctx.stroke()
+  t = new CanvasTexture(canvas)
+  t.colorSpace = SRGBColorSpace
+  rings.set(color, t)
+  return t
+}
+
 /** A small round dot, used for a card that has no room right now. */
 const dots = new Map<string, CanvasTexture>()
 export function dotTexture(color: string): CanvasTexture {

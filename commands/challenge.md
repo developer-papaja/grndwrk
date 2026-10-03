@@ -23,7 +23,16 @@ Three to five questions, aimed at the thinnest areas, the ones a real build woul
 Is booking for a day, half a day or an hour?
 ```
 
-**When the area has no thought to attach to,** create a question node `.groundwork/nodes/<id>.md`. The id is `n_` plus four random lowercase letters or digits, and must not exist yet. Frontmatter order: `id, type, title, topic, topic_by, page, altitude, links, status, created`, with `type: question`, `status: open`, the question as the title, a page and topic (with `topic_by: claude` when you chose the topic), an altitude, and today's date. In its notes, one line on why it matters.
+**When the area has no thought to attach to,** create a question node `.groundwork/nodes/<id>.md`. The id is `n_` plus four random lowercase letters or digits, and must not exist yet. Frontmatter order: `id, type, title, topic, topic_by, page, altitude, links, status, created`, with `type: question`, `status: open`, the question as the title, a page and topic (with `topic_by: claude` when you chose the topic), an altitude, and today's date. In its notes, one line on why it matters, then the question again as a thread entry, so it shows among the person's open questions and can be answered with a reply:
+
+```md
+Why it matters, in one line.
+
+## Thread
+
+**Claude asks** · 2026-10-03
+The question.
+```
 
 Do not ask a question that is already open in a thread. Write only inside `.groundwork/nodes/`. Do not change titles or delete anything. The map updates live, and the person sees "questions for you" there.
 
