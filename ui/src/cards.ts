@@ -9,7 +9,7 @@ const EDGE = 3
 const FONT = '500 12.5px Inter, system-ui, sans-serif'
 const SCALE = 2
 
-export type CardState = 'normal' | 'linked' | 'selected'
+export type CardState = 'normal' | 'linked' | 'selected' | 'fresh'
 
 export interface CardLook {
   title: string
@@ -51,11 +51,13 @@ export function drawCard(look: CardLook): Card {
   ctx.roundRect(0.5, 0.5, width - 1, height - 1, r)
   ctx.fillStyle = look.state === 'selected' ? 'rgba(34, 40, 50, 0.97)' : 'rgba(22, 27, 34, 0.94)'
   ctx.fill()
-  ctx.lineWidth = 1
+  ctx.lineWidth = look.state === 'fresh' ? 2 : 1
   ctx.strokeStyle =
     look.state === 'selected'
       ? 'rgba(255, 255, 255, 0.85)'
-      : look.settled || look.state === 'linked'
+      : look.state === 'fresh'
+        ? look.color
+        : look.settled || look.state === 'linked'
         ? withAlpha(look.color, look.state === 'linked' ? 0.75 : 0.55)
         : 'rgba(255, 255, 255, 0.09)'
   ctx.stroke()

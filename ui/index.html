@@ -8,10 +8,10 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body class="bg-ink text-fog antialiased" x-data>
-    <div id="scene" class="fixed inset-0"></div>
+    <div id="scene" class="fixed bottom-0 top-12"></div>
 
-    <!-- Status -->
-    <div class="pointer-events-none fixed left-4 top-4 flex items-center gap-3 text-sm">
+    <!-- Top bar -->
+    <header class="fixed inset-x-0 top-0 flex h-12 items-center gap-3 border-b border-white/8 bg-ink px-4 text-sm">
       <span class="font-medium tracking-wide text-fog/90" x-text="$store.gw.project.name || 'Groundwork'"></span>
       <span class="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-fog/70">
         <span class="size-2 rounded-full" :class="$store.gw.live ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'"></span>
@@ -21,22 +21,23 @@
       </span>
       <button
         id="list-button"
-        class="pointer-events-auto rounded-full border border-white/10 px-3 py-1 text-xs text-fog/70 hover:bg-white/5 hover:text-fog"
+        class="rounded-full border border-white/10 px-3 py-1 text-xs text-fog/70 hover:bg-white/5 hover:text-fog"
         :class="$store.gw.listOpen && 'bg-white/10 text-fog'"
         @click="$store.gw.setListOpen(!$store.gw.listOpen)"
-       x-text="$store.gw.listOpen ? 'Hide list' : 'Show list'"></button>
+        x-text="$store.gw.listOpen ? 'Hide list' : 'Show list'"
+      ></button>
       <button
         id="fit-button"
-        class="pointer-events-auto rounded-full border border-white/10 px-3 py-1 text-xs text-fog/70 hover:bg-white/5 hover:text-fog"
+        class="rounded-full border border-white/10 px-3 py-1 text-xs text-fog/70 hover:bg-white/5 hover:text-fog"
         @click="$store.gw.fit()"
       >Fit map</button>
-    </div>
+    </header>
 
     <!-- List -->
     <aside
       x-cloak
       x-show="$store.gw.listOpen"
-      class="fixed bottom-4 left-4 top-14 flex w-[min(300px,calc(100vw-2rem))] flex-col rounded-xl border border-white/10 bg-panel/95 text-sm shadow-2xl shadow-black/40 backdrop-blur"
+      class="fixed bottom-0 left-0 top-12 flex w-[320px] max-w-full flex-col border-r border-white/8 bg-panel text-sm"
     >
       <div class="border-b border-white/5 p-3">
         <input
@@ -56,21 +57,26 @@
       <div class="flex-1 overflow-y-auto p-2" id="list">
         <p x-show="$store.gw.listRows.length === 0" class="p-2 text-xs text-fog/40">Nothing matches.</p>
         <template x-for="group in $store.gw.listGroups" :key="group.key">
-          <section class="mb-3">
-            <h3 class="flex items-baseline justify-between px-2 pb-1 text-[11px] uppercase tracking-wide text-fog/45">
-              <span x-text="group.name"></span>
+          <section class="mb-2">
+            <button
+              class="flex w-full items-baseline justify-between rounded-md px-2 py-1 text-[11px] uppercase tracking-wide text-fog/45 hover:bg-white/5"
+              @click="$store.gw.toggleGroup(group.key)"
+              :aria-expanded="!$store.gw.isCollapsed(group.key)"
+            >
+              <span><span class="inline-block w-3 text-fog/35" x-text="$store.gw.isCollapsed(group.key) ? '▸' : '▾'"></span><span x-text="group.name"></span></span>
               <span
                 class="normal-case tracking-normal"
                 :class="group.total <= 2 ? 'text-amber-200/70' : 'text-fog/35'"
                 x-text="group.total + (group.total === 1 ? ' node' : ' nodes') + (group.total <= 2 ? ', thin' : '')"
               ></span>
-            </h3>
-            <template x-for="n in group.nodes" :key="n.id">
+            </button>
+            <template x-for="n in $store.gw.isCollapsed(group.key) ? [] : group.nodes" :key="n.id">
               <button
                 class="flex w-full items-baseline gap-2 rounded-md px-2 py-1 text-left"
                 :class="[
                   $store.gw.listRows[$store.gw.listIndex]?.id === n.id ? 'bg-white/10 text-fog' : 'text-fog/75 hover:bg-white/5',
-                  $store.gw.selectedId === n.id && 'ring-1 ring-white/20'
+                  $store.gw.selectedId === n.id && 'ring-1 ring-white/20',
+                  $store.gw.freshIds.includes(n.id) && 'bg-white/10'
                 ]"
                 @click="$store.gw.chooseRow(n.id)"
               >
@@ -89,8 +95,8 @@
     <div
       x-cloak
       x-show="$store.gw.mode === 'link'"
-      class="pointer-events-none fixed inset-x-0 top-4 flex justify-center px-4"
-      :class="{ 'with-panel': $store.gw.selected, 'with-list': $store.gw.listOpen }"
+      class="pointer-events-none fixed top-16 flex justify-center px-4"
+      :style="$store.gw.mapArea"
     >
       <div id="link-banner" class="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-1.5 text-xs text-amber-100">
         Link mode: click nodes to link or unlink them from
@@ -103,12 +109,14 @@
       x-cloak
       x-show="$store.gw.note"
       x-transition.opacity
-      class="fixed bottom-24 left-1/2 -translate-x-1/2 rounded-md border border-white/10 bg-panel px-3 py-2 text-xs text-fog/80"
-      x-text="$store.gw.note"
-    ></div>
+      class="pointer-events-none fixed bottom-28 flex justify-center px-4"
+      :style="$store.gw.mapArea"
+    >
+      <div id="note" class="rounded-md border border-white/10 bg-panel px-3 py-2 text-xs text-fog/80" x-text="$store.gw.note"></div>
+    </div>
 
     <!-- Capture bar -->
-    <div class="pointer-events-none fixed inset-x-0 bottom-6 flex justify-center px-4" :class="{ 'with-panel': $store.gw.selected, 'with-list': $store.gw.listOpen }">
+    <div class="pointer-events-none fixed bottom-6 flex justify-center px-4" :style="$store.gw.mapArea">
     <form class="pointer-events-auto w-full max-w-[640px]" @submit.prevent="$store.gw.submitCapture()">
       <div class="flex items-center gap-2 rounded-xl border border-white/10 bg-panel/95 px-3 py-2 shadow-2xl shadow-black/40 backdrop-blur focus-within:border-white/25">
         <template x-if="$store.gw.selected && !$store.gw.selected.error && $store.gw.captureLinked">
@@ -136,20 +144,29 @@
     </form>
     </div>
 
-    <!-- Side panel -->
+    <!-- Details, docked on the right -->
+    <button
+      x-cloak
+      x-show="$store.gw.selected && $store.gw.detailsMinimized"
+      id="details-tab"
+      class="fixed bottom-0 right-0 top-12 w-10 border-l border-white/8 bg-panel text-xs text-fog/60 hover:text-fog"
+      @click="$store.gw.setDetailsMinimized(false)"
+    ><span class="inline-block rotate-90 whitespace-nowrap">Show details</span></button>
     <aside
       x-cloak
-      x-show="$store.gw.selected"
-      x-transition:enter="transition duration-150"
-      x-transition:enter-start="translate-x-4 opacity-0"
-      class="fixed bottom-4 right-4 top-4 flex w-[min(360px,calc(100vw-2rem))] flex-col overflow-y-auto rounded-xl border border-white/10 bg-panel/95 p-4 text-sm shadow-2xl shadow-black/40 backdrop-blur"
+      x-show="$store.gw.detailsVisible"
+      class="fixed bottom-0 right-0 top-12 flex w-[360px] max-w-full flex-col overflow-y-auto border-l border-white/8 bg-panel p-4 text-sm"
     >
+      <div class="-mt-1 mb-3 flex items-center justify-between text-xs text-fog/45">
+        <span class="label mb-0">Details</span>
+        <span class="flex gap-1">
+          <button id="minimize" class="rounded-md px-2 py-1 hover:bg-white/5 hover:text-fog" @click="$store.gw.setDetailsMinimized(true)">Minimize</button>
+          <button class="rounded-md px-2 py-1 hover:bg-white/5 hover:text-fog" @click="$store.gw.select(null)" title="Esc">Close</button>
+        </span>
+      </div>
       <template x-if="$store.gw.selected?.error">
         <div class="space-y-3">
-          <div class="flex items-start justify-between gap-3">
-            <h2 class="font-medium text-rose-200" x-text="$store.gw.selected.id + '.md cannot be read'"></h2>
-            <button class="text-fog/40 hover:text-fog" @click="$store.gw.select(null)" title="Close (Esc)">×</button>
-          </div>
+          <h2 class="font-medium text-rose-200" x-text="$store.gw.selected.id + '.md cannot be read'"></h2>
           <p class="text-xs text-fog/60" x-text="$store.gw.selected.error"></p>
           <p class="text-xs text-fog/60">Fix the frontmatter in the file by hand. The map updates as soon as it parses again.</p>
           <pre class="whitespace-pre-wrap rounded-md bg-black/30 p-3 text-xs text-fog/70" x-text="$store.gw.selected.body"></pre>
@@ -158,18 +175,28 @@
 
       <template x-if="$store.gw.selected && !$store.gw.selected.error">
         <div class="flex flex-1 flex-col gap-4">
-          <div class="flex items-start gap-2">
-            <textarea
-              id="field-title"
-              rows="2"
-              x-model="$store.gw.draft.title"
-              @input="$store.gw.edit('title')"
-              @focus="$store.gw.focusField('title')"
-              @blur="$store.gw.blurField('title')"
-              @keydown.enter.prevent="$event.target.blur()"
-              class="field flex-1 resize-none text-base font-medium"
-            ></textarea>
-            <button class="px-1 text-lg leading-none text-fog/40 hover:text-fog" @click="$store.gw.select(null)" title="Close (Esc)">×</button>
+          <div>
+            <h2
+              x-show="!$store.gw.editingTitle"
+              id="title-text"
+              class="-mx-1 cursor-text rounded-md px-1 py-0.5 text-base font-medium leading-snug text-fog hover:bg-white/5"
+              title="Click to edit"
+              @click="$store.gw.editingTitle = true"
+              x-text="$store.gw.draft.title"
+            ></h2>
+            <template x-if="$store.gw.editingTitle">
+              <textarea
+                id="field-title"
+                rows="3"
+                x-model="$store.gw.draft.title"
+                x-init="$nextTick(() => { $el.focus(); $el.setSelectionRange($el.value.length, $el.value.length) })"
+                @input="$store.gw.edit('title')"
+                @focus="$store.gw.focusField('title')"
+                @blur="$store.gw.blurField('title'); $store.gw.editingTitle = false"
+                @keydown.enter.prevent="$event.target.blur()"
+                class="field w-full resize-none text-base font-medium leading-snug"
+              ></textarea>
+            </template>
           </div>
 
           <div class="grid grid-cols-2 gap-3">

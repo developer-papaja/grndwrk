@@ -32,6 +32,12 @@ body {
   overflow: hidden;
 }
 
+/* Quiet scrollbars that match the panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(223, 227, 234, 0.15) transparent;
+}
+
 select.field option {
   background: var(--color-panel);
 }

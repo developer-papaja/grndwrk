@@ -1,6 +1,6 @@
 import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
-import { BufferGeometry, Group, Line, LineBasicMaterial, PerspectiveCamera, Sprite, SpriteMaterial, Vector3 } from 'three'
+import { BufferGeometry, Group, Line, LineBasicMaterial, MOUSE, PerspectiveCamera, Sprite, SpriteMaterial, Vector3 } from 'three'
 import type { GNode, NodeType, Status } from '../../src/shared/types'
 import { dotTexture, drawCard, type CardState } from './cards'
 import {
@@ -57,6 +57,8 @@ export interface SceneView {
   nodes: GNode[]
   selectedId: string | null
   linkMode: boolean
+  /** Just added or just pointed at. Shown as a highlighted card for a moment. */
+  freshIds: string[]
 }
 
 /** Where a node can be clicked on screen right now: its card, or its dot. */
@@ -86,7 +88,7 @@ function screenSprite(order: number): Sprite {
 }
 
 export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: string) => void; onBackgroundClick: () => void }) {
-  let view: SceneView = { nodes: [], selectedId: null, linkMode: false }
+  let view: SceneView = { nodes: [], selectedId: null, linkMode: false, freshIds: [] }
   let structure = ''
   let layoutKey = ''
   let columns = new Map<string, Column>()
@@ -163,14 +165,23 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     setTimeout(fit, 1200)
   }
   graph.cameraPosition({ x: 0, y: 90, z: 460 })
-  // The map sits beside the list, like a canvas next to a layers panel.
-  let leftInset = 0
-  function setLeftInset(px: number) {
-    leftInset = px
-    el.style.left = `${px}px`
-    graph.width(window.innerWidth - px).height(window.innerHeight)
+  // The map sits between the side panels, like a canvas in a design tool.
+  const TOP_BAR = 48
+  let insets = { left: 0, right: 0 }
+  function setInsets(next: { left: number; right: number }) {
+    insets = next
+    el.style.left = `${next.left}px`
+    el.style.right = `${next.right}px`
+    graph.width(window.innerWidth - next.left - next.right).height(window.innerHeight - TOP_BAR)
   }
-  window.addEventListener('resize', () => setLeftInset(leftInset))
+  window.addEventListener('resize', () => setInsets(insets))
+
+  /** Hold space to pan with the left button, as in design tools. */
+  function setPanning(on: boolean) {
+    const c = graph.controls() as { mouseButtons: { LEFT: MOUSE } }
+    c.mouseButtons.LEFT = on ? MOUSE.PAN : MOUSE.ROTATE
+    el.style.cursor = on ? 'grab' : ''
+  }
 
   const guides = new Group()
   const topicLabels = new Group()
@@ -211,7 +222,13 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   function style(n: GraphNode) {
     if (!n.card || !n.dot) return
     const state: CardState =
-      n.id === view.selectedId ? 'selected' : view.selectedId && n.links.includes(view.selectedId) ? 'linked' : 'normal'
+      n.id === view.selectedId
+        ? 'selected'
+        : view.freshIds.includes(n.id)
+          ? 'fresh'
+          : view.selectedId && n.links.includes(view.selectedId)
+            ? 'linked'
+            : 'normal'
     const color = n.error ? SCENE_COLORS.error : TYPE_COLORS[n.type]
     const title = n.error ? `${n.id}.md cannot be read` : n.title
     const key = [title, color, state, n.status].join('|')
@@ -252,7 +269,10 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     const camera = graph.camera() as PerspectiveCamera
     const pxPerUnit = el.clientHeight / (2 * Math.tan((camera.fov * Math.PI) / 360))
     const isFocus = (n: GraphNode) =>
-      n.id === view.selectedId || n.id === hoveredId || (!!view.selectedId && n.links.includes(view.selectedId))
+      n.id === view.selectedId ||
+      n.id === hoveredId ||
+      view.freshIds.includes(n.id) ||
+      (!!view.selectedId && n.links.includes(view.selectedId))
     const nodes = graph
       .graphData()
       .nodes.filter((n) => n.card && n.cardSize && n.x !== undefined)
@@ -460,7 +480,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     return graph.graph2ScreenCoords(n.x, n.y!, n.z!)
   }
 
-  return { render, fit, flyTo, setLeftInset, screenPosition, graph }
+  return { render, fit, flyTo, setInsets, setPanning, screenPosition, graph }
 }
 
 function disposeObject(obj: object) {

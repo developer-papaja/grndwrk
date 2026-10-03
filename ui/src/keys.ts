@@ -5,7 +5,12 @@ function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-export function bindKeys(captureInput: () => HTMLInputElement | null, actions: { fit: () => void }) {
+export function bindKeys(captureInput: () => HTMLInputElement | null, actions: { fit: () => void; pan: (on: boolean) => void }) {
+  window.addEventListener('keyup', (e) => {
+    if (e.key === ' ') actions.pan(false)
+  })
+  window.addEventListener('blur', () => actions.pan(false))
+
   window.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return
 
@@ -16,6 +21,10 @@ export function bindKeys(captureInput: () => HTMLInputElement | null, actions: {
     }
 
     switch (e.key) {
+      case ' ':
+        e.preventDefault()
+        if (!e.repeat) actions.pan(true)
+        break
       case 'n':
       case 'N':
         e.preventDefault()

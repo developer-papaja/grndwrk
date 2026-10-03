@@ -16,3 +16,9 @@ export function parseCapture(raw: string): { title: string; type?: NodeType } | 
   }
   return text ? { title: text } : null
 }
+
+/** Titles count as the same when they only differ in case, spacing or a trailing period. */
+export function sameTitle(a: string, b: string): boolean {
+  const norm = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!?]+$/, '')
+  return norm(a) === norm(b)
+}

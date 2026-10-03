@@ -25,6 +25,7 @@ onNodesChange(() => {
       nodes: Object.values(Alpine.raw(state.nodes)),
       selectedId: state.selectedId,
       linkMode: state.mode === 'link',
+      freshIds: [...state.freshIds],
     })
   })
 })
@@ -32,15 +33,17 @@ onNodesChange(() => {
 // A handle for poking at the map from the browser console.
 Object.assign(window, { groundwork: { state, scene } })
 
-// Give the map the room next to the list on wide screens.
+// The map gets the room between the side panels.
 Alpine.effect(() => {
-  const open = state.listOpen
   const wide = window.innerWidth >= 900
-  scene.setLeftInset(open && wide ? 332 : 0)
+  const left = state.listOpen && wide ? 320 : 0
+  const right = state.detailsVisible ? 360 : state.selected ? 40 : 0
+  scene.setInsets({ left, right })
 })
 
 bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
   fit: () => state.fit(),
+  pan: (on) => scene.setPanning(on),
 })
 onFit(() => scene.fit())
 Alpine.start()

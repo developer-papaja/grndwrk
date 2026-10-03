@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCapture } from '../ui/src/capture.js'
+import { parseCapture, sameTitle } from '../ui/src/capture.js'
 
 describe('parseCapture', () => {
   it('makes an idea by default', () => {
@@ -21,5 +21,12 @@ describe('parseCapture', () => {
     expect(parseCapture('   ')).toBeNull()
     expect(parseCapture('?')).toBeNull()
     expect(parseCapture('!   ')).toBeNull()
+  })
+})
+
+describe('sameTitle', () => {
+  it('ignores case, spacing and a trailing period', () => {
+    expect(sameTitle('The sidebar should dock.', '  the sidebar  should dock ')).toBe(true)
+    expect(sameTitle('The sidebar should dock', 'The sidebar should float')).toBe(false)
   })
 })

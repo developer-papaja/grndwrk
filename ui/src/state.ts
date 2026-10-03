@@ -2,7 +2,7 @@ import Alpine from 'alpinejs'
 import type { GNode, NodeType, Status } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, updateNode } from './api'
-import { parseCapture } from './capture'
+import { parseCapture, sameTitle } from './capture'
 import { topicColumns } from './layout'
 import { flatten, groupForList, type ListGroup } from './list'
 
@@ -23,6 +23,7 @@ const timers = new Map<DraftField, ReturnType<typeof setTimeout>>()
 const pending = new Set<DraftField>()
 /** Deletes started here, so their live event is not reported as a deletion on disk. */
 const deleting = new Set<string>()
+const freshTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let deleteTimer: ReturnType<typeof setTimeout> | undefined
 let noteTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -48,7 +49,12 @@ export const state = Alpine.reactive({
   captureLinked: true,
   editing: null as DraftField | null,
   draft: { title: '', topic: '', type: 'idea', altitude: 3, status: 'open', body: '' } as Draft,
-  listOpen: readListOpen(),
+  listOpen: readStored('groundwork.listOpen', true),
+  detailsMinimized: readStored('groundwork.detailsMinimized', false),
+  collapsed: readStored<Record<string, boolean>>('groundwork.collapsed', {}),
+  editingTitle: false,
+  /** Nodes just added, or just found as duplicates. They light up for a few seconds. */
+  freshIds: [] as string[],
   query: '',
   listIndex: 0,
   note: '',
@@ -68,7 +74,7 @@ export const state = Alpine.reactive({
     if (sel?.error) return 'This file cannot be read. Fix it in your editor and it updates here.'
     if (sel) return 'New thoughts link to the open one and join its topic. [ and ] change altitude. L links. Esc closes.'
     if (this.count === 0) return 'Your first thought can be anything. Press Enter to add it.'
-    return 'Click a card to open it. Dots are cards without room: hover to read them. / searches, F fits the map.'
+    return 'Click a card to open it. Hover a dot to read it. Hold space and drag to pan. / searches, F fits the map.'
   },
   /** Existing topic names, for suggestions in the panel. */
   get topicNames(): string[] {
@@ -78,7 +84,21 @@ export const state = Alpine.reactive({
     return groupForList(Object.values(this.nodes), this.query)
   },
   get listRows(): GNode[] {
-    return flatten(this.listGroups)
+    return flatten(this.listGroups.filter((g) => !this.isCollapsed(g.key)))
+  },
+  get detailsVisible(): boolean {
+    return !!this.selected && !this.detailsMinimized
+  },
+  /**
+   * The space between the side panels, for bars that float over the map.
+   * An object, not a string: a string binding would replace the whole style
+   * attribute and undo x-show.
+   */
+  get mapArea(): { left: string; right: string } {
+    const wide = window.innerWidth >= 900
+    const left = this.listOpen && wide ? 320 : 0
+    const right = this.detailsVisible ? 360 : this.selected ? 40 : 0
+    return { left: `${left}px`, right: `${right}px` }
   },
   get linkedNodes(): GNode[] {
     const sel = this.selected
@@ -113,6 +133,7 @@ export const state = Alpine.reactive({
     this.selectedId = id
     this.deleteArmed = false
     this.captureLinked = true
+    this.editingTitle = false
     if (!id) this.mode = 'normal'
     pending.clear()
     this.editing = null
@@ -137,9 +158,21 @@ export const state = Alpine.reactive({
     const raw = this.capture
     const linkTo = this.selected && !this.selected.error && this.captureLinked ? this.selected : null
     this.capture = ''
+
+    // The same thought twice is almost always a second Enter. Point at the first one instead.
+    const same = Object.values(this.nodes).find((n) => sameTitle(n.title, parsed.title))
+    if (same) {
+      this.markFresh(same.id)
+      this.flash(`Already in the map: "${same.title}"`)
+      return
+    }
+
     try {
       // A thought linked to the open node joins its topic too.
-      this.upsert(await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '' }))
+      const node = await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '' })
+      this.upsert(node)
+      this.markFresh(node.id)
+      this.flash(`Added to ${node.topic || 'no topic'}`)
     } catch (err) {
       // Give the text back so nothing typed is lost.
       if (!this.capture) this.capture = raw
@@ -203,6 +236,33 @@ export const state = Alpine.reactive({
     fitHandler()
   },
 
+  markFresh(id: string) {
+    if (!this.freshIds.includes(id)) this.freshIds.push(id)
+    clearTimeout(freshTimers.get(id))
+    freshTimers.set(
+      id,
+      setTimeout(() => {
+        this.freshIds = this.freshIds.filter((f) => f !== id)
+        onChange()
+      }, 4000),
+    )
+    onChange()
+  },
+
+  setDetailsMinimized(min: boolean) {
+    this.detailsMinimized = min
+    store('groundwork.detailsMinimized', min)
+  },
+
+  isCollapsed(key: string): boolean {
+    // While searching, every match shows.
+    return !this.query && !!this.collapsed[key]
+  },
+  toggleGroup(key: string) {
+    this.collapsed = { ...this.collapsed, [key]: !this.collapsed[key] }
+    store('groundwork.collapsed', this.collapsed)
+  },
+
   // List and search
   /** `/`: show the list if it is collapsed and put the cursor in search. */
   openList() {
@@ -213,11 +273,7 @@ export const state = Alpine.reactive({
   setListOpen(open: boolean) {
     this.listOpen = open
     if (!open) this.query = ''
-    try {
-      localStorage.setItem('groundwork.listOpen', open ? '1' : '0')
-    } catch {
-      // Storage can be blocked. The list still works, it just forgets.
-    }
+    store('groundwork.listOpen', open)
   },
   /** Esc in search clears it and gives the keys back to the map. */
   leaveSearch() {
@@ -281,14 +337,23 @@ export const state = Alpine.reactive({
   },
 })
 
-/** The list is open unless the person collapsed it last time. */
-function readListOpen(): boolean {
+/** Layout choices are remembered per browser. Storage can be blocked, so fall back quietly. */
+function readStored<T>(key: string, fallback: T): T {
   try {
-    return localStorage.getItem('groundwork.listOpen') !== '0'
+    const raw = localStorage.getItem(key)
+    return raw === null ? fallback : (JSON.parse(raw) as T)
   } catch {
-    return true
+    return fallback
   }
 }
+function store(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // The setting still applies for this visit.
+  }
+}
+
 
 /** Focus a field once it is on screen. Panels slide in, so it can take a few frames. */
 function focusWhenVisible(id: string, tries = 20) {
