@@ -3,6 +3,7 @@ import type { GNode, NodeType, Status } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, savePages, updateNode } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
+import { appendEntry, openQuestions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseCapture, sameTitle } from './capture'
 import { ALTITUDE_WORDS, topicColumns } from './layout'
 import { TYPE_COLORS } from './palette'
@@ -56,6 +57,7 @@ export const state = Alpine.reactive({
   /** The page in view, or ALL for the board with everything. */
   currentPage: readStored<string>('groundwork.page', ALL),
   addingPage: false,
+  reply: '',
   newPage: '',
   listOpen: readStored('groundwork.listOpen', true),
   detailsMinimized: readStored('groundwork.detailsMinimized', false),
@@ -88,6 +90,24 @@ export const state = Alpine.reactive({
     const all = Object.values(this.nodes)
     if (this.onAll) return all
     return all.filter((n) => samePage(pageOf(n, this.pageNames), this.currentPage))
+  },
+  /** The open card's free notes, without its thread. */
+  get notesText(): string {
+    return splitBody(this.draft.body).notes
+  },
+  get thread(): Entry[] {
+    return splitBody(this.draft.body).entries
+  },
+  /** Cards where Claude is waiting for an answer, in list order. */
+  get questionIds(): string[] {
+    return groupForList(Object.values(this.nodes), '')
+      .flatMap((g) => g.nodes)
+      .filter((n) => openQuestions(n.body) > 0)
+      .map((n) => n.id)
+  },
+  hasQuestion(id: string): boolean {
+    const n = this.nodes[id]
+    return !!n && openQuestions(n.body) > 0
   },
   pageCount(page: string): number {
     return Object.values(this.nodes).filter((n) => samePage(pageOf(n, this.pageNames), page)).length
@@ -268,6 +288,28 @@ export const state = Alpine.reactive({
       }, 4000),
     )
     onChange()
+  },
+
+  setNotes(notes: string) {
+    this.draft.body = replaceNotes(this.draft.body, notes)
+    this.edit('body')
+  },
+  sendReply() {
+    const text = this.reply.trim()
+    if (!text || !this.selected) return
+    this.draft.body = appendEntry(this.draft.body, 'you', text, new Date().toISOString().slice(0, 10))
+    this.reply = ''
+    this.edit('body', true)
+  },
+  /** Open the next card with a question, moving to its page if needed. */
+  nextQuestion() {
+    const ids = this.questionIds
+    if (!ids.length) return
+    const at = this.selectedId ? ids.indexOf(this.selectedId) : -1
+    const id = ids[(at + 1) % ids.length]
+    const node = this.nodes[id]
+    if (!this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.showPage(pageOf(node, this.pageNames))
+    this.select(id)
   },
 
   showPage(page: string) {

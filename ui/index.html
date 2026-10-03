@@ -40,6 +40,16 @@
             <span class="text-fog/30">·</span>
             <span id="count" x-text="$store.gw.count + ($store.gw.count === 1 ? ' node' : ' nodes')"></span>
           </div>
+          <button
+            x-show="$store.gw.questionIds.length"
+            id="questions"
+            class="mt-2 flex items-center gap-1.5 rounded-md bg-question/15 px-2 py-1 text-xs text-question hover:bg-question/25"
+            title="Open the next card with a question"
+            @click="$store.gw.nextQuestion()"
+          >
+            <span class="size-1.5 rounded-full bg-question"></span>
+            <span x-text="$store.gw.questionIds.length + ($store.gw.questionIds.length === 1 ? ' question for you' : ' questions for you')"></span>
+          </button>
         </div>
         <button id="list-button" class="icon-btn" title="Hide panel" @click="$store.gw.setListOpen(false)">
           <svg class="size-5"><use href="#i-panel" /></svg>
@@ -151,6 +161,7 @@
               >
                 <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[n.type] }"></span>
                 <span class="min-w-0 flex-1 truncate" :class="n.status === 'settled' && 'text-fog/45'" x-text="n.title"></span>
+                <span x-show="$store.gw.hasQuestion(n.id)" class="size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
               </button>
             </template>
           </section>
@@ -377,14 +388,46 @@
               <span class="label">Notes</span>
               <textarea
                 id="field-body"
-                x-model="$store.gw.draft.body"
-                @input="$store.gw.edit('body')"
+                :value="$store.gw.notesText"
+                @input="$store.gw.setNotes($event.target.value)"
                 @focus="$store.gw.focusField('body')"
                 @blur="$store.gw.blurField('body')"
                 placeholder="Thoughts, references, half formed questions"
-                class="field min-h-32 flex-1 resize-none leading-relaxed"
+                class="field min-h-28 flex-1 resize-none leading-relaxed"
               ></textarea>
             </label>
+
+            <div>
+              <span class="label">Thread</span>
+              <ol class="space-y-2" id="thread">
+                <template x-for="(e, i) in $store.gw.thread" :key="i">
+                  <li
+                    class="rounded-lg border px-3 py-2"
+                    :class="e.open ? 'border-question/50 bg-question/10' : e.who === 'you' ? 'border-transparent bg-white/5' : 'border-line'"
+                  >
+                    <div class="mb-0.5 flex items-center justify-between text-[11px]">
+                      <span
+                        class="font-medium"
+                        :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'"
+                        x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Claude asks you' : 'Claude asked') : 'Claude'"
+                      ></span>
+                      <span class="text-fog/35" x-text="e.date"></span>
+                    </div>
+                    <p class="whitespace-pre-wrap text-fog/85" x-text="e.text"></p>
+                  </li>
+                </template>
+              </ol>
+              <form class="mt-2" @submit.prevent="$store.gw.sendReply()">
+                <textarea
+                  id="reply"
+                  rows="2"
+                  x-model="$store.gw.reply"
+                  @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); $store.gw.sendReply() }"
+                  :placeholder="$store.gw.thread.some((e) => e.open) ? 'Answer Claude' : 'Add a comment'"
+                  class="field w-full resize-none"
+                ></textarea>
+              </form>
+            </div>
 
             <div>
               <span class="label">Links</span>

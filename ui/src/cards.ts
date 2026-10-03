@@ -8,6 +8,7 @@ const LINE = 16
 const EDGE = 3
 const FONT = '500 12.5px Inter, system-ui, sans-serif'
 const SCALE = 2
+const QUESTION = '#f5b942'
 
 export type CardState = 'normal' | 'linked' | 'selected' | 'fresh'
 
@@ -17,6 +18,8 @@ export interface CardLook {
   state: CardState
   settled: boolean
   error: boolean
+  /** Claude is waiting for an answer in this card's thread. */
+  question: boolean
 }
 
 export interface Card {
@@ -51,11 +54,13 @@ export function drawCard(look: CardLook): Card {
   ctx.roundRect(0.5, 0.5, width - 1, height - 1, r)
   ctx.fillStyle = look.state === 'selected' ? '#16344d' : '#2c2c2c'
   ctx.fill()
-  ctx.lineWidth = look.state === 'fresh' ? 2 : 1
+  ctx.lineWidth = look.state === 'fresh' || look.question ? 1.5 : 1
   ctx.strokeStyle =
     look.state === 'selected'
       ? '#0d99ff'
-      : look.state === 'fresh'
+      : look.question
+        ? QUESTION
+        : look.state === 'fresh'
         ? look.color
         : look.settled || look.state === 'linked'
         ? withAlpha(look.color, look.state === 'linked' ? 0.75 : 0.55)
@@ -68,6 +73,14 @@ export function drawCard(look: CardLook): Card {
   ctx.fillStyle = look.color
   ctx.fillRect(0, 0, EDGE, height)
   ctx.restore()
+
+  if (look.question) {
+    // A small dot in the corner: there is a question waiting.
+    ctx.beginPath()
+    ctx.arc(width - 7, 7, 3, 0, Math.PI * 2)
+    ctx.fillStyle = QUESTION
+    ctx.fill()
+  }
 
   ctx.font = FONT
   ctx.textBaseline = 'middle'

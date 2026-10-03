@@ -17,6 +17,7 @@ import {
   type Column,
 } from './layout'
 import { SCENE_COLORS, TYPE_COLORS } from './palette'
+import { openQuestions } from '../../src/shared/thread'
 
 /** Sideways room between nodes on the same line of a column. */
 const ROW_GAP = 80
@@ -34,6 +35,8 @@ interface GraphNode {
   error?: string
   /** 0 for the most recently changed node, 1 for the oldest. */
   age: number
+  /** Open questions in the node's thread. */
+  questions: number
   x?: number
   y?: number
   z?: number
@@ -234,10 +237,10 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
             : 'normal'
     const color = n.error ? SCENE_COLORS.error : TYPE_COLORS[n.type]
     const title = n.error ? `${n.id}.md cannot be read` : n.title
-    const key = [title, color, state, n.status].join('|')
+    const key = [title, color, state, n.status, n.questions].join('|')
     if (key === n.cardKey) return
     n.cardKey = key
-    const card = drawCard({ title, color, state, settled: n.status === 'settled', error: !!n.error })
+    const card = drawCard({ title, color, state, settled: n.status === 'settled', error: !!n.error, question: n.questions > 0 })
     const material = n.card.material
     material.map?.dispose()
     material.map = card.texture
@@ -275,6 +278,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       n.id === view.selectedId ||
       n.id === hoveredId ||
       view.freshIds.includes(n.id) ||
+      n.questions > 0 ||
       (!!view.selectedId && n.links.includes(view.selectedId))
     const nodes = graph
       .graphData()
@@ -335,6 +339,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       g.topic = topicKey(n.topic)
       g.error = n.error
       g.age = ages.get(n.id) ?? 0
+      g.questions = openQuestions(n.body)
       return g
     })
 
@@ -385,6 +390,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       links: n.links,
       topic: topicKey(n.topic),
       age: 0,
+      questions: 0,
     }
     const jitter = () => (Math.random() - 0.5) * 30
     const anchor = n.links.map((l) => existing.get(l)).find((a) => a?.x !== undefined)
