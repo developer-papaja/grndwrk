@@ -28,6 +28,8 @@ const pending = new Set<DraftField>()
 /** Deletes started here, so their live event is not reported as a deletion on disk. */
 const deleting = new Set<string>()
 export const ALL = '*'
+/** Replies typed on a card but not sent yet, per card. */
+const replyDrafts = new Map<string, string>()
 /** Nodes with edits that failed to save, retried after a reconnect. */
 const unsaved = new Set<string>()
 const freshTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -177,6 +179,11 @@ export const state = Alpine.reactive({
   },
 
   select(id: string | null) {
+    // Each card keeps its own half typed reply, so an answer never lands on the wrong card.
+    if (this.selectedId !== id) {
+      if (this.selectedId) replyDrafts.set(this.selectedId, this.reply)
+      this.reply = (id && replyDrafts.get(id)) || ''
+    }
     if (this.selectedId && unsaved.has(this.selectedId) && this.selectedId !== id) {
       this.flash('Some edits on the last card were not saved. Groundwork is offline.')
     }
@@ -345,6 +352,7 @@ export const state = Alpine.reactive({
       timers.delete('body')
       const node = await updateNode(id, { body })
       pending.delete('body')
+      replyDrafts.delete(id)
       if (this.selectedId === id) {
         this.draft.body = body
         this.reply = ''
