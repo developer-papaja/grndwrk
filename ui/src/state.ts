@@ -1,18 +1,20 @@
 import Alpine from 'alpinejs'
 import type { GNode, NodeType, Status } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, updateNode } from './api'
+import { createNode, deleteNode, savePages, updateNode } from './api'
+import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { parseCapture, sameTitle } from './capture'
 import { ALTITUDE_WORDS, topicColumns } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
 
-export type DraftField = 'title' | 'topic' | 'type' | 'altitude' | 'status' | 'body'
-const FIELDS: DraftField[] = ['title', 'topic', 'type', 'altitude', 'status', 'body']
+export type DraftField = 'title' | 'topic' | 'page' | 'type' | 'altitude' | 'status' | 'body'
+const FIELDS: DraftField[] = ['title', 'topic', 'page', 'type', 'altitude', 'status', 'body']
 
 interface Draft {
   title: string
   topic: string
+  page: string
   type: NodeType
   altitude: number
   status: Status
@@ -24,6 +26,7 @@ const timers = new Map<DraftField, ReturnType<typeof setTimeout>>()
 const pending = new Set<DraftField>()
 /** Deletes started here, so their live event is not reported as a deletion on disk. */
 const deleting = new Set<string>()
+export const ALL = '*'
 const freshTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let deleteTimer: ReturnType<typeof setTimeout> | undefined
 let noteTimer: ReturnType<typeof setTimeout> | undefined
@@ -49,7 +52,11 @@ export const state = Alpine.reactive({
   capture: '',
   captureLinked: true,
   editing: null as DraftField | null,
-  draft: { title: '', topic: '', type: 'idea', altitude: 3, status: 'open', body: '' } as Draft,
+  draft: { title: '', topic: '', page: '', type: 'idea', altitude: 3, status: 'open', body: '' } as Draft,
+  /** The page in view, or ALL for the board with everything. */
+  currentPage: readStored<string>('groundwork.page', ALL),
+  addingPage: false,
+  newPage: '',
   listOpen: readStored('groundwork.listOpen', true),
   detailsMinimized: readStored('groundwork.detailsMinimized', false),
   collapsed: readStored<Record<string, boolean>>('groundwork.collapsed', {}),
@@ -68,15 +75,32 @@ export const state = Alpine.reactive({
   get count() {
     return Object.keys(this.nodes).length
   },
+  /** Pages in the person's order, plus any that nodes use. */
+  get pageNames(): string[] {
+    const saved = Array.isArray(this.project.pages) ? (this.project.pages as string[]) : []
+    return mergePages(saved, Object.values(this.nodes).map((n) => n.page))
+  },
+  get onAll(): boolean {
+    return this.currentPage === ALL || !this.pageNames.some((p) => samePage(p, this.currentPage))
+  },
+  /** The nodes on the page in view. Everything on All. */
+  get visibleNodes(): GNode[] {
+    const all = Object.values(this.nodes)
+    if (this.onAll) return all
+    return all.filter((n) => samePage(pageOf(n, this.pageNames), this.currentPage))
+  },
+  pageCount(page: string): number {
+    return Object.values(this.nodes).filter((n) => samePage(pageOf(n, this.pageNames), page)).length
+  },
   get selected(): GNode | null {
     return this.selectedId ? (this.nodes[this.selectedId] ?? null) : null
   },
   /** Existing topic names, for suggestions in the panel. */
   get topicNames(): string[] {
-    return [...topicColumns(Object.values(this.nodes)).values()].filter((c) => c.key).map((c) => c.name)
+    return [...topicColumns(this.visibleNodes).values()].filter((c) => c.key).map((c) => c.name)
   },
   get listGroups(): ListGroup[] {
-    return groupForList(Object.values(this.nodes), this.query)
+    return groupForList(this.visibleNodes, this.query)
   },
   get listRows(): GNode[] {
     return flatten(this.listGroups.filter((g) => !this.isCollapsed(g.key)))
@@ -142,7 +166,7 @@ export const state = Alpine.reactive({
     if (!node) return
     for (const f of FIELDS) {
       if (f === this.editing || pending.has(f)) continue
-      ;(this.draft as Record<DraftField, unknown>)[f] = node[f]
+      ;(this.draft as Record<DraftField, unknown>)[f] = f === 'page' ? pageOf(node, this.pageNames) : node[f]
     }
   },
 
@@ -164,7 +188,9 @@ export const state = Alpine.reactive({
 
     try {
       // A thought linked to the open node joins its topic too.
-      const node = await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '' })
+      // New thoughts land on the page in view, or next to the node they link to.
+      const page = linkTo ? linkTo.page : this.onAll ? '' : this.currentPage
+      const node = await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '', page })
       this.upsert(node)
       this.markFresh(node.id)
       this.flash(`Added to ${node.topic || 'no topic'}`)
@@ -242,6 +268,28 @@ export const state = Alpine.reactive({
       }, 4000),
     )
     onChange()
+  },
+
+  showPage(page: string) {
+    this.currentPage = page
+    store('groundwork.page', page)
+    onChange()
+    // Fit once the new page is drawn, not the one before it.
+    setTimeout(fitHandler, 80)
+  },
+  async addPage() {
+    const name = this.newPage.trim()
+    this.addingPage = false
+    this.newPage = ''
+    if (!name) return
+    if (!this.pageNames.some((p) => samePage(p, name))) {
+      try {
+        this.project = await savePages([...this.pageNames, name])
+      } catch (err) {
+        return this.flash(errorText(err))
+      }
+    }
+    this.showPage(this.pageNames.find((p) => samePage(p, name)) ?? name)
   },
 
   setDetailsMinimized(min: boolean) {

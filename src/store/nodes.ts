@@ -75,6 +75,7 @@ export class NodeStore {
         type: DEFAULTS.type,
         title,
         topic: '',
+        page: '',
         altitude: DEFAULTS.altitude,
         links: [],
         status: DEFAULTS.status,
@@ -171,6 +172,7 @@ function clean(input: NodeInput): Partial<GNode> {
   const out: Partial<GNode> = {}
   if (input.title !== undefined) out.title = String(input.title).trim()
   if (input.topic !== undefined) out.topic = String(input.topic ?? '').trim()
+  if (input.page !== undefined) out.page = String(input.page ?? '').trim()
   if (input.type !== undefined) out.type = oneOf(input.type, NODE_TYPES, DEFAULTS.type)
   if (input.altitude !== undefined) out.altitude = toAltitude(input.altitude)
   if (input.status !== undefined) out.status = oneOf(input.status, STATUSES, DEFAULTS.status)

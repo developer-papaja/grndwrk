@@ -22,7 +22,7 @@ onNodesChange(() => {
   requestAnimationFrame(() => {
     queued = false
     scene.render({
-      nodes: Object.values(Alpine.raw(state.nodes)),
+      nodes: Alpine.raw(state.visibleNodes).map((n) => Alpine.raw(n)),
       selectedId: state.selectedId,
       linkMode: state.mode === 'link',
       freshIds: [...state.freshIds],

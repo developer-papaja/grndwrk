@@ -21,6 +21,8 @@ export interface GNode {
   title: string
   /** Groups nodes sideways in the map. Empty when not set. */
   topic: string
+  /** Which page of the map the node is on. Empty means the first page. */
+  page: string
   altitude: number
   links: string[]
   status: Status
@@ -35,7 +37,7 @@ export interface GNode {
 }
 
 /** Fields a client may send when creating or updating a node. */
-export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'altitude' | 'links' | 'status' | 'body'>>
+export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'page' | 'altitude' | 'links' | 'status' | 'body'>>
 
 export type ServerEvent =
   | { type: 'node:upsert'; node: GNode }

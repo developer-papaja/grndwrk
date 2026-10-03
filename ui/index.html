@@ -49,6 +49,46 @@
       <div class="border-t border-line"></div>
 
       <div class="flex items-center justify-between px-4 pb-1 pt-3">
+        <span class="font-semibold text-fog">Pages</span>
+        <button class="icon-btn -mr-1.5" title="Add a page" @click="$store.gw.addingPage = true; $nextTick(() => document.getElementById('new-page').focus())">
+          <svg class="size-[18px]"><use href="#i-plus" /></svg>
+        </button>
+      </div>
+      <div class="px-2 pb-2" id="pages">
+        <button
+          class="flex h-8 w-full items-center justify-between rounded-md px-2"
+          :class="$store.gw.onAll ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
+          @click="$store.gw.showPage('*')"
+        >
+          <span>All</span>
+          <span class="text-xs text-fog/35" x-text="$store.gw.count"></span>
+        </button>
+        <template x-for="p in $store.gw.pageNames" :key="p">
+          <button
+            class="flex h-8 w-full items-center justify-between rounded-md px-2"
+            :class="!$store.gw.onAll && $store.gw.currentPage.toLowerCase() === p.toLowerCase() ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
+            @click="$store.gw.showPage(p)"
+          >
+            <span class="truncate" x-text="p"></span>
+            <span class="text-xs text-fog/35" x-text="$store.gw.pageCount(p)"></span>
+          </button>
+        </template>
+        <form x-show="$store.gw.addingPage" class="px-1 pt-1" @submit.prevent="$store.gw.addPage()">
+          <input
+            id="new-page"
+            x-model="$store.gw.newPage"
+            @blur="$store.gw.addPage()"
+            @keydown.escape.prevent.stop="$store.gw.newPage = ''; $store.gw.addingPage = false"
+            autocomplete="off"
+            placeholder="Page name"
+            class="field w-full"
+          />
+        </form>
+      </div>
+
+      <div class="border-t border-line"></div>
+
+      <div class="flex items-center justify-between px-4 pb-1 pt-3">
         <span class="font-semibold text-fog">Topics</span>
         <span class="-mr-1.5 flex items-center">
           <button class="icon-btn" :class="$store.gw.searchOpen && 'text-fog'" title="Search ( / )" @click="$store.gw.searchOpen ? $store.gw.leaveSearch() : $store.gw.openList()">
@@ -281,6 +321,20 @@
                 </select>
               </label>
             </div>
+
+            <label class="block">
+              <span class="label">Page</span>
+              <select
+                id="field-page"
+                x-model="$store.gw.draft.page"
+                @change="$store.gw.edit('page', true)"
+                class="field w-full"
+              >
+                <template x-for="p in $store.gw.pageNames" :key="p">
+                  <option :value="p" x-text="p" :selected="p === $store.gw.draft.page"></option>
+                </template>
+              </select>
+            </label>
 
             <label class="block">
               <span class="label">Topic</span>

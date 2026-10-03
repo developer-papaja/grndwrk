@@ -23,6 +23,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const fetchNodes = () => request<GNode[]>('GET', '/api/nodes')
 export const fetchProject = () => request<Record<string, unknown>>('GET', '/api/project').catch(() => ({}))
+export const savePages = (pages: string[]) => request<Record<string, unknown>>('PATCH', '/api/project', { pages })
 export const createNode = (input: NodeInput) => request<GNode>('POST', '/api/nodes', input)
 export const updateNode = (id: string, input: NodeInput) =>
   request<GNode>('PATCH', `/api/nodes/${encodeURIComponent(id)}`, input)

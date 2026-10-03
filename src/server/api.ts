@@ -1,8 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import matter from 'gray-matter'
 import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
+import { readProject, writePages } from '../store/project.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
 
@@ -27,7 +25,17 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       return true
     }
     if (url.pathname === '/api/project' && method === 'GET') {
-      return send(res, 200, await readProject(ctx.gwDir))
+      const { data, body, pages } = await readProject(ctx.gwDir)
+      return send(res, 200, { ...data, body, pages })
+    }
+    if (url.pathname === '/api/project' && method === 'PATCH') {
+      const input = (await readBody(req)) as { pages?: unknown }
+      if (!Array.isArray(input.pages) || !input.pages.every((p) => typeof p === 'string')) {
+        throw new BadInput('pages must be a list of names')
+      }
+      await writePages(ctx.gwDir, input.pages)
+      const { data, body, pages } = await readProject(ctx.gwDir)
+      return send(res, 200, { ...data, body, pages })
     }
     if (url.pathname === '/api/nodes' && method === 'GET') {
       return send(res, 200, await ctx.store.list())
@@ -55,15 +63,6 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (err instanceof ReadOnly) return send(res, 409, { error: err.message })
     console.error(err)
     return send(res, 500, { error: 'Something went wrong' })
-  }
-}
-
-async function readProject(gwDir: string) {
-  try {
-    const { data, content } = matter(await readFile(join(gwDir, 'project.md'), 'utf8'), {})
-    return { ...data, body: content }
-  } catch {
-    return {}
   }
 }
 

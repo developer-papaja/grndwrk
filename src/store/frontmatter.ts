@@ -1,7 +1,7 @@
 import matter from 'gray-matter'
 import { NODE_TYPES, STATUSES, type GNode, type NodeType, type Status } from '../shared/types.js'
 
-const KNOWN_KEYS = ['id', 'type', 'title', 'topic', 'altitude', 'links', 'status', 'created'] as const
+const KNOWN_KEYS = ['id', 'type', 'title', 'topic', 'page', 'altitude', 'links', 'status', 'created'] as const
 
 export const DEFAULTS = {
   type: 'idea' as NodeType,
@@ -32,6 +32,7 @@ export function parseNode(id: string, raw: string): GNode {
       type: DEFAULTS.type,
       title: id,
       topic: '',
+      page: '',
       altitude: DEFAULTS.altitude,
       links: [],
       status: DEFAULTS.status,
@@ -52,6 +53,7 @@ export function parseNode(id: string, raw: string): GNode {
     type: oneOf(data.type, NODE_TYPES, DEFAULTS.type),
     title: toText(data.title) || id,
     topic: toText(data.topic),
+    page: toText(data.page),
     altitude: toAltitude(data.altitude),
     links: toLinks(data.links, id),
     status: oneOf(data.status, STATUSES, DEFAULTS.status),
@@ -69,6 +71,7 @@ export function serializeNode(node: GNode): string {
     ...(node.topic ? [`topic: ${scalar(node.topic)}`] : []),
     // Who set the topic sits next to it, so the pair reads together.
     ...(node.topic && typeof node.extra.topic_by === 'string' ? [`topic_by: ${scalar(node.extra.topic_by)}`] : []),
+    ...(node.page ? [`page: ${scalar(node.page)}`] : []),
     `altitude: ${node.altitude}`,
     `links: [${node.links.join(', ')}]`,
     `status: ${node.status}`,
