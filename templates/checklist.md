@@ -23,5 +23,8 @@ Enough when: you know what you are building on and what it must talk to.
 **Constraints.** Deadline, budget, legal, hosting, client demands.
 Enough when: nothing here would surprise you halfway through.
 
+**Setup for building with Claude.** What Claude Code needs to build this well: a CLAUDE.md with the product's context and rules, design docs and references, code standards, and the skills or commands the work will lean on.
+Enough when: a fresh Claude Code session could build a screen that fits, without asking what the product is or how it should look.
+
 **Open questions.** Unanswered questions that block a core flow.
 Enough when: none of them are blocking.

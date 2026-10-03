@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
+import { markAnswered, readReadiness } from '../store/readiness.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
 
@@ -39,6 +40,17 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (url.pathname === '/api/events' && method === 'GET') {
       subscribe(res)
       return true
+    }
+    if (url.pathname === '/api/readiness' && method === 'GET') {
+      return send(res, 200, await readReadiness(ctx.gwDir))
+    }
+    const gapMatch = url.pathname.match(/^\/api\/gaps\/([A-Za-z0-9_-]{1,64})$/)
+    if (gapMatch && method === 'PATCH') {
+      const input = (await readBody(req)) as { answered_by?: unknown }
+      if (typeof input.answered_by !== 'string') throw new BadInput('answered_by must be a node id')
+      await ctx.store.get(input.answered_by)
+      if (!(await markAnswered(ctx.gwDir, gapMatch[1], input.answered_by))) throw new NotFound(gapMatch[1])
+      return send(res, 200, await readReadiness(ctx.gwDir))
     }
     if (url.pathname === '/api/project' && method === 'GET') {
       const { data, body, pages } = await readProject(ctx.gwDir)

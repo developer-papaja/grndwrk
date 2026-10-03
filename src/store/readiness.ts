@@ -1,0 +1,68 @@
+import { readFile, rename, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import matter from 'gray-matter'
+import { SEVERITIES, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
+
+const VERDICTS: Verdict[] = ['ready to build', 'ready to prototype', 'not ready']
+
+const dir = (gwDir: string) => join(gwDir, 'readiness')
+
+/** Read the report and the gaps. Missing or broken files never throw. */
+export async function readReadiness(gwDir: string): Promise<Readiness> {
+  const out: Readiness = { report: null, gaps: [] }
+  try {
+    const { data, content } = matter(await readFile(join(dir(gwDir), 'report.md'), 'utf8'), {})
+    const v = String(data.verdict ?? '').trim().toLowerCase()
+    const checked = data.checked instanceof Date ? data.checked.toISOString().slice(0, 10) : String(data.checked ?? '')
+    out.report = { verdict: (VERDICTS as string[]).includes(v) ? (v as Verdict) : null, checked, body: content }
+  } catch {
+    // No report yet.
+  }
+  try {
+    out.gaps = parseGaps(await readFile(join(dir(gwDir), 'gaps.json'), 'utf8'))
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') out.error = `gaps.json could not be read: ${(err as Error).message}`
+  }
+  return out
+}
+
+/** Keep what is usable from a gaps file, fill sensible defaults, drop the rest. */
+export function parseGaps(raw: string): Gap[] {
+  const data = JSON.parse(raw)
+  if (!Array.isArray(data)) throw new Error('expected a list of gaps')
+  const gaps: Gap[] = []
+  for (const g of data) {
+    if (!g || typeof g !== 'object' || typeof g.title !== 'string' || !g.title.trim()) continue
+    const id = typeof g.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(g.id) ? g.id : `gap_${gaps.length + 1}`
+    const severity = (SEVERITIES as readonly string[]).includes(g.severity) ? (g.severity as Severity) : 'important'
+    const gap: Gap = {
+      id,
+      area: typeof g.area === 'string' ? g.area : '',
+      title: g.title.trim(),
+      why: typeof g.why === 'string' ? g.why : '',
+      near: Array.isArray(g.near) ? g.near.filter((n: unknown) => typeof n === 'string') : [],
+      severity,
+    }
+    if (typeof g.page === 'string' && g.page.trim()) gap.page = g.page.trim()
+    if (typeof g.topic === 'string' && g.topic.trim()) gap.topic = g.topic.trim()
+    const alt = Math.round(Number(g.altitude))
+    if (Number.isFinite(alt) && g.altitude != null) gap.altitude = Math.min(5, Math.max(1, alt))
+    if (typeof g.answered_by === 'string' && g.answered_by) gap.answered_by = g.answered_by
+    if (!gaps.some((x) => x.id === gap.id)) gaps.push(gap)
+  }
+  return gaps
+}
+
+/** Record which node answered a gap, keeping every other gap and field as written. */
+export async function markAnswered(gwDir: string, gapId: string, nodeId: string): Promise<boolean> {
+  const path = join(dir(gwDir), 'gaps.json')
+  const data = JSON.parse(await readFile(path, 'utf8'))
+  if (!Array.isArray(data)) return false
+  const gap = data.find((g) => g && g.id === gapId)
+  if (!gap) return false
+  gap.answered_by = nodeId
+  const tmp = join(dir(gwDir), '.gaps.json.tmp')
+  await writeFile(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8')
+  await rename(tmp, path)
+  return true
+}

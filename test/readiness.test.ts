@@ -1,0 +1,53 @@
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { markAnswered, parseGaps, readReadiness } from '../src/store/readiness.js'
+
+let root: string
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'gw-'))
+  await mkdir(join(root, 'readiness'))
+})
+afterEach(() => rm(root, { recursive: true, force: true }))
+
+describe('readiness', () => {
+  it('reads nothing gracefully before the first run', async () => {
+    expect(await readReadiness(root)).toEqual({ report: null, gaps: [] })
+  })
+
+  it('reads the verdict and checked date from the report', async () => {
+    await writeFile(join(root, 'readiness', 'report.md'), '---\nverdict: Not ready\nchecked: 2026-10-03\n---\nBody\n')
+    const r = await readReadiness(root)
+    expect(r.report).toEqual({ verdict: 'not ready', checked: '2026-10-03', body: 'Body\n' })
+  })
+
+  it('keeps usable gaps, fills defaults and drops broken ones', () => {
+    const gaps = parseGaps(JSON.stringify([
+      { id: 'gap_a', title: 'No typography', severity: 'blocking', near: ['n_1', 2], altitude: 9, topic: ' look ' },
+      { title: 'No id here' },
+      { id: 'gap_a', title: 'Duplicate id' },
+      { id: 'x', severity: 'blocking' },
+      'nonsense',
+    ]))
+    expect(gaps).toEqual([
+      { id: 'gap_a', area: '', title: 'No typography', why: '', near: ['n_1'], severity: 'blocking', topic: 'look', altitude: 5 },
+      { id: 'gap_2', area: '', title: 'No id here', why: '', near: [], severity: 'important' },
+    ])
+  })
+
+  it('reports a broken gaps file instead of throwing', async () => {
+    await writeFile(join(root, 'readiness', 'gaps.json'), '{ not json')
+    const r = await readReadiness(root)
+    expect(r.gaps).toEqual([])
+    expect(r.error).toMatch(/gaps.json could not be read/)
+  })
+
+  it('marks one gap answered and keeps everything else as written', async () => {
+    const file = join(root, 'readiness', 'gaps.json')
+    await writeFile(file, JSON.stringify([{ id: 'gap_a', title: 'A', extra: 'kept' }, { id: 'gap_b', title: 'B' }]))
+    expect(await markAnswered(root, 'gap_b', 'n_x7a2')).toBe(true)
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual([{ id: 'gap_a', title: 'A', extra: 'kept' }, { id: 'gap_b', title: 'B', answered_by: 'n_x7a2' }])
+    expect(await markAnswered(root, 'gap_zz', 'n_1')).toBe(false)
+  })
+})

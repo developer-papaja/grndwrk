@@ -43,3 +43,30 @@ export type ServerEvent =
   | { type: 'node:upsert'; node: GNode }
   | { type: 'node:delete'; id: string }
   | { type: 'file:change'; path: string }
+
+export const SEVERITIES = ['blocking', 'important', 'nice'] as const
+export type Severity = (typeof SEVERITIES)[number]
+
+/** Something /readiness found missing. Shown in the map as a ghost card. */
+export interface Gap {
+  id: string
+  area: string
+  title: string
+  why: string
+  near: string[]
+  severity: Severity
+  page?: string
+  topic?: string
+  altitude?: number
+  /** The node that answered this gap, set from the map. /readiness checks it again. */
+  answered_by?: string
+}
+
+export type Verdict = 'ready to build' | 'ready to prototype' | 'not ready'
+
+export interface Readiness {
+  report: { verdict: Verdict | null; checked: string; body: string } | null
+  gaps: Gap[]
+  /** Set when gaps.json could not be read, so the UI can say so. */
+  error?: string
+}

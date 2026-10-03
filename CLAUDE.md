@@ -156,7 +156,7 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 - A new node captured while a node is selected links to it and takes its topic.
 - `/` opens the list: every node grouped by topic, with counts that show thin topics. Typing filters, Enter opens.
 - Keys: `N` new node (linked to the selection if any), `L` link mode, `[` and `]` move altitude, `/` list and search, `F` fit the map, `Delete` remove (press twice), `Esc` back.
-- Words, not icons, in the UI.
+- The UI follows a design tool's dark interface: icons (Heroicons, inlined) for tools and panel actions, with their name and key in a tooltip; words for content such as titles, topics and labels. Neutral greys, one blue accent, subtle shadows.
 
 ## Claude Code commands
 
