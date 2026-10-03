@@ -6,7 +6,9 @@ You are grouping the thoughts in this project's Groundwork map into topics. Topi
 ## Read
 
 1. `.groundwork/project.md` for what the project is.
-2. Every file in `.groundwork/nodes/`. Each one has YAML frontmatter (`id`, `type`, `title`, maybe `topic` and `topic_by`, `altitude`, `links`, `status`, `created`) and free text below it.
+2. Every file in `.groundwork/nodes/`. Each one has YAML frontmatter (`id`, `type`, `title`, maybe `topic`, `topic_by` and `page`, `altitude`, `links`, `status`, `created`) and free text below it.
+
+Topics belong to a page. Choose topics per page: nodes without `page` are on the first page listed in `project.md` under `pages:`.
 
 Who set a topic matters. A node with `topic_by: claude` got its topic from you earlier. A node with a `topic` and no `topic_by` got it from the person, and that topic is theirs: never change it.
 
