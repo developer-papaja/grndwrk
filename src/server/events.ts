@@ -9,9 +9,15 @@ export function subscribe(res: ServerResponse): void {
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
   })
-  res.write(': connected\n\n')
+  // Ask browsers to retry within a second, so an open tab finds a restarted server quickly.
+  res.write('retry: 1000\n: connected\n\n')
   clients.add(res)
   res.on('close', () => clients.delete(res))
+}
+
+/** How many tabs are connected right now. */
+export function clientCount(): number {
+  return clients.size
 }
 
 export function broadcast(event: ServerEvent): void {

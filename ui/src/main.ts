@@ -1,5 +1,6 @@
 import Alpine from 'alpinejs'
 import { fetchNodes, fetchProject, subscribe } from './api'
+import type { ServerEvent } from '../../src/shared/types'
 import { bindKeys } from './keys'
 import { createScene } from './scene'
 import { onFit, onNodesChange, state } from './state'
@@ -56,8 +57,8 @@ async function reload() {
   }
 }
 
-subscribe({
-  // On every (re)connect, fetch the full list, since events may have been missed while offline.
+const handlers = {
+  // On every (re)connect, fetch the full list, since events may have been missed while away.
   onOpen: () => {
     state.live = true
     state.retryUnsaved()
@@ -67,11 +68,29 @@ subscribe({
   onError: () => {
     state.live = false
   },
-  onEvent: (event) => {
+  onEvent: (event: ServerEvent) => {
     if (event.type === 'node:upsert') state.upsert(event.node)
     else if (event.type === 'node:delete') state.removeLocal(event.id)
     else if (event.type === 'file:change' && event.path === 'project.md') {
       void fetchProject().then((p) => (state.project = p))
     }
   },
-})
+}
+
+/**
+ * Only the tab in view keeps a live connection. Browsers allow six open
+ * connections per site across all tabs, and each live connection holds one,
+ * so a handful of open tabs would leave none for loading or saving.
+ * A tab coming back into view reconnects and reloads everything.
+ */
+let source: EventSource | null = null
+function connect() {
+  if (!source) source = subscribe(handlers)
+}
+function disconnect() {
+  source?.close()
+  source = null
+}
+document.addEventListener('visibilitychange', () => (document.hidden ? disconnect() : connect()))
+window.addEventListener('pagehide', disconnect)
+if (!document.hidden) connect()

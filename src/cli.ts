@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util'
 import { init } from './init.js'
 import { findProjectRoot, GW_DIR } from './root.js'
 import { startServer } from './server/index.js'
+import { clientCount } from './server/events.js'
 
 const HELP = `Usage:
   groundwork init        create .groundwork/ and copy the Claude Code commands
@@ -47,8 +48,15 @@ async function main() {
     const { url } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev })
     console.log(`Groundwork is running at ${url}\nWatching ${join(root, GW_DIR)}\nPress Ctrl+C to stop.`)
     if (values.open) {
-      const { default: open } = await import('open')
-      await open(url).catch(() => {})
+      // A Groundwork tab that is already open reconnects by itself. Give it a
+      // moment, and only open a new tab when none came back.
+      await new Promise((r) => setTimeout(r, 2500))
+      if (clientCount() > 0) {
+        console.log('Your open Groundwork tab reconnected.')
+      } else {
+        const { default: open } = await import('open')
+        await open(url).catch(() => {})
+      }
     }
     return
   }
