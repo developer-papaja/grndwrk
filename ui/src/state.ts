@@ -4,6 +4,7 @@ import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, updateNode } from './api'
 import { parseCapture, sameTitle } from './capture'
 import { ALTITUDE_WORDS, topicColumns } from './layout'
+import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
 
 export type DraftField = 'title' | 'topic' | 'type' | 'altitude' | 'status' | 'body'
@@ -56,10 +57,12 @@ export const state = Alpine.reactive({
   /** Nodes just added, or just found as duplicates. They light up for a few seconds. */
   freshIds: [] as string[],
   query: '',
+  searchOpen: false,
   listIndex: 0,
   note: '',
   types: NODE_TYPES,
   altitudeWords: ALTITUDE_WORDS,
+  typeColors: TYPE_COLORS,
   statuses: STATUSES,
 
   get count() {
@@ -89,7 +92,7 @@ export const state = Alpine.reactive({
   get mapArea(): { left: string; right: string } {
     const wide = window.innerWidth >= 900
     const left = this.listOpen && wide ? 320 : 0
-    const right = this.detailsVisible ? 360 : this.selected ? 40 : 0
+    const right = this.detailsVisible ? 360 : 0
     return { left: `${left}px`, right: `${right}px` }
   },
   get linkedNodes(): GNode[] {
@@ -259,6 +262,7 @@ export const state = Alpine.reactive({
   /** `/`: show the list if it is collapsed and put the cursor in search. */
   openList() {
     this.setListOpen(true)
+    this.searchOpen = true
     this.listIndex = 0
     focusWhenVisible('search')
   },
@@ -271,6 +275,7 @@ export const state = Alpine.reactive({
   leaveSearch() {
     this.query = ''
     this.listIndex = 0
+    this.searchOpen = false
   },
   moveList(delta: number) {
     const count = this.listRows.length
@@ -347,11 +352,16 @@ function store(key: string, value: unknown) {
 }
 
 
-/** Focus a field once it is on screen. Panels slide in, so it can take a few frames. */
+/**
+ * Focus a field as soon as Alpine has shown it, so keys typed right away land
+ * in the field. Falls back to waiting a few frames if it is still hidden.
+ */
 function focusWhenVisible(id: string, tries = 20) {
-  const el = document.getElementById(id)
-  if (el && el.offsetParent !== null) return el.focus()
-  if (tries > 0) requestAnimationFrame(() => focusWhenVisible(id, tries - 1))
+  Alpine.nextTick(() => {
+    const el = document.getElementById(id)
+    if (el && el.offsetParent !== null) return el.focus()
+    if (tries > 0) requestAnimationFrame(() => focusWhenVisible(id, tries - 1))
+  })
 }
 
 function errorText(err: unknown): string {

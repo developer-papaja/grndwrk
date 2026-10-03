@@ -49,17 +49,17 @@ export function drawCard(look: CardLook): Card {
   const r = 6
   ctx.beginPath()
   ctx.roundRect(0.5, 0.5, width - 1, height - 1, r)
-  ctx.fillStyle = look.state === 'selected' ? 'rgba(34, 40, 50, 0.97)' : 'rgba(22, 27, 34, 0.94)'
+  ctx.fillStyle = look.state === 'selected' ? '#16344d' : '#2c2c2c'
   ctx.fill()
   ctx.lineWidth = look.state === 'fresh' ? 2 : 1
   ctx.strokeStyle =
     look.state === 'selected'
-      ? 'rgba(255, 255, 255, 0.85)'
+      ? '#0d99ff'
       : look.state === 'fresh'
         ? look.color
         : look.settled || look.state === 'linked'
         ? withAlpha(look.color, look.state === 'linked' ? 0.75 : 0.55)
-        : 'rgba(255, 255, 255, 0.09)'
+        : 'rgba(255, 255, 255, 0.1)'
   ctx.stroke()
 
   // The type's color as a thin edge on the left.
@@ -71,7 +71,7 @@ export function drawCard(look: CardLook): Card {
 
   ctx.font = FONT
   ctx.textBaseline = 'middle'
-  ctx.fillStyle = look.state === 'selected' ? '#ffffff' : look.error ? '#f0b3a8' : 'rgba(223, 227, 234, 0.92)'
+  ctx.fillStyle = look.state === 'selected' ? '#ffffff' : look.error ? '#f0b3a8' : 'rgba(242, 242, 242, 0.92)'
   lines.forEach((line, i) => ctx.fillText(line, EDGE + PAD_X, PAD_Y + LINE * i + LINE / 2 + 0.5))
 
   const texture = new CanvasTexture(canvas)

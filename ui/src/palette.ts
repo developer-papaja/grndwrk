@@ -15,11 +15,11 @@ export const TYPE_COLORS: Record<NodeType, string> = {
 }
 
 export const SCENE_COLORS = {
-  background: '#0e1116',
+  background: '#1e1e1e',
   error: '#d0796b',
   label: '#dfe3ea',
   link: '#a0aab9',
-  guide: '#2a313c',
-  guideText: 'rgba(223, 227, 234, 0.28)',
-  topic: 'rgba(223, 227, 234, 0.4)',
+  guide: '#333333',
+  guideText: 'rgba(255, 255, 255, 0.28)',
+  topic: 'rgba(255, 255, 255, 0.45)',
 }

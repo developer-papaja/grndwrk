@@ -37,7 +37,7 @@ Object.assign(window, { groundwork: { state, scene } })
 Alpine.effect(() => {
   const wide = window.innerWidth >= 900
   const left = state.listOpen && wide ? 320 : 0
-  const right = state.detailsVisible ? 360 : state.selected ? 40 : 0
+  const right = state.detailsVisible ? 360 : 0
   scene.setInsets({ left, right })
 })
 

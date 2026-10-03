@@ -1,36 +1,39 @@
 @import 'tailwindcss';
 
+/* Neutral greys and one blue accent, in the spirit of a design tool's dark UI. */
 @theme {
-  --color-ink: #0e1116;
-  --color-panel: #161b22;
-  --color-fog: #dfe3ea;
+  --color-ink: #1e1e1e;
+  --color-panel: #2c2c2c;
+  --color-line: #3d3d3d;
+  --color-fog: #f2f2f2;
+  --color-accent: #0d99ff;
+  --font-sans: Inter, system-ui, sans-serif;
 }
 
 @layer components {
   .field {
-    @apply rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-fog placeholder:text-fog/30 focus:border-white/25 focus:outline-none;
-  }
-  .tool {
-    @apply rounded-md px-2 py-1 text-fog/60 hover:bg-white/8 hover:text-fog;
-  }
-  .tool-on {
-    @apply bg-amber-300/15 text-amber-100;
-  }
-  .tool-danger {
-    @apply bg-rose-400/20 text-rose-100;
+    @apply rounded-md border border-transparent bg-white/5 px-2 py-1.5 text-fog placeholder:text-fog/30 hover:border-white/10 focus:border-accent focus:outline-none;
   }
   .label {
-    @apply mb-1 block text-[11px] tracking-wide text-fog/45 uppercase;
+    @apply mb-1.5 block text-[11px] text-fog/50;
   }
-}
-
-/* Center bars in the space left of the side panel while it is open. */
-@media (min-width: 900px) {
-  .with-panel {
-    padding-right: calc(360px + 2rem);
+  /* A square button holding one icon, as in panel headers. */
+  .icon-btn {
+    @apply grid size-8 place-items-center rounded-md text-fog/60 hover:bg-white/8 hover:text-fog;
   }
-  .with-list {
-    padding-left: calc(300px + 2rem);
+  /* A tool in the floating toolbar. */
+  .tool {
+    @apply grid size-9 place-items-center rounded-lg text-fog/75 hover:bg-white/10 hover:text-fog;
+  }
+  .tool-on {
+    @apply bg-accent text-white hover:bg-accent;
+  }
+  .tool-danger {
+    @apply bg-rose-500/80 text-white hover:bg-rose-500/80;
+  }
+  /* Tools that need an open card wait, dimmed, until one is open. */
+  .tools-off .tool {
+    @apply pointer-events-none opacity-35;
   }
 }
 
@@ -44,7 +47,7 @@ body {
 /* Quiet scrollbars that match the panels. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(223, 227, 234, 0.15) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 select.field option {

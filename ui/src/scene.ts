@@ -18,8 +18,6 @@ import {
 } from './layout'
 import { SCENE_COLORS, TYPE_COLORS } from './palette'
 
-/** How close the camera comes when it flies to a node. */
-const FLY_DISTANCE = 280
 /** Sideways room between nodes on the same line of a column. */
 const ROW_GAP = 80
 /** A card with no room shows as a dot this many pixels wide. */
@@ -109,7 +107,8 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     .enablePointerInteraction(false)
     .enableNodeDrag(false)
     .nodeThreeObject((n) => buildObject(n))
-    .linkWidth((l) => (touchesSelected(l) ? 1.1 : 0.6))
+    // Thin lines, never tubes: tubes turn into rods when you zoom in.
+    .linkWidth(0)
     .linkOpacity(1)
     .linkColor((l) => linkColor(l))
 
@@ -171,13 +170,12 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   }
   graph.cameraPosition({ x: 0, y: 90, z: 460 })
   // The map sits between the side panels, like a canvas in a design tool.
-  const TOP_BAR = 48
   let insets = { left: 0, right: 0 }
   function setInsets(next: { left: number; right: number }) {
     insets = next
     el.style.left = `${next.left}px`
     el.style.right = `${next.right}px`
-    graph.width(window.innerWidth - next.left - next.right).height(window.innerHeight - TOP_BAR)
+    graph.width(window.innerWidth - next.left - next.right).height(window.innerHeight)
   }
   window.addEventListener('resize', () => setInsets(insets))
 
@@ -357,7 +355,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       graph.d3ReheatSimulation()
     }
     for (const n of nodes) style(n)
-    graph.linkColor(graph.linkColor()).linkWidth(graph.linkWidth())
+    graph.linkColor(graph.linkColor())
     drawGuides()
     frameOnce()
     if (next.selectedId && next.selectedId !== lastSelected) flyTo(next.selectedId)
@@ -458,13 +456,16 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     }
   }
 
-  /** Ease the camera to a node, keeping the angle you were looking from. */
+  /**
+   * Ease the camera so the node is in the middle. The angle and the zoom stay
+   * as they were, so the map around it stays in view.
+   */
   function flyTo(id: string) {
     const n = graph.graphData().nodes.find((g) => g.id === id)
     if (!n || n.x === undefined) return
     const target = new Vector3(n.x, n.y, n.z)
-    const dir = graph.camera().position.clone().sub(controls.target).normalize()
-    const pos = target.clone().add(dir.multiplyScalar(FLY_DISTANCE))
+    const offset = graph.camera().position.clone().sub(controls.target)
+    const pos = target.clone().add(offset)
     graph.cameraPosition({ x: pos.x, y: pos.y, z: pos.z }, { x: target.x, y: target.y, z: target.z }, 600)
   }
 
