@@ -7,8 +7,10 @@ import {
   ageFractions,
   ageOpacity,
   ALTITUDE_WORDS,
+  altitudeStep,
   altitudeY,
   depthZ,
+  wrapLabel,
   linkStrength,
   topicColumns,
   topicKey,
@@ -95,6 +97,9 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   let hoveredId: string | null = null
   let lastSelected: string | null = null
   let hits: Hit[] = []
+  /** Space between altitude levels. Follows the number of columns and the view's shape. */
+  let step = 70
+  const levelY = (altitude: number) => altitudeY(altitude, step)
 
   // The constructor type does not carry node and link types, so give them here.
   const graph = (new ForceGraph3D(el, { controlType: 'orbit' }) as unknown as ForceGraph3DInstance<GraphNode, GraphLink>)
@@ -247,7 +252,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   /** Every frame: ease height and depth toward their targets, and place cards. */
   function frame() {
     for (const n of graph.graphData().nodes) {
-      n.fy = ease(n.fy, altitudeY(n.altitude))
+      n.fy = ease(n.fy, levelY(n.altitude))
       n.fz = ease(n.fz, depthZ(n.age))
     }
     placeCards()
@@ -309,6 +314,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     const ids = new Set(next.nodes.map((n) => n.id))
     const ages = ageFractions(next.nodes)
     columns = topicColumns(next.nodes)
+    step = altitudeStep(columns.size, el.clientWidth / Math.max(1, el.clientHeight))
 
     const links: GraphLink[] = []
     const seen = new Set<string>()
@@ -385,7 +391,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     const jitter = () => (Math.random() - 0.5) * 30
     const anchor = n.links.map((l) => existing.get(l)).find((a) => a?.x !== undefined)
     g.x = (anchor?.x ?? columns.get(g.topic)?.x ?? 0) + jitter()
-    g.y = g.fy = altitudeY(n.altitude)
+    g.y = g.fy = levelY(n.altitude)
     g.z = g.fz = depthZ(0)
     return g
   }
@@ -423,7 +429,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   /** One faint line per altitude, with its meaning in words, and a name over each topic. */
   let guideKey = ''
   function drawGuides() {
-    const key = [...columns.values()].map((c) => `${c.name}@${c.x}`).join('|')
+    const key = step + '#' + [...columns.values()].map((c) => `${c.name}@${c.x}`).join('|')
     if (key === guideKey) return
     guideKey = key
     for (const obj of [...guides.children, ...topicLabels.children]) disposeObject(obj)
@@ -435,7 +441,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     const right = Math.max(...xs) + 110
     const material = new LineBasicMaterial({ color: SCENE_COLORS.guide, transparent: true, opacity: 0.8 })
     for (let a = 1; a <= 5; a++) {
-      const y = altitudeY(a)
+      const y = levelY(a)
       guides.add(new Line(new BufferGeometry().setFromPoints([new Vector3(left, y, 0), new Vector3(right, y, 0)]), material))
       const word = makeText(ALTITUDE_WORDS[a], 0.0095, SCENE_COLORS.guideText)
       // Right aligned against the start of the line.
@@ -444,8 +450,10 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       guides.add(word)
     }
     for (const col of columns.values()) {
-      const label = makeText(col.name, 0.016, SCENE_COLORS.topic)
-      label.position.set(col.x, altitudeY(5) + 40, 0)
+      // Long names wrap, so neighbouring columns never share a line of text.
+      const label = makeText(wrapLabel(col.name, 12), 0.014, SCENE_COLORS.topic)
+      label.center.set(0.5, 0)
+      label.position.set(col.x, levelY(5) + 24, 0)
       topicLabels.add(label)
     }
   }

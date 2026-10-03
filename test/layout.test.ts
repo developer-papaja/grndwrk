@@ -81,3 +81,12 @@ describe('age and depth', () => {
     expect(ageOpacity(1)).toBeCloseTo(0.6)
   })
 })
+
+describe('altitudeStep', () => {
+  it('spreads levels further apart when there are more columns', async () => {
+    const { altitudeStep } = await import('../ui/src/layout.js')
+    expect(altitudeStep(1, 1.3)).toBe(ALTITUDE_STEP)
+    expect(altitudeStep(7, 1.3)).toBeGreaterThan(altitudeStep(4, 1.3))
+    expect(altitudeStep(30, 1.3)).toBe(260)
+  })
+})

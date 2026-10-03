@@ -18,8 +18,19 @@ export const ALTITUDE_WORDS: Record<number, string> = {
 }
 
 /** Altitude 5 sits highest, 1 lowest, 3 in the middle. */
-export function altitudeY(altitude: number): number {
-  return (Math.min(5, Math.max(1, altitude)) - 3) * ALTITUDE_STEP
+export function altitudeY(altitude: number, step = ALTITUDE_STEP): number {
+  return (Math.min(5, Math.max(1, altitude)) - 3) * step
+}
+
+/**
+ * Space between altitude levels so the map keeps about the shape of the view.
+ * More topic columns make the map wider, so the levels spread further apart
+ * and cards get room on screen instead of turning into dots.
+ */
+export function altitudeStep(columnCount: number, viewAspect: number): number {
+  const width = Math.max(0, columnCount - 1) * COLUMN_SPACING + 220
+  const step = width / Math.max(0.5, viewAspect) / 4.6
+  return Math.round(Math.min(260, Math.max(ALTITUDE_STEP, step)))
 }
 
 /** Topics match regardless of case and spacing. An empty key means no topic. */
@@ -57,20 +68,20 @@ export function linkStrength(sameTopic: boolean, degreeA: number, degreeB: numbe
 }
 
 /** Two short lines read better in a crowded map than one long one. */
-export function wrapLabel(title: string): string {
+export function wrapLabel(title: string, lineLength = LABEL_LINE): string {
   const words = title.trim().split(/\s+/)
   const lines: string[] = ['']
   for (const word of words) {
     const line = lines[lines.length - 1]
-    if (!line || line.length + 1 + word.length <= LABEL_LINE) lines[lines.length - 1] = line ? `${line} ${word}` : word
+    if (!line || line.length + 1 + word.length <= lineLength) lines[lines.length - 1] = line ? `${line} ${word}` : word
     else if (lines.length < 2) lines.push(word)
     else {
       lines[1] = `${lines[1]} ${word}`
       break
     }
   }
-  if (lines[1] && (lines[1].length > LABEL_LINE || words.join(' ').length > lines.join(' ').length)) {
-    lines[1] = `${lines[1].slice(0, LABEL_LINE - 1).trimEnd()}…`
+  if (lines[1] && (lines[1].length > lineLength || words.join(' ').length > lines.join(' ').length)) {
+    lines[1] = `${lines[1].slice(0, lineLength - 1).trimEnd()}…`
   }
   return lines.join('\n')
 }
