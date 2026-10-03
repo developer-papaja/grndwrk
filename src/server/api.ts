@@ -3,6 +3,7 @@ import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import { markAnswered, readReadiness } from '../store/readiness.js'
+import { listStories, readOutput } from '../store/stories.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
 
@@ -40,6 +41,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (url.pathname === '/api/events' && method === 'GET') {
       subscribe(res)
       return true
+    }
+    if (url.pathname === '/api/stories' && method === 'GET') {
+      return send(res, 200, await listStories(ctx.gwDir))
+    }
+    const outputMatch = url.pathname.match(/^\/api\/outputs\/([^/]+)$/)
+    if (outputMatch && method === 'GET') {
+      const text = await readOutput(ctx.gwDir, decodeURIComponent(outputMatch[1]))
+      return send(res, 200, { text })
     }
     if (url.pathname === '/api/readiness' && method === 'GET') {
       return send(res, 200, await readReadiness(ctx.gwDir))

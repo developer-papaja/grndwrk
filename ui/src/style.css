@@ -51,6 +51,24 @@
 .report ol {
   @apply mb-2.5 list-decimal space-y-1.5 pl-5 text-fog/80;
 }
+.report h1 {
+  @apply mb-3 text-lg font-semibold text-fog;
+}
+.report h3 {
+  @apply mb-1.5 mt-4 text-[13px] font-semibold text-fog/90;
+}
+.report blockquote {
+  @apply mb-3 rounded-lg border border-question/40 bg-question/10 px-4 py-2 text-fog/85;
+}
+.report blockquote p {
+  @apply mb-0;
+}
+.report code {
+  @apply rounded bg-white/8 px-1 text-[12px] text-fog;
+}
+.report ul ul {
+  @apply mb-0 mt-1;
+}
 .report ul {
   @apply mb-2.5 list-disc space-y-1.5 pl-5 text-fog/80;
 }

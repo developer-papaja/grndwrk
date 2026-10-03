@@ -70,3 +70,21 @@ export interface Readiness {
   /** Set when gaps.json could not be read, so the UI can say so. */
   error?: string
 }
+
+export const STORY_STATUSES = ['not-started', 'partial', 'done'] as const
+export type StoryStatus = (typeof STORY_STATUSES)[number]
+
+/** A user story written by /brief. Kept in .groundwork/stories/, one file each. */
+export interface Story {
+  id: string
+  title: string
+  status: StoryStatus
+  /** The map nodes the story came from. Every story needs at least one. */
+  from: string[]
+  /** Routes or component paths in the product, filled in while building. */
+  applies_to: string[]
+  created: string
+  body: string
+  /** Set when the file is broken or misses something required. */
+  error?: string
+}

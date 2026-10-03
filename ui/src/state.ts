@@ -1,7 +1,7 @@
 import Alpine from 'alpinejs'
-import type { Gap, GNode, NodeType, Readiness, Status } from '../../src/shared/types'
+import type { Gap, GNode, NodeType, Readiness, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, fetchReadiness, markGapAnswered, savePages, updateNode, uploadImage } from './api'
+import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchStories, markGapAnswered, savePages, updateNode, uploadImage } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
@@ -68,6 +68,12 @@ export const state = Alpine.reactive({
   readiness: null as Readiness | null,
   /** Which view the rail shows: the 3D map, readiness, or deliverables. */
   view: readStored<'map' | 'readiness' | 'deliverables'>('groundwork.view', 'map'),
+  stories: [] as Story[],
+  brief: null as string | null,
+  starter: null as string | null,
+  deliverablesTab: readStored<'brief' | 'stories' | 'starter'>('groundwork.deliverablesTab', 'brief'),
+  openStoryId: null as string | null,
+  copied: false,
   /** The right panel shows the readiness report instead of a card. */
   reportOpen: false,
   selectedGapId: null as string | null,
@@ -167,6 +173,43 @@ export const state = Alpine.reactive({
   get reportHtml(): string {
     const body = this.readiness?.report?.body ?? ''
     return marked.parse(body, { async: false }) as string
+  },
+  get briefHtml(): string {
+    return marked.parse(stripFrontmatter(this.brief ?? ''), { async: false }) as string
+  },
+  get briefWritten(): string {
+    return /^---[\s\S]*?\bwritten:\s*(\S+)[\s\S]*?---/.exec(this.brief ?? '')?.[1] ?? ''
+  },
+  get starterHtml(): string {
+    return marked.parse(stripFrontmatter(this.starter ?? ''), { async: false }) as string
+  },
+  storyHtml(story: Story): string {
+    return marked.parse(story.body, { async: false }) as string
+  },
+  async loadDeliverables() {
+    try {
+      const [stories, brief, starter] = await Promise.all([fetchStories(), fetchOutput('brief.md'), fetchOutput('CLAUDE.starter.md')])
+      this.stories = stories
+      this.brief = brief
+      this.starter = starter
+      onChange()
+    } catch {
+      // Offline: the next reconnect loads them.
+    }
+  },
+  setDeliverablesTab(tab: 'brief' | 'stories' | 'starter') {
+    this.deliverablesTab = tab
+    store('groundwork.deliverablesTab', tab)
+  },
+  async copyStarter() {
+    if (!this.starter) return
+    try {
+      await navigator.clipboard.writeText(this.starter)
+      this.copied = true
+      setTimeout(() => (this.copied = false), 2000)
+    } catch {
+      this.flash('The browser did not allow copying. Open .groundwork/outputs/CLAUDE.starter.md instead.')
+    }
   },
   get areas(): Area[] {
     return parseAreas(this.readiness?.report?.body ?? '')
@@ -620,6 +663,10 @@ export const state = Alpine.reactive({
     noteTimer = setTimeout(() => (this.note = ''), 4000)
   },
 })
+
+function stripFrontmatter(text: string): string {
+  return text.replace(/^---\n[\s\S]*?\n---\n?/, '')
+}
 
 /** Layout choices are remembered per browser. Storage can be blocked, so fall back quietly. */
 function readStored<T>(key: string, fallback: T): T {

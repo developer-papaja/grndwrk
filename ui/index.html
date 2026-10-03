@@ -397,8 +397,70 @@
       :style="{ right: $store.gw.detailsVisible ? '360px' : '0px' }"
     >
       <div class="mx-auto max-w-3xl px-8 pb-24 pt-10">
-        <h1 class="text-xl font-semibold text-fog">Deliverables</h1>
-        <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Nothing yet. Run <code class="text-fog">/brief</code> in Claude Code to turn the map into a brief, a site map and the first stories.</p>
+        <div class="flex items-baseline justify-between gap-4">
+          <h1 class="text-xl font-semibold text-fog">Deliverables</h1>
+          <span class="text-xs text-fog/40" x-show="$store.gw.briefWritten" x-text="'Written ' + $store.gw.briefWritten"></span>
+        </div>
+
+        <template x-if="!$store.gw.brief && !$store.gw.stories.length">
+          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Nothing yet. Run <code class="text-fog">/brief</code> in Claude Code to turn the map into a brief, a site map, the first stories and a CLAUDE.md to start building with.</p>
+        </template>
+
+        <template x-if="$store.gw.brief || $store.gw.stories.length">
+          <div>
+            <div class="mt-4 flex items-center justify-between gap-4">
+              <div class="flex gap-0.5 rounded-lg bg-white/5 p-0.5" id="deliverables-tabs">
+                <template x-for="t in [['brief', 'Brief'], ['stories', 'Stories'], ['starter', 'CLAUDE.md to start with']]" :key="t[0]">
+                  <button
+                    class="rounded-md px-3 py-1 text-xs"
+                    :class="$store.gw.deliverablesTab === t[0] ? 'bg-white/15 text-fog' : 'text-fog/55 hover:text-fog'"
+                    @click="$store.gw.setDeliverablesTab(t[0])"
+                    x-text="t[1] + (t[0] === 'stories' ? ' · ' + $store.gw.stories.length : '')"
+                  ></button>
+                </template>
+              </div>
+              <span class="text-xs text-fog/40">Run <code class="text-fog/70">/brief</code> again after changing the map.</span>
+            </div>
+
+            <div x-show="$store.gw.deliverablesTab === 'brief'" class="report mt-6" id="brief" x-html="$store.gw.brief ? $store.gw.briefHtml : '<p>No brief yet.</p>'"></div>
+
+            <div x-show="$store.gw.deliverablesTab === 'stories'" class="mt-6 space-y-1.5" id="stories">
+              <template x-for="s in $store.gw.stories" :key="s.id">
+                <section class="rounded-lg border border-line" :class="$store.gw.openStoryId === s.id && 'border-white/20'">
+                  <button class="flex w-full items-center gap-3 px-4 py-3 text-left" @click="$store.gw.openStoryId = $store.gw.openStoryId === s.id ? null : s.id">
+                    <span
+                      class="shrink-0 rounded px-1.5 py-0.5 text-[11px]"
+                      :class="{ 'bg-white/10 text-fog/60': s.status === 'not-started', 'bg-question/15 text-question': s.status === 'partial', 'bg-emerald-400/15 text-emerald-300': s.status === 'done' }"
+                      x-text="s.status.replace('-', ' ')"
+                    ></span>
+                    <span class="min-w-0 flex-1 font-medium text-fog" x-text="s.title"></span>
+                    <span class="shrink-0 font-mono text-[11px] text-fog/35" x-text="s.id"></span>
+                  </button>
+                  <div x-show="$store.gw.openStoryId === s.id" class="border-t border-line px-4 py-3">
+                    <p x-show="s.error" class="mb-2 text-xs text-rose-300" x-text="s.error"></p>
+                    <div class="report" x-html="$store.gw.storyHtml(s)"></div>
+                    <span class="label mt-3">Came from</span>
+                    <template x-for="id in s.from" :key="id">
+                      <button class="flex h-7 w-full items-center gap-2 rounded px-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(id)">
+                        <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.nodes[id] ? $store.gw.typeColors[$store.gw.nodes[id].type] : '#666' }"></span>
+                        <span class="truncate" x-text="$store.gw.nodes[id]?.title ?? id + ' (not in the map)'"></span>
+                      </button>
+                    </template>
+                    <p x-show="s.applies_to.length" class="mt-2 text-xs text-fog/45" x-text="'Built in: ' + s.applies_to.join(', ')"></p>
+                  </div>
+                </section>
+              </template>
+            </div>
+
+            <div x-show="$store.gw.deliverablesTab === 'starter'" class="mt-6" id="starter">
+              <div class="mb-3 flex items-center justify-between gap-4 rounded-lg border border-line px-4 py-3">
+                <span class="text-fog/70">Put this in the product's repository as CLAUDE.md. Every Claude Code session there starts from it.</span>
+                <button id="copy-starter" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.starter" @click="$store.gw.copyStarter()" x-text="$store.gw.copied ? 'Copied' : 'Copy'"></button>
+              </div>
+              <div class="report" x-html="$store.gw.starter ? $store.gw.starterHtml : '<p>No starter yet.</p>'"></div>
+            </div>
+          </div>
+        </template>
       </div>
     </main>
 
