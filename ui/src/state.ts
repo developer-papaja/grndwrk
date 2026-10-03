@@ -4,6 +4,7 @@ import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, fetchReadiness, markGapAnswered, savePages, updateNode, uploadImage } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
+import { parseAreas, type Area } from '../../src/shared/report'
 import { parseCapture, sameTitle } from './capture'
 import { marked } from 'marked'
 import { ALTITUDE_WORDS, topicColumns } from './layout'
@@ -65,6 +66,8 @@ export const state = Alpine.reactive({
   reply: '',
   sending: false,
   readiness: null as Readiness | null,
+  /** Which view the rail shows: the 3D map, readiness, or deliverables. */
+  view: readStored<'map' | 'readiness' | 'deliverables'>('groundwork.view', 'map'),
   /** The right panel shows the readiness report instead of a card. */
   reportOpen: false,
   selectedGapId: null as string | null,
@@ -165,6 +168,45 @@ export const state = Alpine.reactive({
     const body = this.readiness?.report?.body ?? ''
     return marked.parse(body, { async: false }) as string
   },
+  get areas(): Area[] {
+    return parseAreas(this.readiness?.report?.body ?? '')
+  },
+  get openGaps(): Gap[] {
+    const order = { blocking: 0, important: 1, nice: 2 }
+    return (this.readiness?.gaps ?? []).filter((g) => !g.answered_by).sort((a, b) => order[a.severity] - order[b.severity])
+  },
+  get waitingGaps(): Gap[] {
+    return (this.readiness?.gaps ?? []).filter((g) => g.answered_by)
+  },
+  get blockingCount(): number {
+    return this.openGaps.filter((g) => g.severity === 'blocking').length
+  },
+  /** What has been decided: decisions and settled thoughts, by topic. Shown outside the map. */
+  get settledGroups(): { topic: string; nodes: GNode[] }[] {
+    const settled = Object.values(this.nodes).filter((n) => n.status === 'settled' || (n.type === 'decision' && n.status !== 'parked'))
+    const groups = new Map<string, GNode[]>()
+    for (const n of settled) {
+      const t = n.topic || 'no topic'
+      groups.set(t, [...(groups.get(t) ?? []), n])
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => (a === 'no topic' ? 1 : b === 'no topic' ? -1 : a.localeCompare(b)))
+      .map(([topic, nodes]) => ({ topic, nodes: nodes.sort((a, b) => b.altitude - a.altitude || a.title.localeCompare(b.title)) }))
+  },
+  setView(view: 'map' | 'readiness' | 'deliverables') {
+    this.view = view
+    store('groundwork.view', view)
+    onChange()
+    if (view === 'map') setTimeout(fitHandler, 80)
+  },
+  /** Open a thought in the map, from any view. */
+  goToNode(id: string) {
+    const node = this.nodes[id]
+    if (!node) return
+    if (!this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.showPage(pageOf(node, this.pageNames))
+    if (this.view !== 'map') this.setView('map')
+    this.select(id)
+  },
   get verdictLabel(): string {
     const r = this.readiness
     if (!r?.report) return ''
@@ -179,7 +221,7 @@ export const state = Alpine.reactive({
    */
   get mapArea(): { left: string; right: string } {
     const wide = window.innerWidth >= 900
-    const left = this.listOpen && wide ? 320 : 0
+    const left = 64 + (this.listOpen && wide ? 320 : 0)
     const right = this.detailsVisible ? 360 : 0
     return { left: `${left}px`, right: `${right}px` }
   },
@@ -237,8 +279,12 @@ export const state = Alpine.reactive({
     this.setDetailsMinimized(false)
     onChange()
   },
-  /** Answer a ghost: the answer becomes a real thought where the gap was, and the gap is marked for a re-check. */
-  async answerGap() {
+  /**
+   * Write about a gap. Either way the text becomes a thought where the gap
+   * sits. Only "this answers it" marks the gap for /readiness to check; a
+   * remark leaves it open.
+   */
+  async answerGap(closes = true) {
     const gap = this.selectedGap
     const title = this.gapAnswer.trim()
     if (!gap || !title) return
@@ -247,9 +293,9 @@ export const state = Alpine.reactive({
       const node = await createNode({ title, topic: gap.topic ?? '', page: gap.page ?? '', altitude: gap.altitude ?? 3, links })
       this.upsert(node)
       this.markFresh(node.id)
-      this.readiness = await markGapAnswered(gap.id, node.id)
+      if (closes) this.readiness = await markGapAnswered(gap.id, node.id)
       this.gapAnswer = ''
-      this.flash('Added to the map. Run /readiness to check again.')
+      this.flash(closes ? 'Marked as answered. /readiness decides if it closes.' : 'Added as a thought. The gap stays open.')
       onChange()
     } catch (err) {
       this.flash(errorText(err))

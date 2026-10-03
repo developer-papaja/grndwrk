@@ -198,6 +198,12 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   window.addEventListener('resize', () => setInsets(insets))
 
   /** Hold space to pan with the left button, as in design tools. */
+  /** Stop drawing while another view covers the map, and pick up again after. */
+  function setActive(on: boolean) {
+    if (on) graph.resumeAnimation()
+    else graph.pauseAnimation()
+  }
+
   function setPanning(on: boolean) {
     const c = graph.controls() as { mouseButtons: { LEFT: MOUSE } }
     c.mouseButtons.LEFT = on ? MOUSE.PAN : MOUSE.ROTATE
@@ -391,6 +397,8 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
         ghosts.set(gap.id, g)
       }
       g.gap = gap
+      // A blocking gap draws above the cards: it must never hide behind one.
+      g.card.renderOrder = gap.severity === 'blocking' && !gap.answered_by ? 22 : 19
       const selected = gap.id === view.selectedGapId
       const key = [gap.title, gap.severity, !!gap.answered_by, selected].join('|')
       if (key !== g.key) {
@@ -595,7 +603,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     return graph.graph2ScreenCoords(n.x, n.y!, n.z!)
   }
 
-  return { render, fit, flyTo, setInsets, setPanning, screenPosition, graph }
+  return { render, fit, flyTo, setInsets, setPanning, setActive, screenPosition, graph }
 }
 
 function disposeObject(obj: object) {

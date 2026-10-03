@@ -5,6 +5,9 @@ import { bindKeys } from './keys'
 import { createScene } from './scene'
 import { onFit, onNodesChange, state } from './state'
 
+/** Width of the views rail at the far left. */
+const RAIL = 64
+
 const scene = createScene(document.getElementById('scene')!, {
   onNodeClick: (id) => {
     if (id.startsWith('gap:')) return state.selectGap(id.slice(4))
@@ -37,13 +40,14 @@ onNodesChange(() => {
 // A handle for poking at the map from the browser console.
 Object.assign(window, { groundwork: { state, scene } })
 
-// The map gets the room between the side panels.
+// The map gets the room between the rail, the side panels and the details.
 Alpine.effect(() => {
   const wide = window.innerWidth >= 900
-  const left = state.listOpen && wide ? 320 : 0
+  const left = RAIL + (state.listOpen && wide ? 320 : 0)
   const right = state.detailsVisible ? 360 : 0
   scene.setInsets({ left, right })
 })
+Alpine.effect(() => scene.setActive(state.view === 'map'))
 
 bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
   fit: () => state.fit(),

@@ -20,16 +20,39 @@
       <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></symbol>
       <symbol id="i-panel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M9.5 5v14" /></symbol>
       <symbol id="i-panel-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M14.5 5v14" /></symbol>
+      <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" /></symbol>
+      <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></symbol>
       <symbol id="i-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" /></symbol>
     </svg>
 
-    <div id="scene" class="fixed inset-y-0"></div>
+    <div id="scene" class="fixed inset-y-0" :class="$store.gw.view !== 'map' && 'invisible'"></div>
+
+    <!-- Views rail -->
+    <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-1 border-r border-line bg-ink pt-3 text-[10px]">
+      <template x-for="v in [['map', 'Map', 'i-map'], ['readiness', 'Readiness', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
+        <button
+          class="relative flex w-14 flex-col items-center gap-1 rounded-lg py-2"
+          :class="$store.gw.view === v[0] ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
+          :id="'rail-' + v[0]"
+          @click="$store.gw.setView(v[0])"
+        >
+          <svg class="size-5"><use :href="'#' + v[2]" /></svg>
+          <span x-text="v[1]"></span>
+          <span
+            x-show="v[0] === 'readiness' && $store.gw.blockingCount"
+            class="absolute right-2 top-1 grid size-4 place-items-center rounded-full bg-rose-500 text-[10px] font-semibold text-white"
+            x-text="$store.gw.blockingCount"
+          ></span>
+        </button>
+      </template>
+    </nav>
 
     <!-- List: docked on the left, or a small pill when collapsed -->
     <aside
       x-cloak
-      x-show="$store.gw.listOpen"
-      class="fixed inset-y-0 left-0 flex w-[320px] max-w-full flex-col border-r border-line bg-panel text-[13px]"
+      x-show="$store.gw.view === 'map' && $store.gw.listOpen"
+      class="fixed inset-y-0 left-16 flex w-[320px] max-w-full flex-col border-r border-line bg-panel text-[13px]"
     >
       <div class="flex items-start justify-between gap-3 px-4 pb-3 pt-4">
         <div class="min-w-0">
@@ -51,7 +74,7 @@
             <span x-text="$store.gw.questionIds.length + ($store.gw.questionIds.length === 1 ? ' question for you' : ' questions for you')"></span>
           </button>
           <button
-            x-show="$store.gw.readiness?.report"
+            x-show="false"
             id="verdict"
             class="mt-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs"
             :class="{
@@ -63,9 +86,7 @@
             @click="$store.gw.openReport()"
             x-text="$store.gw.verdictLabel"
           ></button>
-          <p x-show="$store.gw.readiness && !$store.gw.readiness.report" class="mt-2 text-[11px] leading-snug text-fog/40">
-            Readiness not checked yet. Run /readiness in Claude Code.
-          </p>
+
         </div>
         <button id="list-button" class="icon-btn" title="Hide panel" @click="$store.gw.setListOpen(false)">
           <svg class="size-5"><use href="#i-panel" /></svg>
@@ -186,8 +207,8 @@
 
     <div
       x-cloak
-      x-show="!$store.gw.listOpen"
-      class="fixed left-3 top-3 flex items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-black/20"
+      x-show="$store.gw.view === 'map' && !$store.gw.listOpen"
+      class="fixed left-[76px] top-3 flex items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-black/20"
     >
       <span class="size-1.5 rounded-full" :class="$store.gw.live ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'"></span>
       <span class="font-semibold text-fog" x-text="$store.gw.project.name || 'Groundwork'"></span>
@@ -197,7 +218,7 @@
     </div>
 
     <!-- Link mode banner -->
-    <div x-cloak x-show="$store.gw.mode === 'link'" class="pointer-events-none fixed top-4 flex justify-center px-4" :style="$store.gw.mapArea">
+    <div x-cloak x-show="$store.gw.view === 'map' && $store.gw.mode === 'link'" class="pointer-events-none fixed top-4 flex justify-center px-4" :style="$store.gw.mapArea">
       <div id="link-banner" class="rounded-full border border-accent/40 bg-accent/15 px-4 py-1.5 text-xs text-sky-100">
         Click cards to link or unlink them. Esc to stop.
       </div>
@@ -209,7 +230,7 @@
     </div>
 
     <!-- Toolbar: add a thought, act on the open card, frame the map -->
-    <div class="pointer-events-none fixed bottom-5 flex justify-center px-4" :style="$store.gw.mapArea">
+    <div x-show="$store.gw.view === 'map'" class="pointer-events-none fixed bottom-5 flex justify-center px-4" :style="$store.gw.mapArea">
       <form
         class="pointer-events-auto flex max-w-full items-center gap-1 rounded-2xl border border-line bg-panel p-1.5 shadow-lg shadow-black/25"
         @submit.prevent="$store.gw.submitCapture()"
@@ -261,6 +282,125 @@
         </div>
       </form>
     </div>
+
+    <!-- Readiness view -->
+    <main
+      x-cloak
+      x-show="$store.gw.view === 'readiness'"
+      id="readiness-view"
+      class="fixed inset-y-0 left-16 overflow-y-auto bg-ink text-[13px]"
+      :style="{ right: $store.gw.detailsVisible ? '360px' : '0px' }"
+    >
+      <div class="mx-auto max-w-3xl px-8 pb-24 pt-10">
+        <div class="flex items-baseline justify-between gap-4">
+          <h1 class="text-xl font-semibold text-fog">Readiness</h1>
+          <span class="text-xs text-fog/40" x-show="$store.gw.readiness?.report" x-text="'Checked ' + ($store.gw.readiness?.report?.checked ?? '')"></span>
+        </div>
+
+        <template x-if="!$store.gw.readiness?.report">
+          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Not checked yet. Run <code class="text-fog">/readiness</code> in Claude Code. It judges the map against your checklist and lists what is missing.</p>
+        </template>
+
+        <template x-if="$store.gw.readiness?.report">
+          <div>
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+              <span
+                class="rounded-md px-2.5 py-1 text-sm font-medium"
+                :class="{
+                  'bg-emerald-400/15 text-emerald-300': $store.gw.readiness.report.verdict === 'ready to build',
+                  'bg-accent/15 text-sky-300': $store.gw.readiness.report.verdict === 'ready to prototype',
+                  'bg-question/15 text-question': !['ready to build', 'ready to prototype'].includes($store.gw.readiness.report.verdict)
+                }"
+                x-text="$store.gw.verdictLabel"
+              ></span>
+              <span class="text-xs text-fog/45" x-text="$store.gw.openGaps.length + ' open, ' + $store.gw.waitingGaps.length + ' waiting for a check'"></span>
+            </div>
+            <p class="mt-3 text-xs text-fog/40">Run <code class="text-fog/70">/readiness</code> to check again, or <code class="text-fog/70">/challenge</code> for questions on the thinnest parts.</p>
+
+            <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Areas</h2>
+            <template x-if="$store.gw.areas.length">
+              <ul class="divide-y divide-line rounded-lg border border-line" id="areas">
+                <template x-for="a in $store.gw.areas" :key="a.name">
+                  <li class="flex gap-4 px-4 py-3">
+                    <span class="w-36 shrink-0 font-medium text-fog" x-text="a.name"></span>
+                    <span
+                      class="h-fit shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium"
+                      :class="{ 'bg-rose-400/15 text-rose-300': a.status === 'missing', 'bg-question/15 text-question': a.status === 'thin', 'bg-emerald-400/15 text-emerald-300': a.status === 'enough' }"
+                      x-text="a.status"
+                    ></span>
+                    <span class="text-fog/70" x-text="a.text"></span>
+                  </li>
+                </template>
+              </ul>
+            </template>
+            <template x-if="!$store.gw.areas.length">
+              <div class="report" x-html="$store.gw.reportHtml"></div>
+            </template>
+
+            <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Open</h2>
+            <p x-show="!$store.gw.openGaps.length" class="text-fog/45">Nothing open.</p>
+            <ul class="space-y-1.5" id="gaps-open">
+              <template x-for="g in $store.gw.openGaps" :key="g.id">
+                <li>
+                  <button class="flex w-full items-start gap-3 rounded-lg border border-line px-4 py-3 text-left hover:border-white/20" :class="$store.gw.selectedGapId === g.id && 'border-accent'" @click="$store.gw.selectGap(g.id)">
+                    <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="{ 'bg-rose-400': g.severity === 'blocking', 'bg-question': g.severity === 'important', 'bg-white/40': g.severity === 'nice' }"></span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block font-medium text-fog" x-text="g.title"></span>
+                      <span class="block text-fog/55" x-text="g.why"></span>
+                    </span>
+                    <span class="shrink-0 text-[11px] text-fog/40" x-text="g.severity + ' · ' + g.area"></span>
+                  </button>
+                </li>
+              </template>
+            </ul>
+
+            <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Waiting for a check</h2>
+            <p x-show="!$store.gw.waitingGaps.length" class="text-fog/45">Nothing waiting. When you answer a gap with "This answers it", it waits here until /readiness has looked at it.</p>
+            <ul class="space-y-1.5" id="gaps-waiting">
+              <template x-for="g in $store.gw.waitingGaps" :key="g.id">
+                <li class="rounded-lg border border-dashed border-line px-4 py-3">
+                  <button class="font-medium text-fog/80 hover:text-fog" @click="$store.gw.selectGap(g.id)" x-text="g.title"></button>
+                  <span class="block text-fog/55">
+                    Answered by
+                    <button class="text-accent hover:underline" @click="$store.gw.goToNode(g.answered_by)" x-text="$store.gw.nodes[g.answered_by]?.title ?? g.answered_by"></button>
+                  </span>
+                </li>
+              </template>
+            </ul>
+
+            <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Settled</h2>
+            <p class="mb-3 text-xs text-fog/45">Decisions and settled thoughts, by topic.</p>
+            <div class="grid gap-4 sm:grid-cols-2" id="settled">
+              <template x-for="g in $store.gw.settledGroups" :key="g.topic">
+                <section class="rounded-lg border border-line p-3">
+                  <h3 class="mb-1.5 text-[11px] text-fog/45" x-text="g.topic + ' · ' + g.nodes.length"></h3>
+                  <template x-for="n in g.nodes" :key="n.id">
+                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
+                      <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[n.type] }"></span>
+                      <span class="truncate" x-text="n.title"></span>
+                    </button>
+                  </template>
+                </section>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+    </main>
+
+    <!-- Deliverables view -->
+    <main
+      x-cloak
+      x-show="$store.gw.view === 'deliverables'"
+      id="deliverables-view"
+      class="fixed inset-y-0 left-16 overflow-y-auto bg-ink text-[13px]"
+      :style="{ right: $store.gw.detailsVisible ? '360px' : '0px' }"
+    >
+      <div class="mx-auto max-w-3xl px-8 pb-24 pt-10">
+        <h1 class="text-xl font-semibold text-fog">Deliverables</h1>
+        <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Nothing yet. Run <code class="text-fog">/brief</code> in Claude Code to turn the map into a brief, a site map and the first stories.</p>
+      </div>
+    </main>
 
     <!-- Details: docked on the right, or a small pill when minimized -->
     <button
@@ -333,18 +473,19 @@
                 <p class="mt-1.5 text-xs text-fog/45">Run /readiness in Claude Code to check whether this closes the gap.</p>
               </div>
             </template>
-            <form x-show="!$store.gw.selectedGap.answered_by" @submit.prevent="$store.gw.answerGap()">
-              <span class="label">Your answer becomes a thought here</span>
+            <form x-show="!$store.gw.selectedGap.answered_by" @submit.prevent="$store.gw.answerGap(true)">
+              <span class="label">Write it here. It becomes a thought next to the gap</span>
               <textarea
                 id="gap-answer"
                 rows="3"
                 x-model="$store.gw.gapAnswer"
-                @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerGap() }"
+                @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerGap(true) }"
                 placeholder="For example: Inter, 13px base, 1.25 scale"
                 class="field w-full resize-none"
               ></textarea>
-              <div class="mt-1.5 flex justify-end">
-                <button id="gap-add" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()">Add to map</button>
+              <div class="mt-1.5 flex justify-end gap-2">
+                <button id="gap-note" type="button" class="rounded-md px-3 py-1 text-xs text-fog/70 hover:bg-white/8 hover:text-fog disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()" title="Keep the gap open" @click="$store.gw.answerGap(false)">Add as a thought</button>
+                <button id="gap-add" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()" title="Mark the gap for /readiness to check">This answers it</button>
               </div>
             </form>
           </div>
