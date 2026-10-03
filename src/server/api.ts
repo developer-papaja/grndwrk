@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, writePages } from '../store/project.js'
+import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
 
@@ -16,8 +17,23 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
   if (!url.pathname.startsWith('/api/')) return false
   const method = req.method ?? 'GET'
   const nodeMatch = url.pathname.match(/^\/api\/nodes\/([^/]+)$/)
+  const filesMatch = url.pathname.match(/^\/api\/nodes\/([^/]+)\/files$/)
 
   try {
+    // Images come as their own bytes, not JSON. A cross site page cannot send
+    // an image content type without asking first, which we never allow.
+    if (filesMatch && method === 'POST') {
+      const id = decodeURIComponent(filesMatch[1])
+      await ctx.store.get(id)
+      const type = (req.headers['content-type'] ?? '').split(';')[0].trim()
+      const data = await readRaw(req, MAX_IMAGE_BYTES)
+      try {
+        return send(res, 201, await saveImage(ctx.gwDir, id, type, data))
+      } catch (err) {
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+    }
+
     if ((method === 'POST' || method === 'PATCH') && !isJson(req)) return send(res, 415, { error: 'Send JSON' })
 
     if (url.pathname === '/api/events' && method === 'GET') {
@@ -51,7 +67,9 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       return send(res, 200, change.upserted[0])
     }
     if (nodeMatch && method === 'DELETE') {
-      await ctx.store.delete(decodeURIComponent(nodeMatch[1]))
+      const id = decodeURIComponent(nodeMatch[1])
+      await ctx.store.delete(id)
+      await removeFiles(ctx.gwDir, id)
       await ctx.nodes.sync()
       res.writeHead(204).end()
       return true
@@ -91,6 +109,31 @@ async function readBody(req: IncomingMessage): Promise<NodeInput> {
     if (err instanceof BadInput) throw err
     throw new BadInput('Invalid JSON')
   }
+}
+
+async function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
+  let size = 0
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > limit) throw new BadInput('Images can be at most 10 MB')
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks)
+}
+
+/** Serve /files/<node id>/<name>, and nothing else from disk. */
+export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwDir: string): Promise<boolean> {
+  const url = new URL(req.url ?? '/', 'http://localhost')
+  const m = url.pathname.match(/^\/files\/([^/]+)\/([^/]+)$/)
+  if (!m || req.method !== 'GET') return false
+  const image = await readImage(gwDir, decodeURIComponent(m[1]), decodeURIComponent(m[2]))
+  if (!image) {
+    res.writeHead(404).end()
+    return true
+  }
+  res.writeHead(200, { 'Content-Type': image.type, 'Cache-Control': 'private, max-age=31536000, immutable' }).end(image.data)
+  return true
 }
 
 function send(res: ServerResponse, status: number, body: unknown): true {

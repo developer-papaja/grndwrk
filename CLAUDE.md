@@ -39,9 +39,11 @@ During development of the tool itself, use `npm link` to run it inside a real pr
 
 ```
 .groundwork/
-  project.md            # name, one-line purpose, project type
+  project.md            # name, one-line purpose, project type, page order
   nodes/
     <id>.md             # one node per file
+  files/
+    <node id>/<name>    # images pasted into a node, linked from its notes
   stories/
     <id>.md             # one user story per file, first written by /brief
   readiness/
@@ -70,11 +72,29 @@ Free text. Thoughts, references, half-formed questions.
 ```
 
 - **type:** idea, audience, flow, feature, content, design, constraint, question, decision, reference
+- **page:** optional. Which page of the map the node is on; without it, the first page. The page order lives in `project.md` as `pages: [Product, Feedback]`, and the UI also has an All page with everything.
 - **topic:** optional. Groups nodes sideways in the map. Plain words, matched regardless of case. Set by hand, in the panel, or by `/topics`.
 - **altitude:** 1 to 5. 5 is abstract (vision, feeling, principle), 1 is concrete (a field, a button, a specific screen).
 - **status:** open, settled, parked
 - **links:** undirected in v1. Store on both nodes. Links mostly stay inside a topic; topics do the grouping.
 - **id:** short, random, stable. Never derived from the title.
+- **topic_by: claude** marks a topic Claude chose. Setting a topic yourself removes it, and commands never change a topic without it.
+
+The notes can end in a thread, a dialog between the person and Claude:
+
+```md
+Free notes.
+
+## Thread
+
+**Claude asks** · 2026-10-03
+Does "not too deep" mean one panel at a time?
+
+**You** · 2026-10-03
+Yes.
+```
+
+Entries are `**Claude asks**`, `**Claude**` or `**You**`, a dot and a date. A question is open until any entry follows it. Open questions are marked on cards and counted in the UI. Commands ask in threads when they are unsure instead of guessing.
 
 `gaps.json` shape:
 
@@ -142,6 +162,8 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 
 Shipped with the package in `commands/` and copied into the host project's `.claude/commands/` on init.
 
+- **/decisions** looks back over a Claude Code session and its commits, settles the thoughts it decided (naming the commit), writes decision nodes for the rest, and asks in threads when unsure.
+- **/import <file>** turns a document, such as a brief or a list of user stories, into nodes with the source line quoted in each.
 - **/topics** reads all nodes and writes `topic:` into them: three to seven topics, reusing existing ones, never touching titles or notes. Ends with which topics look thin.
 - **/readiness** reads `project.md`, all nodes and `checklist.md`. Judges each checklist area as missing, thin or enough, relative to the project type. Writes `report.md` and `gaps.json`. Ends with a clear verdict: ready to build, ready to prototype, or not ready, plus the smallest set of things to add.
 - **/challenge** looks at the thinnest areas and writes a few sharp question nodes into the map. This is the seed of the later interview feature.

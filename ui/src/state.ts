@@ -1,7 +1,7 @@
 import Alpine from 'alpinejs'
 import type { GNode, NodeType, Status } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, savePages, updateNode } from './api'
+import { createNode, deleteNode, savePages, updateNode, uploadImage } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseCapture, sameTitle } from './capture'
@@ -94,6 +94,12 @@ export const state = Alpine.reactive({
   /** The open card's free notes, without its thread. */
   get notesText(): string {
     return splitBody(this.draft.body).notes
+  },
+  /** Images linked from the notes, as URLs the browser can load. */
+  get images(): string[] {
+    const out: string[] = []
+    for (const m of this.notesText.matchAll(/!\[[^\]]*\]\(\.\.\/files\/([A-Za-z0-9_-]+)\/([^)\s]+)\)/g)) out.push(`/files/${m[1]}/${m[2]}`)
+    return out
   },
   get thread(): Entry[] {
     return splitBody(this.draft.body).entries
@@ -293,6 +299,26 @@ export const state = Alpine.reactive({
   setNotes(notes: string) {
     this.draft.body = replaceNotes(this.draft.body, notes)
     this.edit('body')
+  },
+  /** Paste or drop images into the notes: upload each and put its markdown at the cursor. */
+  async attachImages(files: File[], field: HTMLTextAreaElement) {
+    const id = this.selectedId
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    if (!id || !images.length) return false
+    let at = field.selectionStart ?? this.notesText.length
+    for (const file of images) {
+      try {
+        const { markdown } = await uploadImage(id, file)
+        const notes = this.notesText
+        const before = notes.slice(0, at)
+        const piece = `${before && !before.endsWith('\n') ? '\n' : ''}${markdown}\n`
+        this.setNotes(before + piece + notes.slice(at))
+        at += piece.length
+      } catch (err) {
+        this.flash(errorText(err))
+      }
+    }
+    return true
   },
   sendReply() {
     const text = this.reply.trim()

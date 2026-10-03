@@ -390,12 +390,23 @@
                 id="field-body"
                 :value="$store.gw.notesText"
                 @input="$store.gw.setNotes($event.target.value)"
+                @paste="const f = [...$event.clipboardData.files]; if (f.some((x) => x.type.startsWith('image/'))) { $event.preventDefault(); $store.gw.attachImages(f, $el) }"
+                @dragover.prevent
+                @drop.prevent="$store.gw.attachImages([...$event.dataTransfer.files], $el)"
                 @focus="$store.gw.focusField('body')"
                 @blur="$store.gw.blurField('body')"
-                placeholder="Thoughts, references, half formed questions"
+                placeholder="Thoughts, references, half formed questions. Paste or drop images here"
                 class="field min-h-28 flex-1 resize-none leading-relaxed"
               ></textarea>
             </label>
+
+            <div x-show="$store.gw.images.length" class="-mt-2 grid grid-cols-3 gap-1.5" id="images">
+              <template x-for="src in $store.gw.images" :key="src">
+                <a :href="src" target="_blank" rel="noopener" class="block overflow-hidden rounded-md border border-line hover:border-accent">
+                  <img :src="src" alt="" class="aspect-[4/3] w-full object-cover" loading="lazy" />
+                </a>
+              </template>
+            </div>
 
             <div>
               <span class="label">Thread</span>

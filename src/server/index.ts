@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import sirv from 'sirv'
 import { PACKAGE_ROOT } from '../root.js'
 import { NodeStore } from '../store/nodes.js'
-import { handleApi } from './api.js'
+import { handleApi, handleFiles } from './api.js'
 import { NodeSync } from './events.js'
 import { watchGroundwork } from './watcher.js'
 
@@ -26,6 +26,7 @@ export async function startServer({ gwDir, port, dev }: StartOptions): Promise<{
     // where another site points its own hostname at 127.0.0.1.
     if (!isLocalHost(req.headers.host)) return res.writeHead(403).end('Forbidden')
     if (await handleApi(req, res, { gwDir, store, nodes })) return
+    if (await handleFiles(req, res, gwDir)) return
     ui(req, res, () => res.writeHead(404).end())
   })
 
