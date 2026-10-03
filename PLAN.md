@@ -38,12 +38,13 @@ One phase per Claude Code session. Start each in plan mode, commit when the done
 
 **Done when:** running `/readiness` on a real idea gives a verdict you agree with, and the ghost nodes point at things you actually had not thought about.
 
-## Phase 4: Outputs
+## Phase 4: Outputs (built, checked in Phase 5)
 
 - Write `/brief`
 - `/brief` writes the first stories as files, each linked to the map nodes it came from
 - Stories show in the map as their own node type, connected to their source nodes
 - `CLAUDE.starter.md` should be good enough to start a new product repo with, including the traceability conventions (story ids in commits and comments, update `applies_to` and `status`, ask before building something no story covers)
+- Built with: a views rail (Map, Readiness, Deliverables), a Readiness view that separates open gaps from gaps waiting for a check, a site map section in the brief, and story cards in the map. The done criterion needs a real product kickoff, so it is checked in Phase 5.
 
 **Done when:** you start building a real product from the generated starter file, the first few prompts land without you re-explaining the idea, and the first commits cite story ids without you asking.
 

@@ -155,9 +155,13 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 - **Nodes are word cards.** The title on a small dark card, the same size on screen at any zoom. A card with no room shows as a dot until hovered or zoomed in.
 - **Color shows type,** as a thin edge on the card. Keep the palette calm and readable on a dark background.
 - **Status shows as weight.** Settled has an outline in its type color, open is normal, parked is dimmed.
+- **Stories are cards of their own kind,** in a row under the map, in the column of their first source thought, with faint lines to the thoughts they came from. They are not nodes; they live in `stories/`.
 - **Readiness gaps are ghost nodes.** Translucent, outlined, placed near the cluster they relate to, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
 
 ## Interaction
+
+- A rail at the far left switches views: **Map** (the 3D map with pages, topics and the list), **Readiness** (the verdict, each checklist area, open gaps, gaps waiting for a check, and everything settled by topic) and **Deliverables** (the brief, the stories and the starter CLAUDE.md, written by `/brief`).
+- Writing on a gap has two actions: "Add as a thought" leaves the gap open, "This answers it" sets `answered_by` so `/readiness` checks it next time. A remark never closes a gap by accident.
 
 - Orbit, zoom, pan with the mouse.
 - Click a node: the camera flies to it and a side panel opens. All text editing happens in the 2D panel, never inside the 3D scene.
