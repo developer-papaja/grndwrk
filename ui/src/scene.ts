@@ -1,8 +1,8 @@
 import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
-import { BufferGeometry, Group, Line, LineBasicMaterial, MOUSE, PerspectiveCamera, Sprite, SpriteMaterial, Vector3 } from 'three'
-import type { Gap, GNode, NodeType, Status } from '../../src/shared/types'
-import { dotTexture, drawCard, drawGhost, ringTexture, SEVERITY_COLORS, type CardState } from './cards'
+import { BufferGeometry, Group, Line, LineBasicMaterial, LineSegments, MOUSE, PerspectiveCamera, Sprite, SpriteMaterial, Vector3 } from 'three'
+import type { Gap, GNode, NodeType, Status, Story } from '../../src/shared/types'
+import { dotTexture, drawCard, drawGhost, drawStoryCard, ringTexture, SEVERITY_COLORS, type CardState } from './cards'
 import {
   ageFractions,
   ageOpacity,
@@ -65,6 +65,19 @@ export interface SceneView {
   /** What /readiness found missing, on the page in view. Drawn as ghost cards. */
   gaps: Gap[]
   selectedGapId: string | null
+  /** Stories whose first source thought is on the page in view. */
+  stories: Story[]
+  selectedStoryId: string | null
+}
+
+/** A story in the map. It sits below its source thoughts with faint lines to them. */
+interface StoryView {
+  story: Story
+  card: Sprite
+  lines: Line
+  key?: string
+  size?: { w: number; h: number }
+  pos: Vector3
 }
 
 /** A gap drawn in the map. Ghosts are not part of the layout: they sit where their topic and altitude say. */
@@ -104,7 +117,10 @@ function screenSprite(order: number): Sprite {
 }
 
 export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: string) => void; onBackgroundClick: () => void }) {
-  let view: SceneView = { nodes: [], selectedId: null, linkMode: false, freshIds: [], gaps: [], selectedGapId: null }
+  let view: SceneView = { nodes: [], selectedId: null, linkMode: false, freshIds: [], gaps: [], selectedGapId: null, stories: [], selectedStoryId: null }
+  const storyViews = new Map<string, StoryView>()
+  const storyLayer = new Group()
+  const storyLineMaterial = new LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 })
   const ghosts = new Map<string, GhostView>()
   const ghostLayer = new Group()
   let structure = ''
@@ -212,7 +228,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
 
   const guides = new Group()
   const topicLabels = new Group()
-  graph.scene().add(guides, topicLabels, ghostLayer)
+  graph.scene().add(guides, topicLabels, ghostLayer, storyLayer)
 
   function linkEnds(l: GraphLink): [GraphNode | undefined, GraphNode | undefined] {
     const byId = (v: string | GraphNode) => (typeof v === 'string' ? graph.graphData().nodes.find((n) => n.id === v) : v)
@@ -278,6 +294,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       n.fz = ease(n.fz, depthZ(n.age))
     }
     placeGhosts()
+    placeStories()
     placeCards()
     requestAnimationFrame(frame)
   }
@@ -329,6 +346,18 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
         dots.push({ id: n.id, x1: p.x - 8, x2: p.x + 8, y1: p.y - 8, y2: p.y + 8 })
       }
     }
+    // Stories always show in full: they are the result of the thinking around them.
+    const storyHits: Hit[] = []
+    for (const sv of storyViews.values()) {
+      if (!sv.size) continue
+      const p = graph.graph2ScreenCoords(sv.pos.x, sv.pos.y, sv.pos.z)
+      const { w, h } = sv.size
+      const box = { id: `story:${sv.story.id}`, x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - h / 2, y2: p.y + h / 2 }
+      sv.card.scale.set(w / pxPerUnit, h / pxPerUnit, 1)
+      shown.push(box)
+      storyHits.push(box)
+    }
+
     // Ghosts come after every real card, so they never push one aside.
     const ghostHits: Hit[] = []
     for (const g of ghosts.values()) {
@@ -353,7 +382,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
         ghostHits.push({ id: box.id, x1: p.x - 8, x2: p.x + 8, y1: p.y - 8, y2: p.y + 8 })
       }
     }
-    hits = [...shown.filter((b) => !b.id.startsWith('gap:')), ...dots, ...ghostHits]
+    hits = [...storyHits, ...shown.filter((b) => !b.id.startsWith('gap:') && !b.id.startsWith('story:')), ...dots, ...ghostHits]
   }
 
   /**
@@ -375,6 +404,81 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       g.pos.set(baseX + (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * 120, levelY(altitude), depthZ(1) - 30)
       g.card.position.copy(g.pos)
       g.dot.position.copy(g.pos)
+    }
+  }
+
+  /**
+   * A story sits at feature height in the column of its first source thought,
+   * in front of the cards, with a faint line to each thought it came from.
+   * Stories in the same spot line up next to each other.
+   */
+  function placeStories() {
+    const nodes = new Map(graph.graphData().nodes.map((n) => [n.id, n]))
+    const taken = new Map<string, number>()
+    for (const sv of storyViews.values()) {
+      const sources = sv.story.from.map((id) => nodes.get(id)).filter((n): n is GraphNode => !!n && n.x !== undefined)
+      const first = sources[0]
+      const col = first ? columns.get(first.topic) : undefined
+      const baseX = col?.x ?? (sources.length ? sources.reduce((s, n) => s + n.x!, 0) / sources.length : 0)
+      const spot = String(Math.round(baseX))
+      const i = taken.get(spot) ?? 0
+      taken.set(spot, i + 1)
+      sv.pos.set(baseX + i * 1, levelY(1) - step * 0.6, depthZ(0) + 20)
+      const points: Vector3[] = []
+      for (const n of sources) points.push(sv.pos.clone(), new Vector3(n.x, n.y, n.z))
+      // A geometry cannot grow once made, so a new number of lines gets a new one.
+      const current = sv.lines.geometry.getAttribute('position')
+      if (!current || current.count !== points.length) {
+        sv.lines.geometry.dispose()
+        sv.lines.geometry = new BufferGeometry()
+      }
+      sv.lines.geometry.setFromPoints(points)
+    }
+    // Stories share one row. Cards keep their size on screen, so the room they
+    // need in the map grows as you zoom out: work it out from the camera.
+    const row = [...storyViews.values()].sort((a, b) => a.pos.x - b.pos.x)
+    if (row.length > 1) {
+      const camera = graph.camera() as PerspectiveCamera
+      const dist = camera.position.distanceTo(row[Math.floor(row.length / 2)].pos)
+      const unitsPerPx = (2 * Math.tan((camera.fov * Math.PI) / 360) * dist) / Math.max(1, el.clientHeight)
+      for (let i = 1; i < row.length; i++) {
+        const need = ((row[i - 1].size?.w ?? 150) / 2 + (row[i].size?.w ?? 150) / 2 + 12) * unitsPerPx
+        const gap = row[i].pos.x - row[i - 1].pos.x
+        if (gap < need) row[i].pos.x += need - gap
+      }
+    }
+    for (const sv of row) sv.card.position.copy(sv.pos)
+  }
+
+  function renderStories() {
+    const keep = new Set(view.stories.map((st) => st.id))
+    for (const [id, sv] of storyViews) {
+      if (keep.has(id)) continue
+      storyLayer.remove(sv.card, sv.lines)
+      sv.card.material.map?.dispose()
+      sv.card.material.dispose()
+      sv.lines.geometry.dispose()
+      storyViews.delete(id)
+    }
+    for (const story of view.stories) {
+      let sv = storyViews.get(story.id)
+      if (!sv) {
+        const lines = new LineSegments(new BufferGeometry(), storyLineMaterial)
+        sv = { story, card: screenSprite(23), lines, pos: new Vector3() }
+        storyLayer.add(sv.card, sv.lines)
+        storyViews.set(story.id, sv)
+      }
+      sv.story = story
+      const selected = story.id === view.selectedStoryId
+      const key = [story.title, story.status, selected].join('|')
+      if (key !== sv.key) {
+        sv.key = key
+        const card = drawStoryCard({ title: story.title, status: story.status, selected })
+        sv.card.material.map?.dispose()
+        sv.card.material.map = card.texture
+        sv.card.material.needsUpdate = true
+        sv.size = { w: card.width, h: card.height }
+      }
     }
   }
 
@@ -466,6 +570,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     }
     for (const n of nodes) style(n)
     renderGhosts()
+    renderStories()
     graph.linkColor(graph.linkColor())
     drawGuides()
     frameOnce()
@@ -583,21 +688,43 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     graph.cameraPosition({ x: pos.x, y: pos.y, z: pos.z }, { x: target.x, y: target.y, z: target.z }, 600)
   }
 
-  /** Back to the overview: straight on, slightly from above, everything in view. */
+  /**
+   * Back to the overview: straight on, slightly from above, with every
+   * thought, ghost and story in view. Room is left for the floating toolbar.
+   */
   function fit() {
-    const nodes = graph.graphData().nodes.filter((n) => n.x !== undefined)
-    if (nodes.length === 0) return
-    const c = nodes.reduce(
-      (sum, n) => ({ x: sum.x + n.x! / nodes.length, y: sum.y + n.y! / nodes.length, z: sum.z + n.z! / nodes.length }),
-      { x: 0, y: 0, z: 0 },
-    )
-    const d = graph.camera().position.distanceTo(new Vector3(c.x, c.y, c.z))
-    graph.cameraPosition({ x: c.x, y: c.y + d * 0.18, z: c.z + d }, c, 0)
-    requestAnimationFrame(() => graph.zoomToFit(600, 120))
+    const points: Vector3[] = graph
+      .graphData()
+      .nodes.filter((n) => n.x !== undefined)
+      .map((n) => new Vector3(n.x, n.y, n.z))
+    for (const g of ghosts.values()) points.push(g.pos.clone())
+    for (const sv of storyViews.values()) points.push(sv.pos.clone())
+    if (points.length === 0) return
+    const min = points.reduce((a, p) => a.min(p), points[0].clone())
+    const max = points.reduce((a, p) => a.max(p), points[0].clone())
+    // The guide lines run from vision to detail with the topic names above,
+    // and the guide words sit to the left.
+    min.x -= 130
+    max.x += 80
+    max.y = Math.max(max.y, levelY(5) + 70)
+    min.y = Math.min(min.y, levelY(1) - 20)
+    const center = min.clone().add(max).multiplyScalar(0.5)
+    const camera = graph.camera() as PerspectiveCamera
+    const aspect = el.clientWidth / Math.max(1, el.clientHeight)
+    const halfFov = (camera.fov * Math.PI) / 360
+    const width = max.x - min.x
+    const height = max.y - min.y
+    // The toolbar covers about 90px at the bottom, so frame a little lower than the middle.
+    const usable = Math.max(0.5, 1 - 110 / Math.max(1, el.clientHeight))
+    const dist = Math.max(height / usable, width / aspect) / (2 * Math.tan(halfFov)) * 1.08 + (max.z - min.z) / 2
+    center.y -= (height / usable - height) / 2
+    graph.cameraPosition({ x: center.x, y: center.y + dist * 0.18, z: center.z + dist }, center, 600)
   }
 
-  /** Where a node is on screen, for debugging and browser tests. */
+  /** Where a node, or a "story:" or "gap:" card, is on screen. For debugging and browser tests. */
   function screenPosition(id: string) {
+    const other = id.startsWith('story:') ? storyViews.get(id.slice(6))?.pos : id.startsWith('gap:') ? ghosts.get(id.slice(4))?.pos : undefined
+    if (other) return graph.graph2ScreenCoords(other.x, other.y, other.z)
     const n = graph.graphData().nodes.find((g) => g.id === id)
     if (!n || n.x === undefined) return null
     return graph.graph2ScreenCoords(n.x, n.y!, n.z!)

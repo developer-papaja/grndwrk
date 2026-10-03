@@ -139,6 +139,46 @@ export function drawGhost(look: { title: string; severity: keyof typeof SEVERITY
   return { texture, width, height }
 }
 
+/**
+ * A story drawn in the map: a light card with "Story" in front of the title,
+ * so it reads as a deliverable that came from the thoughts around it.
+ */
+export function drawStoryCard(look: { title: string; status: string; selected: boolean }): Card {
+  const label = look.status === 'done' ? 'Story, done: ' : 'Story: '
+  const lines = wrapLabel(label + look.title).split('\n')
+  measure.font = FONT
+  const textWidth = Math.max(...lines.map((l) => measure.measureText(l).width))
+  const width = Math.ceil(textWidth + PAD_X * 2 + EDGE)
+  const height = PAD_Y * 2 + lines.length * LINE
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width * SCALE
+  canvas.height = height * SCALE
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(SCALE, SCALE)
+  ctx.beginPath()
+  ctx.roundRect(0.5, 0.5, width - 1, height - 1, 6)
+  ctx.fillStyle = look.selected ? '#16344d' : '#3a3a3a'
+  ctx.fill()
+  ctx.lineWidth = look.selected ? 1.5 : 1
+  ctx.strokeStyle = look.selected ? '#0d99ff' : 'rgba(255, 255, 255, 0.35)'
+  ctx.stroke()
+  ctx.save()
+  ctx.clip()
+  ctx.fillStyle = '#f2f2f2'
+  ctx.fillRect(0, 0, EDGE, height)
+  ctx.restore()
+  ctx.font = FONT
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#ffffff'
+  lines.forEach((line, i) => ctx.fillText(line, EDGE + PAD_X, PAD_Y + LINE * i + LINE / 2 + 0.5))
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  texture.generateMipmaps = false
+  texture.minFilter = LinearFilter
+  return { texture, width, height }
+}
+
 /** A hollow ring: a ghost with no room right now. Hollow, so it never reads as a thought. */
 const rings = new Map<string, CanvasTexture>()
 export function ringTexture(color: string): CanvasTexture {

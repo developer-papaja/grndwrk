@@ -73,6 +73,8 @@ export const state = Alpine.reactive({
   starter: null as string | null,
   deliverablesTab: readStored<'brief' | 'stories' | 'starter'>('groundwork.deliverablesTab', 'brief'),
   openStoryId: null as string | null,
+  /** A story opened in the right panel from the map. */
+  selectedStoryId: null as string | null,
   copied: false,
   /** The right panel shows the readiness report instead of a card. */
   reportOpen: false,
@@ -154,7 +156,24 @@ export const state = Alpine.reactive({
     return flatten(this.listGroups.filter((g) => !this.isCollapsed(g.key)))
   },
   get detailsVisible(): boolean {
-    return (!!this.selected || !!this.selectedGap || this.reportOpen) && !this.detailsMinimized
+    return (!!this.selected || !!this.selectedGap || !!this.selectedStory || this.reportOpen) && !this.detailsMinimized
+  },
+  get selectedStory(): Story | null {
+    return this.stories.find((st) => st.id === this.selectedStoryId) ?? null
+  },
+  /** Stories whose first source thought is on the page in view. */
+  get visibleStories(): Story[] {
+    if (this.onAll) return this.stories
+    return this.stories.filter((st) => {
+      const first = this.nodes[st.from[0]]
+      return first && samePage(pageOf(first, this.pageNames), this.currentPage)
+    })
+  },
+  selectStory(id: string) {
+    this.select(null)
+    this.selectedStoryId = id
+    this.setDetailsMinimized(false)
+    onChange()
   },
   get selectedGap(): Gap | null {
     return this.readiness?.gaps.find((g) => g.id === this.selectedGapId) ?? null
@@ -351,6 +370,9 @@ export const state = Alpine.reactive({
     }
     if (this.selectedGapId) {
       this.selectedGapId = null
+    }
+    if (this.selectedStoryId) {
+      this.selectedStoryId = null
     }
     // Each card keeps its own half typed reply, so an answer never lands on the wrong card.
     if (this.selectedId !== id) {

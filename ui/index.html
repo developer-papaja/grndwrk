@@ -467,13 +467,13 @@
     <!-- Details: docked on the right, or a small pill when minimized -->
     <button
       x-cloak
-      x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.reportOpen) && $store.gw.detailsMinimized"
+      x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.selectedStory || $store.gw.reportOpen) && $store.gw.detailsMinimized"
       id="details-tab"
       class="fixed right-3 top-3 flex max-w-[280px] items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-black/20"
       title="Show details"
       @click="$store.gw.setDetailsMinimized(false)"
     >
-      <span class="truncate text-fog/85" x-text="$store.gw.reportOpen ? 'Readiness report' : $store.gw.selectedGap ? 'Missing: ' + $store.gw.selectedGap.title : $store.gw.selected?.title"></span>
+      <span class="truncate text-fog/85" x-text="$store.gw.reportOpen ? 'Readiness report' : $store.gw.selectedGap ? 'Missing: ' + $store.gw.selectedGap.title : $store.gw.selectedStory ? 'Story: ' + $store.gw.selectedStory.title : $store.gw.selected?.title"></span>
       <span class="icon-btn"><svg class="size-5"><use href="#i-panel-right" /></svg></span>
     </button>
 
@@ -483,7 +483,7 @@
       class="fixed inset-y-0 right-0 flex w-[360px] max-w-full flex-col border-l border-line bg-panel text-[13px]"
     >
       <div class="flex items-center justify-between px-4 py-3">
-        <span class="font-semibold text-fog" x-text="$store.gw.reportOpen ? 'Readiness' : $store.gw.selectedGap ? 'Missing' : 'Details'"></span>
+        <span class="font-semibold text-fog" x-text="$store.gw.reportOpen ? 'Readiness' : $store.gw.selectedGap ? 'Missing' : $store.gw.selectedStory ? 'Story' : 'Details'"></span>
         <span class="-mr-1.5 flex items-center">
           <button id="minimize" class="icon-btn" title="Minimize" @click="$store.gw.setDetailsMinimized(true)">
             <svg class="size-5"><use href="#i-panel-right" /></svg>
@@ -501,6 +501,33 @@
             <p class="mb-3 text-xs text-fog/45" x-text="'Checked ' + $store.gw.readiness.report.checked + ' · ' + $store.gw.readiness.gaps.length + ' gaps'"></p>
             <div class="report" x-html="$store.gw.reportHtml"></div>
             <p class="mt-4 text-xs text-fog/40">Run /readiness in Claude Code to check again, or /challenge for questions on the thinnest parts.</p>
+          </div>
+        </template>
+
+        <template x-if="$store.gw.selectedStory">
+          <div class="flex flex-col gap-4" id="story">
+            <div>
+              <span
+                class="inline-block rounded px-1.5 py-0.5 text-[11px]"
+                :class="{ 'bg-white/10 text-fog/60': $store.gw.selectedStory.status === 'not-started', 'bg-question/15 text-question': $store.gw.selectedStory.status === 'partial', 'bg-emerald-400/15 text-emerald-300': $store.gw.selectedStory.status === 'done' }"
+                x-text="$store.gw.selectedStory.status.replace('-', ' ')"
+              ></span>
+              <span class="ml-1 font-mono text-[11px] text-fog/40" x-text="$store.gw.selectedStory.id"></span>
+              <h2 class="mt-2 text-[15px] font-semibold leading-snug text-fog" x-text="$store.gw.selectedStory.title"></h2>
+            </div>
+            <p x-show="$store.gw.selectedStory.error" class="text-xs text-rose-300" x-text="$store.gw.selectedStory.error"></p>
+            <div class="report" x-html="$store.gw.storyHtml($store.gw.selectedStory)"></div>
+            <div>
+              <span class="label">Came from</span>
+              <template x-for="id in $store.gw.selectedStory.from" :key="id">
+                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(id)">
+                  <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.nodes[id] ? $store.gw.typeColors[$store.gw.nodes[id].type] : '#666' }"></span>
+                  <span class="truncate" x-text="$store.gw.nodes[id]?.title ?? id + ' (not in the map)'"></span>
+                </button>
+              </template>
+            </div>
+            <p x-show="$store.gw.selectedStory.applies_to.length" class="text-xs text-fog/50" x-text="'Built in: ' + $store.gw.selectedStory.applies_to.join(', ')"></p>
+            <p class="text-xs text-fog/40">Stories are written by /brief. Change the thinking in the map and run /brief again.</p>
           </div>
         </template>
 

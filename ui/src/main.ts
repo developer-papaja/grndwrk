@@ -11,6 +11,7 @@ const RAIL = 64
 const scene = createScene(document.getElementById('scene')!, {
   onNodeClick: (id) => {
     if (id.startsWith('gap:')) return state.selectGap(id.slice(4))
+    if (id.startsWith('story:')) return state.selectStory(id.slice(6))
     if (state.mode === 'link' && state.selectedId && id !== state.selectedId) void state.toggleLink(id)
     else state.select(id)
   },
@@ -33,6 +34,8 @@ onNodesChange(() => {
       freshIds: [...state.freshIds],
       gaps: Alpine.raw(state.visibleGaps).map((g) => Alpine.raw(g)),
       selectedGapId: state.selectedGapId,
+      stories: Alpine.raw(state.visibleStories).map((st) => Alpine.raw(st)),
+      selectedStoryId: state.selectedStoryId,
     })
   })
 })
