@@ -63,6 +63,8 @@ export const state = Alpine.reactive({
   addingPage: false,
   reply: '',
   sending: false,
+  /** Shown under the reply box: what happened to the last reply. */
+  replyStatus: '',
   newPage: '',
   listOpen: readStored('groundwork.listOpen', true),
   detailsMinimized: readStored('groundwork.detailsMinimized', false),
@@ -183,6 +185,7 @@ export const state = Alpine.reactive({
     if (this.selectedId !== id) {
       if (this.selectedId) replyDrafts.set(this.selectedId, this.reply)
       this.reply = (id && replyDrafts.get(id)) || ''
+      this.replyStatus = ''
     }
     if (this.selectedId && unsaved.has(this.selectedId) && this.selectedId !== id) {
       this.flash('Some edits on the last card were not saved. Groundwork is offline.')
@@ -347,6 +350,7 @@ export const state = Alpine.reactive({
     if (!text || !id || this.sending) return
     const body = appendEntry(this.draft.body, 'you', text, new Date().toISOString().slice(0, 10))
     this.sending = true
+    this.replyStatus = 'Saving...'
     try {
       clearTimeout(timers.get('body'))
       timers.delete('body')
@@ -357,9 +361,11 @@ export const state = Alpine.reactive({
         this.draft.body = body
         this.reply = ''
       }
+      this.replyStatus = ''
       this.upsert(node)
     } catch (err) {
-      this.flash(`Reply not saved: ${errorText(err)}`)
+      this.replyStatus = `Not saved: ${errorText(err)}`
+      console.error('Reply not saved', err)
     } finally {
       this.sending = false
     }

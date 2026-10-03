@@ -76,6 +76,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     return send(res, 404, { error: 'Not found' })
   } catch (err) {
+    // Say in the terminal why a write failed, so problems can be traced.
+    if (method !== 'GET') console.error(`${method} ${url.pathname} failed: ${err instanceof Error ? err.message : err}`)
     if (err instanceof BadInput) return send(res, 400, { error: err.message })
     if (err instanceof NotFound) return send(res, 404, { error: `No node ${err.message}` })
     if (err instanceof ReadOnly) return send(res, 409, { error: err.message })

@@ -433,10 +433,24 @@
                   id="reply"
                   rows="2"
                   x-model="$store.gw.reply"
-                  @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); $store.gw.sendReply() }"
+                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendReply() }"
                   :placeholder="$store.gw.thread.some((e) => e.open) ? 'Answer Claude' : 'Add a comment'"
                   class="field w-full resize-none"
                 ></textarea>
+                <div class="mt-1.5 flex items-center justify-between gap-2">
+                  <span
+                    id="reply-status"
+                    class="min-w-0 text-[11px]"
+                    :class="$store.gw.replyStatus.startsWith('Not saved') ? 'text-rose-300' : 'text-fog/45'"
+                    x-text="$store.gw.replyStatus || 'Enter sends, Shift Enter for a new line'"
+                  ></span>
+                  <button
+                    id="reply-send"
+                    type="submit"
+                    class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40"
+                    :disabled="!$store.gw.reply.trim() || $store.gw.sending"
+                  >Send</button>
+                </div>
               </form>
             </div>
 
