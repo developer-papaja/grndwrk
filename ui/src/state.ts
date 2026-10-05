@@ -230,6 +230,15 @@ export const state = Alpine.reactive({
       this.flash('The browser did not allow copying. Open .groundwork/outputs/CLAUDE.starter.md instead.')
     }
   },
+  /** The gap a thought answers, if it was written as an answer. The gap may be closed by now. */
+  answeredGap(node: GNode | null): { id: string; title: string; open: boolean } | null {
+    const id = node?.extra?.answers
+    if (typeof id !== 'string') return null
+    const gap = this.readiness?.gaps.find((g) => g.id === id)
+    if (gap) return { id, title: gap.title, open: true }
+    const fromNotes = /^Answer to the gap "([^"]+)"/m.exec(node?.body ?? '')?.[1]
+    return { id, title: fromNotes ?? id, open: false }
+  },
   /** Where a thought came from, in words, when /survey wrote it. */
   sourceLabel(node: GNode | null): string {
     const source = node?.extra?.source
@@ -390,7 +399,9 @@ export const state = Alpine.reactive({
     if (!gap || !title) return
     try {
       const links = gap.near.filter((id) => this.nodes[id])
-      const node = await createNode({ title, topic: gap.topic ?? '', page: gap.page ?? '', altitude: gap.altitude ?? 3, links })
+      // The thought keeps its context: which gap it answers and why that gap mattered.
+      const body = `Answer to the gap "${gap.title}": ${gap.why}\n`
+      const node = await createNode({ title, topic: gap.topic ?? '', page: gap.page ?? '', altitude: gap.altitude ?? 3, links, body, answers: gap.id })
       this.upsert(node)
       this.markFresh(node.id)
       if (closes) this.readiness = await markGapAnswered(gap.id, node.id)

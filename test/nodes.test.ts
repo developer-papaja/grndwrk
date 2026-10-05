@@ -94,6 +94,14 @@ describe('NodeStore', () => {
     expect(after).not.toContain('topic_by')
   })
 
+  it('remembers which gap a thought answers', async () => {
+    const a = (await store.create({ title: 'WCAG AA is nice, not needed', answers: 'gap_accessibility' })).upserted[0]
+    expect(a.extra).toEqual({ answers: 'gap_accessibility' })
+    expect(await file(a.id)).toContain('answers: gap_accessibility')
+    const b = (await store.create({ title: 'B', answers: '../evil' })).upserted[0]
+    expect(b.extra).toEqual({})
+  })
+
   it('normalizes bad input instead of failing', async () => {
     const n = (await store.create({ title: 'x', altitude: 12, type: 'nope' as never })).upserted[0]
     expect(n).toMatchObject({ altitude: 5, type: 'idea' })

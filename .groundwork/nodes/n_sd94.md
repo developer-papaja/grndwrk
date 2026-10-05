@@ -8,4 +8,6 @@ altitude: 5
 links: [n_wncw]
 status: open
 created: 2026-10-03
+answers: gap_success
 ---
+Answer to the gap "What a successful kickoff looks like": Without it there is no way to tell whether a feature helps the kickoff or only adds to the map.

@@ -37,7 +37,10 @@ export interface GNode {
 }
 
 /** Fields a client may send when creating or updating a node. */
-export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'page' | 'altitude' | 'links' | 'status' | 'body'>>
+export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'page' | 'altitude' | 'links' | 'status' | 'body'>> & {
+  /** On create: the id of the gap this thought answers. Kept as `answers:` in the file. */
+  answers?: string
+}
 
 export type ServerEvent =
   | { type: 'node:upsert'; node: GNode }

@@ -8,4 +8,6 @@ altitude: 3
 links: [n_5dqs, n_ax4k]
 status: open
 created: 2026-10-03
+answers: gap_kickoff_flow
 ---
+Answer to the gap "The kickoff flow from init to brief": Without it every feature is judged on its own, and nothing checks that the steps join up into one kickoff.

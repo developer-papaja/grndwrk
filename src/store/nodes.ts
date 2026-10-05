@@ -84,6 +84,8 @@ export class NodeStore {
         extra: {},
       }
       Object.assign(node, clean(input))
+      // A thought written as the answer to a gap remembers which gap, even after the gap closes.
+      if (typeof input.answers === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(input.answers)) node.extra = { answers: input.answers }
       node.links = [...new Set(input.links ?? [])].filter((l) => byId.has(l))
       byId.set(id, node)
       return this.writeWithLinks(byId, node, [])

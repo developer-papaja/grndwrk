@@ -8,4 +8,6 @@ altitude: 5
 links: [n_jtdo]
 status: open
 created: 2026-10-03
+answers: gap_audience
 ---
+Answer to the gap "Who the tool is for": Choices about defaults, wording and how much the tool explains itself keep getting made by guess.

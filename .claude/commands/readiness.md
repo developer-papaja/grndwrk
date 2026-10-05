@@ -11,6 +11,8 @@ Judge whether this project's Groundwork map holds enough to start building, and 
 4. The previous `.groundwork/readiness/report.md` and `gaps.json`, if they exist. A gap with `answered_by` was answered from the map: read that node and decide whether the gap is closed now.
 5. For the "Setup for building with Claude" area, also look at the project itself, outside `.groundwork/` (read only): is there a `CLAUDE.md`, design docs or references, code standards or linting config, and skills or commands in `.claude/`?
 
+A thought with `answers: gap_x` was written as the answer to that gap; its first note line says which gap and why it mattered. Judge the gap against it.
+
 Some thoughts say where they came from with `source:` and `seen_in:` (written by `/survey`). `source: code`, `docs` or `commit` with a `seen_in` is evidence: it counts as what exists. `source: inferred` is Claude's guess: it counts as open until the person has answered its thread.
 
 ## Judge

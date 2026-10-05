@@ -29,19 +29,20 @@
     <div id="scene" class="fixed inset-y-0" :class="$store.gw.view !== 'map' && 'invisible'"></div>
 
     <!-- Views rail -->
-    <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-1 border-r border-line bg-ink pt-3 text-[10px]">
+    <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
       <template x-for="v in [['map', 'Map', 'i-map'], ['readiness', 'Readiness', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
-          class="relative flex w-14 flex-col items-center gap-1 rounded-lg py-2"
+          class="relative grid size-10 place-items-center rounded-lg"
           :class="$store.gw.view === v[0] ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
           :id="'rail-' + v[0]"
+          :title="v[1]"
+          :aria-label="v[1]"
           @click="$store.gw.setView(v[0])"
         >
           <svg class="size-5"><use :href="'#' + v[2]" /></svg>
-          <span x-text="v[1]"></span>
           <span
             x-show="v[0] === 'readiness' && $store.gw.blockingCount"
-            class="absolute right-2 top-1 grid size-4 place-items-center rounded-full bg-rose-500 text-[10px] font-semibold text-white"
+            class="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-rose-500 text-[10px] font-semibold text-white"
             x-text="$store.gw.blockingCount"
           ></span>
         </button>
@@ -649,6 +650,19 @@
                   @keydown.enter.prevent="$event.target.blur()"
                   class="field w-full resize-none text-[15px] font-semibold leading-snug"
                 ></textarea>
+              </template>
+              <template x-if="$store.gw.answeredGap($store.gw.selected)">
+                <div id="answers" class="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-fog/50">
+                  <span>Answer to</span>
+                  <button
+                    class="rounded px-1.5 py-0.5"
+                    :class="$store.gw.answeredGap($store.gw.selected).open ? 'bg-rose-400/15 text-rose-200 hover:bg-rose-400/25' : 'cursor-default bg-white/8 text-fog/60'"
+                    :title="$store.gw.answeredGap($store.gw.selected).open ? 'Open the gap' : 'This gap is closed'"
+                    @click="$store.gw.answeredGap($store.gw.selected).open && $store.gw.selectGap($store.gw.answeredGap($store.gw.selected).id)"
+                    x-text="$store.gw.answeredGap($store.gw.selected).title"
+                  ></button>
+                  <span x-show="!$store.gw.answeredGap($store.gw.selected).open">(closed)</span>
+                </div>
               </template>
               <template x-if="$store.gw.sourceLabel($store.gw.selected)">
                 <div id="source" class="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">

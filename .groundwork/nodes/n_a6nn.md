@@ -8,4 +8,6 @@ altitude: 2
 links: [n_bz8p]
 status: open
 created: 2026-10-03
+answers: gap_design_refs
 ---
+Answer to the gap "Design references in the repo": The Figma screenshots behind the interface decision exist only in a past conversation, so a fresh session cannot look at them.

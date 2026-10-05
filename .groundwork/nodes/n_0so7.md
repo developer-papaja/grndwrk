@@ -8,4 +8,6 @@ altitude: 3
 links: []
 status: open
 created: 2026-10-03
+answers: gap_scope
 ---
+Answer to the gap "Anything decided not to build": The Not now list lives only in PLAN.md, so requests made in the map cannot be checked against it.
