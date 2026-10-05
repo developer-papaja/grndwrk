@@ -15,7 +15,7 @@ Read the file at `$ARGUMENTS` and turn it into thoughts in this project's Ground
 - **Title:** the thought in the document's own words, shortened to one plain sentence if it is long.
 - **Type:** idea, audience, flow, feature, content, design, constraint, question, decision or reference. A user story is usually a `flow` or a `feature`. Anything the document leaves open is a `question`.
 - **Altitude:** 5 vision, 4 principle, 3 approach, 2 feature, 1 detail.
-- **Topic:** plain lowercase words, about the product. Reuse existing topics. Add new ones only when nothing fits, and keep the whole map at three to seven topics per page. Write `topic_by: claude` under each topic you set.
+- **Topic:** plain words about the product, lowercase except names (for example "working with Claude"); the map shows the first letter capitalised. Reuse existing topics. Add new ones only when nothing fits, and keep the whole map at three to seven topics per page. Write `topic_by: claude` under each topic you set.
 - **Page:** if the document is clearly one kind of material (for example user stories), and a page with a fitting name exists, use it. Otherwise leave `page` out, which puts the nodes on the first page.
 - Skip a thought that is already in the map with the same meaning. Mention it in the report instead.
 

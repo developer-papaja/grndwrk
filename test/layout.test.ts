@@ -90,3 +90,13 @@ describe('altitudeStep', () => {
     expect(altitudeStep(30, 1.3)).toBe(260)
   })
 })
+
+describe('displayName', () => {
+  it('capitalises the first letter only', async () => {
+    const { displayName } = await import('../ui/src/layout.js')
+    expect(displayName('look and feel')).toBe('Look and feel')
+    expect(displayName(' flows ')).toBe('Flows')
+    expect(displayName('UI')).toBe('UI')
+    expect(displayName('')).toBe('')
+  })
+})

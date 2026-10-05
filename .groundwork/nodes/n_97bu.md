@@ -2,7 +2,7 @@
 id: n_97bu
 type: decision
 title: I think the notes should be more like comments that are tracked one by one and could be a dialog between me and claude for example. Like if claude don't know what to do it would be great if it created questions there that I need to answer in some way. It needs to be clear which have questions though
-topic: working with claude
+topic: working with Claude
 topic_by: claude
 page: Product
 altitude: 3

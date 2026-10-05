@@ -186,7 +186,7 @@
             >
               <span class="flex items-center gap-1">
                 <svg class="size-4 shrink-0 text-fog/40 transition-transform duration-150" :class="!$store.gw.isCollapsed(group.key) && 'rotate-90'"><use href="#i-chevron" /></svg>
-                <span x-text="group.name"></span>
+                <span x-text="$store.gw.label(group.name)"></span>
               </span>
               <span class="flex cursor-help items-center gap-2 text-xs" :title="$store.gw.topicCountHint(group.total, $store.gw.missingIn(group.key))">
                 <span x-show="$store.gw.missingIn(group.key)" class="text-rose-300/80" x-text="$store.gw.missingIn(group.key) + ' missing'"></span>
@@ -399,7 +399,7 @@
                       <span class="block font-medium text-fog" x-text="g.title"></span>
                       <span class="block text-fog/55" x-text="g.why"></span>
                     </span>
-                    <span class="shrink-0 cursor-help text-[11px] text-fog/40" :title="$store.gw.meaning[g.severity]" x-text="g.severity + ' · ' + g.area"></span>
+                    <span class="shrink-0 cursor-help text-[11px] text-fog/40" :title="$store.gw.meaning[g.severity]" x-text="g.severity + ' · ' + $store.gw.label(g.area)"></span>
                   </button>
                 </li>
               </template>
@@ -424,7 +424,7 @@
             <div class="grid gap-4 sm:grid-cols-2" id="settled">
               <template x-for="g in $store.gw.settledGroups" :key="g.topic">
                 <section class="rounded-lg border border-line p-3">
-                  <h3 class="mb-1.5 text-[11px] text-fog/45" x-text="g.topic + ' · ' + g.nodes.length"></h3>
+                  <h3 class="mb-1.5 text-[11px] text-fog/45" x-text="$store.gw.label(g.topic) + ' · ' + g.nodes.length"></h3>
                   <template x-for="n in g.nodes" :key="n.id">
                     <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
                       <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[n.type] }"></span>
@@ -591,7 +591,7 @@
                 :title="$store.gw.meaning[$store.gw.selectedGap.severity]"
                 x-text="$store.gw.selectedGap.severity"
               ></span>
-              <span class="ml-1 text-[11px] text-fog/45" x-text="$store.gw.selectedGap.area"></span>
+              <span class="ml-1 text-[11px] text-fog/45" x-text="$store.gw.label($store.gw.selectedGap.area)"></span>
               <button
                 x-show="$store.gw.view !== 'map'"
                 id="gap-show"

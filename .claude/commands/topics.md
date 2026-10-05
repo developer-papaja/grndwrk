@@ -18,7 +18,7 @@ Skip any file whose frontmatter does not parse, and mention it at the end.
 
 - Choose three to seven topics for the whole map. Fewer is better when the map is small. Each topic must have at least two nodes.
 - Reuse the topics that already exist, spelled the way they are written now. Only add a new topic when no existing one fits.
-- Name topics in plain lowercase words, one to three words, about the product (for example "booking", "navigation", "look and feel"). Do not name them after node types such as "ideas" or "questions".
+- Name topics in plain words, one to three words, about the product (for example "booking", "navigation", "look and feel"). Write them lowercase except names, such as "working with Claude"; the map shows the first letter capitalised. Do not name them after node types such as "ideas" or "questions".
 - Give every node without a topic the best fitting one.
 - You may move a node whose topic has `topic_by: claude` when a better topic now exists.
 - Never change a topic that has no `topic_by` line. The person set it.

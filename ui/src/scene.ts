@@ -10,6 +10,7 @@ import {
   altitudeStep,
   altitudeY,
   depthZ,
+  displayName,
   wrapLabel,
   linkStrength,
   topicColumns,
@@ -671,7 +672,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     }
     for (const col of columns.values()) {
       // Long names wrap, so neighbouring columns never share a line of text.
-      const label = makeText(wrapLabel(col.name, 12), 0.014, SCENE_COLORS.topic)
+      const label = makeText(wrapLabel(displayName(col.name), 12), 0.014, SCENE_COLORS.topic)
       label.center.set(0.5, 0)
       label.position.set(col.x, levelY(5) + 24, 0)
       topicLabels.add(label)

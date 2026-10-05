@@ -49,7 +49,7 @@ In the notes, one or two lines on what you saw, for example "The booking form po
 
 **Pages:** if `project.md` has no `pages:` yet, add `pages: [Product, Built]`. Product holds the purpose, principles and decisions. Built holds what exists as features and screens. Keep the pages the project already has.
 
-**Topics:** reuse existing topics. Otherwise choose three to seven per page, plain lowercase words about the product, with `topic_by: claude`. Link thoughts that belong together inside a topic. Links are two-sided: add the id on both nodes.
+**Topics:** reuse existing topics. Otherwise choose three to seven per page, plain words about the product, lowercase except names (the map shows the first letter capitalised), with `topic_by: claude`. Link thoughts that belong together inside a topic. Links are two-sided: add the id on both nodes.
 
 **Size:** write at most about 60 thoughts on a first run, most important first: the core of what the product does, then its decisions, then details. Say in the report what you left out.
 

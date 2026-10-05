@@ -33,6 +33,15 @@ export function altitudeStep(columnCount: number, viewAspect: number): number {
   return Math.round(Math.min(260, Math.max(ALTITUDE_STEP, step)))
 }
 
+/**
+ * How a topic or area name is shown: first letter capitalised ("Look and
+ * feel"). Files keep what was written; topics match regardless of case.
+ */
+export function displayName(name: string): string {
+  const t = name.trim()
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t
+}
+
 /** Topics match regardless of case and spacing. An empty key means no topic. */
 export function topicKey(topic: string | undefined): string {
   return (topic ?? '').trim().toLowerCase()

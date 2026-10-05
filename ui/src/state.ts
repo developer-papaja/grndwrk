@@ -7,7 +7,7 @@ import { appendEntry, openQuestions, replaceNotes, splitBody, type Entry } from 
 import { parseAreas, type Area } from '../../src/shared/report'
 import { parseCapture, sameTitle } from './capture'
 import { marked } from 'marked'
-import { ALTITUDE_WORDS, topicColumns } from './layout'
+import { ALTITUDE_WORDS, displayName, topicColumns } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
 
@@ -96,6 +96,8 @@ export const state = Alpine.reactive({
   listIndex: 0,
   note: '',
   types: NODE_TYPES,
+  /** Topic and area names as shown: "Flows", not "flows". */
+  label: displayName,
   altitudeWords: ALTITUDE_WORDS,
   typeColors: TYPE_COLORS,
   statuses: STATUSES,

@@ -2,7 +2,7 @@
 id: n_2sqo
 type: idea
 title: I feel like claude has to help out more with setting categories. Maybe it can propose which categories to put things in or do it automatically and never change it if I have actually set it
-topic: working with claude
+topic: working with Claude
 topic_by: claude
 page: Product
 altitude: 3

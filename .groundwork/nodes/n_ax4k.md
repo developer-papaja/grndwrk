@@ -2,7 +2,7 @@
 id: n_ax4k
 type: question
 title: Would it be possible to also sync all the decisions taken in claude with a command here?
-topic: working with claude
+topic: working with Claude
 topic_by: claude
 page: Product
 altitude: 3

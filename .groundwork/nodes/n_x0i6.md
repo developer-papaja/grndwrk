@@ -2,7 +2,7 @@
 id: n_x0i6
 type: decision
 title: A question in a thread stays open until anything follows it
-topic: working with claude
+topic: working with Claude
 topic_by: claude
 page: Product
 altitude: 2
