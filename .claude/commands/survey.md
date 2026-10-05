@@ -7,7 +7,7 @@ The one rule above all: **code shows what exists, rarely why.** Never make the m
 
 ## Read
 
-1. **The shape of the repo:** top level folders, package files, framework and stack config, routes and pages, components, data models or schemas, environment and deploy config, tests.
+1. **The shape of the repo:** top level folders, package files, framework and stack config, routes and pages (or screens and navigation: SwiftUI views, view controllers, navigation stacks), components, data models or schemas, environment and deploy config, tests. In an Xcode project, read the folders and Swift files directly; the `.xcodeproj` file itself only lists them.
 2. **Docs:** README, CLAUDE.md, a `docs/` folder, ADRs, design files, CHANGELOG, and code comments that state a decision ("we do X because Y").
 3. **History,** if this is a git repository: `git log --oneline -300`, and the full message of commits whose subject suggests a choice was made.
 4. **`.groundwork/` as it is now:** `project.md`, every node, every story. If this is a re-run, add only what is new. A thought is already there when a node has the same meaning or the same `seen_in`.
@@ -55,19 +55,24 @@ In the notes, one or two lines on what you saw, for example "The booking form po
 
 ## Check the design foundation
 
-Score the project's design foundation on nine fixed items, so the person can see at a glance how well the design is set up for building more screens consistently. Look in the places a project keeps these: CSS custom properties, a Tailwind or theme config, token files (JSON, SCSS, TS), a component folder, design docs, linked Figma files, lint config.
+Score the project's design foundation on nine fixed items, so the person can see at a glance how well the design is set up for building more screens consistently. Look in the places this kind of project keeps them:
+
+- **Web:** CSS custom properties, a Tailwind or theme config, token files (JSON, SCSS, TS), a component folder.
+- **iOS and macOS (Swift, SwiftUI, UIKit):** named colors in `Assets.xcassets`, `Color` and `Font` extensions or a theme type, `ViewModifier`s and shared views, SF Symbols, Dynamic Type, accessibility labels and traits.
+- **Android:** `colors.xml`, `themes.xml`, `dimens.xml`, Compose `MaterialTheme`, shared composables.
+- **Anywhere:** design docs, linked Figma files, lint config (for example SwiftLint or ESLint).
 
 For each item, decide **found**, **partly** or **missing**, write one plain line on what you saw, and list where you looked or found it in `seen_in`:
 
 1. **design docs:** a written design guide, style guide or design section in the docs.
-2. **colors as tokens:** colors defined once as variables or theme values, and used from there rather than as hex values all over the code. Partly when tokens exist but many components still hardcode colors.
-3. **typography:** font families, and a type scale (named sizes and line heights) instead of one off sizes.
+2. **colors as tokens:** colors defined once as variables, theme values or named asset colors, and used from there rather than as hex or RGB values all over the code. Partly when tokens exist but many views still hardcode colors.
+3. **typography:** font families, and a type scale (named sizes and line heights, or text styles such as Dynamic Type) instead of one off sizes.
 4. **spacing scale:** spacing from a scale or theme instead of arbitrary values.
 5. **radius and shadows:** corner radius and shadows as tokens or a short fixed set.
 6. **shared components:** reusable UI primitives (buttons, fields, panels) instead of the same markup repeated.
-7. **icons:** one icon set, used the same way everywhere.
+7. **icons:** one icon set (for example SF Symbols or Heroicons), used the same way everywhere.
 8. **references:** design references in the repo or linked: Figma, screenshots, a mood board.
-9. **accessibility:** a stated baseline (for example WCAG AA), or checks such as an accessibility lint rule, focus styles and contrast.
+9. **accessibility:** a stated baseline (for example WCAG AA), or checks such as an accessibility lint rule, focus styles and contrast. On iOS: Dynamic Type support, accessibility labels on controls and images, and enough contrast in both light and dark mode.
 
 Write `.groundwork/readiness/design.json`:
 
