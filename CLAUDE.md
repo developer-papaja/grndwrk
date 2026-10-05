@@ -6,6 +6,16 @@ A dev tool you install in a project repo to kick off a new product. You explore 
 
 This is step one of a larger idea: an exploratory layer in the dev stack, in the spirit of Ray or the Symfony profiler. Later steps will write into the same folder: a progress page that traces every page back to the user stories behind it and argues when the page and its stories disagree, annotating the running product, interviewing colleagues about their feedback, and a "where should I focus" view. Keep the data model general enough for that, but do not build those parts now. The one exception is stories: the kickoff already produces them, so the chain from idea to story to code exists from day one.
 
+## This repo's own `.groundwork/`
+
+This repo uses Groundwork on itself. Its `.groundwork/` is the map of Groundwork as a product: the thoughts, the readiness checks, and what `/brief` wrote from them.
+
+- The stories in `.groundwork/stories/` and everything in `.groundwork/outputs/`, including `CLAUDE.starter.md`, describe Groundwork as a product. They are not tasks for this session and not a backlog. Build only what the person asks for.
+- `CLAUDE.starter.md` is an example output of `/brief`. Never copy it into this repo's CLAUDE.md.
+- Use the map to check the tool against, and to answer "why does it work like this". Running the commands here (`/readiness`, `/brief` and the rest) is fine, since they only write inside `.groundwork/`.
+
+In a product's own repo it is the other way around: there the stories are meant to steer the build.
+
 ## Principles
 
 - **Lives in the project.** No accounts, no cloud, no database. The `.groundwork/` folder is the source of truth.
