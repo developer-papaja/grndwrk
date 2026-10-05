@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs'
-import type { Gap, GNode, NodeType, Readiness, Status, Story } from '../../src/shared/types'
+import type { DesignCheck, Gap, GNode, NodeType, Readiness, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchStories, markGapAnswered, savePages, updateNode, uploadImage } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
@@ -295,18 +295,26 @@ export const state = Alpine.reactive({
     if (missing) parts.push(`${missing} missing: gaps from /readiness that sit in this topic.`)
     return parts.join(' ')
   },
-  /** "5 of 9 in place": found counts as one, partly as half. */
-  get designScore(): string {
-    const d = this.readiness?.design ?? []
-    const found = d.filter((c) => c.status === 'found').length
-    const partly = d.filter((c) => c.status === 'partly').length
-    return `${found} of ${d.length} in place` + (partly ? `, ${partly} partly` : '')
-  },
-  get designPercent(): number {
-    const d = this.readiness?.design ?? []
-    if (!d.length) return 0
-    const points = d.reduce((sum, c) => sum + (c.status === 'found' ? 1 : c.status === 'partly' ? 0.5 : 0), 0)
-    return Math.round((points / d.length) * 100)
+  /**
+   * The design scorecard, one group per platform when a repo holds more than
+   * one app ("All" holds the checks across them), or a single group.
+   * "5 of 9 in place": found counts as one, partly as half.
+   */
+  get designGroups(): { platform: string; checks: DesignCheck[]; score: string; percent: number }[] {
+    const all = this.readiness?.design ?? []
+    const names = [...new Set(all.map((c) => c.platform ?? ''))]
+    return names.map((platform) => {
+      const checks = all.filter((c) => (c.platform ?? '') === platform)
+      const found = checks.filter((c) => c.status === 'found').length
+      const partly = checks.filter((c) => c.status === 'partly').length
+      const points = found + partly / 2
+      return {
+        platform: platform.toLowerCase() === 'all' ? 'Across platforms' : platform,
+        checks,
+        score: checks.length === 1 ? checks[0].status : `${found} of ${checks.length} in place` + (partly ? `, ${partly} partly` : ''),
+        percent: checks.length ? Math.round((points / checks.length) * 100) : 0,
+      }
+    })
   },
   get areas(): Area[] {
     return parseAreas(this.readiness?.report?.body ?? '')

@@ -60,7 +60,7 @@ During development of the tool itself, use `npm link` to run it inside a real pr
     checklist.md        # what "ready" means for this project, editable
     report.md           # written by /readiness, shown in the UI
     gaps.json           # ghost nodes for the UI, written by /readiness
-    design.json         # design scorecard: nine items, found, partly or missing, written by /survey and /readiness
+    design.json         # design scorecard: nine items, found, partly or missing, per platform when a repo holds several apps, written by /survey and /readiness
   outputs/
     brief.md            # written by /brief
     CLAUDE.starter.md   # starting context for building the actual product

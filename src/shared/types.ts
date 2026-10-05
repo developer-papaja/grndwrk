@@ -78,11 +78,15 @@ export const DESIGN_ITEMS = [
   'icons',
   'references',
   'accessibility',
+  // Only when a repo holds more than one app: are colors, type and icons defined once and kept in step?
+  'shared across platforms',
 ] as const
 export type DesignStatus = 'found' | 'partly' | 'missing'
 
 /** One line of the design scorecard, written by /survey and /readiness. */
 export interface DesignCheck {
+  /** Which app this is about, when a repo holds more than one: "iOS", "Android", "Web", or "All". */
+  platform?: string
   item: string
   status: DesignStatus
   note: string

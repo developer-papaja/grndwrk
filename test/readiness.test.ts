@@ -47,6 +47,22 @@ describe('readiness', () => {
     expect(design[1].seen_in).toEqual(['ui/src/style.css'])
   })
 
+  it('keeps a scorecard per platform when a repo holds more than one app', () => {
+    const design = parseDesign(JSON.stringify([
+      { platform: 'All', item: 'shared across platforms', status: 'partly' },
+      { platform: 'Android', item: 'typography', status: 'missing' },
+      { platform: 'iOS', item: 'typography', status: 'found' },
+      { platform: 'iOS', item: 'colors as tokens', status: 'found' },
+      { platform: 'iOS', item: 'colors as tokens', status: 'missing' },
+    ]))
+    expect(design.map((d) => `${d.platform} ${d.item} ${d.status}`)).toEqual([
+      'Android typography missing',
+      'iOS colors as tokens found',
+      'iOS typography found',
+      'All shared across platforms partly',
+    ])
+  })
+
   it('reports a broken gaps file instead of throwing', async () => {
     await writeFile(join(root, 'readiness', 'gaps.json'), '{ not json')
     const r = await readReadiness(root)

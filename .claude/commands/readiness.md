@@ -47,7 +47,7 @@ One or two sentences: the verdict and the main reason.
 
 ## Update `.groundwork/readiness/design.json`
 
-The design scorecard: nine fixed items (design docs, colors as tokens, typography, spacing scale, radius and shadows, shared components, icons, references, accessibility), each `found`, `partly` or `missing`, with a one line `note` and `seen_in`. If the file exists, check each item again against the map and, read only, the project (for example a type scale decided in the map, or tokens added to the code), and update what changed. If it does not exist, write it. Base the Design foundation area of the report on it.
+The design scorecard: nine fixed items (design docs, colors as tokens, typography, spacing scale, radius and shadows, shared components, icons, references, accessibility), each `found`, `partly` or `missing`, with a one line `note` and `seen_in`. If the file exists, check each item again against the map and, read only, the project (for example a type scale decided in the map, or tokens added to the code), and update what changed. If it does not exist, write it. When the repo holds more than one app (for example iOS and Android), keep one set of nine per app with `"platform": "iOS"`, `"Android"` or `"Web"`, plus one `"shared across platforms"` item with `"platform": "All"` (found when colors, type and icons are defined once or kept in step, partly when the names match but values are copied by hand, missing when each app defines its own). With one app, leave `platform` out. Base the Design foundation area of the report on it, naming the weakest app.
 
 ```json
 [{ "item": "typography", "status": "partly", "note": "One font, no type scale.", "seen_in": ["ui/src/style.css"] }]

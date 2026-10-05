@@ -337,7 +337,7 @@
                   <li class="flex gap-4 px-4 py-3">
                     <span class="w-36 shrink-0 font-medium text-fog" x-text="a.name"></span>
                     <span
-                      class="h-fit shrink-0 cursor-help rounded px-1.5 py-0.5 text-[11px] font-medium"
+                      class="h-fit w-14 shrink-0 cursor-help rounded py-0.5 text-center text-[11px] font-medium"
                       :class="{ 'bg-rose-400/15 text-rose-300': a.status === 'missing', 'bg-question/15 text-question': a.status === 'thin', 'bg-emerald-400/15 text-emerald-300': a.status === 'enough' }"
                       :title="$store.gw.meaning[a.status]"
                       x-text="a.status"
@@ -354,35 +354,40 @@
         </template>
 
         <template x-if="$store.gw.readiness?.design?.length">
-          <div>
-            <div class="mb-2 mt-8 flex items-baseline justify-between gap-4">
-              <h2 class="text-[13px] font-semibold text-fog">Design foundation</h2>
-              <span class="text-xs text-fog/45" x-text="$store.gw.designScore"></span>
-            </div>
-            <div class="mb-2 h-1.5 overflow-hidden rounded-full bg-white/8">
-              <div class="h-full rounded-full bg-accent" :style="{ width: $store.gw.designPercent + '%' }"></div>
-            </div>
-            <ul class="divide-y divide-line rounded-lg border border-line" id="design">
-              <template x-for="d in $store.gw.readiness.design" :key="d.item">
-                <li class="flex gap-4 px-4 py-2.5">
-                  <span class="w-36 shrink-0 text-fog" x-text="d.item.charAt(0).toUpperCase() + d.item.slice(1)"></span>
-                  <span
-                    class="h-fit shrink-0 cursor-help rounded px-1.5 py-0.5 text-[11px] font-medium"
-                    :class="{ 'bg-emerald-400/15 text-emerald-300': d.status === 'found', 'bg-question/15 text-question': d.status === 'partly', 'bg-rose-400/15 text-rose-300': d.status === 'missing' }"
-                    :title="$store.gw.meaning[d.status]"
-                    x-text="d.status"
-                  ></span>
-                  <span class="min-w-0 flex-1 text-fog/70">
-                    <span x-text="d.note"></span>
-                    <span class="mt-1 flex flex-wrap gap-1" x-show="d.seen_in.length">
-                      <template x-for="p in d.seen_in" :key="p">
-                        <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/60 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
-                      </template>
-                    </span>
-                  </span>
-                </li>
-              </template>
-            </ul>
+          <div id="design">
+            <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Design foundation</h2>
+            <template x-for="g in $store.gw.designGroups" :key="g.platform">
+              <section class="mb-4">
+                <div class="mb-1.5 flex items-baseline justify-between gap-4">
+                  <span class="text-[12px] font-medium text-fog/80" x-text="g.platform"></span>
+                  <span class="text-xs text-fog/45" x-text="g.score"></span>
+                </div>
+                <div class="mb-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+                  <div class="h-full rounded-full bg-accent" :style="{ width: g.percent + '%' }"></div>
+                </div>
+                <ul class="divide-y divide-line rounded-lg border border-line">
+                  <template x-for="d in g.checks" :key="d.item">
+                    <li class="flex gap-4 px-4 py-2.5">
+                      <span class="w-36 shrink-0 text-fog" x-text="$store.gw.label(d.item)"></span>
+                      <span
+                        class="h-fit w-14 shrink-0 cursor-help rounded py-0.5 text-center text-[11px] font-medium"
+                        :class="{ 'bg-emerald-400/15 text-emerald-300': d.status === 'found', 'bg-question/15 text-question': d.status === 'partly', 'bg-rose-400/15 text-rose-300': d.status === 'missing' }"
+                        :title="$store.gw.meaning[d.status]"
+                        x-text="d.status"
+                      ></span>
+                      <span class="min-w-0 flex-1 text-fog/70">
+                        <span x-text="d.note"></span>
+                        <span class="mt-1 flex flex-wrap gap-1" x-show="d.seen_in.length">
+                          <template x-for="p in d.seen_in" :key="p">
+                            <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/60 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                          </template>
+                        </span>
+                      </span>
+                    </li>
+                  </template>
+                </ul>
+              </section>
+            </template>
           </div>
         </template>
 

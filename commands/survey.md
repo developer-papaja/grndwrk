@@ -83,7 +83,19 @@ Write `.groundwork/readiness/design.json`:
 ]
 ```
 
-Use the item names exactly as above, all nine of them. Also write one thought per item that is found or partly, in a topic named "design foundation" on the Product page, with `source: code` or `docs` and the same `seen_in`, so the map holds the design that exists. Missing items need no thought: the scorecard and `/readiness` cover them.
+Use the item names exactly as above, all nine of them.
+
+**More than one app in the repo** (for example an iOS app and an Android app, or an app and a website): score each app on its own, since each keeps its own colors, type and components. Write all nine items once per app, each with `"platform": "iOS"`, `"Android"` or `"Web"`. Then add one more item, `"item": "shared across platforms"` with `"platform": "All"`: **found** when colors, type and icons are defined once (shared tokens, a generator such as Style Dictionary, or a cross platform UI layer) or clearly kept in step, **partly** when the names match but the values are kept by hand in each app, **missing** when each app defines its own. With one app, leave `platform` out.
+
+```json
+[
+  { "platform": "iOS", "item": "colors as tokens", "status": "found", "note": "Named colors in Assets.xcassets, used through a Color extension.", "seen_in": ["App/Assets.xcassets", "App/Theme/Color+Brand.swift"] },
+  { "platform": "Android", "item": "colors as tokens", "status": "partly", "note": "colors.xml exists, but many composables use Color(0xFF...) directly.", "seen_in": ["android/app/src/main/res/values/colors.xml"] },
+  { "platform": "All", "item": "shared across platforms", "status": "partly", "note": "Same color names on both, values copied by hand.", "seen_in": ["App/Assets.xcassets", "android/app/src/main/res/values/colors.xml"] }
+]
+```
+
+Also write one thought per item that is found or partly, in a topic named "design foundation" on the Product page, with `source: code` or `docs` and the same `seen_in`, so the map holds the design that exists. Missing items need no thought: the scorecard and `/readiness` cover them.
 
 ## Fill in `project.md`
 
@@ -126,7 +138,7 @@ Short and plain:
 - What the project is, in one line.
 - How many thoughts you wrote on each page: settled, open, and guesses (`source: inferred`).
 - How many stories, and how many are done or partial.
-- The design scorecard in one line, for example "Design: 4 of 9 in place (colors and components found; no type scale, spacing scale or design docs)".
+- The design scorecard in one line, for example "Design: 4 of 9 in place (colors and components found; no type scale, spacing scale or design docs)". With more than one app, one line per app plus the shared check, for example "iOS 6 of 9, Android 4 of 9, shared: partly".
 - What you left out, if anything.
 - The two or three questions that matter most.
 - Suggest running `/readiness` next, to see what is missing for the next step.

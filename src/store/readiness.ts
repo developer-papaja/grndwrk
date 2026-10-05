@@ -31,23 +31,36 @@ export async function readReadiness(gwDir: string): Promise<Readiness> {
   return out
 }
 
-/** The design scorecard in the fixed item order. Unknown items are dropped, a bad status reads as missing. */
+/**
+ * The design scorecard. Items keep the fixed order; when a repo holds more
+ * than one app, each platform has its own set, in the order they first
+ * appear, with "All" last. Unknown items are dropped, a bad status reads as
+ * missing, and a duplicate item for the same platform is ignored.
+ */
 export function parseDesign(raw: string): DesignCheck[] {
   const data = JSON.parse(raw)
   if (!Array.isArray(data)) return []
-  const out: DesignCheck[] = []
-  for (const item of DESIGN_ITEMS) {
-    const c = data.find((d) => d && typeof d.item === 'string' && d.item.trim().toLowerCase() === item)
-    if (!c) continue
-    const status: DesignStatus = ['found', 'partly', 'missing'].includes(c.status) ? c.status : 'missing'
-    out.push({
+  const items = DESIGN_ITEMS as readonly string[]
+  const platforms: string[] = []
+  const checks: DesignCheck[] = []
+  for (const d of data) {
+    if (!d || typeof d.item !== 'string') continue
+    const item = d.item.trim().toLowerCase()
+    if (!items.includes(item)) continue
+    const platform = typeof d.platform === 'string' && d.platform.trim() ? d.platform.trim() : undefined
+    if (checks.some((c) => c.item === item && c.platform === platform)) continue
+    if (platform && !platforms.includes(platform)) platforms.push(platform)
+    const status: DesignStatus = ['found', 'partly', 'missing'].includes(d.status) ? d.status : 'missing'
+    checks.push({
+      ...(platform ? { platform } : {}),
       item,
       status,
-      note: typeof c.note === 'string' ? c.note : '',
-      seen_in: Array.isArray(c.seen_in) ? c.seen_in.filter((s: unknown) => typeof s === 'string') : [],
+      note: typeof d.note === 'string' ? d.note : '',
+      seen_in: Array.isArray(d.seen_in) ? d.seen_in.filter((s: unknown) => typeof s === 'string') : [],
     })
   }
-  return out
+  const rank = (p?: string) => (!p ? -1 : p.toLowerCase() === 'all' ? platforms.length : platforms.indexOf(p))
+  return checks.sort((a, b) => rank(a.platform) - rank(b.platform) || items.indexOf(a.item) - items.indexOf(b.item))
 }
 
 /** Keep what is usable from a gaps file, fill sensible defaults, drop the rest. */
