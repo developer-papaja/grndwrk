@@ -698,10 +698,12 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       .nodes.filter((n) => n.x !== undefined)
       .map((n) => new Vector3(n.x, n.y, n.z))
     for (const g of ghosts.values()) points.push(g.pos.clone())
-    for (const sv of storyViews.values()) points.push(sv.pos.clone())
     if (points.length === 0) return
     const min = points.reduce((a, p) => a.min(p), points[0].clone())
     const max = points.reduce((a, p) => a.max(p), points[0].clone())
+    // Stories only add height. Their row spreads with the zoom, so letting
+    // them widen the frame would zoom out a little more on every fit.
+    for (const sv of storyViews.values()) min.y = Math.min(min.y, sv.pos.y)
     // The guide lines run from vision to detail with the topic names above,
     // and the guide words sit to the left.
     min.x -= 130

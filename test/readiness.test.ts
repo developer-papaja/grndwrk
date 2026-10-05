@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { markAnswered, parseGaps, readReadiness } from '../src/store/readiness.js'
+import { markAnswered, parseDesign, parseGaps, readReadiness } from '../src/store/readiness.js'
 
 let root: string
 beforeEach(async () => {
@@ -13,7 +13,7 @@ afterEach(() => rm(root, { recursive: true, force: true }))
 
 describe('readiness', () => {
   it('reads nothing gracefully before the first run', async () => {
-    expect(await readReadiness(root)).toEqual({ report: null, gaps: [] })
+    expect(await readReadiness(root)).toEqual({ report: null, gaps: [], design: [] })
   })
 
   it('reads the verdict and checked date from the report', async () => {
@@ -34,6 +34,17 @@ describe('readiness', () => {
       { id: 'gap_a', area: '', title: 'No typography', why: '', near: ['n_1'], severity: 'blocking', topic: 'look', altitude: 5 },
       { id: 'gap_2', area: '', title: 'No id here', why: '', near: [], severity: 'important' },
     ])
+  })
+
+  it('reads the design scorecard in the fixed order and keeps only known items', () => {
+    const design = parseDesign(JSON.stringify([
+      { item: 'Typography', status: 'partly', note: 'One font, no scale', seen_in: ['ui/src/style.css'] },
+      { item: 'colors as tokens', status: 'found', note: 'In @theme' },
+      { item: 'mood board', status: 'found' },
+      { item: 'icons', status: 'great' },
+    ]))
+    expect(design.map((d) => [d.item, d.status])).toEqual([['colors as tokens', 'found'], ['typography', 'partly'], ['icons', 'missing']])
+    expect(design[1].seen_in).toEqual(['ui/src/style.css'])
   })
 
   it('reports a broken gaps file instead of throwing', async () => {

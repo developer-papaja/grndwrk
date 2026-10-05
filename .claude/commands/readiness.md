@@ -11,6 +11,8 @@ Judge whether this project's Groundwork map holds enough to start building, and 
 4. The previous `.groundwork/readiness/report.md` and `gaps.json`, if they exist. A gap with `answered_by` was answered from the map: read that node and decide whether the gap is closed now.
 5. For the "Setup for building with Claude" area, also look at the project itself, outside `.groundwork/` (read only): is there a `CLAUDE.md`, design docs or references, code standards or linting config, and skills or commands in `.claude/`?
 
+Some thoughts say where they came from with `source:` and `seen_in:` (written by `/survey`). `source: code`, `docs` or `commit` with a `seen_in` is evidence: it counts as what exists. `source: inferred` is Claude's guess: it counts as open until the person has answered its thread.
+
 ## Judge
 
 For each checklist area, decide: **missing**, **thin** or **enough**, relative to the project type. A small internal tool needs much less than a public product. Be honest and specific: "thin" must name what is thin.
@@ -39,6 +41,14 @@ One or two sentences: the verdict and the main reason.
 
 1. The first thing, said so the person can act on it.
 2. ...
+```
+
+## Update `.groundwork/readiness/design.json`
+
+The design scorecard: nine fixed items (design docs, colors as tokens, typography, spacing scale, radius and shadows, shared components, icons, references, accessibility), each `found`, `partly` or `missing`, with a one line `note` and `seen_in`. If the file exists, check each item again against the map and, read only, the project (for example a type scale decided in the map, or tokens added to the code), and update what changed. If it does not exist, write it. Base the Design foundation area of the report on it.
+
+```json
+[{ "item": "typography", "status": "partly", "note": "One font, no type scale.", "seen_in": ["ui/src/style.css"] }]
 ```
 
 ## Write `.groundwork/readiness/gaps.json`
@@ -70,7 +80,7 @@ One entry per concrete thing that is missing or thin. Not one per area: a thin a
 - `near`: ids of the closest related thoughts, when there are any.
 - Drop a gap whose `answered_by` node closes it. Keep it, without `answered_by`, if the answer was not enough, and say why in the report.
 
-Write only those two files, inside `.groundwork/readiness/`. Never edit nodes: questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
+Write only those three files, inside `.groundwork/readiness/`. Never edit nodes: questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
 
 ## Report back
 

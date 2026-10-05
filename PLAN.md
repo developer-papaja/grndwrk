@@ -50,7 +50,7 @@ One phase per Claude Code session. Start each in plan mode, commit when the done
 
 ## Phase 5: Use it, then decide
 
-Use it for two kickoffs. Note what you skip, what you wish existed and where it felt slow. Check that story ids actually end up in commits and `applies_to` gets filled in, since Phase 6 depends on it. Only then build the next layer.
+Use it for two kickoffs, one new product and one existing project. For the existing one, start with `/survey`: it reads the code, docs and history, writes the map from where the project is, scores the design foundation, and asks where the why is missing. Tried first on a copy of this repo, where it found what is built and decided, and stayed honest about guesses. Note what you skip, what you wish existed and where it felt slow. Check that story ids actually end up in commits and `applies_to` gets filled in, since Phase 6 depends on it. Only then build the next layer.
 
 ## Phase 6: Progress and review
 

@@ -12,6 +12,8 @@ Turn this project's Groundwork map into what someone needs to start building the
 
 Use only what the map says. Where the map is silent, say so in the brief instead of inventing an answer.
 
+If the project already exists (thoughts with `source: code` and stories with status `done` or `partial`, usually from `/survey`), say in the brief what is built and what is still planned. In the site map, mark the screens that exist. Keep the `status` and `applies_to` of every story that has them.
+
 ## Write `.groundwork/outputs/brief.md`
 
 ```md

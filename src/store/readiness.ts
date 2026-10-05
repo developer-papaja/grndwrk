@@ -1,7 +1,7 @@
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import matter from 'gray-matter'
-import { SEVERITIES, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
+import { DESIGN_ITEMS, SEVERITIES, type DesignCheck, type DesignStatus, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
 
 const VERDICTS: Verdict[] = ['ready to build', 'ready to prototype', 'not ready']
 
@@ -9,7 +9,7 @@ const dir = (gwDir: string) => join(gwDir, 'readiness')
 
 /** Read the report and the gaps. Missing or broken files never throw. */
 export async function readReadiness(gwDir: string): Promise<Readiness> {
-  const out: Readiness = { report: null, gaps: [] }
+  const out: Readiness = { report: null, gaps: [], design: [] }
   try {
     const { data, content } = matter(await readFile(join(dir(gwDir), 'report.md'), 'utf8'), {})
     const v = String(data.verdict ?? '').trim().toLowerCase()
@@ -22,6 +22,30 @@ export async function readReadiness(gwDir: string): Promise<Readiness> {
     out.gaps = parseGaps(await readFile(join(dir(gwDir), 'gaps.json'), 'utf8'))
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') out.error = `gaps.json could not be read: ${(err as Error).message}`
+  }
+  try {
+    out.design = parseDesign(await readFile(join(dir(gwDir), 'design.json'), 'utf8'))
+  } catch {
+    // No scorecard yet, or a broken one: show none rather than a wrong one.
+  }
+  return out
+}
+
+/** The design scorecard in the fixed item order. Unknown items are dropped, a bad status reads as missing. */
+export function parseDesign(raw: string): DesignCheck[] {
+  const data = JSON.parse(raw)
+  if (!Array.isArray(data)) return []
+  const out: DesignCheck[] = []
+  for (const item of DESIGN_ITEMS) {
+    const c = data.find((d) => d && typeof d.item === 'string' && d.item.trim().toLowerCase() === item)
+    if (!c) continue
+    const status: DesignStatus = ['found', 'partly', 'missing'].includes(c.status) ? c.status : 'missing'
+    out.push({
+      item,
+      status,
+      note: typeof c.note === 'string' ? c.note : '',
+      seen_in: Array.isArray(c.seen_in) ? c.seen_in.filter((s: unknown) => typeof s === 'string') : [],
+    })
   }
   return out
 }

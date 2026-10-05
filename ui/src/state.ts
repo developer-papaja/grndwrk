@@ -230,6 +230,44 @@ export const state = Alpine.reactive({
       this.flash('The browser did not allow copying. Open .groundwork/outputs/CLAUDE.starter.md instead.')
     }
   },
+  /** Where a thought came from, in words, when /survey wrote it. */
+  sourceLabel(node: GNode | null): string {
+    const source = node?.extra?.source
+    if (source === 'code') return 'Seen in code'
+    if (source === 'docs') return 'From the docs'
+    if (source === 'commit') return 'From a commit'
+    if (source === 'inferred') return "Claude's guess. Check the thread."
+    return ''
+  },
+  seenIn(node: GNode | null): string[] {
+    const v = node?.extra?.seen_in
+    return Array.isArray(v) ? v.map(String) : typeof v === 'string' && v ? [v] : []
+  },
+  /** Guesses from /survey that nobody has confirmed yet. */
+  get guessCount(): number {
+    return Object.values(this.nodes).filter((n) => n.extra?.source === 'inferred' && n.status !== 'settled').length
+  },
+  async copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      this.flash(`Copied ${text}`)
+    } catch {
+      this.flash(text)
+    }
+  },
+  /** "5 of 9 in place": found counts as one, partly as half. */
+  get designScore(): string {
+    const d = this.readiness?.design ?? []
+    const found = d.filter((c) => c.status === 'found').length
+    const partly = d.filter((c) => c.status === 'partly').length
+    return `${found} of ${d.length} in place` + (partly ? `, ${partly} partly` : '')
+  },
+  get designPercent(): number {
+    const d = this.readiness?.design ?? []
+    if (!d.length) return 0
+    const points = d.reduce((sum, c) => sum + (c.status === 'found' ? 1 : c.status === 'partly' ? 0.5 : 0), 0)
+    return Math.round((points / d.length) * 100)
+  },
   get areas(): Area[] {
     return parseAreas(this.readiness?.report?.body ?? '')
   },

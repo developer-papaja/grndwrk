@@ -60,6 +60,7 @@ During development of the tool itself, use `npm link` to run it inside a real pr
     checklist.md        # what "ready" means for this project, editable
     report.md           # written by /readiness, shown in the UI
     gaps.json           # ghost nodes for the UI, written by /readiness
+    design.json         # design scorecard: nine items, found, partly or missing, written by /survey and /readiness
   outputs/
     brief.md            # written by /brief
     CLAUDE.starter.md   # starting context for building the actual product
@@ -88,6 +89,7 @@ Free text. Thoughts, references, half-formed questions.
 - **status:** open, settled, parked
 - **links:** undirected in v1. Store on both nodes. Links mostly stay inside a topic; topics do the grouping.
 - **id:** short, random, stable. Never derived from the title.
+- **source** and **seen_in** say where a thought came from, when a command wrote it from an existing project: `source: code`, `docs` or `commit` with the paths, doc anchors or commit ids in `seen_in` is evidence and may be settled; `source: inferred` is Claude's guess, always open, with a thread question. A thought the person writes has neither.
 - **topic_by: claude** marks a topic Claude chose. Setting a topic yourself removes it, and commands never change a topic without it.
 
 The notes can end in a thread, a dialog between the person and Claude:
@@ -185,6 +187,7 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 
 Shipped with the package in `commands/` and copied into the host project's `.claude/commands/` on init.
 
+- **/survey** starts the map from a project that already exists: it reads the code, docs and git history (read only) and writes thoughts for what is built, decided, half done or contradictory, each with `source` and `seen_in`; stories for what is built with `applies_to` filled in and status done or partial; the design scorecard; and questions where the why is missing. It never makes the map look more decided than the project is.
 - **/decisions** looks back over a Claude Code session and its commits, settles the thoughts it decided (naming the commit), writes decision nodes for the rest, and asks in threads when unsure.
 - **/import <file>** turns a document, such as a brief or a list of user stories, into nodes with the source line quoted in each.
 - **/topics** reads all nodes and writes `topic:` into them: three to seven topics, reusing existing ones, never touching titles or notes. Ends with which topics look thin.

@@ -64,9 +64,33 @@ export interface Gap {
 
 export type Verdict = 'ready to build' | 'ready to prototype' | 'not ready'
 
+/** The fixed design checks, in the order the scorecard shows them. */
+export const DESIGN_ITEMS = [
+  'design docs',
+  'colors as tokens',
+  'typography',
+  'spacing scale',
+  'radius and shadows',
+  'shared components',
+  'icons',
+  'references',
+  'accessibility',
+] as const
+export type DesignStatus = 'found' | 'partly' | 'missing'
+
+/** One line of the design scorecard, written by /survey and /readiness. */
+export interface DesignCheck {
+  item: string
+  status: DesignStatus
+  note: string
+  seen_in: string[]
+}
+
 export interface Readiness {
   report: { verdict: Verdict | null; checked: string; body: string } | null
   gaps: Gap[]
+  /** The design scorecard, empty until /survey or /readiness writes it. */
+  design: DesignCheck[]
   /** Set when gaps.json could not be read, so the UI can say so. */
   error?: string
 }

@@ -314,6 +314,7 @@
                 x-text="$store.gw.verdictLabel"
               ></span>
               <span class="text-xs text-fog/45" x-text="$store.gw.openGaps.length + ' open, ' + $store.gw.waitingGaps.length + ' waiting for a check'"></span>
+              <span x-show="$store.gw.guessCount" class="rounded-md bg-question/15 px-2 py-0.5 text-xs text-question" x-text="$store.gw.guessCount + ($store.gw.guessCount === 1 ? ' guess' : ' guesses') + ' from /survey to confirm'"></span>
             </div>
             <p class="mt-3 text-xs text-fog/40">Run <code class="text-fog/70">/readiness</code> to check again, or <code class="text-fog/70">/challenge</code> for questions on the thinnest parts.</p>
 
@@ -336,7 +337,43 @@
             <template x-if="!$store.gw.areas.length">
               <div class="report" x-html="$store.gw.reportHtml"></div>
             </template>
+          </div>
+        </template>
 
+        <template x-if="$store.gw.readiness?.design?.length">
+          <div>
+            <div class="mb-2 mt-8 flex items-baseline justify-between gap-4">
+              <h2 class="text-[13px] font-semibold text-fog">Design foundation</h2>
+              <span class="text-xs text-fog/45" x-text="$store.gw.designScore"></span>
+            </div>
+            <div class="mb-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+              <div class="h-full rounded-full bg-accent" :style="{ width: $store.gw.designPercent + '%' }"></div>
+            </div>
+            <ul class="divide-y divide-line rounded-lg border border-line" id="design">
+              <template x-for="d in $store.gw.readiness.design" :key="d.item">
+                <li class="flex gap-4 px-4 py-2.5">
+                  <span class="w-36 shrink-0 text-fog" x-text="d.item.charAt(0).toUpperCase() + d.item.slice(1)"></span>
+                  <span
+                    class="h-fit shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium"
+                    :class="{ 'bg-emerald-400/15 text-emerald-300': d.status === 'found', 'bg-question/15 text-question': d.status === 'partly', 'bg-rose-400/15 text-rose-300': d.status === 'missing' }"
+                    x-text="d.status"
+                  ></span>
+                  <span class="min-w-0 flex-1 text-fog/70">
+                    <span x-text="d.note"></span>
+                    <span class="mt-1 flex flex-wrap gap-1" x-show="d.seen_in.length">
+                      <template x-for="p in d.seen_in" :key="p">
+                        <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/60 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                      </template>
+                    </span>
+                  </span>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </template>
+
+        <template x-if="$store.gw.readiness?.report">
+          <div>
             <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Open</h2>
             <p x-show="!$store.gw.openGaps.length" class="text-fog/45">Nothing open.</p>
             <ul class="space-y-1.5" id="gaps-open">
@@ -612,6 +649,14 @@
                   @keydown.enter.prevent="$event.target.blur()"
                   class="field w-full resize-none text-[15px] font-semibold leading-snug"
                 ></textarea>
+              </template>
+              <template x-if="$store.gw.sourceLabel($store.gw.selected)">
+                <div id="source" class="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">
+                  <span :class="$store.gw.selected.extra.source === 'inferred' ? 'text-question' : 'text-fog/50'" x-text="$store.gw.sourceLabel($store.gw.selected)"></span>
+                  <template x-for="p in $store.gw.seenIn($store.gw.selected)" :key="p">
+                    <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/70 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                  </template>
+                </div>
               </template>
             </div>
 
