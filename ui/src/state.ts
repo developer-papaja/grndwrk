@@ -63,6 +63,8 @@ export const state = Alpine.reactive({
   /** The page in view, or ALL for the board with everything. */
   currentPage: readStored<string>('groundwork.page', ALL),
   addingPage: false,
+  /** The list shows only topics that are thin or have missing pieces. */
+  onlyAttention: false,
   reply: '',
   sending: false,
   readiness: null as Readiness | null,
@@ -150,7 +152,16 @@ export const state = Alpine.reactive({
     return [...topicColumns(this.visibleNodes).values()].filter((c) => c.key).map((c) => c.name)
   },
   get listGroups(): ListGroup[] {
-    return groupForList(this.visibleNodes, this.query)
+    const groups = groupForList(this.visibleNodes, this.query)
+    if (!this.onlyAttention) return groups
+    return groups.filter((g) => this.needsAttention(g))
+  },
+  /** A topic is thin with two thoughts or fewer; it needs attention when thin or when gaps sit in it. */
+  needsAttention(g: ListGroup): boolean {
+    return g.key !== '' && (g.total <= 2 || this.missingIn(g.key) > 0)
+  },
+  get attentionCount(): number {
+    return groupForList(this.visibleNodes, '').filter((g) => this.needsAttention(g)).length
   },
   get listRows(): GNode[] {
     return flatten(this.listGroups.filter((g) => !this.isCollapsed(g.key)))
@@ -263,6 +274,24 @@ export const state = Alpine.reactive({
     } catch {
       this.flash(text)
     }
+  },
+  /** What the status words mean, shown when hovering them. */
+  meaning: {
+    missing: 'Missing: nothing in the map covers this yet.',
+    thin: 'Thin: something is there, but not enough for a build to rely on. The text beside it says what is lacking.',
+    enough: 'Enough: the map covers this well enough to build on, for this kind of project.',
+    found: 'Found: in place in the project.',
+    partly: 'Partly: started, but not used consistently or not complete. The note says what is lacking.',
+    blocking: 'Blocking: stops a real build until it is decided.',
+    important: 'Important: building without it will cost rework later.',
+    nice: 'Nice: worth having, but nothing breaks without it.',
+  } as Record<string, string>,
+  /** Hover text for a topic's count in the list. */
+  topicCountHint(total: number, missing: number): string {
+    const parts = [`${total} ${total === 1 ? 'thought' : 'thoughts'} in this topic.`]
+    if (total <= 2) parts.push('Thin: topics with two thoughts or fewer are marked thin. Add more, or merge it into another topic.')
+    if (missing) parts.push(`${missing} missing: gaps from /readiness that sit in this topic.`)
+    return parts.join(' ')
   },
   /** "5 of 9 in place": found counts as one, partly as half. */
   get designScore(): string {
@@ -380,6 +409,19 @@ export const state = Alpine.reactive({
     this.select(null)
     this.reportOpen = true
     this.setDetailsMinimized(false)
+  },
+  /** Go to a gap in the map: its page, the map view, and the camera on its ghost. */
+  showGapInMap(id: string) {
+    const gap = this.readiness?.gaps.find((g) => g.id === id)
+    if (!gap) return
+    if (gap.page && !this.onAll && !samePage(gap.page, this.currentPage)) {
+      this.currentPage = gap.page
+      store('groundwork.page', gap.page)
+    }
+    // No fit here: the camera flies to the ghost instead.
+    this.view = 'map'
+    store('groundwork.view', 'map')
+    this.selectGap(id)
   },
   selectGap(id: string) {
     this.select(null)

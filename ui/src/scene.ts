@@ -128,6 +128,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   let columns = new Map<string, Column>()
   let hoveredId: string | null = null
   let lastSelected: string | null = null
+  let lastGap: string | null = null
   let hits: Hit[] = []
   /** Space between altitude levels. Follows the number of columns and the view's shape. */
   let step = 70
@@ -576,6 +577,8 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     frameOnce()
     if (next.selectedId && next.selectedId !== lastSelected) flyTo(next.selectedId)
     lastSelected = next.selectedId
+    if (next.selectedGapId && next.selectedGapId !== lastGap) setTimeout(() => flyTo(`gap:${next.selectedGapId}`), 60)
+    lastGap = next.selectedGapId
     el.style.cursor = next.linkMode ? 'crosshair' : ''
   }
 
@@ -680,9 +683,16 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
    * as they were, so the map around it stays in view.
    */
   function flyTo(id: string) {
-    const n = graph.graphData().nodes.find((g) => g.id === id)
-    if (!n || n.x === undefined) return
-    const target = new Vector3(n.x, n.y, n.z)
+    let target: Vector3
+    if (id.startsWith('gap:')) {
+      const g = ghosts.get(id.slice(4))
+      if (!g) return
+      target = g.pos.clone()
+    } else {
+      const n = graph.graphData().nodes.find((g) => g.id === id)
+      if (!n || n.x === undefined) return
+      target = new Vector3(n.x, n.y, n.z)
+    }
     const offset = graph.camera().position.clone().sub(controls.target)
     const pos = target.clone().add(offset)
     graph.cameraPosition({ x: pos.x, y: pos.y, z: pos.z }, { x: target.x, y: target.y, z: target.z }, 600)
