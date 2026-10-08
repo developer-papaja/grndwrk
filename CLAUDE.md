@@ -49,7 +49,7 @@ During development of the tool itself, use `npm link` to run it inside a real pr
 
 ```
 .groundwork/
-  project.md            # name, one-line purpose, project type, page order
+  project.md            # name, one-line purpose, project type, page order, kickoff sign-offs
   nodes/
     <id>.md             # one node per file
   files/
@@ -132,7 +132,9 @@ Entries are `**Claude asks**`, `**Claude**` or `**You**`, a dot and a date. A qu
 - **enough:** set with `answered_by` when the person chose "Enough for now". The answer node is a settled decision titled "Enough for now: ...", and `/readiness` never raises that gap again.
 - **suggestions:** two or three answers Claude proposes, `{title, why}`, written by `/readiness`. The person can start from one instead of a blank box.
 
-`report.md` has `verdict:` (ready to build, ready to prototype, not ready) and `checked:` in its frontmatter, then the areas and the smallest set of things to add.
+`report.md` has `verdict:` (ready to build, ready to prototype, not ready) and `checked:` in its frontmatter, plus `closed:` and `added:` (gap titles since the check before), then the areas and the smallest set of things to add. `/readiness` narrows down: it keeps gap ids, adds a blocking gap only when something changed, and never raises an accepted one.
+
+**The kickoff** has five steps: Map, Check, Answer, Brief, Build. The person signs each off; the files only inform (where things stand, and whether something changed since). Sign-offs live in `project.md` as `kickoff: { map: 2026-10-08, check: 2026-10-08 }`. Build hands off the starter CLAUDE.md for a new product, or only its story rules for an existing project.
 
 A story file:
 
@@ -174,7 +176,7 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 
 ## Interaction
 
-- A rail at the far left switches views: **Focus** (only what needs the person, one item at a time: blocking gaps, Claude's questions, guesses from `/survey` to confirm, then the other gaps; each with its suggestions or options, an answer box, Skip, and for gaps "Enough for now"; the map stays visible, dimmed around the current item; it ends in "Nothing needs you right now" and the next command to run), **Map** (the 3D map with pages, topics and the list), **Readiness** (the verdict, each checklist area, open gaps, gaps waiting for a check, and everything settled by topic) and **Deliverables** (the brief, the stories and the starter CLAUDE.md, written by `/brief`).
+- A rail at the far left switches views: **Focus** (only what needs the person, one item at a time: blocking gaps, Claude's questions, guesses from `/survey` to confirm, then the other gaps; each with its suggestions or options, an answer box, Skip, and for gaps "Enough for now"; the map stays visible, dimmed around the current item; it ends in "Nothing needs you right now" and the next command to run), **Map** (the 3D map with pages, topics and the list), **Readiness** (the kickoff steps on top, then the verdict, what closed since the last check, each checklist area, open gaps, gaps waiting for a check, and everything settled by topic) and **Deliverables** (the brief, the stories and the starter CLAUDE.md, written by `/brief`).
 - Writing on a gap has three actions: "Add as a thought" leaves the gap open, "This answers it" sets `answered_by` so `/readiness` checks it next time, and "Enough for now" accepts it as it is, closed at once and for good. A remark never closes a gap by accident.
 
 - Orbit, zoom, pan with the mouse.
