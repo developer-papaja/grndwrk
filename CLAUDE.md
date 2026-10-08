@@ -29,7 +29,7 @@ In a product's own repo it is the other way around: there the stories are meant 
 From the root of any project:
 
 ```
-npx groundwork init   # creates .groundwork/ and copies Claude Code commands
+npx groundwork init   # creates .groundwork/ and copies Claude Code commands; run again to update them
 npx groundwork        # starts local server and opens the browser
 ```
 
@@ -50,6 +50,7 @@ During development of the tool itself, use `npm link` to run it inside a real pr
 ```
 .groundwork/
   project.md            # name, one-line purpose, project type, page order, kickoff sign-offs
+  commands.json         # which command versions init installed, so a later init updates only untouched ones
   nodes/
     <id>.md             # one node per file
   files/
