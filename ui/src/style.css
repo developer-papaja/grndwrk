@@ -93,3 +93,7 @@ select.field option {
 [x-cloak] {
   display: none !important;
 }
+/* Node ids in a document: click to open the thought. */
+.report .node-link {
+  @apply rounded bg-white/8 px-1 font-mono text-[11.5px] text-accent hover:bg-accent/15;
+}

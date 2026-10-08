@@ -89,7 +89,7 @@ The starting CLAUDE.md for the product's own repository. It is read by Claude Co
 - what is not in the first version, as rules ("Do not build ...")
 - how to write: the tone and wording rules from the map
 
-It must end with a section on working with stories, with these four rules, in these words or close to them:
+It must end with a section headed exactly `## Working with stories` (the map hands only that section to a project that already has a CLAUDE.md), with these four rules, in these words or close to them:
 
 1. Cite the story id in every commit message that implements or changes a story, for example "Book a desk in three steps (s_k3f9)".
 2. Where a story shapes behavior, add the id in a short code comment, for example `// s_k3f9: at most three steps`.

@@ -136,9 +136,44 @@ Three to five sharp questions, in the threads of the thoughts they concern, wher
 
 Write only inside `.groundwork/`. Never change code, docs or config. Do not use the dash characters "–" or "—".
 
+## Write `.groundwork/outputs/survey.md`
+
+The payoff of the survey: one page the person reads first, about what they did not already know. The map holds the details; this page holds the conclusions. Keep it under a page.
+
+```md
+---
+written: 2026-10-08
+---
+# State of <project name>
+
+One or two sentences: what the project is and where it stands.
+
+## What is built
+Two to four lines: the main screens or features, how many stories are done or partial, and how far along it looks.
+
+## What I found
+Three to seven things worth knowing that the person may have missed or forgotten, most important first. Each is one or two plain sentences with the node id it rests on, like (n_bz8p):
+- docs and code that disagree
+- decisions that quietly drifted from what was written down
+- half built parts, TODOs and dead ends
+- screens or features no doc or story explains
+- risks for the next step, for example missing tests around the core flow
+
+Not a list of what exists: only what is surprising, contradictory or risky.
+
+## Design foundation
+The scorecard in one line per app, and the weakest point.
+
+## The three things worth doing next
+1. Each one concrete and small enough to start today, with why it matters, and the node id when there is one.
+```
+
+On a re-run, rewrite it from the current state and drop findings that were answered.
+
 ## Report back
 
-Short and plain:
+Short and plain, findings first:
+- What I found: the top three findings, one line each.
 - What the project is, in one line.
 - How many thoughts you wrote on each page: settled, open, and guesses (`source: inferred`).
 - How many stories, and how many are done or partial.
@@ -146,4 +181,5 @@ Short and plain:
 - What you left out, if anything.
 - The two or three questions that matter most.
 - Say that Focus in the map (the top icon in the rail) goes through the questions and guesses one at a time, with options to pick from.
+- That the whole summary is under Deliverables, State of the project.
 - Suggest running `/readiness` next, to see what is missing for the next step.

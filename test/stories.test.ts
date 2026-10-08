@@ -44,9 +44,13 @@ describe('stories', () => {
     expect((await listStories(root)).map((s) => s.id)).toEqual(['s_k3f9'])
   })
 
-  it('serves only the two outputs /brief writes', async () => {
+  it('serves only the outputs /brief and /survey write', async () => {
     await writeFile(join(root, 'outputs', 'brief.md'), '# Brief')
+    await writeFile(join(root, 'outputs', 'survey.md'), '# State')
+    await writeFile(join(root, 'outputs', 'notes.md'), 'private')
     expect(await readOutput(root, 'brief.md')).toBe('# Brief')
+    expect(await readOutput(root, 'survey.md')).toBe('# State')
+    expect(await readOutput(root, 'notes.md')).toBeNull()
     expect(await readOutput(root, '../project.md')).toBeNull()
     expect(await readOutput(root, 'CLAUDE.starter.md')).toBeNull()
   })

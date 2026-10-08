@@ -6,7 +6,7 @@ import { startServer } from './server/index.js'
 import { clientCount } from './server/events.js'
 
 const HELP = `Usage:
-  groundwork init        create .groundwork/ and copy the Claude Code commands
+  groundwork init        create .groundwork/ and copy the Claude Code commands, or update them
   groundwork [start]     open the map in the browser
 
 Options for start:

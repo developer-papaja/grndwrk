@@ -52,8 +52,8 @@ export function parseStory(id: string, raw: string): Story {
   return story
 }
 
-/** The two outputs /brief writes. Nothing else in outputs/ is served. */
-export const OUTPUTS = ['brief.md', 'CLAUDE.starter.md'] as const
+/** The outputs /brief and /survey write. Nothing else in outputs/ is served. */
+export const OUTPUTS = ['brief.md', 'CLAUDE.starter.md', 'survey.md'] as const
 
 export async function readOutput(gwDir: string, name: string): Promise<string | null> {
   if (!(OUTPUTS as readonly string[]).includes(name)) return null

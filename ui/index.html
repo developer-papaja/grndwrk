@@ -546,17 +546,17 @@
           <span class="text-xs text-fog/40" x-show="$store.gw.briefWritten" x-text="'Written ' + $store.gw.briefWritten"></span>
         </div>
 
-        <template x-if="!$store.gw.brief && !$store.gw.stories.length">
+        <template x-if="!$store.gw.brief && !$store.gw.stories.length && !$store.gw.survey">
           <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Nothing yet. Run <code class="text-fog">/brief</code> in Claude Code to turn the map into a brief, a site map, the first stories and a CLAUDE.md to start building with.</p>
         </template>
 
-        <template x-if="$store.gw.brief || $store.gw.stories.length">
+        <template x-if="$store.gw.brief || $store.gw.stories.length || $store.gw.survey">
           <div>
             <div class="mt-4 flex items-center justify-between gap-4">
               <div class="flex gap-0.5 rounded-lg bg-white/5 p-0.5" id="deliverables-tabs">
-                <template x-for="t in [['brief', 'Brief'], ['stories', 'Stories'], ['starter', 'CLAUDE.md to start with']]" :key="t[0]">
+                <template x-for="t in $store.gw.deliverableTabs" :key="t[0]">
                   <button
-                    class="rounded-md px-3 py-1 text-xs"
+                    class="whitespace-nowrap rounded-md px-3 py-1 text-xs"
                     :class="$store.gw.deliverablesTab === t[0] ? 'bg-white/15 text-fog' : 'text-fog/55 hover:text-fog'"
                     @click="$store.gw.setDeliverablesTab(t[0])"
                     x-text="t[1] + (t[0] === 'stories' ? ' · ' + $store.gw.stories.length : '')"
@@ -566,7 +566,8 @@
               <span class="text-xs text-fog/40">Run <code class="text-fog/70">/brief</code> again after changing the map.</span>
             </div>
 
-            <div x-show="$store.gw.deliverablesTab === 'brief'" class="report mt-6" id="brief" x-html="$store.gw.brief ? $store.gw.briefHtml : '<p>No brief yet.</p>'"></div>
+            <div x-show="$store.gw.deliverablesTab === 'survey' && $store.gw.survey" class="report mt-6" id="survey" @click="$store.gw.openIdLink($event)" x-html="$store.gw.surveyHtml"></div>
+            <div x-show="$store.gw.deliverablesTab === 'brief'" class="report mt-6" id="brief" @click="$store.gw.openIdLink($event)" x-html="$store.gw.brief ? $store.gw.briefHtml : '<p>No brief yet.</p>'"></div>
 
             <div x-show="$store.gw.deliverablesTab === 'stories'" class="mt-6 space-y-1.5" id="stories">
               <template x-for="s in $store.gw.stories" :key="s.id">

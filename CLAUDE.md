@@ -62,6 +62,7 @@ During development of the tool itself, use `npm link` to run it inside a real pr
     gaps.json           # ghost nodes for the UI, written by /readiness
     design.json         # design scorecard: nine items, found, partly or missing, per platform when a repo holds several apps, written by /survey and /readiness
   outputs/
+    survey.md           # state of an existing project and what /survey found, written by /survey
     brief.md            # written by /brief
     CLAUDE.starter.md   # starting context for building the actual product
 ```

@@ -101,7 +101,9 @@ export const state = Alpine.reactive({
   stories: [] as Story[],
   brief: null as string | null,
   starter: null as string | null,
-  deliverablesTab: readStored<'brief' | 'stories' | 'starter'>('groundwork.deliverablesTab', 'brief'),
+  deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'starter'>('groundwork.deliverablesTab', 'brief'),
+  /** The state of the project, written by /survey. */
+  survey: null as string | null,
   openStoryId: null as string | null,
   /** A story opened in the right panel from the map. */
   selectedStoryId: null as string | null,
@@ -242,7 +244,7 @@ export const state = Alpine.reactive({
     return marked.parse(body, { async: false }) as string
   },
   get briefHtml(): string {
-    return marked.parse(stripFrontmatter(this.brief ?? ''), { async: false }) as string
+    return linkIds(marked.parse(stripFrontmatter(this.brief ?? ''), { async: false }) as string)
   },
   get briefWritten(): string {
     return /^---[\s\S]*?\bwritten:\s*(\S+)[\s\S]*?---/.exec(this.brief ?? '')?.[1] ?? ''
@@ -255,16 +257,37 @@ export const state = Alpine.reactive({
   },
   async loadDeliverables() {
     try {
-      const [stories, brief, starter] = await Promise.all([fetchStories(), fetchOutput('brief.md'), fetchOutput('CLAUDE.starter.md')])
+      const [stories, brief, starter, survey] = await Promise.all([fetchStories(), fetchOutput('brief.md'), fetchOutput('CLAUDE.starter.md'), fetchOutput('survey.md')])
       this.stories = stories
       this.brief = brief
       this.starter = starter
+      this.survey = survey
       onChange()
     } catch {
       // Offline: the next reconnect loads them.
     }
   },
-  setDeliverablesTab(tab: 'brief' | 'stories' | 'starter') {
+  get surveyHtml(): string {
+    return linkIds(marked.parse(stripFrontmatter(this.survey ?? ''), { async: false }) as string)
+  },
+  /** How many findings the survey lists under "What I found". */
+  get surveyFindings(): number {
+    const m = /^#{1,3}\s+What I found\s*\n([\s\S]*?)(?=^#{1,3}\s|(?![\s\S]))/im.exec(this.survey ?? '')
+    return m ? m[1].split('\n').filter((l) => /^\s*(?:[-*]|\d+\.)\s+/.test(l)).length : 0
+  },
+  get deliverableTabs(): [string, string][] {
+    const tabs: [string, string][] = [['brief', 'Brief'], ['stories', 'Stories'], ['starter', 'CLAUDE.md to start with']]
+    return this.survey ? [['survey', 'State of the project'], ...tabs] : tabs
+  },
+  /** A node id clicked inside a rendered document opens that thought. */
+  openIdLink(e: MouseEvent) {
+    const id = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-node]')?.dataset.node
+    if (!id) return
+    e.preventDefault()
+    if (this.nodes[id]) this.goToNode(id)
+    else this.flash(`${id} is not in the map`)
+  },
+  setDeliverablesTab(tab: 'survey' | 'brief' | 'stories' | 'starter') {
     this.deliverablesTab = tab
     store('groundwork.deliverablesTab', tab)
   },
@@ -393,7 +416,9 @@ export const state = Alpine.reactive({
         status: nodes.length
           ? `${nodes.length} ${nodes.length === 1 ? 'thought' : 'thoughts'}, ${settled} settled` + (fromCode ? `, ${fromCode} found in the project` : '')
           : 'Nothing in the map yet.',
-        next: this.existingProject || nodes.length ? 'Add what is on your mind. Move on when the purpose and the main flows are in.' : 'Capture what you know, or run /survey in Claude Code if the project already exists.',
+        next: this.survey
+          ? `/survey found ${this.surveyFindings || 'some'} things worth knowing. Read them under Deliverables, State of the project.`
+          : this.existingProject || nodes.length ? 'Add what is on your mind. Move on when the purpose and the main flows are in.' : 'Capture what you know, or run /survey in Claude Code if the project already exists.',
         stale: !nodes.length,
       },
       {
@@ -1088,6 +1113,11 @@ export const state = Alpine.reactive({
 
 function today(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+/** Node ids in rendered text, like (n_bz8p), become links to the thought. Text only, never inside tags. */
+function linkIds(html: string): string {
+  return html.replace(/(<[^>]*>)|\b(n_[a-z0-9]{4})\b/g, (m, tag, id) => (tag ? tag : `<a href="#" class="node-link" data-node="${id}">${id}</a>`))
 }
 
 function stripFrontmatter(text: string): string {
