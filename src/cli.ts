@@ -8,10 +8,16 @@ import { clientCount } from './server/events.js'
 const HELP = `Usage:
   groundwork init        create .groundwork/ and copy the Claude Code commands, or update them
   groundwork [start]     open the map in the browser
+  groundwork import-feedback <file>
+                         add comments a tester shared as a file
 
 Options for start:
   --port <n>   port to use (default 7777, or the next free one)
   --no-open    do not open the browser
+  --app <url>  your product's dev server, for example http://localhost:5173.
+               Open the address Groundwork prints for it, and every page gets
+               a Comment button. Comments land in the map, on the Feedback page.
+  --app-port <n>  port for that address (default: the map's port plus one)
 `
 
 async function main() {
@@ -20,6 +26,8 @@ async function main() {
     allowNegative: true,
     options: {
       port: { type: 'string', default: '7777' },
+      app: { type: 'string' },
+      'app-port': { type: 'string' },
       open: { type: 'boolean', default: true },
       dev: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
@@ -34,6 +42,24 @@ async function main() {
     return init(process.cwd())
   }
 
+  if (command === 'import-feedback') {
+    const root = findProjectRoot(process.cwd())
+    const files = positionals.slice(1)
+    if (!root || !files.length) {
+      console.error(!root ? `No ${GW_DIR}/ folder found here. Run \`groundwork init\` first.` : 'Usage: groundwork import-feedback <file> [more files]')
+      process.exit(1)
+    }
+    const { readFile } = await import('node:fs/promises')
+    const { NodeStore } = await import('./store/nodes.js')
+    const { importFeedback } = await import('./server/feedback.js')
+    const store = new NodeStore(join(root, GW_DIR))
+    for (const file of files) {
+      const { added, skipped } = await importFeedback(join(root, GW_DIR), store, await readFile(file, 'utf8'))
+      console.log(`${file}: ${added} added to the Feedback page${skipped ? `, ${skipped} already there or unreadable` : ''}`)
+    }
+    return
+  }
+
   if (command === 'start') {
     const root = findProjectRoot(process.cwd())
     if (!root) {
@@ -45,8 +71,20 @@ async function main() {
       console.error(`Not a valid port: ${values.port}`)
       process.exit(1)
     }
-    const { url } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev })
-    console.log(`Groundwork is running at ${url}\nWatching ${join(root, GW_DIR)}\nPress Ctrl+C to stop.`)
+    let app: URL | undefined
+    if (values.app) {
+      try {
+        app = new URL(/^https?:\/\//.test(values.app) ? values.app : `http://${values.app}`)
+      } catch {
+        console.error(`Not a valid address: ${values.app}`)
+        process.exit(1)
+      }
+    }
+    const appPort = values['app-port'] ? Number(values['app-port']) : undefined
+    const { url, appUrl } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort })
+    console.log(`Groundwork is running at ${url}\nWatching ${join(root, GW_DIR)}`)
+    if (appUrl) console.log(`Your product with the Comment button: ${appUrl} (passes through to ${app!.origin})`)
+    console.log('Press Ctrl+C to stop.')
     if (values.open) {
       // A Groundwork tab that is already open reconnects by itself. Give it a
       // moment, and only open a new tab when none came back.

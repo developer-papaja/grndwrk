@@ -3,3 +3,7 @@ dist/
 playground/
 .DS_Store
 .playwright-mcp/
+
+# Swift package build output
+.build/
+.swiftpm/

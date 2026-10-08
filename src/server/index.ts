@@ -4,6 +4,7 @@ import sirv from 'sirv'
 import { PACKAGE_ROOT } from '../root.js'
 import { NodeStore } from '../store/nodes.js'
 import { handleApi, handleFiles } from './api.js'
+import { createProxy } from './proxy.js'
 import { NodeSync } from './events.js'
 import { watchGroundwork } from './watcher.js'
 
@@ -13,9 +14,12 @@ export interface StartOptions {
   gwDir: string
   port: number
   dev: boolean
+  /** The product's dev server. When set, a proxy with the comment overlay runs on appPort. */
+  app?: URL
+  appPort?: number
 }
 
-export async function startServer({ gwDir, port, dev }: StartOptions): Promise<{ server: Server; url: string }> {
+export async function startServer({ gwDir, port, dev, app, appPort }: StartOptions): Promise<{ server: Server; url: string; appUrl?: string }> {
   const store = new NodeStore(gwDir)
   const nodes = new NodeSync(() => store.list())
   await nodes.prime()
@@ -52,7 +56,12 @@ export async function startServer({ gwDir, port, dev }: StartOptions): Promise<{
 
   const actualPort = await listen(server, port)
   watchGroundwork(gwDir, nodes)
-  return { server, url: `http://localhost:${actualPort}` }
+  let appUrl: string | undefined
+  if (app) {
+    const proxy = createProxy({ target: app, gwDir, store, nodes })
+    appUrl = `http://localhost:${await listen(proxy, appPort ?? actualPort + 1)}`
+  }
+  return { server, url: `http://localhost:${actualPort}`, appUrl }
 }
 
 function isLocalHost(host: string | undefined): boolean {
@@ -61,7 +70,7 @@ function isLocalHost(host: string | undefined): boolean {
 }
 
 /** Listen on `port`, or the next free one if it is taken. */
-async function listen(server: Server, port: number, attempts = 20): Promise<number> {
+export async function listen(server: Server, port: number, attempts = 20): Promise<number> {
   for (let p = port; p < port + attempts; p++) {
     const ok = await new Promise<boolean>((resolve, reject) => {
       const onError = (err: NodeJS.ErrnoException) => {

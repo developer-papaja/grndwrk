@@ -10,7 +10,8 @@
     "bin",
     "dist",
     "templates",
-    "commands"
+    "commands",
+    "overlay"
   ],
   "engines": {
     "node": ">=20"

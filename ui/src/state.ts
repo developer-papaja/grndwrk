@@ -317,6 +317,7 @@ export const state = Alpine.reactive({
     if (source === 'docs') return 'From the docs'
     if (source === 'commit') return 'From a commit'
     if (source === 'inferred') return "Claude's guess. Check the thread."
+    if (source === 'app') return 'Commented in the running product'
     return ''
   },
   seenIn(node: GNode | null): string[] {

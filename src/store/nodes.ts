@@ -60,7 +60,8 @@ export class NodeStore {
     return node
   }
 
-  create(input: NodeInput): Promise<Change> {
+  /** Create a node. `extra` is for fields the server sets itself, never taken from a request. */
+  create(input: NodeInput, extra: Record<string, unknown> = {}): Promise<Change> {
     return this.serial(async () => {
       const title = input.title?.trim()
       if (!title) throw new BadInput('A title is required')
@@ -86,6 +87,7 @@ export class NodeStore {
       Object.assign(node, clean(input))
       // A thought written as the answer to a gap remembers which gap, even after the gap closes.
       if (typeof input.answers === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(input.answers)) node.extra = { answers: input.answers }
+      node.extra = { ...node.extra, ...extra }
       node.links = [...new Set(input.links ?? [])].filter((l) => byId.has(l))
       byId.set(id, node)
       return this.writeWithLinks(byId, node, [])
