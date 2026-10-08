@@ -3,13 +3,23 @@ import type { DesignCheck, Gap, GNode, NodeType, Readiness, Status, Story } from
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchStories, markGapAnswered, savePages, updateNode, uploadImage } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
-import { appendEntry, openQuestions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
+import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
 import { parseCapture, sameTitle } from './capture'
 import { marked } from 'marked'
 import { ALTITUDE_WORDS, displayName, topicColumns } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
+
+export type View = 'focus' | 'map' | 'readiness' | 'deliverables'
+
+/** One thing waiting on the person, in focus mode. */
+export interface FocusItem {
+  /** Unique across kinds, for skipping. */
+  key: string
+  kind: 'gap' | 'question' | 'guess'
+  id: string
+}
 
 export type DraftField = 'title' | 'topic' | 'page' | 'type' | 'altitude' | 'status' | 'body'
 const FIELDS: DraftField[] = ['title', 'topic', 'page', 'type', 'altitude', 'status', 'body']
@@ -68,8 +78,10 @@ export const state = Alpine.reactive({
   reply: '',
   sending: false,
   readiness: null as Readiness | null,
-  /** Which view the rail shows: the 3D map, readiness, or deliverables. */
-  view: readStored<'map' | 'readiness' | 'deliverables'>('groundwork.view', 'map'),
+  /** Which view the rail shows: focus, the 3D map, readiness, or deliverables. */
+  view: readStored<View>('groundwork.view', 'map'),
+  /** Items skipped in focus mode this visit. They wait at the end of the queue. */
+  focusSkipped: [] as string[],
   stories: [] as Story[],
   brief: null as string | null,
   starter: null as string | null,
@@ -167,6 +179,11 @@ export const state = Alpine.reactive({
   },
   get listRows(): GNode[] {
     return flatten(this.listGroups.filter((g) => !this.isCollapsed(g.key)))
+  },
+  /** Width of whatever is docked on the right: the focus card, the details, or nothing. */
+  get rightInset(): number {
+    if (this.view === 'focus') return 400
+    return this.detailsVisible ? 360 : 0
   },
   get detailsVisible(): boolean {
     return (!!this.selected || !!this.selectedGap || !!this.selectedStory || this.reportOpen) && !this.detailsMinimized
@@ -324,7 +341,162 @@ export const state = Alpine.reactive({
     return (this.readiness?.gaps ?? []).filter((g) => !g.answered_by).sort((a, b) => order[a.severity] - order[b.severity])
   },
   get waitingGaps(): Gap[] {
-    return (this.readiness?.gaps ?? []).filter((g) => g.answered_by)
+    return (this.readiness?.gaps ?? []).filter((g) => g.answered_by && !g.enough)
+  },
+  /** Gaps the person accepted as they are. Closed for good. */
+  get acceptedGaps(): Gap[] {
+    return (this.readiness?.gaps ?? []).filter((g) => g.enough)
+  },
+
+  // Focus mode: one thing at a time, only what needs the person.
+  /**
+   * Everything waiting on the person, most important first: blocking gaps,
+   * questions from Claude, guesses from /survey to confirm, then the other
+   * gaps. Skipped items wait at the end, in the order they were skipped.
+   */
+  get focusQueue(): FocusItem[] {
+    const gaps = this.openGaps
+    const nodes = groupForList(Object.values(this.nodes), '').flatMap((g) => g.nodes)
+    const guess = (n: GNode) => n.extra?.source === 'inferred' && n.status === 'open' && !splitBody(n.body).entries.some((e) => e.who === 'you')
+    const items: FocusItem[] = [
+      ...gaps.filter((g) => g.severity === 'blocking').map((g) => ({ key: `gap:${g.id}`, kind: 'gap' as const, id: g.id })),
+      ...nodes.filter((n) => !guess(n) && openQuestions(n.body) > 0).map((n) => ({ key: `node:${n.id}`, kind: 'question' as const, id: n.id })),
+      ...nodes.filter(guess).map((n) => ({ key: `node:${n.id}`, kind: 'guess' as const, id: n.id })),
+      ...gaps.filter((g) => g.severity !== 'blocking').map((g) => ({ key: `gap:${g.id}`, kind: 'gap' as const, id: g.id })),
+    ]
+    const skipped = this.focusSkipped
+    const rank = (i: FocusItem) => (skipped.includes(i.key) ? 1 + skipped.indexOf(i.key) : 0)
+    return items.map((item, i) => ({ item, i })).sort((a, b) => rank(a.item) - rank(b.item) || a.i - b.i).map((x) => x.item)
+  },
+  get focusCurrent(): FocusItem | null {
+    return this.focusQueue[0] ?? null
+  },
+  /** True when everything left has been skipped once. */
+  get focusOnlySkipped(): boolean {
+    const cur = this.focusCurrent
+    return !!cur && this.focusSkipped.includes(cur.key)
+  },
+  get focusGap(): Gap | null {
+    const cur = this.focusCurrent
+    return cur?.kind === 'gap' ? (this.readiness?.gaps.find((g) => g.id === cur.id) ?? null) : null
+  },
+  get focusNode(): GNode | null {
+    const cur = this.focusCurrent
+    return cur && cur.kind !== 'gap' ? (this.nodes[cur.id] ?? null) : null
+  },
+  /** The open question on the current card, and the options Claude gave with it. */
+  get focusQuestion(): { question: string; options: string[] } | null {
+    const n = this.focusNode
+    const open = n ? splitBody(n.body).entries.find((e) => e.open) : undefined
+    return open ? questionOptions(open.text) : null
+  },
+  /** What the current item offers to start from: suggestions on a gap, options on a question. */
+  get focusOptions(): string[] {
+    if (this.focusGap) return (this.focusGap.suggestions ?? []).map((s) => s.title)
+    return this.focusQuestion?.options ?? []
+  },
+  /** The ids that stay bright in the map: the current item and what it touches. */
+  get focusIds(): string[] {
+    const gap = this.focusGap
+    if (gap) return [`gap:${gap.id}`, ...gap.near]
+    const n = this.focusNode
+    return n ? [n.id, ...n.links] : []
+  },
+  /** The free notes on the current card, without its thread. */
+  get focusNotes(): string {
+    const n = this.focusNode
+    return n ? splitBody(n.body).notes.replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim() : ''
+  },
+  /** What to do once nothing needs the person. */
+  get focusNextStep(): string {
+    if (!this.readiness?.report) return 'Run /readiness in Claude Code to see what is missing.'
+    if (this.waitingGaps.length) return `Run /readiness in Claude Code to check your ${this.waitingGaps.length === 1 ? 'answer' : 'answers'}.`
+    if (!this.brief) return 'Run /brief in Claude Code to write the brief and the first stories.'
+    return 'Run /challenge for a few sharp questions, or keep adding thoughts in the map.'
+  },
+  enterFocus() {
+    this.focusSkipped = []
+    this.setView('focus')
+    this.focusShow()
+  },
+  /** Point the map and the selection at the current item, so the camera flies to it. */
+  focusShow() {
+    const cur = this.focusCurrent
+    if (!cur) {
+      this.select(null)
+      return
+    }
+    if (cur.kind === 'gap') {
+      const gap = this.focusGap
+      if (gap?.page && !this.onAll && !samePage(gap.page, this.currentPage)) this.currentPage = gap.page
+      if (this.selectedGapId !== cur.id) this.selectGap(cur.id)
+    } else {
+      const node = this.nodes[cur.id]
+      if (node && !this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.currentPage = pageOf(node, this.pageNames)
+      if (this.selectedId !== cur.id) this.select(cur.id)
+    }
+    focusWhenVisible('focus-answer')
+  },
+  focusSkip() {
+    const cur = this.focusCurrent
+    if (!cur) return
+    this.focusSkipped = [...this.focusSkipped.filter((k) => k !== cur.key), cur.key]
+    this.focusShow()
+  },
+  /** Start the skipped ones over, from the top. */
+  focusRestart() {
+    this.focusSkipped = []
+    this.focusShow()
+  },
+  /** Start an answer from a suggestion or an option. It can be edited before sending. */
+  pickOption(text: string) {
+    if (this.focusGap || (this.view !== 'focus' && this.selectedGap)) this.gapAnswer = text
+    else this.reply = text
+    focusWhenVisible(this.view === 'focus' ? 'focus-answer' : 'gap-answer')
+  },
+  /** A guess from /survey is right: settle it, and answer its question if one is open. */
+  async confirmGuess() {
+    const n = this.focusNode
+    if (!n) return
+    const body = openQuestions(n.body) > 0 ? appendEntry(n.body, 'you', 'Yes, that is right.', today()) : n.body
+    try {
+      this.upsert(await updateNode(n.id, { status: 'settled', body }))
+      this.flash('Confirmed and settled.')
+      this.focusShow()
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /**
+   * "Enough for now": the person accepts the gap as it is. It becomes a
+   * settled decision, so /readiness never raises it again, and it closes now
+   * instead of waiting for a check.
+   */
+  async acceptGap() {
+    const gap = this.selectedGap
+    if (!gap) return
+    const why = this.gapAnswer.trim()
+    try {
+      const node = await createNode({
+        type: 'decision',
+        status: 'settled',
+        title: `Enough for now: ${gap.title}`,
+        topic: gap.topic ?? '',
+        page: gap.page ?? '',
+        altitude: gap.altitude ?? 3,
+        links: gap.near.filter((id) => this.nodes[id]),
+        body: `${why ? why + '\n\n' : ''}Accepted as it is for now, from the gap "${gap.title}": ${gap.why}\n`,
+        answers: gap.id,
+      })
+      this.upsert(node)
+      this.readiness = await markGapAnswered(gap.id, node.id, true)
+      this.gapAnswer = ''
+      this.flash('Accepted for now. /readiness will not raise it again.')
+      onChange()
+      if (this.view === 'focus') this.focusShow()
+    } catch (err) {
+      this.flash(errorText(err))
+    }
   },
   get blockingCount(): number {
     return this.openGaps.filter((g) => g.severity === 'blocking').length
@@ -341,7 +513,7 @@ export const state = Alpine.reactive({
       .sort(([a], [b]) => (a === 'no topic' ? 1 : b === 'no topic' ? -1 : a.localeCompare(b)))
       .map(([topic, nodes]) => ({ topic, nodes: nodes.sort((a, b) => b.altitude - a.altitude || a.title.localeCompare(b.title)) }))
   },
-  setView(view: 'map' | 'readiness' | 'deliverables') {
+  setView(view: View) {
     this.view = view
     store('groundwork.view', view)
     onChange()
@@ -369,9 +541,8 @@ export const state = Alpine.reactive({
    */
   get mapArea(): { left: string; right: string } {
     const wide = window.innerWidth >= 900
-    const left = 64 + (this.listOpen && wide ? 320 : 0)
-    const right = this.detailsVisible ? 360 : 0
-    return { left: `${left}px`, right: `${right}px` }
+    const left = 64 + (this.view === 'map' && this.listOpen && wide ? 320 : 0)
+    return { left: `${left}px`, right: `${this.rightInset}px` }
   },
   get linkedNodes(): GNode[] {
     const sel = this.selected
@@ -460,6 +631,7 @@ export const state = Alpine.reactive({
       this.gapAnswer = ''
       this.flash(closes ? 'Marked as answered. /readiness decides if it closes.' : 'Added as a thought. The gap stays open.')
       onChange()
+      if (this.view === 'focus') this.focusShow()
     } catch (err) {
       this.flash(errorText(err))
     }
@@ -642,7 +814,7 @@ export const state = Alpine.reactive({
     const text = this.reply.trim()
     const id = this.selectedId
     if (!text || !id || this.sending) return
-    const body = appendEntry(this.draft.body, 'you', text, new Date().toISOString().slice(0, 10))
+    const body = appendEntry(this.draft.body, 'you', text, today())
     this.sending = true
     this.replyStatus = 'Saving...'
     try {
@@ -657,6 +829,7 @@ export const state = Alpine.reactive({
       }
       this.replyStatus = ''
       this.upsert(node)
+      if (this.view === 'focus') this.focusShow()
     } catch (err) {
       this.replyStatus = `Not saved: ${errorText(err)}`
       console.error('Reply not saved', err)
@@ -786,6 +959,10 @@ export const state = Alpine.reactive({
     noteTimer = setTimeout(() => (this.note = ''), 4000)
   },
 })
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
 
 function stripFrontmatter(text: string): string {
   return text.replace(/^---\n[\s\S]*?\n---\n?/, '')

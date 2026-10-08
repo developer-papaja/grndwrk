@@ -77,4 +77,22 @@ describe('readiness', () => {
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual([{ id: 'gap_a', title: 'A', extra: 'kept' }, { id: 'gap_b', title: 'B', answered_by: 'n_x7a2' }])
     expect(await markAnswered(root, 'gap_zz', 'n_1')).toBe(false)
   })
+
+  it('marks a gap as enough for now, and keeps suggestions', async () => {
+    const file = join(root, 'readiness', 'gaps.json')
+    const suggestions = [{ title: 'Use the sizes in style.css', why: 'They are already in use' }, { title: '' }, 'junk']
+    await writeFile(file, JSON.stringify([{ id: 'gap_a', title: 'A', suggestions }]))
+    expect(await markAnswered(root, 'gap_a', 'n_x7a2', true)).toBe(true)
+    const [gap] = (await readReadiness(root)).gaps
+    expect(gap.enough).toBe(true)
+    expect(gap.answered_by).toBe('n_x7a2')
+    expect(gap.suggestions).toEqual([{ title: 'Use the sizes in style.css', why: 'They are already in use' }])
+    // Answering again without enough reopens it for /readiness to check.
+    await markAnswered(root, 'gap_a', 'n_b', false)
+    expect((await readReadiness(root)).gaps[0].enough).toBeUndefined()
+  })
+
+  it('ignores enough on a gap nobody answered', () => {
+    expect(parseGaps(JSON.stringify([{ id: 'gap_a', title: 'A', enough: true }]))[0].enough).toBeUndefined()
+  })
 })

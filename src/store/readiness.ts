@@ -85,19 +85,31 @@ export function parseGaps(raw: string): Gap[] {
     const alt = Math.round(Number(g.altitude))
     if (Number.isFinite(alt) && g.altitude != null) gap.altitude = Math.min(5, Math.max(1, alt))
     if (typeof g.answered_by === 'string' && g.answered_by) gap.answered_by = g.answered_by
+    if (gap.answered_by && g.enough === true) gap.enough = true
+    if (Array.isArray(g.suggestions)) {
+      const suggestions = g.suggestions
+        .filter((s: unknown) => !!s && typeof (s as { title?: unknown }).title === 'string' && (s as { title: string }).title.trim())
+        .map((s: { title: string; why?: unknown }) => ({ title: s.title.trim(), why: typeof s.why === 'string' ? s.why : '' }))
+      if (suggestions.length) gap.suggestions = suggestions
+    }
     if (!gaps.some((x) => x.id === gap.id)) gaps.push(gap)
   }
   return gaps
 }
 
-/** Record which node answered a gap, keeping every other gap and field as written. */
-export async function markAnswered(gwDir: string, gapId: string, nodeId: string): Promise<boolean> {
+/**
+ * Record which node answered a gap, keeping every other gap and field as
+ * written. With enough, the person accepted the gap as it is, for good.
+ */
+export async function markAnswered(gwDir: string, gapId: string, nodeId: string, enough = false): Promise<boolean> {
   const path = join(dir(gwDir), 'gaps.json')
   const data = JSON.parse(await readFile(path, 'utf8'))
   if (!Array.isArray(data)) return false
   const gap = data.find((g) => g && g.id === gapId)
   if (!gap) return false
   gap.answered_by = nodeId
+  if (enough) gap.enough = true
+  else delete gap.enough
   const tmp = join(dir(gwDir), '.gaps.json.tmp')
   await writeFile(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8')
   await rename(tmp, path)

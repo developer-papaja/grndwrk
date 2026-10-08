@@ -62,6 +62,29 @@ function parseThread(section: string): Entry[] {
   return entries
 }
 
+/**
+ * A question from Claude can end in options to pick from:
+ *
+ *   **Claude asks** · 2026-10-08
+ *   Which type scale?
+ *
+ *   Options:
+ *   - 12, 13, 15 and 20, the sizes style.css already uses
+ *   - Tailwind's default scale
+ *
+ * Returns the question without the list, and the options.
+ */
+export function questionOptions(text: string): { question: string; options: string[] } {
+  const m = /^\s*options:\s*$/im.exec(text)
+  if (!m) return { question: text.trim(), options: [] }
+  const options = text
+    .slice(m.index + m[0].length)
+    .split('\n')
+    .map((l) => /^\s*[-*]\s+(.+)$/.exec(l)?.[1].trim())
+    .filter((o): o is string => !!o)
+  return { question: text.slice(0, m.index).trim(), options }
+}
+
 export function openQuestions(body: string): number {
   return splitBody(body).entries.filter((e) => e.open).length
 }

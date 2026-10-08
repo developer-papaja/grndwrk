@@ -35,6 +35,10 @@ seen_in: [src/routes/booking.ts, src/components/DeskMap.tsx]
 
   **Claude asks** · 2026-10-05
   Booking stops at three steps everywhere. Is that a rule, or how it happened to turn out?
+
+  Options:
+  - A rule: booking never takes more than three steps
+  - How it turned out; it can change
   ```
 
 What to write:
@@ -128,7 +132,7 @@ As an employee, I want to pick a desk on the floor plan, so that I sit where I l
 
 ## Ask
 
-Three to five sharp questions, in the threads of the thoughts they concern, where the why is missing and it matters for what comes next. Each forces a choice and can be answered in a sentence. The `source: inferred` questions count toward these.
+Three to five sharp questions, in the threads of the thoughts they concern, where the why is missing and it matters for what comes next. Each forces a choice, can be answered in a sentence, and ends with an `Options:` list of two to four answers the person could pick as they stand. The `source: inferred` questions count toward these.
 
 Write only inside `.groundwork/`. Never change code, docs or config. Do not use the dash characters "–" or "—".
 
@@ -141,4 +145,5 @@ Short and plain:
 - The design scorecard in one line, for example "Design: 4 of 9 in place (colors and components found; no type scale, spacing scale or design docs)". With more than one app, one line per app plus the shared check, for example "iOS 6 of 9, Android 4 of 9, shared: partly".
 - What you left out, if anything.
 - The two or three questions that matter most.
+- Say that Focus in the map (the top icon in the rail) goes through the questions and guesses one at a time, with options to pick from.
 - Suggest running `/readiness` next, to see what is missing for the next step.

@@ -63,6 +63,10 @@ export interface Gap {
   altitude?: number
   /** The node that answered this gap, set from the map. /readiness checks it again. */
   answered_by?: string
+  /** Set with answered_by when the person said "Enough for now": the gap is closed for good. */
+  enough?: boolean
+  /** Answers Claude proposes, written by /readiness, so the person can start from one. */
+  suggestions?: { title: string; why: string }[]
 }
 
 export type Verdict = 'ready to build' | 'ready to prototype' | 'not ready'

@@ -30,6 +30,10 @@ Frontmatter order: `id, type, title, topic, topic_by, page, altitude, links, sta
 
 **Claude asks** · 2026-10-03
 Did we decide that pages replace topics, or sit above them?
+
+Options:
+- Pages replace topics
+- Pages sit above topics
 ```
 
 Add `## Thread` once, at the end of the node's notes, if the node has none yet. New entries go at the end of the thread. A question stays open until any entry comes after it.

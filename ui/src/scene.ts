@@ -69,6 +69,8 @@ export interface SceneView {
   /** Stories whose first source thought is on the page in view. */
   stories: Story[]
   selectedStoryId: string | null
+  /** Focus mode: only these stay bright (node ids, and gap:<id> for ghosts). Null shows everything. */
+  focusIds?: string[] | null
 }
 
 /** A story in the map. It sits below its source thoughts with faint lines to them. */
@@ -248,6 +250,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
     const [s, t] = linkEnds(l)
     const same = !!s && !!t && s.topic === t.topic
     if (touchesSelected(l)) return 'rgba(240, 236, 210, 0.8)'
+    if (view.focusIds) return 'rgba(160, 170, 185, 0.04)'
     return same ? 'rgba(160, 170, 185, 0.35)' : 'rgba(160, 170, 185, 0.1)'
   }
 
@@ -315,7 +318,10 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
   function placeCards() {
     const camera = graph.camera() as PerspectiveCamera
     const pxPerUnit = el.clientHeight / (2 * Math.tan((camera.fov * Math.PI) / 360))
+    // Focus mode dims everything but the current item and what it touches.
+    const dimmed = (id: string) => !!view.focusIds && !view.focusIds.includes(id)
     const isFocus = (n: GraphNode) =>
+      view.focusIds?.includes(n.id) ||
       n.id === view.selectedId ||
       n.id === hoveredId ||
       view.freshIds.includes(n.id) ||
@@ -334,7 +340,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       const box = { id: n.id, x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - h / 2, y2: p.y + h / 2 }
       const covered = shown.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
       const asCard = isFocus(n) || !covered
-      const opacity = isFocus(n) ? 1 : ageOpacity(n.age) * (n.status === 'parked' ? 0.45 : 1)
+      const opacity = dimmed(n.id) ? 0.1 : isFocus(n) ? 1 : ageOpacity(n.age) * (n.status === 'parked' ? 0.45 : 1)
 
       n.card!.visible = asCard
       n.dot!.visible = !asCard
@@ -348,6 +354,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
         dots.push({ id: n.id, x1: p.x - 8, x2: p.x + 8, y1: p.y - 8, y2: p.y + 8 })
       }
     }
+    storyLineMaterial.opacity = view.focusIds ? 0.03 : 0.18
     // Stories always show in full: they are the result of the thinking around them.
     const storyHits: Hit[] = []
     for (const sv of storyViews.values()) {
@@ -356,6 +363,7 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       const { w, h } = sv.size
       const box = { id: `story:${sv.story.id}`, x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - h / 2, y2: p.y + h / 2 }
       sv.card.scale.set(w / pxPerUnit, h / pxPerUnit, 1)
+      sv.card.material.opacity = view.focusIds ? 0.1 : 1
       shown.push(box)
       storyHits.push(box)
     }
@@ -372,8 +380,11 @@ export function createScene(el: HTMLElement, handlers: { onNodeClick: (id: strin
       // A blocking gap always shows in full: it is the thing to see first.
       const blocking = g.gap.severity === 'blocking' && !g.gap.answered_by
       const covered = shown.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
-      const asCard = selected || hovered || blocking || !covered
+      const asCard = view.focusIds ? !dimmed(box.id) : selected || hovered || blocking || !covered
+      // The item in focus draws above everything, so no related card covers it.
+      g.card.renderOrder = view.focusIds && asCard ? 23 : blocking ? 22 : 19
       g.card.visible = asCard
+      g.dot.material.opacity = view.focusIds ? 0.15 : 1
       g.dot.visible = !asCard
       if (asCard) {
         g.card.scale.set(w / pxPerUnit, h / pxPerUnit, 1)

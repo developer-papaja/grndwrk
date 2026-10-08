@@ -8,8 +8,10 @@ Judge whether this project's Groundwork map holds enough to start building, and 
 1. `.groundwork/project.md`: name, purpose, project type, and `pages:` for the page order.
 2. `.groundwork/readiness/checklist.md`: what "ready" means for this project. Each area has an "Enough when" line. The person may have edited it; follow their version.
 3. Every file in `.groundwork/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and the notes, including any `## Thread`. A settled thought counts more than an open one. A thread answer from the person counts as settled for what it answers.
-4. The previous `.groundwork/readiness/report.md` and `gaps.json`, if they exist. A gap with `answered_by` was answered from the map: read that node and decide whether the gap is closed now.
+4. The previous `.groundwork/readiness/report.md` and `gaps.json`, if they exist. A gap with `answered_by` was answered from the map: read that node and decide whether the gap is closed now. A gap with `enough: true` was accepted by the person as it is ("Enough for now"): it is closed for good.
 5. For the "Setup for building with Claude" area, also look at the project itself, outside `.groundwork/` (read only): is there a `CLAUDE.md`, design docs or references, code standards or linting config, and skills or commands in `.claude/`?
+
+**Enough for now.** A settled decision titled "Enough for now: ..." (with `answers: gap_x`) means the person decided that point is good enough for now. Never raise that gap again, under any id or wording, and judge its area with that decision in mind: an area can be enough because the person said so.
 
 A thought with `answers: gap_x` was written as the answer to that gap; its first note line says which gap and why it mattered. Judge the gap against it.
 
@@ -68,7 +70,11 @@ One entry per concrete thing that is missing or thin. Not one per area: a thin a
     "severity": "blocking",
     "page": "Product",
     "topic": "look and feel",
-    "altitude": 2
+    "altitude": 2,
+    "suggestions": [
+      { "title": "Keep the sizes already in use: 12, 13, 15 and 20 px", "why": "style.css already uses these, so nothing has to change" },
+      { "title": "A 1.25 scale from 14 px: 14, 17.5, 22, 27", "why": "Even steps for a content heavy product, but every screen shifts a little" }
+    ]
   }
 ]
 ```
@@ -80,10 +86,11 @@ One entry per concrete thing that is missing or thin. Not one per area: a thin a
 - `page` and `topic`: where the ghost card sits in the map. Use an existing page and topic when one fits. A topic with no thoughts yet is fine and makes the empty area visible as its own column.
 - `altitude`: 5 vision, 4 principle, 3 approach, 2 feature, 1 detail.
 - `near`: ids of the closest related thoughts, when there are any.
-- Drop a gap whose `answered_by` node closes it. Keep it, without `answered_by`, if the answer was not enough, and say why in the report.
+- `suggestions`: two or three concrete answers the person could pick, each `{ "title": ..., "why": ... }`. The title is the answer itself, written so it could be the thought as it stands ("Keep the sizes already in use: 12, 13, 15 and 20 px"), not advice ("Decide a type scale"). Ground them in this project: what the code, docs or map already hold, or the plainest common choice for this kind of project. The `why` is one short line on what picking it means. Make them differ in a way that matters. The person may still write their own.
+- Drop a gap whose `answered_by` node closes it, and every gap with `enough: true`. Keep it, without `answered_by`, if the answer was not enough, and say why in the report.
 
 Write only those three files, inside `.groundwork/readiness/`. Never edit nodes: questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
 
 ## Report back
 
-End with the verdict in one sentence, then the smallest set of things to add as a short list.
+End with the verdict in one sentence, then the smallest set of things to add as a short list. Then say that Focus in the map (the top icon in the rail) goes through the open gaps one at a time, with your suggestions to pick from.

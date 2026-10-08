@@ -27,8 +27,8 @@ export const fetchStories = () => request<Story[]>('GET', '/api/stories')
 export const fetchOutput = (name: 'brief.md' | 'CLAUDE.starter.md') =>
   request<{ text: string | null }>('GET', `/api/outputs/${encodeURIComponent(name)}`).then((r) => r.text)
 export const fetchReadiness = () => request<Readiness>('GET', '/api/readiness')
-export const markGapAnswered = (gapId: string, nodeId: string) =>
-  request<Readiness>('PATCH', `/api/gaps/${encodeURIComponent(gapId)}`, { answered_by: nodeId })
+export const markGapAnswered = (gapId: string, nodeId: string, enough = false) =>
+  request<Readiness>('PATCH', `/api/gaps/${encodeURIComponent(gapId)}`, { answered_by: nodeId, ...(enough ? { enough } : {}) })
 export const savePages = (pages: string[]) => request<Record<string, unknown>>('PATCH', '/api/project', { pages })
 export const createNode = (input: NodeInput) => request<GNode>('POST', '/api/nodes', input)
 export const updateNode = (id: string, input: NodeInput) =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendEntry, openQuestions, replaceNotes, splitBody } from '../src/shared/thread.js'
+import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody } from '../src/shared/thread.js'
 
 const body = `Free notes here.
 
@@ -48,5 +48,11 @@ describe('thread', () => {
     expect(appendEntry('', 'claude-asks', 'Why?', '2026-10-03')).toBe('## Thread\n\n**Claude asks** · 2026-10-03\nWhy?\n')
     const twice = appendEntry(appendEntry('', 'claude-asks', 'Why?', 'd'), 'you', 'Because.', 'd')
     expect(splitBody(twice).entries.map((e) => e.text)).toEqual(['Why?', 'Because.'])
+  })
+
+  it('reads the options under a question', () => {
+    const text = 'Which type scale?\n\nOptions:\n- 12, 13, 15 and 20\n- Tailwind default\n* A third'
+    expect(questionOptions(text)).toEqual({ question: 'Which type scale?', options: ['12, 13, 15 and 20', 'Tailwind default', 'A third'] })
+    expect(questionOptions('Plain question?')).toEqual({ question: 'Plain question?', options: [] })
   })
 })

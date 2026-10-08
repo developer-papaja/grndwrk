@@ -10,12 +10,20 @@ const RAIL = 64
 
 const scene = createScene(document.getElementById('scene')!, {
   onNodeClick: (id) => {
+    // In focus mode, clicking another card leaves focus and opens it in the map.
+    if (state.view === 'focus') {
+      state.setView('map')
+      if (id.startsWith('gap:')) return state.showGapInMap(id.slice(4))
+      if (id.startsWith('story:')) return state.selectStory(id.slice(6))
+      return state.goToNode(id)
+    }
     if (id.startsWith('gap:')) return state.selectGap(id.slice(4))
     if (id.startsWith('story:')) return state.selectStory(id.slice(6))
     if (state.mode === 'link' && state.selectedId && id !== state.selectedId) void state.toggleLink(id)
     else state.select(id)
   },
   onBackgroundClick: () => {
+    if (state.view === 'focus') return
     if (state.mode !== 'link') state.select(null)
   },
 })
@@ -36,6 +44,7 @@ onNodesChange(() => {
       selectedGapId: state.selectedGapId,
       stories: Alpine.raw(state.visibleStories).map((st) => Alpine.raw(st)),
       selectedStoryId: state.selectedStoryId,
+      focusIds: state.view === 'focus' && state.focusCurrent ? [...state.focusIds] : null,
     })
   })
 })
@@ -46,11 +55,20 @@ Object.assign(window, { groundwork: { state, scene } })
 // The map gets the room between the rail, the side panels and the details.
 Alpine.effect(() => {
   const wide = window.innerWidth >= 900
-  const left = RAIL + (state.listOpen && wide ? 320 : 0)
-  const right = state.detailsVisible ? 360 : 0
-  scene.setInsets({ left, right })
+  const left = RAIL + (state.view === 'map' && state.listOpen && wide ? 320 : 0)
+  scene.setInsets({ left, right: state.rightInset })
 })
-Alpine.effect(() => scene.setActive(state.view === 'map'))
+Alpine.effect(() => scene.setActive(state.view === 'map' || state.view === 'focus'))
+
+// In focus mode the map follows the queue: when the current item changes,
+// for any reason (an answer, a skip, a file changed on disk), fly to the next.
+let lastFocus: string | undefined
+Alpine.effect(() => {
+  const key = state.view === 'focus' ? (state.focusCurrent?.key ?? '') : undefined
+  if (key === lastFocus) return
+  lastFocus = key
+  if (key !== undefined) setTimeout(() => state.focusShow())
+})
 
 bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
   fit: () => state.fit(),

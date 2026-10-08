@@ -55,10 +55,10 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     const gapMatch = url.pathname.match(/^\/api\/gaps\/([A-Za-z0-9_-]{1,64})$/)
     if (gapMatch && method === 'PATCH') {
-      const input = (await readBody(req)) as { answered_by?: unknown }
+      const input = (await readBody(req)) as { answered_by?: unknown; enough?: unknown }
       if (typeof input.answered_by !== 'string') throw new BadInput('answered_by must be a node id')
       await ctx.store.get(input.answered_by)
-      if (!(await markAnswered(ctx.gwDir, gapMatch[1], input.answered_by))) throw new NotFound(gapMatch[1])
+      if (!(await markAnswered(ctx.gwDir, gapMatch[1], input.answered_by, input.enough === true))) throw new NotFound(gapMatch[1])
       return send(res, 200, await readReadiness(ctx.gwDir))
     }
     if (url.pathname === '/api/project' && method === 'GET') {

@@ -23,23 +23,29 @@
       <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" /></symbol>
       <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" /></symbol>
       <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z" /></symbol>
       <symbol id="i-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" /></symbol>
     </svg>
 
-    <div id="scene" class="fixed inset-y-0" :class="$store.gw.view !== 'map' && 'invisible'"></div>
+    <div id="scene" class="fixed inset-y-0" :class="!['map', 'focus'].includes($store.gw.view) && 'invisible'"></div>
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
-      <template x-for="v in [['map', 'Map', 'i-map'], ['readiness', 'Readiness', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
+      <template x-for="v in [['focus', 'Focus: only what needs you', 'i-inbox'], ['map', 'Map', 'i-map'], ['readiness', 'Readiness', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
           :class="$store.gw.view === v[0] ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
           :id="'rail-' + v[0]"
           :title="v[1]"
           :aria-label="v[1]"
-          @click="$store.gw.setView(v[0])"
+          @click="v[0] === 'focus' ? $store.gw.enterFocus() : $store.gw.setView(v[0])"
         >
           <svg class="size-5"><use :href="'#' + v[2]" /></svg>
+          <span
+            x-show="v[0] === 'focus' && $store.gw.focusQueue.length"
+            class="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white"
+            x-text="$store.gw.focusQueue.length"
+          ></span>
           <span
             x-show="v[0] === 'readiness' && $store.gw.blockingCount"
             class="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-rose-500 text-[10px] font-semibold text-white"
@@ -328,6 +334,7 @@
               <span class="text-xs text-fog/45" x-text="$store.gw.openGaps.length + ' open, ' + $store.gw.waitingGaps.length + ' waiting for a check'"></span>
               <span x-show="$store.gw.guessCount" class="rounded-md bg-question/15 px-2 py-0.5 text-xs text-question" x-text="$store.gw.guessCount + ($store.gw.guessCount === 1 ? ' guess' : ' guesses') + ' from /survey to confirm'"></span>
             </div>
+            <button x-show="$store.gw.focusQueue.length" id="readiness-focus" class="mt-4 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.enterFocus()" x-text="'Go through what needs you, one at a time (' + $store.gw.focusQueue.length + ')'"></button>
             <p class="mt-3 text-xs text-fog/40">Run <code class="text-fog/70">/readiness</code> to check again, or <code class="text-fog/70">/challenge</code> for questions on the thinnest parts.</p>
 
             <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Areas</h2>
@@ -423,6 +430,17 @@
                 </li>
               </template>
             </ul>
+
+            <template x-if="$store.gw.acceptedGaps.length">
+              <div>
+                <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Accepted for now</h2>
+                <ul class="space-y-1" id="gaps-accepted">
+                  <template x-for="g in $store.gw.acceptedGaps" :key="g.id">
+                    <li><button class="text-fog/60 hover:text-fog" @click="$store.gw.goToNode(g.answered_by)" x-text="g.title"></button></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
 
             <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Settled</h2>
             <p class="mb-3 text-xs text-fog/45">Decisions and settled thoughts, by topic.</p>
@@ -520,10 +538,160 @@
       </div>
     </main>
 
+    <!-- Focus: one thing that needs the person at a time, over a dimmed map -->
+    <aside
+      x-cloak
+      x-show="$store.gw.view === 'focus'"
+      id="focus"
+      class="fixed inset-y-0 right-0 flex w-[400px] max-w-full flex-col border-l border-line bg-panel text-[13px]"
+    >
+      <div class="flex items-center justify-between px-4 py-3">
+        <span class="font-semibold text-fog">Focus</span>
+        <span class="-mr-1.5 flex items-center gap-2">
+          <span id="focus-count" class="text-xs text-fog/45" x-show="$store.gw.focusQueue.length" x-text="$store.gw.focusQueue.length + ' left'"></span>
+          <button class="icon-btn" title="Back to the map ( Esc )" @click="$store.gw.setView('map')">
+            <svg class="size-5"><use href="#i-close" /></svg>
+          </button>
+        </span>
+      </div>
+      <div class="border-t border-line"></div>
+
+      <div class="flex-1 overflow-y-auto p-5">
+        <template x-if="!$store.gw.focusCurrent">
+          <div id="focus-done" class="flex flex-col items-start gap-3 pt-6">
+            <span class="grid size-10 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
+              <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+            </span>
+            <h2 class="text-[17px] font-semibold text-fog">Nothing needs you right now</h2>
+            <p class="text-fog/70" x-text="$store.gw.focusNextStep"></p>
+            <button class="mt-2 rounded-md px-3 py-1.5 text-xs text-fog/70 hover:bg-white/8 hover:text-fog" @click="$store.gw.setView('map')">Back to the map</button>
+          </div>
+        </template>
+
+        <template x-if="$store.gw.focusCurrent">
+          <div class="flex flex-col gap-5">
+            <div x-show="$store.gw.focusOnlySkipped" class="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-xs text-fog/60">
+              <span>Only skipped ones are left.</span>
+              <button class="text-accent hover:underline" @click="$store.gw.focusRestart()">Start over</button>
+            </div>
+
+            <!-- A gap from /readiness -->
+            <template x-if="$store.gw.focusGap">
+              <div class="flex flex-col gap-4">
+                <div>
+                  <span
+                    class="inline-block rounded px-1.5 py-0.5 text-[11px] font-medium"
+                    :class="{ 'bg-rose-400/15 text-rose-300': $store.gw.focusGap.severity === 'blocking', 'bg-question/15 text-question': $store.gw.focusGap.severity === 'important', 'bg-white/10 text-fog/60': $store.gw.focusGap.severity === 'nice' }"
+                    :title="$store.gw.meaning[$store.gw.focusGap.severity]"
+                    x-text="'Missing · ' + $store.gw.focusGap.severity"
+                  ></span>
+                  <span class="ml-1 text-[11px] text-fog/45" x-text="$store.gw.label($store.gw.focusGap.area)"></span>
+                  <h2 class="mt-2 text-[17px] font-semibold leading-snug text-fog" x-text="$store.gw.focusGap.title"></h2>
+                  <p class="mt-1.5 text-fog/70" x-text="$store.gw.focusGap.why"></p>
+                </div>
+                <div x-show="$store.gw.focusGap.near.some((id) => $store.gw.nodes[id])">
+                  <span class="label">Related</span>
+                  <template x-for="id in $store.gw.focusGap.near.filter((id) => $store.gw.nodes[id])" :key="id">
+                    <p class="flex items-center gap-2 py-1 text-fog/70">
+                      <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[$store.gw.nodes[id].type] }"></span>
+                      <span class="truncate" x-text="$store.gw.nodes[id].title"></span>
+                    </p>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <!-- A question from Claude, or a guess from /survey -->
+            <template x-if="$store.gw.focusNode">
+              <div class="flex flex-col gap-4">
+                <div>
+                  <span
+                    class="inline-block rounded bg-question/15 px-1.5 py-0.5 text-[11px] font-medium text-question"
+                    x-text="$store.gw.focusCurrent.kind === 'guess' ? 'Claude\'s guess. Is it right?' : 'Claude asks'"
+                  ></span>
+                  <span class="ml-1 text-[11px] text-fog/45" x-text="$store.gw.label($store.gw.focusNode.topic || 'no topic')"></span>
+                  <h2
+                    class="mt-2 text-[17px] font-semibold leading-snug text-fog"
+                    x-text="$store.gw.focusCurrent.kind === 'guess' || !$store.gw.focusQuestion ? $store.gw.focusNode.title : $store.gw.focusQuestion.question"
+                  ></h2>
+                  <p x-show="$store.gw.focusCurrent.kind === 'question'" class="mt-1.5 text-xs text-fog/50" x-text="'On: ' + $store.gw.focusNode.title"></p>
+                </div>
+                <p x-show="$store.gw.focusNotes" class="line-clamp-6 whitespace-pre-line text-fog/70" x-text="$store.gw.focusNotes"></p>
+                <div x-show="$store.gw.seenIn($store.gw.focusNode).length" class="flex flex-wrap items-center gap-1 text-[11px]">
+                  <span class="text-fog/50">Seen in</span>
+                  <template x-for="p in $store.gw.seenIn($store.gw.focusNode)" :key="p">
+                    <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/70 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                  </template>
+                </div>
+                <p x-show="$store.gw.focusCurrent.kind === 'guess' && $store.gw.focusQuestion" class="rounded-lg bg-white/5 px-3 py-2 text-fog/80" x-text="$store.gw.focusQuestion?.question"></p>
+              </div>
+            </template>
+
+            <!-- Suggestions and options to start from -->
+            <div x-show="$store.gw.focusOptions.length" id="focus-options">
+              <span class="label">Start from one of these</span>
+              <div class="flex flex-col gap-1.5">
+                <template x-for="(o, i) in $store.gw.focusOptions" :key="i">
+                  <button
+                    class="rounded-lg border border-line px-3 py-2 text-left text-fog/85 hover:border-accent/60 hover:bg-accent/10"
+                    @click="$store.gw.pickOption(o)"
+                  >
+                    <span class="block" x-text="o"></span>
+                    <span class="mt-0.5 block text-xs text-fog/50" x-show="$store.gw.focusGap?.suggestions?.[i]?.why" x-text="$store.gw.focusGap?.suggestions?.[i]?.why"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Answer -->
+            <template x-if="$store.gw.focusGap">
+              <form @submit.prevent="$store.gw.answerGap(true)">
+                <span class="label" x-text="$store.gw.focusOptions.length ? 'Or write your own' : 'Your answer'"></span>
+                <textarea
+                  id="focus-answer"
+                  rows="3"
+                  x-model="$store.gw.gapAnswer"
+                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerGap(true) }"
+                  placeholder="It becomes a thought next to the gap"
+                  class="field w-full resize-none"
+                ></textarea>
+                <div class="mt-2 flex items-center gap-2">
+                  <button type="button" class="rounded-md px-3 py-1 text-xs text-fog/60 hover:bg-white/8 hover:text-fog" title="Come back to it later" @click="$store.gw.focusSkip()">Skip</button>
+                  <span class="flex-1"></span>
+                  <button id="focus-enough" type="button" class="rounded-md px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Accept it as it is. What you wrote is kept as the reason." @click="$store.gw.acceptGap()">Enough for now</button>
+                  <button id="focus-submit" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()">This answers it</button>
+                </div>
+              </form>
+            </template>
+            <template x-if="$store.gw.focusNode">
+              <form @submit.prevent="$store.gw.sendReply()">
+                <span class="label" x-text="$store.gw.focusCurrent.kind === 'guess' ? 'Or correct it' : $store.gw.focusOptions.length ? 'Or write your own' : 'Your answer'"></span>
+                <textarea
+                  id="focus-answer"
+                  rows="3"
+                  x-model="$store.gw.reply"
+                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendReply() }"
+                  :placeholder="$store.gw.focusCurrent.kind === 'guess' ? 'Not quite: ...' : 'A sentence is enough'"
+                  class="field w-full resize-none"
+                ></textarea>
+                <p x-show="$store.gw.replyStatus" class="mt-1 text-xs text-rose-300" x-text="$store.gw.replyStatus"></p>
+                <div class="mt-2 flex items-center gap-2">
+                  <button type="button" class="rounded-md px-3 py-1 text-xs text-fog/60 hover:bg-white/8 hover:text-fog" title="Come back to it later" @click="$store.gw.focusSkip()">Skip</button>
+                  <span class="flex-1"></span>
+                  <button x-show="$store.gw.focusCurrent.kind === 'guess'" id="focus-confirm" type="button" class="rounded-md px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-400/15" title="Settle it as it is" @click="$store.gw.confirmGuess()">Yes, that is right</button>
+                  <button id="focus-submit" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.reply.trim() || $store.gw.sending" x-text="$store.gw.focusCurrent.kind === 'guess' ? 'Send correction' : 'Answer'"></button>
+                </div>
+              </form>
+            </template>
+          </div>
+        </template>
+      </div>
+    </aside>
+
     <!-- Details: docked on the right, or a small pill when minimized -->
     <button
       x-cloak
-      x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.selectedStory || $store.gw.reportOpen) && $store.gw.detailsMinimized"
+      x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.selectedStory || $store.gw.reportOpen) && $store.gw.detailsMinimized && $store.gw.view !== 'focus'"
       id="details-tab"
       class="fixed right-3 top-3 flex max-w-[280px] items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-black/20"
       title="Show details"
@@ -535,7 +703,7 @@
 
     <aside
       x-cloak
-      x-show="$store.gw.detailsVisible"
+      x-show="$store.gw.detailsVisible && $store.gw.view !== 'focus'"
       class="fixed inset-y-0 right-0 flex w-[360px] max-w-full flex-col border-l border-line bg-panel text-[13px]"
     >
       <div class="flex items-center justify-between px-4 py-3">
@@ -620,11 +788,19 @@
             </div>
             <template x-if="$store.gw.selectedGap.answered_by">
               <div class="rounded-lg border border-line px-3 py-2 text-fog/70">
-                <span class="label mb-1">Answered by</span>
+                <span class="label mb-1" x-text="$store.gw.selectedGap.enough ? 'Accepted for now' : 'Answered by'"></span>
                 <button class="block w-full text-left text-accent hover:underline" @click="$store.gw.select($store.gw.selectedGap.answered_by)" x-text="$store.gw.nodes[$store.gw.selectedGap.answered_by]?.title ?? $store.gw.selectedGap.answered_by"></button>
-                <p class="mt-1.5 text-xs text-fog/45">Run /readiness in Claude Code to check whether this closes the gap.</p>
+                <p x-show="!$store.gw.selectedGap.enough" class="mt-1.5 text-xs text-fog/45">Run /readiness in Claude Code to check whether this closes the gap.</p>
               </div>
             </template>
+            <div x-show="!$store.gw.selectedGap.answered_by && $store.gw.selectedGap.suggestions?.length">
+              <span class="label">Start from one of these</span>
+              <div class="flex flex-col gap-1.5">
+                <template x-for="s in $store.gw.selectedGap.suggestions ?? []" :key="s.title">
+                  <button class="rounded-lg border border-line px-3 py-2 text-left text-fog/85 hover:border-accent/60 hover:bg-accent/10" :title="s.why" @click="$store.gw.pickOption(s.title)" x-text="s.title"></button>
+                </template>
+              </div>
+            </div>
             <form x-show="!$store.gw.selectedGap.answered_by" @submit.prevent="$store.gw.answerGap(true)">
               <span class="label">Write it here. It becomes a thought next to the gap</span>
               <textarea
@@ -636,6 +812,7 @@
                 class="field w-full resize-none"
               ></textarea>
               <div class="mt-1.5 flex justify-end gap-2">
+                <button id="gap-enough" type="button" class="mr-auto rounded-md px-3 py-1 text-xs text-fog/70 hover:bg-white/8 hover:text-fog" title="Accept it as it is. What you wrote is kept as the reason." @click="$store.gw.acceptGap()">Enough for now</button>
                 <button id="gap-note" type="button" class="rounded-md px-3 py-1 text-xs text-fog/70 hover:bg-white/8 hover:text-fog disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()" title="Keep the gap open" @click="$store.gw.answerGap(false)">Add as a thought</button>
                 <button id="gap-add" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()" title="Mark the gap for /readiness to check">This answers it</button>
               </div>
