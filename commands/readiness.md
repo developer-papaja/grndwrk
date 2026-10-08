@@ -17,6 +17,13 @@ A thought with `answers: gap_x` was written as the answer to that gap; its first
 
 Some thoughts say where they came from with `source:` and `seen_in:` (written by `/survey`). `source: code`, `docs` or `commit` with a `seen_in` is evidence: it counts as what exists. `source: inferred` is Claude's guess: it counts as open until the person has answered its thread.
 
+## Narrow down, do not start over
+
+Each run should leave the person closer to done, never further away:
+- Keep the gap ids of the previous run for the same things, so answers stay attached.
+- Add a new **blocking** gap only when something changed since the last `checked` date (in the map, the checklist or the project) that causes it. Anything else you notice now is `important` or `nice`.
+- Never raise a gap the person accepted with "Enough for now".
+
 ## Judge
 
 For each checklist area, decide: **missing**, **thin** or **enough**, relative to the project type. A small internal tool needs much less than a public product. Be honest and specific: "thin" must name what is thin.
@@ -32,8 +39,10 @@ Then pick one verdict:
 ---
 verdict: not ready
 checked: 2026-10-03
+closed: ["Type scale and spacing", "Anything decided not to build"]
+added: ["Spacing scale"]
 ---
-One or two sentences: the verdict and the main reason.
+Since the last check: 2 closed, 1 new. One or two sentences: the verdict and the main reason.
 
 ## Areas
 
@@ -54,6 +63,8 @@ The design scorecard: nine fixed items (design docs, colors as tokens, typograph
 ```json
 [{ "item": "typography", "status": "partly", "note": "One font, no type scale.", "seen_in": ["ui/src/style.css"] }]
 ```
+
+`closed` lists, by title, the gaps of the previous run that are gone now (answered, accepted for now, or no longer true). `added` lists the gaps that are new in this run. Both are quoted titles, and empty lists on the first run. The body opens with the "Since the last check" line, except on the first run.
 
 ## Write `.groundwork/readiness/gaps.json`
 
@@ -93,4 +104,4 @@ Write only those three files, inside `.groundwork/readiness/`. Never edit nodes:
 
 ## Report back
 
-End with the verdict in one sentence, then the smallest set of things to add as a short list. Then say that Focus in the map (the top icon in the rail) goes through the open gaps one at a time, with your suggestions to pick from.
+End with what closed since the last check, then the verdict in one sentence, then the smallest set of things to add as a short list. Then say that Focus in the map (the top icon in the rail) goes through the open gaps one at a time, with your suggestions to pick from.

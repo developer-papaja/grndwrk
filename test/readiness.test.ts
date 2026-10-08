@@ -19,7 +19,7 @@ describe('readiness', () => {
   it('reads the verdict and checked date from the report', async () => {
     await writeFile(join(root, 'readiness', 'report.md'), '---\nverdict: Not ready\nchecked: 2026-10-03\n---\nBody\n')
     const r = await readReadiness(root)
-    expect(r.report).toEqual({ verdict: 'not ready', checked: '2026-10-03', body: 'Body\n' })
+    expect(r.report).toEqual({ verdict: 'not ready', checked: '2026-10-03', body: 'Body\n', closed: [], added: [] })
   })
 
   it('keeps usable gaps, fills defaults and drops broken ones', () => {
@@ -94,5 +94,12 @@ describe('readiness', () => {
 
   it('ignores enough on a gap nobody answered', () => {
     expect(parseGaps(JSON.stringify([{ id: 'gap_a', title: 'A', enough: true }]))[0].enough).toBeUndefined()
+  })
+
+  it('reads what closed and what was added since the last check', async () => {
+    await writeFile(join(root, 'readiness', 'report.md'), '---\nverdict: ready to build\nchecked: 2026-10-08\nclosed: ["Type scale and spacing", "Lint, and format"]\nadded: ["Spacing scale"]\n---\nBody\n')
+    const { report } = await readReadiness(root)
+    expect(report?.closed).toEqual(['Type scale and spacing', 'Lint, and format'])
+    expect(report?.added).toEqual(['Spacing scale'])
   })
 })

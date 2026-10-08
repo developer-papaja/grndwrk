@@ -1,7 +1,7 @@
 import Alpine from 'alpinejs'
 import type { DesignCheck, Gap, GNode, NodeType, Readiness, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchStories, markGapAnswered, savePages, updateNode, uploadImage } from './api'
+import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchStories, markGapAnswered, saveKickoff, savePages, updateNode, uploadImage } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
@@ -19,6 +19,20 @@ export interface FocusItem {
   key: string
   kind: 'gap' | 'question' | 'guess'
   id: string
+}
+
+/** One step of the kickoff, as the track shows it. */
+export interface KickoffStepView {
+  key: 'map' | 'check' | 'answer' | 'brief' | 'build'
+  name: string
+  /** The date the person signed it off, or empty. */
+  done: string
+  /** Where things stand, from the files. */
+  status: string
+  /** What to do next for this step. */
+  next: string
+  /** Something changed after it was signed off, or the files suggest it is not finished. */
+  stale: boolean
 }
 
 export type DraftField = 'title' | 'topic' | 'page' | 'type' | 'altitude' | 'status' | 'body'
@@ -80,6 +94,8 @@ export const state = Alpine.reactive({
   readiness: null as Readiness | null,
   /** Which view the rail shows: focus, the 3D map, readiness, or deliverables. */
   view: readStored<View>('groundwork.view', 'map'),
+  /** The kickoff step open on the track, or null for the current one. */
+  kickoffOpen: null as string | null,
   /** Items skipped in focus mode this visit. They wait at the end of the queue. */
   focusSkipped: [] as string[],
   stories: [] as Story[],
@@ -151,6 +167,8 @@ export const state = Alpine.reactive({
       .filter((n) => openQuestions(n.body) > 0)
       .map((n) => n.id)
   },
+  /** A thread entry split into its question and the options Claude gave. */
+  options: questionOptions,
   hasQuestion(id: string): boolean {
     const n = this.nodes[id]
     return !!n && openQuestions(n.body) > 0
@@ -289,7 +307,7 @@ export const state = Alpine.reactive({
   async copyText(text: string) {
     try {
       await navigator.clipboard.writeText(text)
-      this.flash(`Copied ${text}`)
+      this.flash(text.length > 60 ? 'Copied' : `Copied ${text}`)
     } catch {
       this.flash(text)
     }
@@ -346,6 +364,112 @@ export const state = Alpine.reactive({
   /** Gaps the person accepted as they are. Closed for good. */
   get acceptedGaps(): Gap[] {
     return (this.readiness?.gaps ?? []).filter((g) => g.enough)
+  },
+
+  // The kickoff: five steps, each signed off by the person. Files only inform.
+  /** True when /survey started this map from an existing project. */
+  get existingProject(): boolean {
+    return Object.values(this.nodes).some((n) => typeof n.extra?.source === 'string')
+  },
+  /** The last time any thought changed, as a date. */
+  get mapChanged(): string {
+    return Object.values(this.nodes).reduce((m, n) => (n.modified && n.modified > m ? n.modified : m), '').slice(0, 10)
+  },
+  get kickoffSteps(): KickoffStepView[] {
+    const signed = (this.project.kickoff ?? {}) as Record<string, string>
+    const nodes = Object.values(this.nodes)
+    const report = this.readiness?.report
+    const fromCode = nodes.filter((n) => ['code', 'docs', 'commit'].includes(String(n.extra?.source))).length
+    const settled = nodes.filter((n) => n.status === 'settled').length
+    const waiting = this.focusQueue.length
+    const brief = this.briefWritten
+    const reportStale = !!report && !!this.mapChanged && this.mapChanged > report.checked
+    const briefStale = !!brief && !!report && report.checked > brief
+    return [
+      {
+        key: 'map',
+        name: 'Map',
+        done: signed.map ?? '',
+        status: nodes.length
+          ? `${nodes.length} ${nodes.length === 1 ? 'thought' : 'thoughts'}, ${settled} settled` + (fromCode ? `, ${fromCode} found in the project` : '')
+          : 'Nothing in the map yet.',
+        next: this.existingProject || nodes.length ? 'Add what is on your mind. Move on when the purpose and the main flows are in.' : 'Capture what you know, or run /survey in Claude Code if the project already exists.',
+        stale: !nodes.length,
+      },
+      {
+        key: 'check',
+        name: 'Check',
+        done: signed.check ?? '',
+        status: report ? `${this.verdictLabel}, checked ${report.checked}` + (reportStale ? '. The map changed since.' : '') : 'Not checked yet.',
+        next: 'Run /readiness in Claude Code. It says what is missing and suggests answers.',
+        stale: !report || reportStale,
+      },
+      {
+        key: 'answer',
+        name: 'Answer',
+        done: signed.answer ?? '',
+        status: waiting ? `${waiting} waiting on you` + (this.blockingCount ? `, ${this.blockingCount} blocking` : '') : 'Nothing waiting on you.',
+        next: waiting ? 'Go through them in Focus. "Enough for now" is a fine answer.' : this.waitingGaps.length ? 'Run /readiness to check your answers.' : 'Move on, or run /challenge for a few sharp questions.',
+        stale: waiting > 0,
+      },
+      {
+        key: 'brief',
+        name: 'Brief',
+        done: signed.brief ?? '',
+        status: brief ? `Written ${brief}, ${this.stories.length} ${this.stories.length === 1 ? 'story' : 'stories'}` + (briefStale ? '. Checked again since.' : '') : 'Not written yet.',
+        next: 'Run /brief in Claude Code, then read it under Deliverables.',
+        stale: !brief || briefStale,
+      },
+      {
+        key: 'build',
+        name: 'Build',
+        done: signed.build ?? '',
+        status: signed.build ? `Kickoff done on ${signed.build}.` : 'Hand the brief to the product.',
+        next: this.existingProject
+          ? 'Copy the "Working with stories" rules into the CLAUDE.md the project already has, then build against the stories.'
+          : 'Copy CLAUDE.starter.md into the product as its CLAUDE.md, then build against the stories.',
+        stale: false,
+      },
+    ]
+  },
+  /** The first step not signed off, or null when the kickoff is done. */
+  get kickoffCurrent(): KickoffStepView | null {
+    return this.kickoffSteps.find((s) => !s.done) ?? null
+  },
+  /** The step shown below the track: the one clicked, or the current one. */
+  get kickoffShown(): KickoffStepView | null {
+    return this.kickoffSteps.find((s) => s.key === this.kickoffOpen) ?? this.kickoffCurrent
+  },
+  get kickoffLabel(): string {
+    const steps = this.kickoffSteps
+    const at = steps.findIndex((s) => !s.done)
+    if (at < 0) return 'Kickoff done'
+    return `Step ${at + 1} of ${steps.length} · ${steps[at].name}`
+  },
+  async signOff(key: string) {
+    try {
+      this.project = await saveKickoff({ [key]: today() })
+      this.kickoffOpen = null
+      const next = this.kickoffCurrent
+      this.flash(next ? `Done. Next: ${next.name}.` : 'Kickoff done. Time to build.')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async reopenStep(key: string) {
+    try {
+      this.project = await saveKickoff({ [key]: null })
+      this.kickoffOpen = null
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** The text to paste into the product's CLAUDE.md: all of it, or only the story rules for an existing project. */
+  get handoffText(): string {
+    const starter = stripFrontmatter(this.starter ?? '')
+    if (!this.existingProject) return starter
+    const m = /^#{1,3}\s+Working with stories[\s\S]*?(?=^#{1,2}\s|(?![\s\S]))/im.exec(starter)
+    return (m?.[0] ?? starter).trim() + '\n'
   },
 
   // Focus mode: one thing at a time, only what needs the person.
@@ -514,6 +638,8 @@ export const state = Alpine.reactive({
       .map(([topic, nodes]) => ({ topic, nodes: nodes.sort((a, b) => b.altitude - a.altitude || a.title.localeCompare(b.title)) }))
   },
   setView(view: View) {
+    // Leaving focus for another page closes the card focus had open. The map keeps it, to see it in place.
+    if (this.view === 'focus' && view !== 'focus' && view !== 'map') this.closePanel()
     this.view = view
     store('groundwork.view', view)
     onChange()

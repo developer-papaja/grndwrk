@@ -81,17 +81,12 @@
             <span x-text="$store.gw.questionIds.length + ($store.gw.questionIds.length === 1 ? ' question for you' : ' questions for you')"></span>
           </button>
           <button
-            x-show="false"
-            id="verdict"
+            id="kickoff-chip"
             class="mt-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs"
-            :class="{
-              'bg-emerald-400/15 text-emerald-300 hover:bg-emerald-400/25': $store.gw.readiness?.report?.verdict === 'ready to build',
-              'bg-accent/15 text-sky-300 hover:bg-accent/25': $store.gw.readiness?.report?.verdict === 'ready to prototype',
-              'bg-question/15 text-question hover:bg-question/25': !['ready to build', 'ready to prototype'].includes($store.gw.readiness?.report?.verdict)
-            }"
-            title="Open the readiness report"
-            @click="$store.gw.openReport()"
-            x-text="$store.gw.verdictLabel"
+            :class="$store.gw.kickoffCurrent ? 'bg-accent/15 text-sky-300 hover:bg-accent/25' : 'bg-emerald-400/15 text-emerald-300 hover:bg-emerald-400/25'"
+            title="Where the kickoff stands"
+            @click="$store.gw.setView('readiness')"
+            x-text="$store.gw.kickoffLabel"
           ></button>
 
         </div>
@@ -315,6 +310,77 @@
           <span class="text-xs text-fog/40" x-show="$store.gw.readiness?.report" x-text="'Checked ' + ($store.gw.readiness?.report?.checked ?? '')"></span>
         </div>
 
+        <!-- The kickoff: five steps, each signed off by the person -->
+        <section id="kickoff" class="mt-6">
+          <ol class="flex gap-1.5">
+            <template x-for="(st, i) in $store.gw.kickoffSteps" :key="st.key">
+              <li class="min-w-0 flex-1">
+                <button
+                  class="flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left"
+                  :class="$store.gw.kickoffShown?.key === st.key ? 'border-accent/70 bg-accent/10' : 'border-line hover:border-white/20'"
+                  :title="st.done ? 'Done on ' + st.done : st.status"
+                  @click="$store.gw.kickoffOpen = st.key"
+                >
+                  <span
+                    class="grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold"
+                    :class="st.done ? 'bg-emerald-400/20 text-emerald-300' : $store.gw.kickoffCurrent?.key === st.key ? 'bg-accent text-white' : 'bg-white/8 text-fog/50'"
+                  >
+                    <template x-if="st.done"><svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg></template>
+                    <template x-if="!st.done"><span x-text="i + 1"></span></template>
+                  </span>
+                  <span class="truncate text-[13px]" :class="st.done || $store.gw.kickoffCurrent?.key === st.key ? 'text-fog' : 'text-fog/55'" x-text="st.name"></span>
+                </button>
+              </li>
+            </template>
+          </ol>
+
+          <template x-if="!$store.gw.kickoffShown">
+            <div class="mt-3 rounded-lg border border-emerald-400/30 bg-emerald-400/5 p-4">
+              <p class="font-medium text-emerald-200" x-text="'Kickoff done on ' + $store.gw.kickoffSteps[4].done + '.'"></p>
+              <p class="mt-1 text-fog/70">The map keeps going: capture what comes up while building, and Focus shows what needs you. Click a step to reopen it.</p>
+            </div>
+          </template>
+          <template x-if="$store.gw.kickoffShown">
+            <div class="mt-3 rounded-lg border border-line p-4" id="kickoff-step">
+              <div class="flex items-baseline justify-between gap-4">
+                <h2 class="text-[15px] font-semibold text-fog" x-text="$store.gw.kickoffShown.name"></h2>
+                <span class="text-xs" :class="$store.gw.kickoffShown.done ? 'text-emerald-300/80' : 'text-fog/40'" x-text="$store.gw.kickoffShown.done ? 'Done on ' + $store.gw.kickoffShown.done : ''"></span>
+              </div>
+              <p class="mt-1 text-fog/80" x-text="$store.gw.kickoffShown.status"></p>
+              <p class="mt-1 text-fog/55" x-text="$store.gw.kickoffShown.next"></p>
+
+              <template x-if="$store.gw.kickoffShown.key === 'build' && $store.gw.starter">
+                <div class="mt-3">
+                  <button class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.copyText($store.gw.handoffText)" x-text="$store.gw.existingProject ? 'Copy the story rules' : 'Copy CLAUDE.starter.md'"></button>
+                </div>
+              </template>
+              <p x-show="$store.gw.kickoffShown.key === 'build' && !$store.gw.starter" class="mt-2 text-xs text-fog/45">Run /brief first: it writes the starter CLAUDE.md.</p>
+
+              <div class="mt-4 flex items-center gap-2">
+                <button
+                  x-show="$store.gw.kickoffShown.key === 'answer' && $store.gw.focusQueue.length"
+                  class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog"
+                  @click="$store.gw.enterFocus()"
+                >Open Focus</button>
+                <span class="flex-1"></span>
+                <button
+                  x-show="$store.gw.kickoffShown.done"
+                  class="rounded-md px-3 py-1.5 text-xs text-fog/60 hover:bg-white/8 hover:text-fog"
+                  @click="$store.gw.reopenStep($store.gw.kickoffShown.key)"
+                >Reopen</button>
+                <button
+                  x-show="!$store.gw.kickoffShown.done"
+                  id="kickoff-done"
+                  class="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90"
+                  :title="$store.gw.kickoffShown.stale ? 'The files suggest this is not finished, but you decide' : ''"
+                  @click="$store.gw.signOff($store.gw.kickoffShown.key)"
+                  x-text="$store.gw.kickoffShown.key === 'build' ? 'Done, kickoff complete' : 'Done, move on'"
+                ></button>
+              </div>
+            </div>
+          </template>
+        </section>
+
         <template x-if="!$store.gw.readiness?.report">
           <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Not checked yet. Run <code class="text-fog">/readiness</code> in Claude Code. It judges the map against your checklist and lists what is missing.</p>
         </template>
@@ -334,6 +400,10 @@
               <span class="text-xs text-fog/45" x-text="$store.gw.openGaps.length + ' open, ' + $store.gw.waitingGaps.length + ' waiting for a check'"></span>
               <span x-show="$store.gw.guessCount" class="rounded-md bg-question/15 px-2 py-0.5 text-xs text-question" x-text="$store.gw.guessCount + ($store.gw.guessCount === 1 ? ' guess' : ' guesses') + ' from /survey to confirm'"></span>
             </div>
+            <p x-show="$store.gw.readiness.report.closed.length" id="closed" class="mt-3 text-emerald-300/90">
+              <span x-text="'Closed since the last check: ' + $store.gw.readiness.report.closed.join(', ') + '.'"></span>
+              <span x-show="$store.gw.readiness.report.added.length" class="text-fog/50" x-text="' New: ' + $store.gw.readiness.report.added.join(', ') + '.'"></span>
+            </p>
             <button x-show="$store.gw.focusQueue.length" id="readiness-focus" class="mt-4 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.enterFocus()" x-text="'Go through what needs you, one at a time (' + $store.gw.focusQueue.length + ')'"></button>
             <p class="mt-3 text-xs text-fog/40">Run <code class="text-fog/70">/readiness</code> to check again, or <code class="text-fog/70">/challenge</code> for questions on the thinnest parts.</p>
 
@@ -986,7 +1056,21 @@
                       ></span>
                       <span class="text-fog/35" x-text="e.date"></span>
                     </div>
-                    <p class="whitespace-pre-wrap text-fog/85" x-text="e.text"></p>
+                    <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.options(e.text).question"></p>
+                    <div x-show="$store.gw.options(e.text).options.length" class="mt-2 flex flex-col gap-1">
+                      <template x-for="(o, j) in $store.gw.options(e.text).options" :key="j">
+                        <button
+                          x-show="e.open"
+                          class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
+                          title="Start your answer from this"
+                          @click="$store.gw.reply = o; $nextTick(() => document.getElementById('reply')?.focus())"
+                          x-text="o"
+                        ></button>
+                      </template>
+                      <template x-for="(o, j) in $store.gw.options(e.text).options" :key="'c' + j">
+                        <span x-show="!e.open" class="text-xs text-fog/50" x-text="'· ' + o"></span>
+                      </template>
+                    </div>
                   </li>
                 </template>
               </ol>

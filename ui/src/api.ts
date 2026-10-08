@@ -29,6 +29,7 @@ export const fetchOutput = (name: 'brief.md' | 'CLAUDE.starter.md') =>
 export const fetchReadiness = () => request<Readiness>('GET', '/api/readiness')
 export const markGapAnswered = (gapId: string, nodeId: string, enough = false) =>
   request<Readiness>('PATCH', `/api/gaps/${encodeURIComponent(gapId)}`, { answered_by: nodeId, ...(enough ? { enough } : {}) })
+export const saveKickoff = (changes: Record<string, string | null>) => request<Record<string, unknown>>('PATCH', '/api/project', { kickoff: changes })
 export const savePages = (pages: string[]) => request<Record<string, unknown>>('PATCH', '/api/project', { pages })
 export const createNode = (input: NodeInput) => request<GNode>('POST', '/api/nodes', input)
 export const updateNode = (id: string, input: NodeInput) =>

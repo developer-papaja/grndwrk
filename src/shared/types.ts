@@ -98,7 +98,14 @@ export interface DesignCheck {
 }
 
 export interface Readiness {
-  report: { verdict: Verdict | null; checked: string; body: string } | null
+  report: {
+    verdict: Verdict | null
+    checked: string
+    body: string
+    /** Gaps closed and gaps added since the check before, by title. */
+    closed: string[]
+    added: string[]
+  } | null
   gaps: Gap[]
   /** The design scorecard, empty until /survey or /readiness writes it. */
   design: DesignCheck[]

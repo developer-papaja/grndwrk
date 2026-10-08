@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
-import { readProject, writePages } from '../store/project.js'
+import { readProject, KICKOFF_STEPS, writeKickoff, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import { markAnswered, readReadiness } from '../store/readiness.js'
 import { listStories, readOutput } from '../store/stories.js'
@@ -66,11 +66,23 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       return send(res, 200, { ...data, body, pages })
     }
     if (url.pathname === '/api/project' && method === 'PATCH') {
-      const input = (await readBody(req)) as { pages?: unknown }
-      if (!Array.isArray(input.pages) || !input.pages.every((p) => typeof p === 'string')) {
-        throw new BadInput('pages must be a list of names')
+      const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown }
+      if (input.kickoff !== undefined) {
+        const k = input.kickoff
+        if (!k || typeof k !== 'object' || Array.isArray(k)) throw new BadInput('kickoff must map steps to a date or null')
+        const changes: Record<string, string | null> = {}
+        for (const [step, date] of Object.entries(k)) {
+          if (!(KICKOFF_STEPS as readonly string[]).includes(step)) throw new BadInput(`Unknown kickoff step: ${step}`)
+          if (date !== null && (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date))) throw new BadInput('A kickoff date must look like 2026-10-08')
+          changes[step] = date
+        }
+        await writeKickoff(ctx.gwDir, changes)
+      } else {
+        if (!Array.isArray(input.pages) || !input.pages.every((p) => typeof p === 'string')) {
+          throw new BadInput('pages must be a list of names')
+        }
+        await writePages(ctx.gwDir, input.pages)
       }
-      await writePages(ctx.gwDir, input.pages)
       const { data, body, pages } = await readProject(ctx.gwDir)
       return send(res, 200, { ...data, body, pages })
     }

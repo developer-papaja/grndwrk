@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mergePages, readProject, writePages } from '../src/store/project.js'
+import { mergePages, readProject, writeKickoff, writePages } from '../src/store/project.js'
 import { parseNode, serializeNode } from '../src/store/frontmatter.js'
 
 let root: string
@@ -29,5 +29,19 @@ describe('pages', () => {
     const n = parseNode('n_pppp', '---\ntitle: x\npage: Feedback\ntopic: nav\naltitude: 2\n---\n')
     expect(n.page).toBe('Feedback')
     expect(serializeNode(n)).toContain('title: x\ntopic: nav\npage: Feedback\naltitude: 2\n')
+  })
+
+  it('signs kickoff steps off and reopens them, keeping everything else', async () => {
+    await writeFile(join(root, 'project.md'), '---\nname: Groundwork\npages: [Product]\n---\nBody stays.\n')
+    await writeKickoff(root, { check: '2026-10-08', map: '2026-10-07' })
+    let raw = await readFile(join(root, 'project.md'), 'utf8')
+    expect(raw).toBe('---\nname: Groundwork\npages: [Product]\nkickoff: { map: 2026-10-07, check: 2026-10-08 }\n---\nBody stays.\n')
+    expect((await readProject(root)).data.kickoff).toEqual({ map: '2026-10-07', check: '2026-10-08' })
+    // Writing pages keeps the kickoff as it was.
+    await writePages(root, ['Product', 'Feedback'])
+    expect((await readProject(root)).data.kickoff).toEqual({ map: '2026-10-07', check: '2026-10-08' })
+    await writeKickoff(root, { check: null, map: null })
+    raw = await readFile(join(root, 'project.md'), 'utf8')
+    expect(raw).toBe('---\nname: Groundwork\npages: [Product, Feedback]\n---\nBody stays.\n')
   })
 })

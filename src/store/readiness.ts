@@ -14,7 +14,14 @@ export async function readReadiness(gwDir: string): Promise<Readiness> {
     const { data, content } = matter(await readFile(join(dir(gwDir), 'report.md'), 'utf8'), {})
     const v = String(data.verdict ?? '').trim().toLowerCase()
     const checked = data.checked instanceof Date ? data.checked.toISOString().slice(0, 10) : String(data.checked ?? '')
-    out.report = { verdict: (VERDICTS as string[]).includes(v) ? (v as Verdict) : null, checked, body: content }
+    const titles = (x: unknown) => (Array.isArray(x) ? x.filter((t) => typeof t === 'string' && t.trim()).map((t: string) => t.trim()) : [])
+    out.report = {
+      verdict: (VERDICTS as string[]).includes(v) ? (v as Verdict) : null,
+      checked,
+      body: content,
+      closed: titles(data.closed),
+      added: titles(data.added),
+    }
   } catch {
     // No report yet.
   }
