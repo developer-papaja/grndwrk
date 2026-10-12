@@ -46,8 +46,42 @@ describe('init', () => {
 
   it('never overwrites the map', async () => {
     await init(root)
-    await writeFile(join(root, '.groundwork', 'project.md'), '---\nname: Mine\n---\n')
+    await writeFile(join(root, '.groundwork', 'project.md'), '---\nname: Mine\nstart: new\n---\n')
     await init(root)
-    expect(await readFile(join(root, '.groundwork', 'project.md'), 'utf8')).toBe('---\nname: Mine\n---\n')
+    expect(await readFile(join(root, '.groundwork', 'project.md'), 'utf8')).toBe('---\nname: Mine\nstart: new\n---\n')
+  })
+})
+
+describe('new or existing', () => {
+  it('counts an empty folder as new and a folder with code as existing, without asking when there is no terminal', async () => {
+    await init(root)
+    expect(await readFile(join(root, '.groundwork', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
+
+    const other = await mkdtemp(join(tmpdir(), 'gw-init-'))
+    await writeFile(join(other, 'package.json'), '{}')
+    await init(other)
+    expect(await readFile(join(other, '.groundwork', 'project.md'), 'utf8')).toMatch(/^start: existing$/m)
+    await rm(other, { recursive: true, force: true })
+  })
+
+  it('asks, takes the answer, and never asks again', async () => {
+    await writeFile(join(root, 'package.json'), '{}')
+    const asked: string[] = []
+    await init(root, { ask: async (q) => (asked.push(q), 'n') })
+    expect(asked[0]).toMatch(/has code/)
+    expect(await readFile(join(root, '.groundwork', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
+    await init(root, { ask: async (q) => (asked.push(q), 'y') })
+    expect(asked).toHaveLength(1)
+  })
+
+  it('adds start to a project.md written before it existed', async () => {
+    await init(root)
+    const path = join(root, '.groundwork', 'project.md')
+    await writeFile(path, '---\nname: Desks\npurpose: Book desks\n---\nNotes\n')
+    await init(root, { ask: async () => 'n' })
+    const text = await readFile(path, 'utf8')
+    expect(text).toMatch(/^start: existing$/m)
+    expect(text).toContain('purpose: Book desks')
+    expect(text).toContain('Notes')
   })
 })

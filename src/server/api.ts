@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
-import { readProject, KICKOFF_STEPS, writeKickoff, writePages } from '../store/project.js'
+import { readProject, KICKOFF_STEPS, writeFields, writeKickoff, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import { markAnswered, readReadiness } from '../store/readiness.js'
 import { listStories, readOutput } from '../store/stories.js'
@@ -76,8 +76,19 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       return send(res, 200, { ...data, body, pages })
     }
     if (url.pathname === '/api/project' && method === 'PATCH') {
-      const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown }
-      if (input.kickoff !== undefined) {
+      const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown; start?: unknown; purpose?: unknown }
+      if (input.start !== undefined || input.purpose !== undefined) {
+        const fields: Record<string, string> = {}
+        if (input.start !== undefined) {
+          if (input.start !== 'new' && input.start !== 'existing') throw new BadInput('start must be new or existing')
+          fields.start = input.start
+        }
+        if (input.purpose !== undefined) {
+          if (typeof input.purpose !== 'string') throw new BadInput('purpose must be text')
+          fields.purpose = input.purpose.trim().replace(/\s*\n\s*/g, ' ').slice(0, 500)
+        }
+        await writeFields(ctx.gwDir, fields)
+      } else if (input.kickoff !== undefined) {
         const k = input.kickoff
         if (!k || typeof k !== 'object' || Array.isArray(k)) throw new BadInput('kickoff must map steps to a date or null')
         const changes: Record<string, string | null> = {}

@@ -1,7 +1,7 @@
 import Alpine from 'alpinejs'
 import type { DesignCheck, Gap, GNode, NodeInput, NodeType, Readiness, Screen, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, updateNode, updateScreen, uploadImage } from './api'
+import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
 import { BOX, commentsForScreen, layoutSitemap, screenTree, storiesForScreen } from '../../src/shared/screens'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
@@ -25,7 +25,7 @@ export interface FocusItem {
 
 /** One step of the kickoff, as the track shows it. */
 export interface KickoffStepView {
-  key: 'map' | 'check' | 'answer' | 'brief' | 'build'
+  key: 'purpose' | 'map' | 'check' | 'answer' | 'brief' | 'build'
   name: string
   /** The date the person signed it off, or empty. */
   done: string
@@ -556,10 +556,36 @@ export const state = Alpine.reactive({
     return (this.readiness?.gaps ?? []).filter((g) => g.enough)
   },
 
-  // The kickoff: five steps, each signed off by the person. Files only inform.
-  /** True when /survey started this map from an existing project. */
+  // The kickoff: steps signed off by the person, different for a new idea and
+  // for a project that has code. Files only inform.
+  /** new or existing, from project.md. Empty when nobody said yet. */
+  get start(): 'new' | 'existing' | '' {
+    const v = this.project.start
+    return v === 'new' || v === 'existing' ? v : ''
+  },
+  /** True for a project that has code: said so, or /survey found code before anyone said. */
   get existingProject(): boolean {
-    return Object.values(this.nodes).some((n) => typeof n.extra?.source === 'string')
+    if (this.start) return this.start === 'existing'
+    return Object.values(this.nodes).some((n) => typeof n.extra?.source === 'string' && n.extra.source !== 'app')
+  },
+  async setStart(start: 'new' | 'existing') {
+    try {
+      this.project = await saveProjectFields({ start })
+      this.kickoffOpen = null
+      this.flash(start === 'existing' ? 'An existing project. Start with /survey and /sitemap.' : 'A new project. Start with the purpose.')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async savePurpose(text: string) {
+    const purpose = text.trim()
+    if (purpose === String(this.project.purpose ?? '').trim()) return
+    try {
+      this.project = await saveProjectFields({ purpose })
+      this.flash('Purpose saved')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
   },
   /** The last time any thought changed, as a date. */
   get mapChanged(): string {
@@ -575,17 +601,79 @@ export const state = Alpine.reactive({
     const brief = this.briefWritten
     const reportStale = !!report && !!this.mapChanged && this.mapChanged > report.checked
     const briefStale = !!brief && !!report && report.checked > brief
+    const purpose = String(this.project.purpose ?? '').trim()
+    const stories = `${this.stories.length} ${this.stories.length === 1 ? 'story' : 'stories'}`
+    const answer: KickoffStepView = {
+      key: 'answer',
+      name: 'Answer',
+      done: signed.answer ?? '',
+      status: waiting ? `${waiting} waiting on you` + (this.blockingCount ? `, ${this.blockingCount} blocking` : '') : 'Nothing waiting on you.',
+      next: waiting ? 'Go through them in Focus. "Enough for now" is a fine answer.' : this.waitingGaps.length ? 'Run /readiness to check your answers.' : 'Move on, or run /challenge for a few sharp questions.',
+      stale: waiting > 0,
+    }
+
+    if (this.existingProject) {
+      const screens = this.screens.length
+      return [
+        {
+          key: 'map',
+          name: 'Survey',
+          done: signed.map ?? '',
+          status: fromCode || screens
+            ? `${fromCode} ${fromCode === 1 ? 'thought' : 'thoughts'} found in the project, ${screens} ${screens === 1 ? 'screen' : 'screens'} in the sitemap`
+            : 'Nothing read from the project yet.',
+          next: !fromCode
+            ? 'Run /survey in Claude Code. It reads the code, docs and history into the map.'
+            : !screens
+              ? 'Run /sitemap in Claude Code. It writes every screen: what it is for, who it is for, what they do there.'
+              : this.survey
+                ? `/survey found ${this.surveyFindings || 'some'} things worth knowing. Read them under Deliverables, State of the project.`
+                : 'Check the sitemap and the map, and correct what Claude guessed.',
+          stale: !fromCode || !screens,
+        },
+        {
+          key: 'check',
+          name: 'Foundations',
+          done: signed.check ?? '',
+          status: report ? `Checked ${report.checked}` + (reportStale ? '. The map changed since.' : '') : 'Not checked yet.',
+          next: 'Run /readiness in Claude Code. It checks what the project has and lacks: purpose, CLAUDE.md, docs, design philosophy, design tokens.',
+          stale: !report || reportStale,
+        },
+        answer,
+        {
+          key: 'brief',
+          name: 'Plan',
+          done: signed.brief ?? '',
+          status: brief ? `Brief written ${brief}, ${stories}` + (briefStale ? '. Checked again since.' : '') : `${stories}, no brief yet.`,
+          next: 'Run /brief in Claude Code: what is built, what comes next, and stories for it.',
+          stale: !brief || briefStale,
+        },
+        {
+          key: 'build',
+          name: 'Build',
+          done: signed.build ?? '',
+          status: signed.build ? `Kickoff done on ${signed.build}.` : 'Hand the plan to the product.',
+          next: 'Copy the "Working with stories" rules into the CLAUDE.md the project already has, then build against the stories.',
+          stale: false,
+        },
+      ]
+    }
+
     return [
+      {
+        key: 'purpose',
+        name: 'Purpose',
+        done: signed.purpose ?? '',
+        status: purpose || 'No purpose written yet.',
+        next: 'Say it in one line: what it is, and who it is for.',
+        stale: !purpose,
+      },
       {
         key: 'map',
         name: 'Map',
         done: signed.map ?? '',
-        status: nodes.length
-          ? `${nodes.length} ${nodes.length === 1 ? 'thought' : 'thoughts'}, ${settled} settled` + (fromCode ? `, ${fromCode} found in the project` : '')
-          : 'Nothing in the map yet.',
-        next: this.survey
-          ? `/survey found ${this.surveyFindings || 'some'} things worth knowing. Read them under Deliverables, State of the project.`
-          : this.existingProject || nodes.length ? 'Add what is on your mind. Move on when the purpose and the main flows are in.' : 'Capture what you know, or run /survey in Claude Code if the project already exists.',
+        status: nodes.length ? `${nodes.length} ${nodes.length === 1 ? 'thought' : 'thoughts'}, ${settled} settled` : 'Nothing in the map yet.',
+        next: 'Add what is on your mind. Move on when the main flows and screens are in.',
         stale: !nodes.length,
       },
       {
@@ -596,20 +684,13 @@ export const state = Alpine.reactive({
         next: 'Run /readiness in Claude Code. It says what is missing and suggests answers.',
         stale: !report || reportStale,
       },
-      {
-        key: 'answer',
-        name: 'Answer',
-        done: signed.answer ?? '',
-        status: waiting ? `${waiting} waiting on you` + (this.blockingCount ? `, ${this.blockingCount} blocking` : '') : 'Nothing waiting on you.',
-        next: waiting ? 'Go through them in Focus. "Enough for now" is a fine answer.' : this.waitingGaps.length ? 'Run /readiness to check your answers.' : 'Move on, or run /challenge for a few sharp questions.',
-        stale: waiting > 0,
-      },
+      answer,
       {
         key: 'brief',
         name: 'Brief',
         done: signed.brief ?? '',
-        status: brief ? `Written ${brief}, ${this.stories.length} ${this.stories.length === 1 ? 'story' : 'stories'}` + (briefStale ? '. Checked again since.' : '') : 'Not written yet.',
-        next: 'Run /brief in Claude Code, then read it under Deliverables.',
+        status: brief ? `Written ${brief}, ${stories}` + (briefStale ? '. Checked again since.' : '') : 'Not written yet.',
+        next: 'Run /brief in Claude Code: the brief, the stories, the screens, and a CLAUDE.md to start with.',
         stale: !brief || briefStale,
       },
       {
@@ -617,9 +698,7 @@ export const state = Alpine.reactive({
         name: 'Build',
         done: signed.build ?? '',
         status: signed.build ? `Kickoff done on ${signed.build}.` : 'Hand the brief to the product.',
-        next: this.existingProject
-          ? 'Copy the "Working with stories" rules into the CLAUDE.md the project already has, then build against the stories.'
-          : 'Copy CLAUDE.starter.md into the product as its CLAUDE.md, then build against the stories.',
+        next: 'Copy CLAUDE.starter.md into the product as its CLAUDE.md, then build against the stories.',
         stale: false,
       },
     ]

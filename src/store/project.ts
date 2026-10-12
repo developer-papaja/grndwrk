@@ -4,8 +4,12 @@ import matter from 'gray-matter'
 import { scalar } from './frontmatter.js'
 export { mergePages } from '../shared/pages.js'
 
-/** The kickoff steps, in order. Each is signed off by the person, with a date. */
-export const KICKOFF_STEPS = ['map', 'check', 'answer', 'brief', 'build'] as const
+/**
+ * The kickoff steps. Each is signed off by the person, with a date. A new
+ * project goes through all of them; an existing one skips purpose, and shows
+ * map, check and brief as Survey, Foundations and Plan.
+ */
+export const KICKOFF_STEPS = ['purpose', 'map', 'check', 'answer', 'brief', 'build'] as const
 export type KickoffStep = (typeof KICKOFF_STEPS)[number]
 
 export interface Project {
@@ -46,6 +50,12 @@ export async function writeKickoff(gwDir: string, changes: Partial<Record<Kickof
   const next: Record<string, unknown> = { ...data, kickoff }
   if (!Object.keys(kickoff).length) delete next.kickoff
   await writeProject(gwDir, next, body)
+}
+
+/** Set fields of project.md, such as `start: existing` or the purpose, keeping the rest. */
+export async function writeFields(gwDir: string, fields: Record<string, string>): Promise<void> {
+  const { data, body } = await readProject(gwDir)
+  await writeProject(gwDir, { ...data, ...fields }, body)
 }
 
 async function writeProject(gwDir: string, next: Record<string, unknown>, body: string): Promise<void> {

@@ -3,6 +3,8 @@ description: Start the Groundwork map from a project that already exists, by rea
 ---
 This project already exists. Read what is built, what is documented and what the history says, and write it into the Groundwork map, so the map starts from where the project really is. You only read the project; you write only inside `.groundwork/`.
 
+This command is for a project that already has code. Check `start:` in `.groundwork/project.md`: if it is empty, set it to `start: existing`. If it says `start: new` but you find code, say so in the report and ask whether the project should count as existing; do not change it yourself.
+
 The one rule above all: **code shows what exists, rarely why.** Never make the map look more decided than the project is. Every thought you write says where it came from, and only real evidence counts as settled.
 
 ## Read
@@ -182,4 +184,4 @@ Short and plain, findings first:
 - The two or three questions that matter most.
 - Say that Focus in the map (the top icon in the rail) goes through the questions and guesses one at a time, with options to pick from.
 - That the whole summary is under Deliverables, State of the project.
-- Suggest running `/readiness` next, to see what is missing for the next step.
+- Suggest the next steps: `/sitemap` if `.groundwork/screens/` is empty (every screen, what it is for and who it is for), then `/readiness` to see what the project has and lacks.

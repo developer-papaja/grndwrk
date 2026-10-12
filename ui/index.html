@@ -747,7 +747,23 @@
           <span class="text-xs text-fog/40" x-show="$store.gw.readiness?.report" x-text="'Checked ' + ($store.gw.readiness?.report?.checked ?? '')"></span>
         </div>
 
-        <!-- The kickoff: five steps, each signed off by the person -->
+        <!-- New or existing: asked by init, or here for a project set up before that -->
+        <section x-show="!$store.gw.start" id="start-choice" class="mt-6 rounded-lg border border-accent/40 bg-accent/5 p-4">
+          <h2 class="text-[15px] font-semibold text-fog">Is this a new project, or one that already has code?</h2>
+          <p class="mt-1 text-fog/65">It decides the steps below and what Groundwork suggests next. You can change it in project.md.</p>
+          <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            <button class="rounded-lg border border-line px-3 py-2.5 text-left hover:border-accent/60 hover:bg-accent/10" @click="$store.gw.setStart('new')">
+              <span class="block font-medium text-fog">New</span>
+              <span class="block text-xs text-fog/55">Nothing built yet. Start from the purpose and the idea, end with a brief and stories.</span>
+            </button>
+            <button class="rounded-lg border border-line px-3 py-2.5 text-left hover:border-accent/60 hover:bg-accent/10" @click="$store.gw.setStart('existing')">
+              <span class="block font-medium text-fog">Existing</span>
+              <span class="block text-xs text-fog/55">There is code. Start from what is built, see what it lacks, and plan what comes next.</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- The kickoff: steps, each signed off by the person -->
         <section id="kickoff" class="mt-6">
           <ol class="flex gap-1.5">
             <template x-for="(st, i) in $store.gw.kickoffSteps" :key="st.key">
@@ -773,7 +789,7 @@
 
           <template x-if="!$store.gw.kickoffShown">
             <div class="mt-3 rounded-lg border border-emerald-400/30 bg-emerald-400/5 p-4">
-              <p class="font-medium text-emerald-200" x-text="'Kickoff done on ' + $store.gw.kickoffSteps[4].done + '.'"></p>
+              <p class="font-medium text-emerald-200" x-text="'Kickoff done on ' + $store.gw.kickoffSteps[$store.gw.kickoffSteps.length - 1].done + '.'"></p>
               <p class="mt-1 text-fog/70">The map keeps going: capture what comes up while building, and Focus shows what needs you. Click a step to reopen it.</p>
             </div>
           </template>
@@ -783,7 +799,18 @@
                 <h2 class="text-[15px] font-semibold text-fog" x-text="$store.gw.kickoffShown.name"></h2>
                 <span class="text-xs" :class="$store.gw.kickoffShown.done ? 'text-emerald-300/80' : 'text-fog/40'" x-text="$store.gw.kickoffShown.done ? 'Done on ' + $store.gw.kickoffShown.done : ''"></span>
               </div>
-              <p class="mt-1 text-fog/80" x-text="$store.gw.kickoffShown.status"></p>
+              <template x-if="$store.gw.kickoffShown.key === 'purpose'">
+                <textarea
+                  id="purpose"
+                  rows="2"
+                  class="field mt-2 w-full resize-none text-[14px]"
+                  placeholder="What it is, and who it is for"
+                  :value="$store.gw.project.purpose || ''"
+                  @keydown.enter.prevent="$event.target.blur()"
+                  @blur="$store.gw.savePurpose($event.target.value)"
+                ></textarea>
+              </template>
+              <p x-show="$store.gw.kickoffShown.key !== 'purpose'" class="mt-1 text-fog/80" x-text="$store.gw.kickoffShown.status"></p>
               <p class="mt-1 text-fog/55" x-text="$store.gw.kickoffShown.next"></p>
 
               <template x-if="$store.gw.kickoffShown.key === 'build' && $store.gw.starter">

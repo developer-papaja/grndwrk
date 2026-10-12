@@ -29,7 +29,7 @@ In a product's own repo it is the other way around: there the stories are meant 
 From the root of any project:
 
 ```
-npx groundwork init   # creates .groundwork/ and copies Claude Code commands; run again to update them
+npx groundwork init   # asks new or existing, creates .groundwork/, copies Claude Code commands; run again to update them
 npx groundwork        # starts local server and opens the browser
 npx groundwork --app http://localhost:5173   # also puts a Comment button on every page of the product
 npx groundwork --lan                         # lets phones on the same Wi-Fi send comments (comments only)
@@ -56,7 +56,7 @@ During development of the tool itself, use `npm link` to run it inside a real pr
 
 ```
 .groundwork/
-  project.md            # name, one-line purpose, project type, page order, kickoff sign-offs
+  project.md            # name, one-line purpose, project type, start (new or existing), page order, kickoff sign-offs
   commands.json         # which command versions init installed, so a later init updates only untouched ones
   nodes/
     <id>.md             # one node per file
@@ -145,7 +145,9 @@ Entries are `**Claude asks**`, `**Claude**` or `**You**`, a dot and a date. A qu
 
 `report.md` has `verdict:` (ready to build, ready to prototype, not ready) and `checked:` in its frontmatter, plus `closed:` and `added:` (gap titles since the check before), then the areas and the smallest set of things to add. `/readiness` narrows down: it keeps gap ids, adds a blocking gap only when something changed, and never raises an accepted one.
 
-**The kickoff** has five steps: Map, Check, Answer, Brief, Build. The person signs each off; the files only inform (where things stand, and whether something changed since). Sign-offs live in `project.md` as `kickoff: { map: 2026-10-08, check: 2026-10-08 }`. Build hands off the starter CLAUDE.md for a new product, or only its story rules for an existing project.
+**New or existing** is the first question. `init` asks it (proposing an answer from what it finds: a package or project file, a source folder, a history of commits), stores `start: new` or `start: existing` in `project.md`, and prints the next steps for that kind. A project set up before that is asked in the Readiness view. Everything Groundwork suggests follows it: `/survey` and `/sitemap` are for an existing project.
+
+**The kickoff** has two tracks, signed off step by step by the person; the files only inform (where things stand, and whether something changed since). A new project: Purpose, Map, Check, Answer, Brief, Build. An existing project: Survey (the map and the sitemap from the code), Foundations (what the project has and lacks), Answer, Plan, Build; these reuse the keys map, check and brief. Sign-offs live in `project.md` as `kickoff: { purpose: 2026-10-12, map: 2026-10-12 }`. Build hands off the starter CLAUDE.md for a new product, or only its story rules for an existing project.
 
 A story file:
 
