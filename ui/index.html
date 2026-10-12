@@ -202,15 +202,58 @@
     <!-- Which part of the product, and how the map draws its cards -->
     <div x-cloak x-show="$store.gw.view === 'map'" class="pointer-events-none fixed top-3 z-[5] flex flex-col items-center gap-2 px-4" :style="$store.gw.mapArea">
       <div class="flex items-center gap-2">
-      <label x-show="$store.gw.screens.length" class="pointer-events-auto flex h-10 items-center gap-2 rounded-xl border bg-panel pl-3 pr-1 text-[13px] shadow-md shadow-black/20" :class="$store.gw.scopeScreen ? 'border-accent/60' : 'border-line'" title="Work on the whole product, or only one screen from the sitemap">
-        <svg class="size-4 shrink-0 text-fog/50"><use href="#i-screens" /></svg>
-        <select id="scope" class="h-8 max-w-[220px] cursor-pointer rounded-md bg-transparent pr-1 text-fog focus:outline-none" :value="$store.gw.scope || ''" @change="$store.gw.setScope($event.target.value || null)">
-          <option value="">Whole product</option>
-          <template x-for="row in $store.gw.screenRows" :key="row.screen.id">
-            <option :value="row.screen.id" :selected="$store.gw.scope === row.screen.id" x-text="'\u00a0\u00a0'.repeat(row.depth) + row.screen.title + ($store.gw.thoughtsOn(row.screen.id) ? ' (' + $store.gw.thoughtsOn(row.screen.id) + ')' : '')"></option>
-          </template>
-        </select>
-      </label>
+      <!-- The part picker: search the screens, or walk the tree -->
+      <div x-show="$store.gw.screens.length" class="pointer-events-auto relative" @keydown.escape.stop="$store.gw.scopeOpen = false" @click.outside="$store.gw.scopeOpen = false">
+        <button
+          id="scope"
+          class="flex h-10 max-w-[280px] items-center gap-2 rounded-xl border bg-panel pl-3 pr-2.5 text-[13px] shadow-md shadow-black/20"
+          :class="$store.gw.scopeScreen ? 'border-accent bg-accent/15 text-white' : 'border-line text-fog hover:border-white/25'"
+          title="Work on the whole product, or only one screen from the sitemap"
+          @click="$store.gw.scopeOpen ? ($store.gw.scopeOpen = false) : $store.gw.openScopePicker()"
+        >
+          <svg class="size-4 shrink-0" :class="$store.gw.scopeScreen ? 'text-accent' : 'text-fog/50'"><use href="#i-screens" /></svg>
+          <span class="truncate" x-text="$store.gw.scopeScreen ? $store.gw.scopeScreen.title : 'Whole product'"></span>
+          <svg class="size-3.5 shrink-0 rotate-90 text-fog/50"><use href="#i-chevron" /></svg>
+        </button>
+        <div x-show="$store.gw.scopeOpen" x-transition.opacity.duration.100ms class="absolute left-0 top-12 z-20 flex max-h-[min(520px,70vh)] w-[340px] flex-col overflow-hidden rounded-xl border border-line bg-panel text-[13px] shadow-xl shadow-black/40">
+          <div class="border-b border-line p-2">
+            <input
+              id="scope-search"
+              x-model="$store.gw.scopeQuery"
+              @input="$store.gw.scopeIndex = 0"
+              @keydown.down.prevent="$store.gw.moveScope(1)"
+              @keydown.up.prevent="$store.gw.moveScope(-1)"
+              @keydown.enter.prevent="$store.gw.chooseScope()"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Find a screen"
+              class="field w-full"
+            />
+          </div>
+          <ul id="scope-options" class="flex-1 overflow-y-auto p-1">
+            <template x-for="(o, i) in $store.gw.scopeOptions" :key="o.id ?? 'all'">
+              <li>
+                <button
+                  class="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left"
+                  :class="i === $store.gw.scopeIndex ? 'bg-accent/25 text-white' : 'text-fog/80 hover:bg-white/5'"
+                  :data-active="i === $store.gw.scopeIndex"
+                  :style="{ paddingLeft: (8 + ($store.gw.scopeQuery ? 0 : o.depth * 14)) + 'px' }"
+                  @mouseenter="$store.gw.scopeIndex = i"
+                  @click="$store.gw.chooseScope(o.id)"
+                >
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate" :class="o.id === null && 'font-medium'" x-text="o.title"></span>
+                    <span x-show="$store.gw.scopeQuery && o.path" class="block truncate text-[11px] text-fog/40" x-text="o.path"></span>
+                  </span>
+                  <span x-show="o.count" class="shrink-0 text-[11px] text-fog/40" x-text="o.count"></span>
+                  <svg x-show="o.id === $store.gw.scope" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+                </button>
+              </li>
+            </template>
+            <li x-show="!$store.gw.scopeOptions.length" class="px-3 py-2 text-xs text-fog/45">No screen matches.</li>
+          </ul>
+        </div>
+      </div>
       <div id="layouts" class="pointer-events-auto flex gap-0.5 rounded-xl border border-line bg-panel p-1 shadow-md shadow-black/20">
         <template x-for="l in $store.gw.mapLayouts" :key="l.key">
           <button
@@ -317,14 +360,21 @@
           <svg class="size-[18px]"><use href="#i-plus" /></svg>
         </button>
       </div>
-      <p x-show="$store.gw.scopeScreen" class="px-4 pb-1 text-xs text-fog/50">
-        <span x-text="'Showing ' + ($store.gw.scopeScreen?.title ?? '') + ' from every page.'"></span>
-        <button class="text-accent hover:underline" @click="$store.gw.setScope(null)">Whole product</button>
-      </p>
-      <div class="px-2 pb-2" id="pages" :class="$store.gw.scopeScreen && 'opacity-50'">
+      <div x-show="$store.gw.scopeScreen" id="scope-banner" class="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-accent/60 bg-accent/15 py-2 pl-3 pr-1.5">
+        <svg class="size-4 shrink-0 text-accent"><use href="#i-screens" /></svg>
+        <span class="min-w-0 flex-1">
+          <span class="block text-[11px] text-sky-200/70">Working on one part</span>
+          <span class="block truncate font-medium text-white" x-text="$store.gw.scopeScreen?.title"></span>
+        </span>
+        <button class="icon-btn shrink-0" title="Back to the whole product" @click="$store.gw.setScope(null)">
+          <svg class="size-4"><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <p x-show="$store.gw.scopeScreen" class="px-4 pb-1 text-[11px] text-fog/40">Its thoughts from every page. Choosing a page goes back to the whole product.</p>
+      <div class="px-2 pb-2" id="pages">
         <button
           class="flex h-8 w-full items-center justify-between rounded-md px-2"
-          :class="$store.gw.onAll ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
+          :class="$store.gw.onAll && !$store.gw.scopeScreen ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
           @click="$store.gw.showPage('*')"
         >
           <span>All</span>
@@ -333,7 +383,7 @@
         <template x-for="p in $store.gw.pageNames" :key="p">
           <button
             class="flex h-8 w-full items-center justify-between rounded-md px-2"
-            :class="!$store.gw.onAll && $store.gw.currentPage.toLowerCase() === p.toLowerCase() ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
+            :class="!$store.gw.scopeScreen && !$store.gw.onAll && $store.gw.currentPage.toLowerCase() === p.toLowerCase() ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
             @click="$store.gw.showPage(p)"
           >
             <span class="truncate" x-text="p"></span>

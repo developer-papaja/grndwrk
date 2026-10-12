@@ -192,6 +192,46 @@ export const state = Alpine.reactive({
     const s = this.scopeScreen
     this.flash(s ? `Working on ${s.title}. New thoughts belong to it.` : 'The whole product')
   },
+  // The part picker: search the screens, or walk the tree.
+  scopeOpen: false,
+  scopeQuery: '',
+  scopeIndex: 0,
+  /** Whole product first, then every screen with where it sits; filtered while searching. */
+  get scopeOptions(): { id: string | null; title: string; path: string; depth: number; count: number }[] {
+    const byId = new Map(this.screens.map((s) => [s.id, s]))
+    const path = (s: Screen) => {
+      const names: string[] = []
+      let p = s.parent ? byId.get(s.parent) : undefined
+      while (p && names.length < 6) {
+        names.unshift(p.title)
+        p = p.parent ? byId.get(p.parent) : undefined
+      }
+      return names.join(' › ')
+    }
+    const all = this.screenRows.map(({ screen, depth }) => ({ id: screen.id, title: screen.title, path: path(screen), depth, count: this.thoughtsOn(screen.id) }))
+    const q = this.scopeQuery.trim().toLowerCase()
+    if (!q) return [{ id: null, title: 'Whole product', path: '', depth: 0, count: 0 }, ...all]
+    return all
+      .filter((o) => o.title.toLowerCase().includes(q) || o.path.toLowerCase().includes(q))
+      .sort((a, b) => Number(!a.title.toLowerCase().startsWith(q)) - Number(!b.title.toLowerCase().startsWith(q)))
+  },
+  openScopePicker() {
+    this.scopeOpen = true
+    this.scopeQuery = ''
+    this.scopeIndex = Math.max(0, this.scopeOptions.findIndex((o) => o.id === this.scope))
+    focusWhenVisible('scope-search')
+  },
+  moveScope(delta: number) {
+    const n = this.scopeOptions.length
+    if (n) this.scopeIndex = (this.scopeIndex + delta + n) % n
+    Alpine.nextTick(() => document.querySelector('#scope-options [data-active="true"]')?.scrollIntoView({ block: 'nearest' }))
+  },
+  chooseScope(id?: string | null) {
+    const pick = id !== undefined ? id : this.scopeOptions[this.scopeIndex]?.id
+    this.scopeOpen = false
+    if (pick === undefined) return
+    if (pick !== this.scope) this.setScope(pick)
+  },
   /** Open the map on one screen, from the sitemap. */
   workOn(id: string) {
     this.setScope(id)
