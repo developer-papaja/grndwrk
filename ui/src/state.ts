@@ -119,6 +119,8 @@ export const state = Alpine.reactive({
   detailsMinimized: readStored('groundwork.detailsMinimized', false),
   collapsed: readStored<Record<string, boolean>>('groundwork.collapsed', {}),
   editingTitle: false,
+  /** Select the whole title when it opens for editing, so typing replaces it. */
+  selectTitle: false,
   /** Nodes just added, or just found as duplicates. They light up for a few seconds. */
   freshIds: [] as string[],
   query: '',
@@ -670,6 +672,17 @@ export const state = Alpine.reactive({
     store('groundwork.view', view)
     onChange()
     if (view === 'map') setTimeout(fitHandler, 80)
+  },
+  /**
+   * A comment pointed out on the phone, to be written here: open it with the
+   * title selected, so typing replaces the placeholder.
+   */
+  writeComment(id: string) {
+    if (!this.nodes[id]) return
+    this.goToNode(id)
+    this.selectTitle = true
+    this.editingTitle = true
+    window.focus()
   },
   /** Open a thought in the map, from any view. */
   goToNode(id: string) {

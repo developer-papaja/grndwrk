@@ -916,7 +916,7 @@
                   id="field-title"
                   rows="3"
                   x-model="$store.gw.draft.title"
-                  x-init="$nextTick(() => { $el.focus(); $el.setSelectionRange($el.value.length, $el.value.length) })"
+                  x-init="$nextTick(() => { $el.focus(); $store.gw.selectTitle ? $el.select() : $el.setSelectionRange($el.value.length, $el.value.length); $store.gw.selectTitle = false })"
                   @input="$store.gw.edit('title')"
                   @focus="$store.gw.focusField('title')"
                   @blur="$store.gw.blurField('title'); $store.gw.editingTitle = false"

@@ -106,13 +106,17 @@ describe('proxy', () => {
 
 describe('lan', () => {
   it('takes comments and nothing else', async () => {
-    const server = createLanServer({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks' })
+    const server = createLanServer({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks', uiUrl: 'http://localhost:1' })
     const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
     const base = `http://127.0.0.1:${port}`
     try {
-      expect(await (await fetch(`${base}/api/hello`)).json()).toEqual({ groundwork: true, project: 'Desks' })
+      expect(await (await fetch(`${base}/api/hello`)).json()).toEqual({ groundwork: true, project: 'Desks', browser: false })
       const post = (path: string, body: unknown) => fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      expect((await post('/api/feedback', { text: 'From the phone', platform: 'iOS', screen: 'Home' })).status).toBe(201)
+      const sent = await post('/api/feedback', { text: 'From the phone', platform: 'iOS', screen: 'Home', key: 'K'.repeat(20) })
+      expect(sent.status).toBe(201)
+      const { id } = await sent.json()
+      expect(await (await post('/api/feedback/status', { comments: [{ id, key: 'K'.repeat(20) }] })).json()).toEqual({ comments: [{ id, title: 'From the phone', status: 'open' }] })
+      expect(await (await post('/api/feedback/remove', { comments: [{ id, key: 'Q'.repeat(20) }] })).json()).toEqual({ removed: [] })
       expect((await post('/api/nodes', { title: 'Sneaky' })).status).toBe(404)
       expect((await fetch(`${base}/api/nodes`)).status).toBe(404)
       expect((await fetch(`${base}/`)).status).toBe(404)
@@ -123,3 +127,36 @@ describe('lan', () => {
   })
 })
 
+
+describe('comments a device can follow up on', () => {
+  const key = 'A1B2C3D4-E5F6-4711-8899-AABBCCDDEEFF'
+
+  it('keeps one comment per key, and tells only the key holder what became of it', async () => {
+    const first = await createFeedback(gw, store, parseFeedback({ text: 'Too small', key }))
+    const again = await createFeedback(gw, store, parseFeedback({ text: 'Too small', key }))
+    expect(again.id).toBe(first.id)
+    expect(first.extra.key).toBe(key)
+    await store.update(first.id, { title: 'Make the day ring bigger', status: 'settled' })
+    const { feedbackStatus } = await import('../src/server/feedback.js')
+    expect(await feedbackStatus(store, { comments: [{ id: first.id, key }, { id: first.id, key: 'X'.repeat(20) }] })).toEqual([
+      { id: first.id, title: 'Make the day ring bigger', status: 'settled' },
+      { id: first.id, gone: true },
+    ])
+  })
+
+  it('deletes only with the right key, and only comments from the app', async () => {
+    const { removeFeedback } = await import('../src/server/feedback.js')
+    const node = await createFeedback(gw, store, parseFeedback({ text: 'Wrong color', key, image: PNG }))
+    const own = (await store.create({ title: 'Mine' })).upserted[0]
+    expect(await removeFeedback(gw, store, { comments: [{ id: node.id, key: 'Z'.repeat(20) }, { id: own.id, key }] })).toEqual([])
+    expect(await removeFeedback(gw, store, { comments: [{ id: node.id, key }] })).toEqual([node.id])
+    expect((await store.list()).map((n) => n.title)).toEqual(['Mine'])
+  })
+
+  it('takes a comment without text when it is to be written on the Mac', async () => {
+    expect(() => parseFeedback({ text: '' })).toThrow()
+    const node = await createFeedback(gw, store, parseFeedback({ text: '', on_mac: true, screen: 'Home', element: { role: 'button', label: 'Start session' } }))
+    expect(node.title).toBe('Comment on the button "Start session" on Home')
+    expect(node.body).toContain('to be written here')
+  })
+})

@@ -6,7 +6,6 @@ import { markAnswered, readReadiness } from '../store/readiness.js'
 import { listStories, readOutput } from '../store/stories.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
-import { createFeedback, parseFeedback } from './feedback.js'
 
 interface Ctx {
   gwDir: string
@@ -89,12 +88,6 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     if (url.pathname === '/api/nodes' && method === 'GET') {
       return send(res, 200, await ctx.store.list())
-    }
-    // A comment from the running product: the iOS package posts here. The web overlay goes through the proxy.
-    if (url.pathname === '/api/feedback' && method === 'POST') {
-      const node = await createFeedback(ctx.gwDir, ctx.store, parseFeedback(await readBody(req, 14_000_000)))
-      await ctx.nodes.sync()
-      return send(res, 201, { id: node.id, title: node.title })
     }
     if (url.pathname === '/api/nodes' && method === 'POST') {
       const change = await ctx.store.create(await readBody(req))

@@ -8,6 +8,7 @@ import { createProxy } from './proxy.js'
 import { advertise, createLanServer, lanAddresses } from './lan.js'
 import { readProject } from '../store/project.js'
 import { NodeSync } from './events.js'
+import { handleComments, type CommentsCtx } from './comments.js'
 import { watchGroundwork } from './watcher.js'
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
@@ -29,11 +30,16 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   const nodes = new NodeSync(() => store.list())
   await nodes.prime()
 
+  const project = String((await readProject(gwDir)).data.name ?? 'project')
+  // Comments from the iOS package: in the Simulator on this port, from a phone on the LAN port.
+  const comments: CommentsCtx = { gwDir, store, nodes, project, uiUrl: `http://localhost:${port}` }
+
   let ui: Middleware = (_req, res) => res.writeHead(404).end()
   const server = createServer(async (req, res) => {
     // Only answer requests addressed to this machine. This blocks DNS rebinding,
     // where another site points its own hostname at 127.0.0.1.
     if (!isLocalHost(req.headers.host)) return res.writeHead(403).end('Forbidden')
+    if (await handleComments(req, res, comments)) return
     if (await handleApi(req, res, { gwDir, store, nodes })) return
     if (await handleFiles(req, res, gwDir)) return
     ui(req, res, () => res.writeHead(404).end())
@@ -60,6 +66,7 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   }
 
   const actualPort = await listen(server, port)
+  comments.uiUrl = `http://localhost:${actualPort}`
   watchGroundwork(gwDir, nodes)
   let appUrl: string | undefined
   if (app) {
@@ -68,8 +75,7 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   }
   let lanUrls: string[] | undefined
   if (lan) {
-    const project = String((await readProject(gwDir)).data.name ?? 'project')
-    const lanServer = createLanServer({ gwDir, store, nodes, project })
+    const lanServer = createLanServer(comments)
     const p = await listen(lanServer, lanPort ?? actualPort + 2, 20, '0.0.0.0')
     advertise(p, project)
     lanUrls = lanAddresses().map((a) => `http://${a}:${p}`)

@@ -77,9 +77,17 @@ bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
 onFit(() => scene.fit())
 Alpine.start()
 
+/** A comment to open once nodes are loaded: from a node:open event, or #write=<id> when Groundwork opened this tab. */
+let writeWhenLoaded = /^#write=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1] ?? ''
+if (writeWhenLoaded) history.replaceState(null, '', location.pathname + location.search)
+
 async function reload() {
   try {
     state.replaceAll(await fetchNodes())
+    if (writeWhenLoaded && state.nodes[writeWhenLoaded]) {
+      state.writeComment(writeWhenLoaded)
+      writeWhenLoaded = ''
+    }
   } catch (err) {
     state.flash(err instanceof Error ? err.message : String(err))
   }
@@ -101,6 +109,11 @@ const handlers = {
   onEvent: (event: ServerEvent) => {
     if (event.type === 'node:upsert') state.upsert(event.node)
     else if (event.type === 'node:delete') state.removeLocal(event.id)
+    else if (event.type === 'node:open') {
+      // The node may arrive a moment after the request to open it.
+      if (state.nodes[event.id]) state.writeComment(event.id)
+      else writeWhenLoaded = event.id
+    }
     else if (event.type === 'file:change' && event.path === 'project.md') {
       void fetchProject().then((p) => (state.project = p))
     } else if (event.type === 'file:change' && event.path.startsWith('readiness/')) {

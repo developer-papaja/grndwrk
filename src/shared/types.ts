@@ -46,6 +46,8 @@ export type ServerEvent =
   | { type: 'node:upsert'; node: GNode }
   | { type: 'node:delete'; id: string }
   | { type: 'file:change'; path: string }
+  /** A comment pointed out on the phone, to be written in the browser. */
+  | { type: 'node:open'; id: string }
 
 export const SEVERITIES = ['blocking', 'important', 'nice'] as const
 export type Severity = (typeof SEVERITIES)[number]
