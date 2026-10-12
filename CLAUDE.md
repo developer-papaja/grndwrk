@@ -32,12 +32,13 @@ From the root of any project:
 npx groundwork init   # creates .groundwork/ and copies Claude Code commands; run again to update them
 npx groundwork        # starts local server and opens the browser
 npx groundwork --app http://localhost:5173   # also puts a Comment button on every page of the product
+npx groundwork --lan                         # lets phones on the same Wi-Fi send comments (comments only)
 npx groundwork import-feedback <file>        # adds comments a tester shared as a file
 ```
 
 **Comments on the running product** become thoughts on the Feedback page, in a topic named after the screen (`source: app`, `seen_in` with the screen and element, the stories that cover the screen, and a picture on iOS):
 - **Web:** `--app` runs a proxy in front of the dev server that adds `overlay/feedback.js` to each page. Live reload passes through. Nothing is written into the product.
-- **iOS:** the debug-only Swift package in `clients/ios/GroundworkFeedback` posts to `/api/feedback`. It reads the tapped element through accessibility, so it works for SwiftUI and UIKit.
+- **iOS:** the debug-only Swift package in `clients/ios/GroundworkFeedback` posts to `/api/feedback`. It reads the tapped element through accessibility, so it works for SwiftUI and UIKit. On a phone it finds Groundwork with Bonjour (`_groundwork._tcp`), which `--lan` announces. That listener answers only `POST /api/feedback` and `GET /api/hello`. The phone keeps a list of waiting and sent comments (long press, then Show comments).
 - **Without Groundwork running:** both keep comments on the device and send them later. A tester can share them as a file for `import-feedback`. A comment that arrives twice is kept once.
 
 The local server serves the UI, exposes a small REST API for nodes, and watches `.groundwork/`. Changes made on disk (by Claude Code or by hand) are pushed to the browser live via server-sent events. Default port 7777.

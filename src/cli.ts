@@ -18,6 +18,9 @@ Options for start:
                Open the address Groundwork prints for it, and every page gets
                a Comment button. Comments land in the map, on the Feedback page.
   --app-port <n>  port for that address (default: the map's port plus one)
+  --lan        let phones on the same Wi-Fi send comments (GroundworkFeedback
+               finds this Mac by itself). They can only add comments.
+  --lan-port <n>  port for that (default: the map's port plus two)
 `
 
 async function main() {
@@ -28,6 +31,8 @@ async function main() {
       port: { type: 'string', default: '7777' },
       app: { type: 'string' },
       'app-port': { type: 'string' },
+      lan: { type: 'boolean', default: false },
+      'lan-port': { type: 'string' },
       open: { type: 'boolean', default: true },
       dev: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
@@ -81,9 +86,14 @@ async function main() {
       }
     }
     const appPort = values['app-port'] ? Number(values['app-port']) : undefined
-    const { url, appUrl } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort })
+    const lanPort = values['lan-port'] ? Number(values['lan-port']) : undefined
+    const { url, appUrl, lanUrls } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort, lan: values.lan, lanPort })
     console.log(`Groundwork is running at ${url}\nWatching ${join(root, GW_DIR)}`)
     if (appUrl) console.log(`Your product with the Comment button: ${appUrl} (passes through to ${app!.origin})`)
+    if (lanUrls) {
+      console.log(`Phones on this network can send comments: ${lanUrls.join(', ') || 'no network found'}`)
+      console.log('  Only comments can be sent from there. The map stays on this Mac.')
+    }
     console.log('Press Ctrl+C to stop.')
     if (values.open) {
       // A Groundwork tab that is already open reconnects by itself. Give it a

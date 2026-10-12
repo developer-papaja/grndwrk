@@ -8,6 +8,7 @@ import { NodeStore } from '../src/store/nodes.js'
 import { NodeSync } from '../src/server/events.js'
 import { createFeedback, importFeedback, parseFeedback, storiesFor } from '../src/server/feedback.js'
 import { createProxy, inject } from '../src/server/proxy.js'
+import { createLanServer } from '../src/server/lan.js'
 
 let gw: string
 let store: NodeStore
@@ -102,3 +103,23 @@ describe('proxy', () => {
     expect((await fetch(`${base}/__groundwork/feedback`, { method: 'POST', body: 'text=x' })).status).toBe(415)
   })
 })
+
+describe('lan', () => {
+  it('takes comments and nothing else', async () => {
+    const server = createLanServer({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks' })
+    const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
+    const base = `http://127.0.0.1:${port}`
+    try {
+      expect(await (await fetch(`${base}/api/hello`)).json()).toEqual({ groundwork: true, project: 'Desks' })
+      const post = (path: string, body: unknown) => fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      expect((await post('/api/feedback', { text: 'From the phone', platform: 'iOS', screen: 'Home' })).status).toBe(201)
+      expect((await post('/api/nodes', { title: 'Sneaky' })).status).toBe(404)
+      expect((await fetch(`${base}/api/nodes`)).status).toBe(404)
+      expect((await fetch(`${base}/`)).status).toBe(404)
+      expect((await store.list()).map((n) => n.title)).toEqual(['From the phone'])
+    } finally {
+      server.close()
+    }
+  })
+})
+

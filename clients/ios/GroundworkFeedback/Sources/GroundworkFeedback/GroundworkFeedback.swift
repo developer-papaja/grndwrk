@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import Network
 import UIKit
 
 /// Comment on your running app, straight into the Groundwork map.
@@ -20,13 +21,13 @@ import UIKit
 @MainActor
 public enum GroundworkFeedback {
   private static var overlay: OverlayWindow?
-  static var server = URL(string: "http://localhost:7777")!
 
-  /// Show the Comment button. `server` is where `groundwork` runs; the
-  /// Simulator reaches your Mac as localhost. Comments written while
-  /// Groundwork cannot be reached are kept and sent once it can.
-  public static func start(server: URL = URL(string: "http://localhost:7777")!) {
-    self.server = server
+  /// Show the Comment button. Without `server`, it finds Groundwork by itself:
+  /// on the same Wi-Fi when `groundwork --lan` runs, and in the Simulator also
+  /// at localhost:7777. Comments written while Groundwork cannot be reached
+  /// are kept on the device and sent once it can.
+  public static func start(server: URL? = nil) {
+    Locator.fixed = server
     NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
       Task { await Outbox.flush() }
     }
@@ -40,6 +41,12 @@ public enum GroundworkFeedback {
 
   static func didFlush(_ sent: Int) {
     (overlay?.rootViewController as? OverlayController)?.updateBadge()
+  }
+
+  /// Open the list of comments: the ones waiting to be sent, and the ones sent.
+  /// The same as a long press on the Comment button, then Show comments.
+  public static func showComments() {
+    (overlay?.rootViewController as? OverlayController)?.showComments()
   }
 
   /// Hide the Comment button until the next `start()`.
@@ -152,6 +159,7 @@ final class OverlayController: UIViewController {
     guard press.state == .began else { return }
     let count = Outbox.count
     let sheet = UIAlertController(title: "Groundwork", message: count > 0 ? "\(count) \(count == 1 ? "comment waits" : "comments wait") to be sent." : nil, preferredStyle: .actionSheet)
+    sheet.addAction(UIAlertAction(title: "Show comments", style: .default) { [weak self] _ in self?.showComments() })
     if count > 0 {
       sheet.addAction(UIAlertAction(title: "Share \(count) \(count == 1 ? "comment" : "comments") as a file", style: .default) { [weak self] _ in self?.share() })
     }
@@ -161,20 +169,27 @@ final class OverlayController: UIViewController {
     present(sheet, animated: true)
   }
 
+  func showComments() {
+    let list = CommentsController(overlay: self)
+    let nav = UINavigationController(rootViewController: list)
+    present(nav, animated: true)
+  }
+
   /// One file with every waiting comment, pictures included. The person who
   /// runs Groundwork adds it with `groundwork import-feedback <file>`.
-  func share() {
+  func share(from presenter: UIViewController? = nil) {
     guard let (file, sent) = Outbox.export() else { return }
     let activity = UIActivityViewController(activityItems: [file], applicationActivities: nil)
-    activity.popoverPresentationController?.sourceView = button
+    activity.popoverPresentationController?.sourceView = presenter?.view ?? button
     activity.completionWithItemsHandler = { [weak self] _, completed, _, _ in
       guard completed else { return }
       // Shared: they are on their way, so they do not wait here any more.
       Outbox.remove(sent)
       self?.updateBadge()
       self?.flash("Shared. They will show up in Groundwork once imported.")
+      (presenter as? CommentsController)?.reload()
     }
-    present(activity, animated: true)
+    (presenter ?? self).present(activity, animated: true)
   }
 
   @objc func togglePicking() {
@@ -233,7 +248,8 @@ final class OverlayController: UIViewController {
     guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
 
     switch await Outbox.post(data) {
-    case .sent:
+    case .sent(let id):
+      Outbox.remember(data, id: id)
       flash("Sent to Groundwork")
       await Outbox.flush()
     case .rejected(let status):
@@ -259,7 +275,7 @@ final class OverlayController: UIViewController {
     button.frame = CGRect(x: button.frame.maxX - size.width, y: button.frame.minY, width: size.width, height: size.height)
   }
 
-  private func flash(_ text: String) {
+  func flash(_ text: String) {
     toast.text = text
     let size = toast.intrinsicContentSize
     let width = min(size.width, view.bounds.width - 32)
@@ -289,7 +305,15 @@ final class PaddedLabel: UILabel {
 /// Support. Sent in the order they were written once Groundwork answers.
 @MainActor
 enum Outbox {
-  enum Result { case sent, rejected(Int), blockedByATS, unreachable }
+  enum Result { case sent(String), rejected(Int), blockedByATS, unreachable }
+
+  /// A comment as the list shows it.
+  struct Item {
+    var file: URL?
+    var text: String
+    var detail: String
+    var written: Date?
+  }
 
   private static var flushing = false
   private static var dir: URL {
@@ -309,22 +333,66 @@ enum Outbox {
   }
 
   static func post(_ data: Data) async -> Result {
-    var request = URLRequest(url: GroundworkFeedback.server.appendingPathComponent("api/feedback"))
+    guard let server = await Locator.url() else { return .unreachable }
+    var request = URLRequest(url: server.appendingPathComponent("api/feedback"))
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = data
     request.timeoutInterval = 10
     do {
-      let (_, response) = try await URLSession.shared.data(for: request)
+      let (body, response) = try await URLSession.shared.data(for: request)
       let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-      if status == 201 { return .sent }
+      if status == 201 {
+        let id = ((try? JSONSerialization.jsonObject(with: body)) as? [String: Any])?["id"] as? String
+        return .sent(id ?? "")
+      }
       // An old Groundwork without comments, or a server error: keep it for later.
-      return status == 404 || status >= 500 ? .unreachable : .rejected(status)
+      if status == 404 || status >= 500 {
+        Locator.forget()
+        return .unreachable
+      }
+      return .rejected(status)
     } catch let error as URLError where error.code == .appTransportSecurityRequiresSecureConnection {
       return .blockedByATS
     } catch {
+      // Groundwork may have moved, or stopped: look for it again next time.
+      Locator.forget()
       return .unreachable
     }
+  }
+
+  // Sent comments, so the person can look back at them. Without pictures, last 200.
+  private static var sentFile: URL { dir.deletingLastPathComponent().appendingPathComponent("sent.json") }
+
+  static func remember(_ data: Data, id: String) {
+    guard var entry = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+    entry["image"] = nil
+    entry["node"] = id
+    entry["sent"] = ISO8601DateFormatter().string(from: Date())
+    var list = ((try? Data(contentsOf: sentFile)).flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [[String: Any]]) ?? []
+    list.append(entry)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    if let out = try? JSONSerialization.data(withJSONObject: Array(list.suffix(200))) { try? out.write(to: sentFile) }
+  }
+
+  static var waiting: [Item] {
+    files.compactMap { file in
+      (try? Data(contentsOf: file)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }.map { item(from: $0, file: file) }
+    }
+  }
+
+  static var sent: [Item] {
+    let list = ((try? Data(contentsOf: sentFile)).flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [[String: Any]]) ?? []
+    return list.reversed().map { item(from: $0, file: nil) }
+  }
+
+  private static func item(from c: [String: Any], file: URL?) -> Item {
+    let element = c["element"] as? [String: Any]
+    let on = [element?["role"] as? String, (element?["label"] as? String).map { "\u{201C}\($0)\u{201D}" }].compactMap { $0 }.joined(separator: " ")
+    var parts = [c["screen"] as? String, on.isEmpty ? nil : on].compactMap { $0 }
+    if let node = c["node"] as? String, !node.isEmpty { parts.append(node) }
+    let written = (c["written"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
+    return Item(file: file, text: c["text"] as? String ?? "", detail: parts.joined(separator: " · "), written: written)
   }
 
   /// Every waiting comment in one file: { "groundwork": "feedback", "comments": [...] }.
@@ -351,7 +419,11 @@ enum Outbox {
     for file in files {
       guard let data = try? Data(contentsOf: file) else { continue }
       switch await post(data) {
-      case .sent, .rejected:
+      case .sent(let id):
+        remember(data, id: id)
+        try? FileManager.default.removeItem(at: file)
+        sent += 1
+      case .rejected:
         // Sent, or refused for good: either way it should not be tried again.
         try? FileManager.default.removeItem(at: file)
         sent += 1
@@ -360,6 +432,189 @@ enum Outbox {
       }
     }
     if sent > 0 { GroundworkFeedback.didFlush(sent) }
+  }
+}
+
+// MARK: - Finding Groundwork
+
+/// Where Groundwork runs. Found with Bonjour when `groundwork --lan` runs on a
+/// Mac on the same network; in the Simulator, localhost:7777 also works.
+@MainActor
+enum Locator {
+  static var fixed: URL?
+  private static var found: URL?
+  static var current: URL? { fixed ?? found }
+
+  static func url() async -> URL? {
+    if let fixed { return fixed }
+    if let found { return found }
+    if let url = await discover(timeout: 2.5) {
+      found = url
+      return url
+    }
+    // GROUNDWORK_NO_LOCALHOST: for testing discovery alone, in the Simulator.
+    #if targetEnvironment(simulator) && !GROUNDWORK_NO_LOCALHOST
+    return URL(string: "http://localhost:7777")
+    #else
+    return nil
+    #endif
+  }
+
+  static func forget() { found = nil }
+
+  /// Browse for _groundwork._tcp and turn the first answer into an address.
+  private static func discover(timeout: TimeInterval) async -> URL? {
+    await withCheckedContinuation { (done: CheckedContinuation<URL?, Never>) in
+      Discovery(timeout: timeout) { done.resume(returning: $0) }.start()
+    }
+  }
+}
+
+/// One search for Groundwork on the network. Every callback runs on the main queue.
+private final class Discovery: @unchecked Sendable {
+  private let browser = NWBrowser(for: .bonjour(type: "_groundwork._tcp", domain: nil), using: .tcp)
+  private var connection: NWConnection?
+  private var finished = false
+  private let timeout: TimeInterval
+  private let done: (URL?) -> Void
+
+  init(timeout: TimeInterval, done: @escaping (URL?) -> Void) {
+    self.timeout = timeout
+    self.done = done
+  }
+
+  func start() {
+    browser.browseResultsChangedHandler = { [self] results, _ in
+      guard connection == nil, let result = results.first else { return }
+      connect(to: result.endpoint)
+    }
+    browser.stateUpdateHandler = { [self] state in
+      if case .failed = state { finish(nil) }
+    }
+    browser.start(queue: .main)
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [self] in finish(nil) }
+  }
+
+  /// Connect once to learn the Mac's IPv4 address and port.
+  private func connect(to endpoint: NWEndpoint) {
+    let params = NWParameters.tcp
+    (params.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options)?.version = .v4
+    let c = NWConnection(to: endpoint, using: params)
+    connection = c
+    c.stateUpdateHandler = { [self] state in
+      switch state {
+      case .ready:
+        guard case .hostPort(let host, let port) = c.currentPath?.remoteEndpoint else { return finish(nil) }
+        var name = "\(host)"
+        if let cut = name.firstIndex(of: "%") { name = String(name[..<cut]) }
+        finish(URL(string: "http://\(name):\(port.rawValue)"))
+      case .failed, .cancelled:
+        finish(nil)
+      default:
+        break
+      }
+    }
+    c.start(queue: .main)
+  }
+
+  private func finish(_ url: URL?) {
+    guard !finished else { return }
+    finished = true
+    browser.cancel()
+    connection?.cancel()
+    done(url)
+  }
+}
+
+// MARK: - The list of comments
+
+/// Waiting comments, which can be sent now, shared or deleted, and the ones already sent.
+@MainActor
+final class CommentsController: UITableViewController {
+  private weak var overlay: OverlayController?
+  private var waiting: [Outbox.Item] = []
+  private var sent: [Outbox.Item] = []
+  private let dates: DateFormatter = {
+    let f = DateFormatter()
+    f.dateStyle = .short
+    f.timeStyle = .short
+    return f
+  }()
+
+  init(overlay: OverlayController) {
+    self.overlay = overlay
+    super.init(style: .insetGrouped)
+  }
+  required init?(coder: NSCoder) { fatalError() }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Comments"
+    tableView.register(UITableViewCell.self, forCellReuseIdentifier: "c")
+    navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak self] _ in self?.dismiss(animated: true) })
+    reload()
+  }
+
+  func reload() {
+    waiting = Outbox.waiting
+    sent = Outbox.sent
+    var actions: [UIMenuElement] = []
+    if !waiting.isEmpty {
+      actions.append(UIAction(title: "Send now", image: UIImage(systemName: "paperplane")) { [weak self] _ in
+        Task {
+          await Outbox.flush()
+          self?.reload()
+          self?.overlay?.updateBadge()
+          if !Outbox.waiting.isEmpty { self?.overlay?.flash("Groundwork is not reachable yet") }
+        }
+      })
+      actions.append(UIAction(title: "Share as a file", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
+        self?.overlay?.share(from: self)
+      })
+    }
+    navigationItem.rightBarButtonItem = actions.isEmpty ? nil : UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: UIMenu(children: actions))
+    tableView.reloadData()
+  }
+
+  override func numberOfSections(in tableView: UITableView) -> Int { 2 }
+
+  override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    section == 0 ? "Waiting to be sent (\(waiting.count))" : "Sent to Groundwork (\(sent.count))"
+  }
+
+  override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+    if section == 0 {
+      if !waiting.isEmpty { return "They go by themselves once Groundwork is reachable. Or share them as a file." }
+      return Locator.current.map { "Connected to Groundwork at \($0.host ?? "")." } ?? nil
+    }
+    return sent.isEmpty ? "Nothing sent yet." : "In Groundwork they are on the Feedback page, in a topic per screen."
+  }
+
+  override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    section == 0 ? waiting.count : sent.count
+  }
+
+  override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let item = indexPath.section == 0 ? waiting[indexPath.row] : sent[indexPath.row]
+    let cell = tableView.dequeueReusableCell(withIdentifier: "c", for: indexPath)
+    var content = UIListContentConfiguration.subtitleCell()
+    content.text = item.text
+    content.secondaryText = [item.detail, item.written.map { dates.string(from: $0) }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    content.secondaryTextProperties.color = .secondaryLabel
+    cell.contentConfiguration = content
+    cell.selectionStyle = .none
+    return cell
+  }
+
+  override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+    guard indexPath.section == 0, let file = waiting[indexPath.row].file else { return nil }
+    let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in
+      Outbox.remove([file])
+      self?.reload()
+      self?.overlay?.updateBadge()
+      done(true)
+    }
+    return UISwipeActionsConfiguration(actions: [delete])
   }
 }
 
