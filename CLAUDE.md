@@ -2,7 +2,7 @@
 
 ## What this is
 
-A dev tool you install in a project repo to kick off a new product. You explore the product idea as a 3D mind map in the browser, and the tool tells you whether you have enough to start building, what is missing, and what to add before you start. Everything is stored as plain files inside the project so Claude Code can read and act on it.
+A dev tool you install in a project repo to kick off a new product. You explore the product idea as a board of cards in the browser, and the tool tells you whether you have enough to start building, what is missing, and what to add before you start. Everything is stored as plain files inside the project so Claude Code can read and act on it.
 
 This is step one of a larger idea: an exploratory layer in the dev stack, in the spirit of Ray or the Symfony profiler. Later steps will write into the same folder: a progress page that traces every page back to the user stories behind it and argues when the page and its stories disagree, annotating the running product, interviewing colleagues about their feedback, and a "where should I focus" view. Keep the data model general enough for that, but do not build those parts now. The one exception is stories: the kickoff already produces them, so the chain from idea to story to code exists from day one.
 
@@ -21,7 +21,7 @@ In a product's own repo it is the other way around: there the stories are meant 
 - **Lives in the project.** No accounts, no cloud, no database. The `.groundwork/` folder is the source of truth.
 - **Human readable and diffable.** One node per markdown file. A person should be able to read the folder without the UI.
 - **Capture is fast and loose.** Only a title is required. Never block capture with validation or forms.
-- **Space means something.** 3D is not decoration. Position carries meaning (see Spatial model).
+- **Position means something.** Where a card sits says what it is about and how abstract it is (see Spatial model).
 - **Claude thinks, the UI captures.** Evaluation and writing happen through Claude Code commands that read and write files. The UI captures, displays and reacts to file changes. No API key in v1.
 
 ## How it runs
@@ -49,7 +49,6 @@ During development of the tool itself, use `npm link` to run it inside a real pr
 
 - Node + TypeScript
 - Vite for the UI
-- `3d-force-graph` (built on three.js) for the scene, with `three-spritetext` for labels. Drop down to raw three.js only if the library blocks something we need.
 - UI panels: Alpine.js + Tailwind (preferred), no heavy framework
 - `gray-matter` for frontmatter, `chokidar` for file watching
 
@@ -174,28 +173,30 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 
 ## Spatial model
 
-- **Y axis is altitude.** Abstract nodes float high, concrete nodes sit low, each altitude on its own faint guide line. Changing a node's altitude visibly moves it.
-- **X axis is topic.** Each topic gets a column, left to right by name, with nodes without a topic in a "no topic" column at the right. Topics are the main grouping.
-- **Z axis is time.** The most recently changed nodes (by the file's modified time) sit in front, untouched ones sink back and are a little dimmer.
-- **Spread within a row comes from the force layout.** Links inside a topic pull nodes together. Links across topics are allowed but drawn faint and pull weakly, so they never merge two groups.
-- **Nodes are word cards.** The title on a small dark card, the same size on screen at any zoom. A card with no room shows as a dot until hovered or zoomed in.
+The map is a board. (A 3D map came first; the person found the flat board clearer and it was removed.)
+
+- **Columns are topics.** Each topic gets a column, left to right by name, with nodes without a topic in a "no topic" column at the right. Topics are the main grouping. A column header shows the count, and marks a topic thin or with missing pieces.
+- **Rows are altitude.** Vision at the top, detail at the bottom, each row labeled. Changing a node's altitude moves it to another row.
+- **Within a cell, newest first,** by the file's modified time.
+- **Dragging a card** to another cell changes its topic and altitude.
+- **Nodes are word cards.** The title on a small dark card, up to three lines.
 - **Color shows type,** as a thin edge on the card. Keep the palette calm and readable on a dark background.
 - **Status shows as weight.** Settled has an outline in its type color, open is normal, parked is dimmed.
-- **Stories are cards of their own kind,** in a row under the map, in the column of their first source thought, with faint lines to the thoughts they came from. They are not nodes; they live in `stories/`.
-- **Readiness gaps are ghost nodes.** Translucent, outlined, placed near the cluster they relate to, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
-- **The map has three layouts, one switch** (top of the map, or `V`): **Space** is the 3D map above; **Board** is the same grid flat, a column per topic and a row per altitude, newest first in each cell, gaps as dashed cards and stories in a row under it, and dragging a card to another cell changes its topic and altitude; **Outline** is a section per topic, read top to bottom from vision to detail, with the first line of each thought's notes. Selection, the panels, link mode and Focus work the same in all three. The layout is a view setting kept in the browser, not in the files.
+- **Links show on selection.** The cards linked to the open card light up; no lines are drawn. Links mostly stay inside a topic.
+- **Stories are cards of their own kind,** in a row under the board, in the column of their first source thought. They are not nodes; they live in `stories/`.
+- **Readiness gaps are ghost cards.** Dashed, in the column and row of their topic and altitude, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
+- **The outline** is the second layout (the switch at the top of the map, or `V`): a section per topic, read from vision to detail, with the first line of each thought's notes. Selection, the panels, link mode and Focus work the same in both. The layout is a view setting kept in the browser, not in the files.
 
 ## Interaction
 
-- A rail at the far left switches views: **Focus** (only what needs the person, one item at a time: blocking gaps, Claude's questions, guesses from `/survey` to confirm, then the other gaps; each with its suggestions or options, an answer box, Skip, and for gaps "Enough for now"; the map stays visible, dimmed around the current item; it ends in "Nothing needs you right now" and the next command to run), **Map** (the 3D map with pages, topics and the list), **Readiness** (the kickoff steps on top, then the verdict, what closed since the last check, each checklist area, open gaps, gaps waiting for a check, and everything settled by topic) and **Deliverables** (the brief, the stories and the starter CLAUDE.md, written by `/brief`).
+- A rail at the far left switches views: **Focus** (only what needs the person, one item at a time: blocking gaps, Claude's questions, guesses from `/survey` to confirm, then the other gaps; each with its suggestions or options, an answer box, Skip, and for gaps "Enough for now"; the map stays visible, dimmed around the current item; it ends in "Nothing needs you right now" and the next command to run), **Map** (the board or the outline, with pages, topics and the list), **Readiness** (the kickoff steps on top, then the verdict, what closed since the last check, each checklist area, open gaps, gaps waiting for a check, and everything settled by topic) and **Deliverables** (the brief, the stories and the starter CLAUDE.md, written by `/brief`).
 - Writing on a gap has three actions: "Add as a thought" leaves the gap open, "This answers it" sets `answered_by` so `/readiness` checks it next time, and "Enough for now" accepts it as it is, closed at once and for good. A remark never closes a gap by accident.
 
-- Orbit, zoom, pan with the mouse.
-- Click a node: the camera flies to it and a side panel opens. All text editing happens in the 2D panel, never inside the 3D scene.
+- Click a card: it opens in the side panel, where all text editing happens. Opening a card from elsewhere (the list, Focus, a link) scrolls it into view.
 - A quick capture bar is always available. Type and press Enter to create a node. Prefixes are optional: `?` makes a question, `!` makes a decision, with or without a space after.
 - A new node captured while a node is selected links to it and takes its topic.
 - `/` opens the list: every node grouped by topic, with counts that show thin topics. Typing filters, Enter opens.
-- Keys: `N` new node (linked to the selection if any), `L` link mode, `[` and `]` move altitude, `/` list and search, `F` fit the map, `V` next layout, `Delete` remove (press twice), `Esc` back.
+- Keys: `N` new node (linked to the selection if any), `L` link mode, `[` and `]` move altitude, `/` list and search, `V` board or outline, `Delete` remove (press twice), `Esc` back.
 - The UI follows a design tool's dark interface: icons (Heroicons, inlined) for tools and panel actions, with their name and key in a tooltip; words for content such as titles, topics and labels. Neutral greys, one blue accent, subtle shadows.
 
 ## Claude Code commands

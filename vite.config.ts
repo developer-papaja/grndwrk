@@ -8,7 +8,5 @@ export default defineConfig({
   build: {
     outDir: fileURLToPath(new URL('./dist/ui', import.meta.url)),
     emptyOutDir: true,
-    // three.js is large, and this is only ever served from localhost.
-    chunkSizeWarningLimit: 2000,
   },
 })

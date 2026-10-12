@@ -1,10 +1,9 @@
 import type { Gap, GNode, Story } from '../../src/shared/types'
 import { ALTITUDE_WORDS, topicColumns, topicKey } from './layout'
 
-/** How the map draws its cards. The same files and the same meaning, drawn three ways. */
-export type MapLayout = '3d' | 'board' | 'outline'
+/** How the map draws its cards. The same files and the same meaning, drawn two ways. */
+export type MapLayout = 'board' | 'outline'
 export const MAP_LAYOUTS: { key: MapLayout; name: string; icon: string }[] = [
-  { key: '3d', name: 'Space: 3D, height is altitude', icon: 'i-cube' },
   { key: 'board', name: 'Board: topics as columns, altitude as rows', icon: 'i-columns' },
   { key: 'outline', name: 'Outline: topics as sections, to read through', icon: 'i-outline' },
 ]
@@ -42,7 +41,7 @@ const newestFirst = (a: GNode, b: GNode) => time(b) - time(a) || a.title.localeC
 const altitudeOf = (a: number | undefined) => Math.min(5, Math.max(1, Math.round(a ?? 3)))
 
 /**
- * The map as a grid: a column per topic in the same order as the 3D map, a
+ * The map as a grid: a column per topic, left to right by name, and a
  * row per altitude from vision down to detail. Open gaps sit in their cell as
  * ghost cards. A topic only gaps point at still gets a column.
  */

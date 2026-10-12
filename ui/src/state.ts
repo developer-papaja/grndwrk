@@ -63,17 +63,6 @@ const freshTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let deleteTimer: ReturnType<typeof setTimeout> | undefined
 let noteTimer: ReturnType<typeof setTimeout> | undefined
 
-/** Called whenever the nodes change, so the scene can redraw. Set by main.ts. */
-let onChange: () => void = () => {}
-export function onNodesChange(fn: () => void) {
-  onChange = fn
-}
-
-let fitHandler: () => void = () => {}
-export function onFit(fn: () => void) {
-  fitHandler = fn
-}
-
 export const state = Alpine.reactive({
   live: false,
   project: {} as Record<string, unknown>,
@@ -95,8 +84,8 @@ export const state = Alpine.reactive({
   readiness: null as Readiness | null,
   /** Which view the rail shows: focus, the map, readiness, or deliverables. */
   view: readStored<View>('groundwork.view', 'map'),
-  /** How the map draws its cards: in 3D, as a board, or as an outline. */
-  mapLayout: readStored<MapLayout>('groundwork.mapLayout', '3d'),
+  /** How the map draws its cards: as a board, or as an outline. */
+  mapLayout: readStored<MapLayout>('groundwork.mapLayout', 'board') === 'outline' ? ('outline' as MapLayout) : ('board' as MapLayout),
   mapLayouts: MAP_LAYOUTS,
   /** The card being dragged on the board, and the cell it is over. */
   dragId: null as string | null,
@@ -232,7 +221,6 @@ export const state = Alpine.reactive({
     this.select(null)
     this.selectedStoryId = id
     this.setDetailsMinimized(false)
-    onChange()
   },
   get selectedGap(): Gap | null {
     return this.readiness?.gaps.find((g) => g.id === this.selectedGapId) ?? null
@@ -271,7 +259,6 @@ export const state = Alpine.reactive({
       this.brief = brief
       this.starter = starter
       this.survey = survey
-      onChange()
     } catch {
       // Offline: the next reconnect loads them.
     }
@@ -578,7 +565,7 @@ export const state = Alpine.reactive({
     this.setView('focus')
     this.focusShow()
   },
-  /** Point the map and the selection at the current item, so the camera flies to it. */
+  /** Point the map and the selection at the current item, so it scrolls into view. */
   focusShow() {
     const cur = this.focusCurrent
     if (!cur) {
@@ -651,7 +638,6 @@ export const state = Alpine.reactive({
       this.readiness = await markGapAnswered(gap.id, node.id, true)
       this.gapAnswer = ''
       this.flash('Accepted for now. /readiness will not raise it again.')
-      onChange()
       if (this.view === 'focus') this.focusShow()
     } catch (err) {
       this.flash(errorText(err))
@@ -677,8 +663,7 @@ export const state = Alpine.reactive({
     if (this.view === 'focus' && view !== 'focus' && view !== 'map') this.closePanel()
     this.view = view
     store('groundwork.view', view)
-    onChange()
-    if (view === 'map') setTimeout(fitHandler, 80)
+    if (view === 'map') revealSelection()
   },
   /**
    * A comment pointed out on the phone, to be written here: open it with the
@@ -716,7 +701,7 @@ export const state = Alpine.reactive({
     const left = 64 + (this.view === 'map' && this.listOpen && wide ? 320 : 0)
     return { left: `${left}px`, right: `${this.rightInset}px` }
   },
-  // The board and the outline: the same cards as the 3D map, drawn flat.
+  // The board and the outline: two ways to draw the same cards.
   get board(): Board {
     return buildBoard(this.visibleNodes, this.visibleGaps, this.visibleStories)
   },
@@ -727,9 +712,7 @@ export const state = Alpine.reactive({
   setMapLayout(layout: MapLayout) {
     this.mapLayout = layout
     store('groundwork.mapLayout', layout)
-    onChange()
-    if (layout === '3d') setTimeout(fitHandler, 80)
-    else revealSelection()
+    revealSelection()
   },
   /** `V`: the next way to draw the map. */
   cycleLayout() {
@@ -797,12 +780,10 @@ export const state = Alpine.reactive({
     this.nodes = Object.fromEntries(nodes.map((n) => [n.id, n]))
     if (this.selectedId && !this.nodes[this.selectedId]) this.select(null)
     else if (this.selected) this.syncDraft()
-    onChange()
   },
   upsert(node: GNode) {
     this.nodes[node.id] = node
     if (node.id === this.selectedId) this.syncDraft()
-    onChange()
   },
   removeLocal(id: string) {
     if (!this.nodes[id]) return
@@ -811,13 +792,11 @@ export const state = Alpine.reactive({
       this.select(null)
       if (!deleting.has(id)) this.flash('That node was deleted on disk')
     }
-    onChange()
   },
 
   async loadReadiness() {
     try {
       this.readiness = await fetchReadiness()
-      onChange()
     } catch {
       // Offline: the next reconnect loads it.
     }
@@ -826,14 +805,13 @@ export const state = Alpine.reactive({
   closePanel() {
     this.select(null)
     this.reportOpen = false
-    onChange()
   },
   openReport() {
     this.select(null)
     this.reportOpen = true
     this.setDetailsMinimized(false)
   },
-  /** Go to a gap in the map: its page, the map view, and the camera on its ghost. */
+  /** Go to a gap in the map: its page, the map view, and its ghost card in view. */
   showGapInMap(id: string) {
     const gap = this.readiness?.gaps.find((g) => g.id === id)
     if (!gap) return
@@ -841,7 +819,6 @@ export const state = Alpine.reactive({
       this.currentPage = gap.page
       store('groundwork.page', gap.page)
     }
-    // No fit here: the camera flies to the ghost instead.
     this.view = 'map'
     store('groundwork.view', 'map')
     this.selectGap(id)
@@ -851,7 +828,6 @@ export const state = Alpine.reactive({
     this.selectedGapId = id
     this.gapAnswer = ''
     this.setDetailsMinimized(false)
-    onChange()
     revealSelection()
   },
   /**
@@ -873,7 +849,6 @@ export const state = Alpine.reactive({
       if (closes) this.readiness = await markGapAnswered(gap.id, node.id)
       this.gapAnswer = ''
       this.flash(closes ? 'Marked as answered. /readiness decides if it closes.' : 'Added as a thought. The gap stays open.')
-      onChange()
       if (this.view === 'focus') this.focusShow()
     } catch (err) {
       this.flash(errorText(err))
@@ -908,7 +883,6 @@ export const state = Alpine.reactive({
     pending.clear()
     this.editing = null
     this.syncDraft()
-    onChange()
     if (id) revealSelection()
   },
 
@@ -1012,10 +986,6 @@ export const state = Alpine.reactive({
     this.edit('altitude', true)
   },
 
-  fit() {
-    fitHandler()
-  },
-
   markFresh(id: string) {
     if (!this.freshIds.includes(id)) this.freshIds.push(id)
     clearTimeout(freshTimers.get(id))
@@ -1023,10 +993,8 @@ export const state = Alpine.reactive({
       id,
       setTimeout(() => {
         this.freshIds = this.freshIds.filter((f) => f !== id)
-        onChange()
       }, 4000),
     )
-    onChange()
   },
 
   setNotes(notes: string) {
@@ -1095,9 +1063,6 @@ export const state = Alpine.reactive({
   showPage(page: string) {
     this.currentPage = page
     store('groundwork.page', page)
-    onChange()
-    // Fit once the new page is drawn, not the one before it.
-    setTimeout(fitHandler, 80)
   },
   async addPage() {
     const name = this.newPage.trim()
@@ -1160,7 +1125,6 @@ export const state = Alpine.reactive({
   toggleLinkMode() {
     if (!this.selected || this.selected.error) return
     this.mode = this.mode === 'link' ? 'normal' : 'link'
-    onChange()
   },
   async toggleLink(otherId: string) {
     const sel = this.selected
@@ -1247,9 +1211,8 @@ function focusWhenVisible(id: string, tries = 20) {
   })
 }
 
-/** On the board and the outline, scroll the open card into view, as the 3D camera flies to it. */
+/** Scroll the open card into view on the board or the outline. */
 function revealSelection() {
-  if (state.mapLayout === '3d') return
   Alpine.nextTick(() => {
     const id = state.selectedId ?? (state.selectedGapId ? `gap:${state.selectedGapId}` : null)
     if (!id) return

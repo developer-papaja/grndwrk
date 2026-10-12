@@ -13,13 +13,3 @@ export const TYPE_COLORS: Record<NodeType, string> = {
   decision: '#79cfc4',
   reference: '#9ba6b9',
 }
-
-export const SCENE_COLORS = {
-  background: '#1e1e1e',
-  error: '#d0796b',
-  label: '#dfe3ea',
-  link: '#a0aab9',
-  guide: '#333333',
-  guideText: 'rgba(255, 255, 255, 0.28)',
-  topic: 'rgba(255, 255, 255, 0.45)',
-}

@@ -1,7 +1,7 @@
 ---
 description: Group the Groundwork map into topics by writing topic fields into the node files
 ---
-You are grouping the thoughts in this project's Groundwork map into topics. Topics decide where nodes sit sideways in the 3D map: each topic gets its own column. Links between topics should be rare, so a good topic holds thoughts that belong together.
+You are grouping the thoughts in this project's Groundwork map into topics. Topics decide where nodes sit on the board: each topic gets its own column. Links between topics should be rare, so a good topic holds thoughts that belong together.
 
 ## Read
 

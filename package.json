@@ -1,7 +1,7 @@
 {
   "name": "groundwork",
   "version": "0.0.1",
-  "description": "Explore a product idea as a 3D map and find out if you are ready to build",
+  "description": "Explore a product idea as a map of cards and find out if you are ready to build",
   "type": "module",
   "bin": {
     "groundwork": "bin/groundwork.js"
@@ -32,13 +32,9 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/alpinejs": "^3.17.0",
     "@types/node": "^26.6.4",
-    "@types/three": "^0.186.0",
-    "3d-force-graph": "^1.80.1",
     "alpinejs": "^3.17.4",
     "marked": "^18.0.14",
     "tailwindcss": "^4.3.3",
-    "three": "^0.186.1",
-    "three-spritetext": "^1.10.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.2",

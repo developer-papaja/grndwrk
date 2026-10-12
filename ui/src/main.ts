@@ -2,51 +2,13 @@ import Alpine from 'alpinejs'
 import { fetchNodes, fetchProject, subscribe } from './api'
 import type { ServerEvent } from '../../src/shared/types'
 import { bindKeys } from './keys'
-import { createScene } from './scene'
-import { onFit, onNodesChange, state } from './state'
-
-/** Width of the views rail at the far left. */
-const RAIL = 64
-
-const scene = createScene(document.getElementById('scene')!, {
-  onNodeClick: (id) => state.clickCard(id),
-  onBackgroundClick: () => state.clickBackground(),
-})
-
-// Redraw at most once per frame, however many events arrive.
-let queued = false
-onNodesChange(() => {
-  if (queued) return
-  queued = true
-  requestAnimationFrame(() => {
-    queued = false
-    scene.render({
-      nodes: Alpine.raw(state.visibleNodes).map((n) => Alpine.raw(n)),
-      selectedId: state.selectedId,
-      linkMode: state.mode === 'link',
-      freshIds: [...state.freshIds],
-      gaps: Alpine.raw(state.visibleGaps).map((g) => Alpine.raw(g)),
-      selectedGapId: state.selectedGapId,
-      stories: Alpine.raw(state.visibleStories).map((st) => Alpine.raw(st)),
-      selectedStoryId: state.selectedStoryId,
-      focusIds: state.view === 'focus' && state.focusCurrent ? [...state.focusIds] : null,
-    })
-  })
-})
+import { state } from './state'
 
 // A handle for poking at the map from the browser console.
-Object.assign(window, { groundwork: { state, scene } })
-
-// The map gets the room between the rail, the side panels and the details.
-Alpine.effect(() => {
-  const wide = window.innerWidth >= 900
-  const left = RAIL + (state.view === 'map' && state.listOpen && wide ? 320 : 0)
-  scene.setInsets({ left, right: state.rightInset })
-})
-Alpine.effect(() => scene.setActive((state.view === 'map' || state.view === 'focus') && state.mapLayout === '3d'))
+Object.assign(window, { groundwork: { state } })
 
 // In focus mode the map follows the queue: when the current item changes,
-// for any reason (an answer, a skip, a file changed on disk), fly to the next.
+// for any reason (an answer, a skip, a file changed on disk), show the next.
 let lastFocus: string | undefined
 Alpine.effect(() => {
   const key = state.view === 'focus' ? (state.focusCurrent?.key ?? '') : undefined
@@ -56,11 +18,8 @@ Alpine.effect(() => {
 })
 
 bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
-  fit: () => state.fit(),
   layout: () => state.cycleLayout(),
-  pan: (on) => scene.setPanning(on),
 })
-onFit(() => scene.fit())
 Alpine.start()
 
 /** A comment to open once nodes are loaded: from a node:open event, or #write=<id> when Groundwork opened this tab. */
