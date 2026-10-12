@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs'
-import type { DesignCheck, Gap, GNode, NodeType, Readiness, Status, Story } from '../../src/shared/types'
+import type { DesignCheck, Gap, GNode, NodeInput, NodeType, Readiness, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchStories, markGapAnswered, saveKickoff, savePages, updateNode, uploadImage } from './api'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
@@ -7,9 +7,10 @@ import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, t
 import { parseAreas, type Area } from '../../src/shared/report'
 import { parseCapture, sameTitle } from './capture'
 import { marked } from 'marked'
-import { ALTITUDE_WORDS, displayName, topicColumns } from './layout'
+import { ALTITUDE_WORDS, displayName, topicColumns, topicKey } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
+import { buildBoard, buildOutline, firstLine, MAP_LAYOUTS, type Board, type MapLayout, type OutlineSection } from './board'
 
 export type View = 'focus' | 'map' | 'readiness' | 'deliverables'
 
@@ -92,8 +93,14 @@ export const state = Alpine.reactive({
   reply: '',
   sending: false,
   readiness: null as Readiness | null,
-  /** Which view the rail shows: focus, the 3D map, readiness, or deliverables. */
+  /** Which view the rail shows: focus, the map, readiness, or deliverables. */
   view: readStored<View>('groundwork.view', 'map'),
+  /** How the map draws its cards: in 3D, as a board, or as an outline. */
+  mapLayout: readStored<MapLayout>('groundwork.mapLayout', '3d'),
+  mapLayouts: MAP_LAYOUTS,
+  /** The card being dragged on the board, and the cell it is over. */
+  dragId: null as string | null,
+  dropCell: '',
   /** The kickoff step open on the track, or null for the current one. */
   kickoffOpen: null as string | null,
   /** Items skipped in focus mode this visit. They wait at the end of the queue. */
@@ -709,6 +716,76 @@ export const state = Alpine.reactive({
     const left = 64 + (this.view === 'map' && this.listOpen && wide ? 320 : 0)
     return { left: `${left}px`, right: `${this.rightInset}px` }
   },
+  // The board and the outline: the same cards as the 3D map, drawn flat.
+  get board(): Board {
+    return buildBoard(this.visibleNodes, this.visibleGaps, this.visibleStories)
+  },
+  get outline(): OutlineSection[] {
+    return buildOutline(this.visibleNodes, this.visibleGaps)
+  },
+  firstLine,
+  setMapLayout(layout: MapLayout) {
+    this.mapLayout = layout
+    store('groundwork.mapLayout', layout)
+    onChange()
+    if (layout === '3d') setTimeout(fitHandler, 80)
+    else revealSelection()
+  },
+  /** `V`: the next way to draw the map. */
+  cycleLayout() {
+    const keys = MAP_LAYOUTS.map((l) => l.key)
+    const next = keys[(keys.indexOf(this.mapLayout) + 1) % keys.length]
+    this.setMapLayout(next)
+    this.flash(MAP_LAYOUTS.find((l) => l.key === next)!.name)
+  },
+  /** A card clicked in any layout: a thought, a ghost gap (gap:<id>) or a story (story:<id>). */
+  clickCard(id: string) {
+    // In focus mode, clicking another card leaves focus and opens it in the map.
+    if (this.view === 'focus') {
+      this.setView('map')
+      if (id.startsWith('gap:')) return this.showGapInMap(id.slice(4))
+      if (id.startsWith('story:')) return this.selectStory(id.slice(6))
+      return this.goToNode(id)
+    }
+    if (id.startsWith('gap:')) return this.selectGap(id.slice(4))
+    if (id.startsWith('story:')) return this.selectStory(id.slice(6))
+    if (this.mode === 'link' && this.selectedId && id !== this.selectedId) void this.toggleLink(id)
+    else this.select(id)
+  },
+  clickBackground() {
+    if (this.view === 'focus') return
+    if (this.mode !== 'link') this.select(null)
+  },
+  /** Linked to the open card, so it lights up on the board. */
+  isLinked(id: string): boolean {
+    return !!this.selected?.links.includes(id)
+  },
+  /** In focus mode everything but the current item and what it touches is dimmed. */
+  dimmed(id: string): boolean {
+    return this.view === 'focus' && !!this.focusCurrent && !this.focusIds.includes(id)
+  },
+  /** Dropping a card in another cell gives it that topic and altitude. */
+  async moveCard(id: string, column: string, altitude: number) {
+    const node = this.nodes[id]
+    this.dragId = null
+    this.dropCell = ''
+    if (!node || node.error) return
+    const col = this.board.columns.find((c) => c.key === column)
+    const topic = column && col ? col.name : ''
+    const changes: NodeInput = {}
+    if (topicKey(node.topic) !== column) changes.topic = topic
+    if (node.altitude !== altitude) changes.altitude = altitude
+    if (!Object.keys(changes).length) return
+    try {
+      this.upsert(await updateNode(id, changes))
+      this.markFresh(id)
+      const where = [changes.topic !== undefined && `to ${topic || 'no topic'}`, changes.altitude !== undefined && `to ${ALTITUDE_WORDS[altitude]}`].filter(Boolean).join(', ')
+      this.flash(`Moved ${where}`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+
   get linkedNodes(): GNode[] {
     const sel = this.selected
     if (!sel) return []
@@ -775,6 +852,7 @@ export const state = Alpine.reactive({
     this.gapAnswer = ''
     this.setDetailsMinimized(false)
     onChange()
+    revealSelection()
   },
   /**
    * Write about a gap. Either way the text becomes a thought where the gap
@@ -831,6 +909,7 @@ export const state = Alpine.reactive({
     this.editing = null
     this.syncDraft()
     onChange()
+    if (id) revealSelection()
   },
 
   /** Copy the node into the panel, except fields the person is busy with. */
@@ -1165,6 +1244,18 @@ function focusWhenVisible(id: string, tries = 20) {
     const el = document.getElementById(id)
     if (el && el.offsetParent !== null) return el.focus()
     if (tries > 0) requestAnimationFrame(() => focusWhenVisible(id, tries - 1))
+  })
+}
+
+/** On the board and the outline, scroll the open card into view, as the 3D camera flies to it. */
+function revealSelection() {
+  if (state.mapLayout === '3d') return
+  Alpine.nextTick(() => {
+    const id = state.selectedId ?? (state.selectedGapId ? `gap:${state.selectedGapId}` : null)
+    if (!id) return
+    for (const el of document.querySelectorAll<HTMLElement>(`[data-card="${CSS.escape(id)}"]`)) {
+      if (el.offsetParent !== null) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+    }
   })
 }
 

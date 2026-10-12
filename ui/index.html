@@ -25,9 +25,200 @@
       <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></symbol>
       <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z" /></symbol>
       <symbol id="i-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" /></symbol>
+      <symbol id="i-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" /></symbol>
+      <symbol id="i-columns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125Z" /></symbol>
+      <symbol id="i-outline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></symbol>
     </svg>
 
-    <div id="scene" class="fixed inset-y-0" :class="!['map', 'focus'].includes($store.gw.view) && 'invisible'"></div>
+    <div id="scene" class="fixed inset-y-0" :class="(!['map', 'focus'].includes($store.gw.view) || $store.gw.mapLayout !== '3d') && 'invisible'"></div>
+
+    <!-- Board: the same cards, a column per topic and a row per altitude -->
+    <main
+      x-cloak
+      x-show="['map', 'focus'].includes($store.gw.view) && $store.gw.mapLayout === 'board'"
+      id="board-view"
+      class="fixed inset-y-0 overflow-auto bg-ink text-[12.5px]"
+      :style="$store.gw.mapArea"
+      @click.self="$store.gw.clickBackground()"
+    >
+      <p x-show="!$store.gw.board.columns.length" class="px-8 pt-20 text-fog/50">Nothing on this page yet. Add a thought below.</p>
+      <div
+        x-show="$store.gw.board.columns.length"
+        class="inline-grid gap-x-2 px-4 pb-32"
+        :style="{ gridTemplateColumns: '76px repeat(' + $store.gw.board.columns.length + ', 220px)' }"
+        @click.self="$store.gw.clickBackground()"
+      >
+        <div class="sticky left-0 top-0 z-[3] bg-ink"></div>
+        <template x-for="col in $store.gw.board.columns" :key="col.key">
+          <div class="sticky top-0 z-[2] flex items-baseline justify-between gap-2 bg-ink px-1 pb-2 pt-16">
+            <span class="truncate font-semibold text-fog" :class="!col.key && 'text-fog/50'" x-text="$store.gw.label(col.name)"></span>
+            <span class="flex shrink-0 gap-2 text-[11px]">
+              <span x-show="col.missing" class="text-rose-300/80" x-text="col.missing + ' missing'"></span>
+              <span :class="col.key && col.count <= 2 ? 'text-amber-200/70' : 'text-fog/35'" x-text="col.key && col.count <= 2 ? col.count + ', thin' : col.count"></span>
+            </span>
+          </div>
+        </template>
+
+        <template x-for="row in $store.gw.board.rows" :key="row.altitude">
+          <div class="contents">
+            <div class="sticky left-0 z-[1] border-t border-white/5 bg-ink py-2.5 pr-2 text-[11px] text-fog/40" :title="'Altitude ' + row.altitude">
+              <span x-text="$store.gw.label(row.word)"></span>
+            </div>
+            <template x-for="cell in row.cells" :key="cell.column">
+              <div
+                class="flex min-h-12 flex-col gap-1.5 rounded-md border-t border-white/5 py-2"
+                :class="$store.gw.dropCell === cell.column + ':' + row.altitude && 'bg-accent/10 outline-1 outline-dashed outline-accent/60'"
+                @click.self="$store.gw.clickBackground()"
+                @dragover.prevent="$store.gw.dragId && ($store.gw.dropCell = cell.column + ':' + row.altitude)"
+                @drop.prevent="$store.gw.moveCard($store.gw.dragId, cell.column, row.altitude)"
+              >
+                <template x-for="n in cell.nodes" :key="n.id">
+                  <button
+                    draggable="true"
+                    :data-card="n.id"
+                    class="board-card"
+                    :class="{
+                      'is-settled': n.status === 'settled',
+                      'opacity-45': n.status === 'parked' && !$store.gw.dimmed(n.id),
+                      'opacity-20': $store.gw.dimmed(n.id),
+                      'ring-2 ring-accent': $store.gw.selectedId === n.id,
+                      'ring-1 ring-accent/50': $store.gw.selectedId !== n.id && $store.gw.isLinked(n.id),
+                      'ring-1 ring-white/40': $store.gw.selectedId !== n.id && !$store.gw.isLinked(n.id) && $store.gw.freshIds.includes(n.id),
+                      'cursor-copy': $store.gw.mode === 'link'
+                    }"
+                    :style="{ '--type': $store.gw.typeColors[n.type] }"
+                    :title="n.type + (n.status !== 'open' ? ', ' + n.status : '')"
+                    @click="$store.gw.clickCard(n.id)"
+                    @dragstart="$store.gw.dragId = n.id; $event.dataTransfer.setData('text/plain', n.id); $event.dataTransfer.effectAllowed = 'move'"
+                    @dragend="$store.gw.dragId = null; $store.gw.dropCell = ''"
+                  >
+                    <span class="line-clamp-3" x-text="n.title"></span>
+                    <span x-show="$store.gw.hasQuestion(n.id)" class="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-question" title="Claude asked something"></span>
+                  </button>
+                </template>
+                <template x-for="g in cell.gaps" :key="g.id">
+                  <button
+                    :data-card="'gap:' + g.id"
+                    class="rounded-md border border-dashed px-2.5 py-2 text-left"
+                    :class="[
+                      g.severity === 'blocking' ? 'border-rose-400/50 text-rose-200/90' : 'border-white/25 text-fog/65',
+                      $store.gw.selectedGapId === g.id && 'ring-2 ring-accent',
+                      $store.gw.dimmed('gap:' + g.id) && 'opacity-20'
+                    ]"
+                    :title="g.why"
+                    @click="$store.gw.clickCard('gap:' + g.id)"
+                  >
+                    <span class="block text-[10.5px] opacity-70" x-text="'Missing · ' + g.severity"></span>
+                    <span class="line-clamp-3" x-text="g.title"></span>
+                  </button>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <template x-if="$store.gw.board.stories.some((s) => s.length)">
+          <div class="contents">
+            <div class="sticky left-0 z-[1] border-t border-line bg-ink py-2.5 text-[11px] text-fog/40">Stories</div>
+            <template x-for="(list, i) in $store.gw.board.stories" :key="i">
+              <div class="flex flex-col gap-1.5 border-t border-line py-2">
+                <template x-for="st in list" :key="st.id">
+                  <button
+                    :data-card="'story:' + st.id"
+                    class="rounded-md bg-white/5 px-2.5 py-2 text-left text-fog/80 hover:bg-white/10"
+                    :class="$store.gw.selectedStoryId === st.id && 'ring-2 ring-accent'"
+                    @click="$store.gw.clickCard('story:' + st.id)"
+                  >
+                    <span class="block text-[10.5px]" :class="{ 'text-fog/45': st.status === 'not-started', 'text-question': st.status === 'partial', 'text-emerald-300': st.status === 'done' }" x-text="'Story · ' + st.status.replace('-', ' ')"></span>
+                    <span class="line-clamp-3" x-text="st.title"></span>
+                  </button>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </main>
+
+    <!-- Outline: the same cards as a document, a section per topic -->
+    <main
+      x-cloak
+      x-show="['map', 'focus'].includes($store.gw.view) && $store.gw.mapLayout === 'outline'"
+      id="outline-view"
+      class="fixed inset-y-0 overflow-y-auto bg-ink text-[13px]"
+      :style="$store.gw.mapArea"
+      @click.self="$store.gw.clickBackground()"
+    >
+      <div class="mx-auto max-w-2xl px-8 pb-32 pt-16" @click.self="$store.gw.clickBackground()">
+        <p x-show="!$store.gw.outline.length" class="text-fog/50">Nothing on this page yet. Add a thought below.</p>
+        <template x-for="sec in $store.gw.outline" :key="sec.key">
+          <section class="mb-8">
+            <h2 class="flex items-baseline gap-2 border-b border-line pb-1.5">
+              <span class="text-[15px] font-semibold text-fog" x-text="$store.gw.label(sec.name)"></span>
+              <span class="text-xs text-fog/40" x-text="sec.count"></span>
+            </h2>
+            <template x-for="lv in sec.levels" :key="lv.altitude">
+              <div class="mt-3">
+                <span class="label" x-text="$store.gw.label(lv.word)"></span>
+                <template x-for="n in lv.nodes" :key="n.id">
+                  <button
+                    :data-card="n.id"
+                    class="flex w-full gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
+                    :class="{
+                      'bg-accent/15 hover:bg-accent/20': $store.gw.selectedId === n.id,
+                      'bg-white/5': $store.gw.selectedId !== n.id && ($store.gw.isLinked(n.id) || $store.gw.freshIds.includes(n.id)),
+                      'opacity-45': n.status === 'parked' || $store.gw.dimmed(n.id)
+                    }"
+                    @click="$store.gw.clickCard(n.id)"
+                  >
+                    <span class="mt-[7px] size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[n.type] }"></span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block text-fog" x-text="n.title"></span>
+                      <span x-show="$store.gw.firstLine(n.body)" class="mt-0.5 line-clamp-2 block text-fog/50" x-text="$store.gw.firstLine(n.body)"></span>
+                    </span>
+                    <span x-show="$store.gw.hasQuestion(n.id)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
+                    <span x-show="n.status !== 'open'" class="mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[10.5px]" :class="n.status === 'settled' ? 'bg-emerald-400/10 text-emerald-300/80' : 'bg-white/8 text-fog/50'" x-text="n.status"></span>
+                  </button>
+                </template>
+                <template x-for="g in lv.gaps" :key="g.id">
+                  <button
+                    :data-card="'gap:' + g.id"
+                    class="mt-1 flex w-full gap-2.5 rounded-md border border-dashed px-2 py-1.5 text-left"
+                    :class="[g.severity === 'blocking' ? 'border-rose-400/40 text-rose-200/90' : 'border-white/20 text-fog/65', $store.gw.selectedGapId === g.id && 'bg-accent/15', $store.gw.dimmed('gap:' + g.id) && 'opacity-45']"
+                    @click="$store.gw.clickCard('gap:' + g.id)"
+                  >
+                    <span class="min-w-0 flex-1">
+                      <span class="block" x-text="'Missing: ' + g.title"></span>
+                      <span class="mt-0.5 block text-fog/45" x-text="g.why"></span>
+                    </span>
+                    <span class="mt-0.5 h-fit shrink-0 text-[10.5px] opacity-70" x-text="g.severity"></span>
+                  </button>
+                </template>
+              </div>
+            </template>
+          </section>
+        </template>
+      </div>
+    </main>
+
+    <!-- How the map draws its cards -->
+    <div x-cloak x-show="$store.gw.view === 'map'" class="pointer-events-none fixed top-3 z-[5] flex justify-center px-4" :style="$store.gw.mapArea">
+      <div id="layouts" class="pointer-events-auto flex gap-0.5 rounded-xl border border-line bg-panel p-1 shadow-md shadow-black/20">
+        <template x-for="l in $store.gw.mapLayouts" :key="l.key">
+          <button
+            class="grid size-8 place-items-center rounded-lg"
+            :class="$store.gw.mapLayout === l.key ? 'bg-white/12 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
+            :id="'layout-' + l.key"
+            :title="l.name + ' ( V )'"
+            :aria-label="l.name"
+            :aria-pressed="$store.gw.mapLayout === l.key"
+            @click="$store.gw.setMapLayout(l.key)"
+          >
+            <svg class="size-[18px]"><use :href="'#' + l.icon" /></svg>
+          </button>
+        </template>
+      </div>
+    </div>
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
@@ -231,7 +422,7 @@
     </div>
 
     <!-- Link mode banner -->
-    <div x-cloak x-show="$store.gw.view === 'map' && $store.gw.mode === 'link'" class="pointer-events-none fixed top-4 flex justify-center px-4" :style="$store.gw.mapArea">
+    <div x-cloak x-show="$store.gw.view === 'map' && $store.gw.mode === 'link'" class="pointer-events-none fixed top-16 z-[5] flex justify-center px-4" :style="$store.gw.mapArea">
       <div id="link-banner" class="rounded-full border border-accent/40 bg-accent/15 px-4 py-1.5 text-xs text-sky-100">
         Click cards to link or unlink them. Esc to stop.
       </div>
@@ -286,9 +477,9 @@
           </button>
         </div>
 
-        <div class="mx-1 h-6 w-px bg-line"></div>
+        <div x-show="$store.gw.mapLayout === '3d'" class="mx-1 h-6 w-px bg-line"></div>
 
-        <div class="rounded-xl bg-white/5 p-0.5">
+        <div x-show="$store.gw.mapLayout === '3d'" class="rounded-xl bg-white/5 p-0.5">
           <button id="fit-button" type="button" class="tool" title="Fit the map ( F )" @click="$store.gw.fit()">
             <svg class="size-5"><use href="#i-fit" /></svg>
           </button>

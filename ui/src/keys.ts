@@ -5,7 +5,7 @@ function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-export function bindKeys(captureInput: () => HTMLInputElement | null, actions: { fit: () => void; pan: (on: boolean) => void }) {
+export function bindKeys(captureInput: () => HTMLInputElement | null, actions: { fit: () => void; layout: () => void; pan: (on: boolean) => void }) {
   window.addEventListener('keyup', (e) => {
     if (e.key === ' ') actions.pan(false)
   })
@@ -22,6 +22,7 @@ export function bindKeys(captureInput: () => HTMLInputElement | null, actions: {
 
     switch (e.key) {
       case ' ':
+        if (state.mapLayout !== '3d') break
         e.preventDefault()
         if (!e.repeat) actions.pan(true)
         break
@@ -47,6 +48,10 @@ export function bindKeys(captureInput: () => HTMLInputElement | null, actions: {
       case 'f':
       case 'F':
         actions.fit()
+        break
+      case 'v':
+      case 'V':
+        if (state.view === 'map') actions.layout()
         break
       case 'Delete':
       case 'Backspace':

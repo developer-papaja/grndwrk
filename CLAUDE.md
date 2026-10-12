@@ -183,6 +183,7 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 - **Status shows as weight.** Settled has an outline in its type color, open is normal, parked is dimmed.
 - **Stories are cards of their own kind,** in a row under the map, in the column of their first source thought, with faint lines to the thoughts they came from. They are not nodes; they live in `stories/`.
 - **Readiness gaps are ghost nodes.** Translucent, outlined, placed near the cluster they relate to, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
+- **The map has three layouts, one switch** (top of the map, or `V`): **Space** is the 3D map above; **Board** is the same grid flat, a column per topic and a row per altitude, newest first in each cell, gaps as dashed cards and stories in a row under it, and dragging a card to another cell changes its topic and altitude; **Outline** is a section per topic, read top to bottom from vision to detail, with the first line of each thought's notes. Selection, the panels, link mode and Focus work the same in all three. The layout is a view setting kept in the browser, not in the files.
 
 ## Interaction
 
@@ -194,7 +195,7 @@ Decisions stay as nodes with `type: decision`. Stories reference them through `f
 - A quick capture bar is always available. Type and press Enter to create a node. Prefixes are optional: `?` makes a question, `!` makes a decision, with or without a space after.
 - A new node captured while a node is selected links to it and takes its topic.
 - `/` opens the list: every node grouped by topic, with counts that show thin topics. Typing filters, Enter opens.
-- Keys: `N` new node (linked to the selection if any), `L` link mode, `[` and `]` move altitude, `/` list and search, `F` fit the map, `Delete` remove (press twice), `Esc` back.
+- Keys: `N` new node (linked to the selection if any), `L` link mode, `[` and `]` move altitude, `/` list and search, `F` fit the map, `V` next layout, `Delete` remove (press twice), `Esc` back.
 - The UI follows a design tool's dark interface: icons (Heroicons, inlined) for tools and panel actions, with their name and key in a tooltip; words for content such as titles, topics and labels. Neutral greys, one blue accent, subtle shadows.
 
 ## Claude Code commands

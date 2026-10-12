@@ -9,23 +9,8 @@ import { onFit, onNodesChange, state } from './state'
 const RAIL = 64
 
 const scene = createScene(document.getElementById('scene')!, {
-  onNodeClick: (id) => {
-    // In focus mode, clicking another card leaves focus and opens it in the map.
-    if (state.view === 'focus') {
-      state.setView('map')
-      if (id.startsWith('gap:')) return state.showGapInMap(id.slice(4))
-      if (id.startsWith('story:')) return state.selectStory(id.slice(6))
-      return state.goToNode(id)
-    }
-    if (id.startsWith('gap:')) return state.selectGap(id.slice(4))
-    if (id.startsWith('story:')) return state.selectStory(id.slice(6))
-    if (state.mode === 'link' && state.selectedId && id !== state.selectedId) void state.toggleLink(id)
-    else state.select(id)
-  },
-  onBackgroundClick: () => {
-    if (state.view === 'focus') return
-    if (state.mode !== 'link') state.select(null)
-  },
+  onNodeClick: (id) => state.clickCard(id),
+  onBackgroundClick: () => state.clickBackground(),
 })
 
 // Redraw at most once per frame, however many events arrive.
@@ -58,7 +43,7 @@ Alpine.effect(() => {
   const left = RAIL + (state.view === 'map' && state.listOpen && wide ? 320 : 0)
   scene.setInsets({ left, right: state.rightInset })
 })
-Alpine.effect(() => scene.setActive(state.view === 'map' || state.view === 'focus'))
+Alpine.effect(() => scene.setActive((state.view === 'map' || state.view === 'focus') && state.mapLayout === '3d'))
 
 // In focus mode the map follows the queue: when the current item changes,
 // for any reason (an answer, a skip, a file changed on disk), fly to the next.
@@ -72,6 +57,7 @@ Alpine.effect(() => {
 
 bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
   fit: () => state.fit(),
+  layout: () => state.cycleLayout(),
   pan: (on) => scene.setPanning(on),
 })
 onFit(() => scene.fit())
