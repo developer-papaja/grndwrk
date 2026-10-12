@@ -56,3 +56,60 @@ export function commentsForScreen(screen: Screen, nodes: GNode[]): GNode[] {
     return screen.code.length > 0 && overlaps(screen.code, where)
   })
 }
+
+export interface SitemapBox {
+  id: string
+  x: number
+  y: number
+  depth: number
+}
+
+export interface SitemapLayout {
+  boxes: SitemapBox[]
+  /** Parent to child, as drawn in the tree. The root is ''. */
+  edges: { from: string; to: string }[]
+  width: number
+  height: number
+}
+
+export const BOX = { width: 200, height: 96, gapX: 28, gapY: 64 }
+
+/**
+ * The screens drawn as a site map, top down: the product at the top, then
+ * each screen under its parent. Leaves sit side by side, and a parent is
+ * centered over its children. The root box has the id ''.
+ */
+export function layoutSitemap(screens: Screen[]): SitemapLayout {
+  const rows = screenTree(screens)
+  // The tree as screenTree resolved it: each row's parent is the nearest row above at one less depth.
+  const parentOf = new Map<string, string>()
+  const children = new Map<string, string[]>([['', []]])
+  const stack: string[] = []
+  for (const { screen, depth } of rows) {
+    stack.length = depth
+    const parent = depth ? stack[depth - 1] : ''
+    parentOf.set(screen.id, parent)
+    children.set(parent, [...(children.get(parent) ?? []), screen.id])
+    children.set(screen.id, children.get(screen.id) ?? [])
+    stack.push(screen.id)
+  }
+  const slot = BOX.width + BOX.gapX
+  const level = BOX.height + BOX.gapY
+  const boxes = new Map<string, SitemapBox>()
+  let next = 0
+  const place = (id: string, depth: number): number => {
+    const kids = children.get(id) ?? []
+    const xs = kids.map((k) => place(k, depth + 1))
+    const x = xs.length ? (xs[0] + xs[xs.length - 1]) / 2 : next++ * slot
+    boxes.set(id, { id, x, y: depth * level, depth })
+    return x
+  }
+  place('', 0)
+  const all = [...boxes.values()]
+  return {
+    boxes: all,
+    edges: [...parentOf.entries()].map(([to, from]) => ({ from, to })),
+    width: Math.max(...all.map((b) => b.x)) + BOX.width,
+    height: Math.max(...all.map((b) => b.y)) + BOX.height,
+  }
+}

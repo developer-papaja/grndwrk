@@ -26,6 +26,7 @@
       <symbol id="i-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" /></symbol>
       <symbol id="i-columns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125Z" /></symbol>
       <symbol id="i-outline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></symbol>
+      <symbol id="i-tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="4.5" rx="1" /><rect x="3" y="16.5" width="6" height="4.5" rx="1" /><rect x="15" y="16.5" width="6" height="4.5" rx="1" /><path d="M12 7.5v4.5M6 16.5V12h12v4.5" /></symbol>
       <symbol id="i-screens" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" /></symbol>
     </svg>
 
@@ -498,17 +499,73 @@
 
       <template x-if="$store.gw.screens.length">
         <div class="flex min-w-0 flex-1">
-          <!-- The tree -->
-          <div class="flex w-[380px] shrink-0 flex-col border-r border-line">
-            <div class="px-5 pb-3 pt-6">
+          <!-- The screens: drawn as a site map, or as a list -->
+          <div class="flex flex-col border-r border-line" :class="$store.gw.sitemapLayout === 'drawn' ? 'min-w-0 flex-1' : 'w-[380px] shrink-0'">
+            <div class="flex items-start justify-between gap-4 px-5 pb-3 pt-6">
+             <div class="min-w-0">
               <h1 class="text-xl font-semibold text-fog">Sitemap</h1>
               <p class="mt-1 text-xs text-fog/50">
                 <span x-text="$store.gw.sitemapSummary.screens + ($store.gw.sitemapSummary.screens === 1 ? ' screen' : ' screens')"></span>
                 <span x-show="$store.gw.sitemapSummary.noStory" x-text="' · ' + $store.gw.sitemapSummary.noStory + ' without a story'"></span>
                 <span x-show="$store.gw.sitemapSummary.questions" class="text-question" x-text="' · ' + $store.gw.sitemapSummary.questions + ($store.gw.sitemapSummary.questions === 1 ? ' question' : ' questions')"></span>
               </p>
+             </div>
+             <div class="flex shrink-0 items-center gap-2">
+              <div x-show="$store.gw.sitemapLayout === 'drawn'" class="flex items-center gap-0.5 rounded-lg bg-white/5 p-0.5 text-xs text-fog/60">
+                <button class="grid size-7 place-items-center rounded-md hover:bg-white/10 hover:text-fog" title="Smaller" @click="$store.gw.zoomSitemap(1 / 1.2)">−</button>
+                <button class="h-7 rounded-md px-1.5 hover:bg-white/10 hover:text-fog" title="Fit to the window" @click="$store.gw.zoomSitemap('fit')" x-text="Math.round($store.gw.sitemapZoom * 100) + '%'"></button>
+                <button class="grid size-7 place-items-center rounded-md hover:bg-white/10 hover:text-fog" title="Bigger" @click="$store.gw.zoomSitemap(1.2)">+</button>
+              </div>
+              <div class="flex gap-0.5 rounded-lg bg-white/5 p-0.5" id="sitemap-layouts">
+                <button class="grid size-7 place-items-center rounded-md" :class="$store.gw.sitemapLayout === 'drawn' ? 'bg-white/15 text-fog' : 'text-fog/55 hover:text-fog'" title="Drawn as a site map" @click="$store.gw.setSitemapLayout('drawn')">
+                  <svg class="size-4"><use href="#i-tree" /></svg>
+                </button>
+                <button class="grid size-7 place-items-center rounded-md" :class="$store.gw.sitemapLayout === 'list' ? 'bg-white/15 text-fog' : 'text-fog/55 hover:text-fog'" title="As a list" @click="$store.gw.setSitemapLayout('list')">
+                  <svg class="size-4"><use href="#i-outline" /></svg>
+                </button>
+              </div>
+             </div>
             </div>
-            <ol class="flex-1 overflow-y-auto px-2 pb-24" id="screens">
+
+            <!-- Drawn: the product on top, each screen under the one it opens from -->
+            <div x-show="$store.gw.sitemapLayout === 'drawn'" id="sitemap-drawn" class="flex-1 overflow-auto">
+              <div class="relative" :style="{ width: $store.gw.sitemapDrawing.width * $store.gw.sitemapZoom + 'px', height: $store.gw.sitemapDrawing.height * $store.gw.sitemapZoom + 'px' }">
+                <div class="absolute left-0 top-0 origin-top-left" :style="{ width: $store.gw.sitemapDrawing.width + 'px', height: $store.gw.sitemapDrawing.height + 'px', transform: 'scale(' + $store.gw.sitemapZoom + ')' }">
+                  <svg class="pointer-events-none absolute inset-0" :width="$store.gw.sitemapDrawing.width" :height="$store.gw.sitemapDrawing.height" x-html="$store.gw.sitemapDrawing.svg"></svg>
+                  <template x-for="b in $store.gw.sitemapDrawing.boxes" :key="'b' + b.id">
+                    <div class="absolute" :style="{ left: b.x + 'px', top: b.y + 'px', width: $store.gw.box.width + 'px', height: $store.gw.box.height + 'px' }">
+                      <template x-if="!b.screen">
+                        <div class="flex h-full flex-col justify-center rounded-lg border border-white/20 bg-white/8 px-3">
+                          <span class="truncate font-semibold text-fog" x-text="$store.gw.project.name || 'The product'"></span>
+                          <span class="text-xs text-fog/50" x-text="$store.gw.screens.length + ($store.gw.screens.length === 1 ? ' screen' : ' screens')"></span>
+                        </div>
+                      </template>
+                      <template x-if="b.screen">
+                        <button
+                          class="flex h-full w-full flex-col rounded-lg border bg-panel px-3 py-2 text-left shadow-sm shadow-black/30"
+                          :class="[
+                            $store.gw.screen?.id === b.id ? 'border-accent ring-1 ring-accent' : $store.gw.screen?.leads_to.includes(b.id) ? 'border-accent/50' : 'border-line hover:border-white/25',
+                            b.screen.status === 'planned' && 'border-dashed'
+                          ]"
+                          :data-screen="b.id"
+                          @click="$store.gw.selectScreen(b.id)"
+                        >
+                          <span class="flex w-full items-center gap-1.5">
+                            <span class="size-1.5 shrink-0 rounded-full" :class="{ 'bg-emerald-400': b.screen.status === 'built', 'bg-question': b.screen.status === 'partial', 'bg-white/30': b.screen.status === 'planned' }" :title="b.screen.status"></span>
+                            <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-fog" x-text="b.screen.title"></span>
+                            <span x-show="$store.gw.questionsOn(b.screen)" class="size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
+                          </span>
+                          <span class="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-fog/55" x-text="b.screen.purpose || 'No purpose written yet'"></span>
+                          <span class="mt-auto truncate text-[10.5px] text-fog/35" x-text="b.screen.audience.length ? 'For ' + b.screen.audience.join(', ') : ''"></span>
+                        </button>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <ol x-show="$store.gw.sitemapLayout === 'list'" class="flex-1 overflow-y-auto px-2 pb-24" id="screens">
               <template x-for="row in $store.gw.screenRows" :key="row.screen.id">
                 <li>
                   <button
@@ -536,7 +593,7 @@
 
           <!-- The open screen -->
           <template x-if="$store.gw.screen">
-            <div class="min-w-0 flex-1 overflow-y-auto" id="screen">
+            <div class="overflow-y-auto" :class="$store.gw.sitemapLayout === 'drawn' ? 'w-[440px] shrink-0' : 'min-w-0 flex-1'" id="screen">
               <div class="max-w-2xl px-8 pb-24 pt-6">
                 <div class="flex flex-wrap items-center gap-2 text-[11px]">
                   <span

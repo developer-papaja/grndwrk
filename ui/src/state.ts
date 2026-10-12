@@ -2,7 +2,7 @@ import Alpine from 'alpinejs'
 import type { DesignCheck, Gap, GNode, NodeInput, NodeType, Readiness, Screen, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
 import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, updateNode, updateScreen, uploadImage } from './api'
-import { commentsForScreen, screenTree, storiesForScreen } from '../../src/shared/screens'
+import { BOX, commentsForScreen, layoutSitemap, screenTree, storiesForScreen } from '../../src/shared/screens'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
@@ -102,6 +102,10 @@ export const state = Alpine.reactive({
   screenId: readStored<string | null>('groundwork.screen', null),
   screenReply: '',
   screenStatus: '',
+  /** The sitemap drawn as boxes and lines, or as a list. */
+  sitemapLayout: readStored<'drawn' | 'list'>('groundwork.sitemapLayout', 'drawn'),
+  sitemapZoom: readStored('groundwork.sitemapZoom', 1),
+  box: BOX,
   brief: null as string | null,
   starter: null as string | null,
   deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'starter'>('groundwork.deliverablesTab', 'brief'),
@@ -315,6 +319,68 @@ export const state = Alpine.reactive({
       questions: this.screens.reduce((n, s) => n + openQuestions(s.body), 0),
       guesses: this.screens.filter((s) => s.source === 'inferred').length,
     }
+  },
+  /** The sitemap as boxes, tree lines, and the links out of the open screen. */
+  get sitemapDrawing() {
+    const layout = layoutSitemap(this.screens)
+    const pad = 24
+    const at = new Map(layout.boxes.map((b) => [b.id, { x: b.x + pad, y: b.y + pad }]))
+    const { width: w, height: h } = BOX
+    const tree = layout.edges.map((e) => {
+      const a = at.get(e.from)!
+      const b = at.get(e.to)!
+      const mid = a.y + h + BOX.gapY / 2
+      return `M${a.x + w / 2},${a.y + h} V${mid} H${b.x + w / 2} V${b.y}`
+    })
+    const open: Screen | null = this.screen
+    const links = (open?.leads_to ?? []).filter((id: string) => at.has(id)).map((id: string) => {
+      const a = at.get(open!.id)!
+      const b = at.get(id)!
+      // Above or below: out of the bottom or top, into the facing edge.
+      if (Math.abs(b.x - a.x) < w) {
+        const down = b.y > a.y
+        const sx = a.x + w / 2
+        const ex = b.x + w / 2
+        const sy = a.y + (down ? h : 0)
+        const ey = b.y + (down ? 0 : h)
+        const bend = Math.max(30, Math.abs(ey - sy) / 2) * (down ? 1 : -1)
+        // Off to the side a little, so it does not hide under the tree line.
+        return { id, d: `M${sx + 24},${sy} C${sx + 24},${sy + bend} ${ex + 24},${ey - bend} ${ex + 24},${ey}` }
+      }
+      // Out of the side facing the target, into the side facing back.
+      const right = b.x >= a.x
+      const sx = a.x + (right ? w : 0)
+      const ex = b.x + (right ? 0 : w)
+      const sy = a.y + h / 2
+      const ey = b.y + h / 2
+      const bend = Math.max(40, Math.abs(ex - sx) / 2)
+      return { id, d: `M${sx},${sy} C${sx + (right ? bend : -bend)},${sy} ${ex + (right ? -bend : bend)},${ey} ${ex},${ey}` }
+    })
+    // Lines as SVG markup: Alpine's template loops cannot live inside an svg element.
+    const svg = [
+      '<defs><marker id="sitemap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0d99ff" /></marker></defs>',
+      ...tree.map((d) => `<path d="${d}" fill="none" stroke="#4a4a4a" stroke-width="1.5" />`),
+      ...links.map((l) => `<path d="${l.d}" fill="none" stroke="#0d99ff" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sitemap-arrow)" />`),
+    ].join('')
+    return {
+      boxes: layout.boxes.map((b) => ({ ...b, x: b.x + pad, y: b.y + pad, screen: this.screenById(b.id) ?? null })),
+      svg,
+      width: layout.width + pad * 2,
+      height: layout.height + pad * 2,
+    }
+  },
+  setSitemapLayout(layout: 'drawn' | 'list') {
+    this.sitemapLayout = layout
+    store('groundwork.sitemapLayout', layout)
+  },
+  zoomSitemap(by: number | 'fit') {
+    if (by === 'fit') {
+      const pane = document.getElementById('sitemap-drawn')
+      const d = this.sitemapDrawing
+      by = pane ? Math.min(1, (pane.clientWidth - 16) / d.width, (pane.clientHeight - 16) / d.height) : 1
+    } else by = this.sitemapZoom * by
+    this.sitemapZoom = Math.round(Math.min(1.5, Math.max(0.3, by)) * 100) / 100
+    store('groundwork.sitemapZoom', this.sitemapZoom)
   },
   selectScreen(id: string) {
     this.screenId = id
