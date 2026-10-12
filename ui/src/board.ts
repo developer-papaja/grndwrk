@@ -1,95 +1,148 @@
-import type { Gap, GNode, Story } from '../../src/shared/types'
+import type { Gap, GNode, Screen, Story } from '../../src/shared/types'
+import { commentsForScreen, screenTree, storiesForScreen } from '../../src/shared/screens'
 import { ALTITUDE_WORDS, topicColumns, topicKey } from './layout'
 
 /** How the map draws its cards. The same files and the same meaning, drawn two ways. */
 export type MapLayout = 'board' | 'outline'
 export const MAP_LAYOUTS: { key: MapLayout; name: string; icon: string }[] = [
-  { key: 'board', name: 'Board: topics as columns, altitude as rows', icon: 'i-columns' },
-  { key: 'outline', name: 'Outline: topics as sections, to read through', icon: 'i-outline' },
+  { key: 'board', name: 'Board: a column per page or topic', icon: 'i-columns' },
+  { key: 'outline', name: 'Outline: a section per page or topic, to read through', icon: 'i-outline' },
 ]
 
+/** What the columns are: the product's pages from the sitemap, or topics. */
+export type GroupBy = 'page' | 'topic'
+
+/** A card in a column: a thought, or a ghost for something missing. */
+export type BoardItem = { kind: 'node'; id: string; node: GNode; altitude: number } | { kind: 'gap'; id: string; gap: Gap; altitude: number }
+
 export interface BoardColumn {
+  /** The screen id or topic key. Empty for General, or for no topic. */
   key: string
   name: string
+  /** Where a screen sits in the sitemap, like "Plan › Training plans". */
+  path: string
   count: number
-  /** Open gaps in this topic. */
+  /** Open gaps in this column. */
   missing: number
-}
-
-export interface BoardCell {
-  column: string
-  nodes: GNode[]
-  gaps: Gap[]
-}
-
-export interface BoardRow {
-  altitude: number
-  word: string
-  cells: BoardCell[]
+  /** From vision down to detail, newest first within a level. */
+  items: BoardItem[]
+  stories: Story[]
 }
 
 export interface Board {
+  groupBy: GroupBy
   columns: BoardColumn[]
-  rows: BoardRow[]
-  /** Stories under each column, in the column of their first source thought. */
-  stories: Story[][]
 }
 
 const time = (n: GNode) => (n.modified ? Date.parse(n.modified) : Number.POSITIVE_INFINITY)
-/** Newest first, so what changed lately sits at the top of its cell. */
-const newestFirst = (a: GNode, b: GNode) => time(b) - time(a) || a.title.localeCompare(b.title)
-const altitudeOf = (a: number | undefined) => Math.min(5, Math.max(1, Math.round(a ?? 3)))
+export const altitudeOf = (a: number | undefined) => Math.min(5, Math.max(1, Math.round(a ?? 3)))
+/** Vision first, detail last; within a level, thoughts newest first, then the ghosts. */
+const byLevel = (a: BoardItem, b: BoardItem) =>
+  b.altitude - a.altitude ||
+  (a.kind === b.kind ? (a.kind === 'node' && b.kind === 'node' ? time(b.node) - time(a.node) || a.node.title.localeCompare(b.node.title) : 0) : a.kind === 'node' ? -1 : 1)
 
 /**
- * The map as a grid: a column per topic, left to right by name, and a
- * row per altitude from vision down to detail. Open gaps sit in their cell as
- * ghost cards. A topic only gaps point at still gets a column.
+ * The screen a thought is about: its `screen:`, or for a comment made in the
+ * running product, the screen it was made on. Empty means the whole product.
  */
-export function buildBoard(nodes: GNode[], gaps: Gap[], stories: Story[]): Board {
+export function screenOf(node: GNode, screens: Screen[]): string {
+  const id = node.extra?.screen
+  if (typeof id === 'string' && screens.some((s) => s.id === id)) return id
+  if (node.extra?.source === 'app') return screens.find((s) => commentsForScreen(s, [node]).length)?.id ?? ''
+  return ''
+}
+
+/**
+ * The map as columns. By page: General (the whole product) first, then each
+ * screen with something on it, in sitemap order. By topic: a column per topic,
+ * left to right by name, no topic last. Open gaps sit in their column as
+ * ghost cards.
+ */
+export function buildBoard(nodes: GNode[], gaps: Gap[], stories: Story[], options: { groupBy?: GroupBy; screens?: Screen[] } = {}): Board {
+  const screens = options.screens ?? []
+  const groupBy: GroupBy = options.groupBy === 'page' && screens.length ? 'page' : 'topic'
   const open = gaps.filter((g) => !g.answered_by)
-  const cols = [...topicColumns([...nodes, ...open]).values()]
-  const columns = cols.map((c) => ({
-    key: c.key,
-    name: c.name,
-    count: nodes.filter((n) => topicKey(n.topic) === c.key).length,
-    missing: open.filter((g) => topicKey(g.topic) === c.key).length,
-  }))
-  const rows = [5, 4, 3, 2, 1].map((altitude) => ({
-    altitude,
-    word: ALTITUDE_WORDS[altitude],
-    cells: cols.map((c) => ({
-      column: c.key,
-      nodes: nodes.filter((n) => topicKey(n.topic) === c.key && altitudeOf(n.altitude) === altitude).sort(newestFirst),
-      gaps: open.filter((g) => topicKey(g.topic) === c.key && altitudeOf(g.altitude) === altitude),
-    })),
-  }))
-  const byId = new Map(nodes.map((n) => [n.id, n]))
-  const storyCols = cols.map((c) => stories.filter((st) => {
-    const first = byId.get(st.from[0])
-    return !!first && topicKey(first.topic) === c.key
-  }))
-  return { columns, rows, stories: storyCols }
+  const item = (n: GNode): BoardItem => ({ kind: 'node', id: n.id, node: n, altitude: altitudeOf(n.altitude) })
+  const ghost = (g: Gap): BoardItem => ({ kind: 'gap', id: `gap:${g.id}`, gap: g, altitude: altitudeOf(g.altitude) })
+
+  if (groupBy === 'topic') {
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    const columns = [...topicColumns([...nodes, ...open]).values()].map((c) => {
+      const mine = nodes.filter((n) => topicKey(n.topic) === c.key)
+      const ghosts = open.filter((g) => topicKey(g.topic) === c.key)
+      return {
+        key: c.key,
+        name: c.name,
+        path: '',
+        count: mine.length,
+        missing: ghosts.length,
+        items: [...mine.map(item), ...ghosts.map(ghost)].sort(byLevel),
+        stories: stories.filter((st) => {
+          const first = byId.get(st.from[0])
+          return !!first && topicKey(first.topic) === c.key
+        }),
+      }
+    })
+    return { groupBy, columns }
+  }
+
+  const where = new Map(nodes.map((n) => [n.id, screenOf(n, screens)]))
+  const known = new Set(screens.map((s) => s.id))
+  const gapScreen = (g: Gap) => (g.screen && known.has(g.screen) ? g.screen : '')
+  const byId = new Map(screens.map((s) => [s.id, s]))
+  const pathOf = (s: Screen) => {
+    const names: string[] = []
+    let p = s.parent ? byId.get(s.parent) : undefined
+    while (p && names.length < 6) {
+      names.unshift(p.title)
+      p = p.parent ? byId.get(p.parent) : undefined
+    }
+    return names.join(' › ')
+  }
+  // A story goes under the first screen that covers it, or General.
+  const storyAt = new Map<string, string>()
+  for (const st of stories) storyAt.set(st.id, screenTree(screens).find(({ screen }) => storiesForScreen(screen, [st]).length)?.screen.id ?? '')
+
+  const column = (key: string, name: string, path: string): BoardColumn => {
+    const mine = nodes.filter((n) => where.get(n.id) === key)
+    const ghosts = open.filter((g) => gapScreen(g) === key)
+    return {
+      key,
+      name,
+      path,
+      count: mine.length,
+      missing: ghosts.length,
+      items: [...mine.map(item), ...ghosts.map(ghost)].sort(byLevel),
+      stories: stories.filter((st) => storyAt.get(st.id) === key),
+    }
+  }
+  const columns = [column('', 'General', 'The whole product'), ...screenTree(screens).map(({ screen }) => column(screen.id, screen.title, pathOf(screen)))]
+  // Screens with nothing on them yet stay out of the way; General always shows.
+  return { groupBy, columns: columns.filter((c, i) => i === 0 || c.items.length || c.stories.length) }
 }
 
 export interface OutlineSection {
   key: string
   name: string
+  path: string
   /** Altitude levels that hold something, highest first. */
-  levels: { altitude: number; word: string; nodes: GNode[]; gaps: Gap[] }[]
+  levels: { altitude: number; word: string; items: BoardItem[] }[]
   count: number
 }
 
-/** The map as a document: a section per topic, its thoughts from vision down to detail. */
-export function buildOutline(nodes: GNode[], gaps: Gap[]): OutlineSection[] {
-  const board = buildBoard(nodes, gaps, [])
-  return board.columns.map((col, i) => ({
-    key: col.key,
-    name: col.name,
-    count: col.count,
-    levels: board.rows
-      .map((r) => ({ altitude: r.altitude, word: r.word, nodes: r.cells[i].nodes, gaps: r.cells[i].gaps }))
-      .filter((l) => l.nodes.length || l.gaps.length),
-  }))
+/** The map as a document: a section per column, its thoughts from vision down to detail. */
+export function buildOutline(board: Board): OutlineSection[] {
+  return board.columns
+    .filter((c) => c.items.length)
+    .map((c) => ({
+      key: c.key,
+      name: c.name,
+      path: c.path,
+      count: c.count,
+      levels: [5, 4, 3, 2, 1]
+        .map((altitude) => ({ altitude, word: ALTITUDE_WORDS[altitude], items: c.items.filter((i) => i.altitude === altitude) }))
+        .filter((l) => l.items.length),
+    }))
 }
 
 /** The first line of a thought's notes, without images, links or the thread. */

@@ -1,7 +1,7 @@
 ---
 description: Write the product's site map from its code: every screen, what it is for, who it is for, and what the person is expected to do there
 ---
-Read this product's code and write its site map into Groundwork: one file per screen, page or view, saying what it is for, who it is meant for, and what the person is expected to do there. You only read the project; you write only inside `.groundwork/screens/`.
+Read this product's code and write its site map into Groundwork: one file per screen, page or view, saying what it is for, who it is meant for, and what the person is expected to do there. You only read the project; you write inside `.groundwork/screens/`, and add `screen:` to thoughts in `.groundwork/nodes/`.
 
 The rule above all: **code shows what a screen contains, rarely why it exists or who it is for.** Say what the code shows. Where purpose or audience is your guess, mark it as a guess and ask.
 
@@ -72,8 +72,28 @@ Ask at most five questions in the whole run, about the screens that matter most.
 
 **On a re-run,** keep ids, `created` and anything the person wrote: purpose, `for`, `does` and answers in the thread are theirs. Update `code`, `leads_to`, `stories` and `status` from the code. When the code no longer has a screen, set `status: partial` and say so in the notes instead of deleting the file; ask in its thread whether to remove it.
 
-Write plainly. Do not use the dash characters "–" or "—". Write only inside `.groundwork/screens/`.
+## File the thoughts under their screens
+
+The map can show a column per screen, with General first for what is about the whole product. Go through every thought in `.groundwork/nodes/` that has no `screen:` yet, and decide where it belongs:
+
+- **One screen:** the thought is clearly about that screen, its content, a feature on it or a detail of it ("The filter on the routes list", a comment about the Goals form). Add one line `screen: <id>` to its frontmatter, after `page:` (or after `topic:` when there is no page). Change nothing else in the file.
+- **The whole product, or several screens:** the purpose, principles, the audience, the look and feel, technical decisions, flows that cross screens. Leave it without `screen:`; it shows under General.
+- **Unsure between screens:** leave it without `screen:` and add a question to its thread with the screens as options:
+
+  ```md
+  **Claude asks** · 2026-10-12
+  Which screen is this about?
+
+  Options:
+  - Goals
+  - New goal
+  - The whole product
+  ```
+
+Never change a `screen:` that is already set; the person or an earlier run chose it. Comments with `source: app` already belong to the screen they were made on through their topic; add `screen:` to them too when the screen exists.
+
+Write plainly. Do not use the dash characters "–" or "—". Write only inside `.groundwork/screens/`, and in `.groundwork/nodes/` only the `screen:` line and thread questions.
 
 ## Report back
 
-A short plain paragraph: how many screens, the top level of the tree in one line, which screens have no story and which stories have no screen, and the questions you asked.
+A short plain paragraph: how many screens, the top level of the tree in one line, which screens have no story and which stories have no screen, how many thoughts you filed under a screen and how many stay under General, and the questions you asked.

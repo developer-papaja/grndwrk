@@ -12,7 +12,7 @@ import { marked } from 'marked'
 import { ALTITUDE_WORDS, displayName, topicColumns, topicKey } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
-import { buildBoard, buildOutline, firstLine, MAP_LAYOUTS, type Board, type MapLayout, type OutlineSection } from './board'
+import { buildBoard, buildOutline, firstLine, MAP_LAYOUTS, type Board, type GroupBy, type MapLayout, type OutlineSection } from './board'
 
 export type View = 'focus' | 'map' | 'sitemap' | 'readiness' | 'deliverables'
 
@@ -89,6 +89,8 @@ export const state = Alpine.reactive({
   /** How the map draws its cards: as a board, or as an outline. */
   mapLayout: readStored<MapLayout>('groundwork.mapLayout', 'board') === 'outline' ? ('outline' as MapLayout) : ('board' as MapLayout),
   mapLayouts: MAP_LAYOUTS,
+  /** What the board's columns are: the product's screens (General first), or topics. */
+  groupBy: readStored<GroupBy>('groundwork.groupBy', 'page'),
   /** The card being dragged on the board, and the cell it is over. */
   dragId: null as string | null,
   dropCell: '',
@@ -1068,10 +1070,17 @@ export const state = Alpine.reactive({
   },
   // The board and the outline: two ways to draw the same cards.
   get board(): Board {
-    return buildBoard(this.visibleNodes, this.visibleGaps, this.visibleStories)
+    // Inside one part, its thoughts group by topic: the part's areas and features.
+    const groupBy = this.scopeScreen ? 'topic' : this.groupBy
+    return buildBoard(this.visibleNodes, this.visibleGaps, this.visibleStories, { groupBy, screens: this.screens })
   },
   get outline(): OutlineSection[] {
-    return buildOutline(this.visibleNodes, this.visibleGaps)
+    return buildOutline(this.board)
+  },
+  setGroupBy(groupBy: GroupBy) {
+    this.groupBy = groupBy
+    store('groundwork.groupBy', groupBy)
+    revealSelection()
   },
   firstLine,
   setMapLayout(layout: MapLayout) {
@@ -1112,22 +1121,37 @@ export const state = Alpine.reactive({
   dimmed(id: string): boolean {
     return this.view === 'focus' && !!this.focusCurrent && !this.focusIds.includes(id)
   },
-  /** Dropping a card in another cell gives it that topic and altitude. */
-  async moveCard(id: string, column: string, altitude: number) {
+  /**
+   * Dropping a card in another column moves it to that screen (or General),
+   * or that topic. Dropped on another card, it also takes that card's level.
+   */
+  async moveCard(id: string, column: string, altitude?: number) {
     const node = this.nodes[id]
     this.dragId = null
     this.dropCell = ''
     if (!node || node.error) return
-    const col = this.board.columns.find((c) => c.key === column)
-    const topic = column && col ? col.name : ''
+    const board = this.board
+    const col = board.columns.find((c) => c.key === column)
     const changes: NodeInput = {}
-    if (topicKey(node.topic) !== column) changes.topic = topic
-    if (node.altitude !== altitude) changes.altitude = altitude
+    let where = ''
+    if (board.groupBy === 'page') {
+      const now = typeof node.extra?.screen === 'string' ? node.extra.screen : ''
+      if (now !== column) {
+        changes.screen = column
+        where = `to ${col?.name ?? 'General'}`
+      }
+    } else if (topicKey(node.topic) !== column) {
+      changes.topic = column && col ? col.name : ''
+      where = `to ${changes.topic || 'no topic'}`
+    }
+    if (altitude !== undefined && node.altitude !== altitude) {
+      changes.altitude = altitude
+      where = [where, `to ${ALTITUDE_WORDS[altitude]}`].filter(Boolean).join(', ')
+    }
     if (!Object.keys(changes).length) return
     try {
       this.upsert(await updateNode(id, changes))
       this.markFresh(id)
-      const where = [changes.topic !== undefined && `to ${topic || 'no topic'}`, changes.altitude !== undefined && `to ${ALTITUDE_WORDS[altitude]}`].filter(Boolean).join(', ')
       this.flash(`Moved ${where}`)
     } catch (err) {
       this.flash(errorText(err))

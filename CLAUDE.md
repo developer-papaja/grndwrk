@@ -98,7 +98,7 @@ Free text. Thoughts, references, half-formed questions.
 - **type:** idea, audience, flow, feature, content, design, constraint, question, decision, reference
 - **page:** optional. Which page of the map the node is on; without it, the first page. The page order lives in `project.md` as `pages: [Product, Feedback]`, and the UI also has an All page with everything.
 - **topic:** optional. Groups nodes sideways in the map. Plain words, matched regardless of case. Set by hand, in the panel, or by `/topics`.
-- **altitude:** 1 to 5. 5 is abstract (vision, feeling, principle), 1 is concrete (a field, a button, a specific screen).
+- **altitude:** 1 to 5, the level: 5 is abstract (vision, feeling, principle), 1 is concrete (a field, a button, a specific screen). Shown as a tag on the card.
 - **status:** open, settled, parked
 - **links:** undirected in v1. Store on both nodes. Links mostly stay inside a topic; topics do the grouping.
 - **id:** short, random, stable. Never derived from the title.
@@ -210,19 +210,18 @@ What is on the screen. Can end in a thread, like a node.
 
 ## Spatial model
 
-The map is a board. (A 3D map came first; the person found the flat board clearer and it was removed.)
+The map is a board of columns. (A 3D map came first, then a grid with a row per altitude; the person found columns with the level as a tag clearer.)
 
-- **Columns are topics.** Each topic gets a column, left to right by name, with nodes without a topic in a "no topic" column at the right. Topics are the main grouping. A column header shows the count, and marks a topic thin or with missing pieces.
-- **Rows are altitude.** Vision at the top, detail at the bottom, each row labeled. Changing a node's altitude moves it to another row.
-- **Within a cell, newest first,** by the file's modified time.
-- **Dragging a card** to another cell changes its topic and altitude.
+- **Columns are screens or topics,** switched at the top of the map. **By screen** (the default when a sitemap exists): General first, for what is about the whole product, then each screen with something on it in sitemap order, its place in the tree under its name. A thought is under a screen by its `screen:`; a comment from the running product, by the screen it was made on. **By topic:** a column per topic, left to right by name, no topic last; a column header marks a thin topic. Without a sitemap the board groups by topic. Working on one part groups that part's thoughts by topic.
+- **Within a column, vision first and detail last;** within a level, the newest first. Each card carries its level as a small tag (Vision, Principle, Approach, Feature, Detail). Color stays for type.
+- **Dragging a card** to another column moves it to that screen (or General) or that topic. Dropped on another card, it also takes that card's level. `[` and `]` change the level too.
 - **Nodes are word cards.** The title on a small dark card, up to three lines.
 - **Color shows type,** as a thin edge on the card. Keep the palette calm and readable on a dark background.
 - **Status shows as weight.** Settled has an outline in its type color, open is normal, parked is dimmed.
-- **Links show on selection.** The cards linked to the open card light up; no lines are drawn. Links mostly stay inside a topic.
-- **Stories are cards of their own kind,** in a row under the board, in the column of their first source thought. They are not nodes; they live in `stories/`.
-- **Readiness gaps are ghost cards.** Dashed, in the column and row of their topic and altitude, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
-- **The outline** is the second layout (the switch at the top of the map, or `V`): a section per topic, read from vision to detail, with the first line of each thought's notes. Selection, the panels, link mode and Focus work the same in both. The layout is a view setting kept in the browser, not in the files.
+- **Links show on selection.** The cards linked to the open card light up; no lines are drawn.
+- **Stories are cards of their own kind,** at the foot of a column: under the first screen that covers them, or the topic of their first source thought. They are not nodes; they live in `stories/`.
+- **Readiness gaps are ghost cards.** Dashed, in the column of their screen or topic, at their level, labeled with what is missing. Clicking one shows why it matters and lets you answer it, which turns it into a real node.
+- **The outline** is the second layout (the switch at the top of the map, or `V`): the same columns as sections, read from vision to detail, with the first line of each thought's notes. The layout and the grouping are view settings kept in the browser, not in the files.
 
 ## Interaction
 
@@ -248,7 +247,7 @@ Shipped with the package in `commands/` and copied into the host project's `.cla
 - **/topics** reads all nodes and writes `topic:` into them: three to seven topics, reusing existing ones, never touching titles or notes. Ends with which topics look thin.
 - **/readiness** reads `project.md`, all nodes and `checklist.md`. Judges each checklist area as missing, thin or enough, relative to the project type. Writes `report.md` and `gaps.json`. Ends with a clear verdict: ready to build, ready to prototype, or not ready, plus the smallest set of things to add.
 - **/challenge** looks at the thinnest areas and asks three to five choice forcing questions: in the thread of the thought they concern, or as a new question node where an area is empty. This is the seed of the later interview feature.
-- **/sitemap** reads the code (navigation, routes, what each screen asks of the person) and writes `screens/`: one file per screen with purpose, `for` and `does`, the tree, links between screens, code paths and stories. Guesses about purpose or audience are marked inferred and asked about. A re-run keeps what the person wrote and updates the rest from the code.
+- **/sitemap** reads the code (navigation, routes, what each screen asks of the person), files the existing thoughts under their screens (`screen:`, or General when they are about the whole product, a thread question when unsure), and writes `screens/`: one file per screen with purpose, `for` and `does`, the tree, links between screens, code paths and stories. Guesses about purpose or audience are marked inferred and asked about. A re-run keeps what the person wrote and updates the rest from the code.
 - **/brief** writes `outputs/brief.md`, `outputs/CLAUDE.starter.md` and the first set of stories in `stories/`, one file each, every story linked to the nodes it came from. If readiness has blocking gaps, it says so at the top instead of hiding them.
 - **/review** (later phase, do not build yet) reads a page's code and its stories and writes arguments: drift, orphans, conflicts, and requests that contradict earlier decisions. See PLAN.md Phase 6.
 
