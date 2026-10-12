@@ -63,3 +63,13 @@ export async function readOutput(gwDir: string, name: string): Promise<string | 
     return null
   }
 }
+
+/** A draft /readiness wrote for something the project lacks, from outputs/drafts/. Only plain .md names. */
+export async function readDraft(gwDir: string, name: string): Promise<string | null> {
+  if (!/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,79}\.md$/.test(name) || name.includes('..')) return null
+  try {
+    return await readFile(join(gwDir, 'outputs', 'drafts', name), 'utf8')
+  } catch {
+    return null
+  }
+}

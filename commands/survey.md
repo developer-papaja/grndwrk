@@ -59,6 +59,10 @@ In the notes, one or two lines on what you saw, for example "The booking form po
 
 **Size:** write at most about 60 thoughts on a first run, most important first: the core of what the product does, then its decisions, then details. Say in the report what you left out.
 
+## Foundations
+
+Also write `.groundwork/readiness/foundations.json` the way `/readiness` does: the eight standard items (`purpose`, `claude_md`, `code_standards`, `claude_tools`, `readme`, `code_docs`, `design_philosophy`, `design_tokens`), each `done`, `partly` or `missing`, with `seen_in`, `missing` (what is lacking inside the files) and a `suggestion` Claude Code can follow in the product's repo. No drafts here; `/readiness` writes those.
+
 ## Check the design foundation
 
 Score the project's design foundation on nine fixed items, so the person can see at a glance how well the design is set up for building more screens consistently. Look in the places this kind of project keeps them:

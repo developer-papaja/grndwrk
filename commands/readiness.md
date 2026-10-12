@@ -9,7 +9,8 @@ Judge whether this project's Groundwork map holds enough to start building, and 
 2. `.groundwork/readiness/checklist.md`: what "ready" means for this project. Each area has an "Enough when" line. The person may have edited it; follow their version.
 3. Every file in `.groundwork/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and the notes, including any `## Thread`. A settled thought counts more than an open one. A thread answer from the person counts as settled for what it answers.
 4. The previous `.groundwork/readiness/report.md` and `gaps.json`, if they exist. A gap with `answered_by` was answered from the map: read that node and decide whether the gap is closed now. A gap with `enough: true` was accepted by the person as it is ("Enough for now"): it is closed for good.
-5. For the "Setup for building with Claude" area, also look at the project itself, outside `.groundwork/` (read only): is there a `CLAUDE.md`, design docs or references, code standards or linting config, and skills or commands in `.claude/`?
+5. The project itself, outside `.groundwork/` (read only), for the foundations below and the "Setup for building with Claude" area: `CLAUDE.md`, README and docs, design docs and references, code standards or linting config, design tokens in the code, and skills or commands in `.claude/`.
+6. `.groundwork/screens/` and `.groundwork/stories/`: the Status page shows each screen as a part, done when it is built and its stories are done. You do not write about parts, but name the parts that matter most in the report when they are not done.
 
 **Enough for now.** A settled decision titled "Enough for now: ..." (with `answers: gap_x`) means the person decided that point is good enough for now. Never raise that gap again, under any id or wording, and judge its area with that decision in mind: an area can be enough because the person said so.
 
@@ -66,6 +67,41 @@ The design scorecard: nine fixed items (design docs, colors as tokens, typograph
 
 `closed` lists, by title, the gaps of the previous run that are gone now (answered, accepted for now, or no longer true). `added` lists the gaps that are new in this run. Both are quoted titles, and empty lists on the first run. The body opens with the "Since the last check" line, except on the first run.
 
+## Write `.groundwork/readiness/foundations.json`
+
+What the project has and lacks, as the Status page shows it: each item **done**, **partly** or **missing**, and for anything not done, what is lacking *inside* the files and an instruction Claude Code can follow in the product's repo. Look at the project itself, read only. In a new project with no code yet, judge from the map and `.groundwork/outputs/` (the brief and `CLAUDE.starter.md` count as the coding instructions to come).
+
+Always these eight, with these ids:
+
+| id | Done when |
+|---|---|
+| `purpose` | the map or `project.md` says what it is, who it is for and what success is, in a way two people would agree on |
+| `claude_md` | a CLAUDE.md gives a fresh session the product's context, how the code is laid out, the rules to build by, and how to run it |
+| `code_standards` | linting and formatting are configured and used (ESLint, Prettier, SwiftLint, SwiftFormat, Ruff...) |
+| `claude_tools` | the skills or commands the work leans on exist in `.claude/` (for example a command to add a screen the house way) |
+| `readme` | a README says what it is and how to run and build it |
+| `code_docs` | how the code is organized is written down: folders, main types, where to add things, in docs or CLAUDE.md |
+| `design_philosophy` | a design document says what the product should feel like and the principles behind its choices, not only values |
+| `design_tokens` | colors, type and spacing are defined once as tokens and used, not repeated as raw values (use the design scorecard) |
+
+```json
+[
+  {
+    "id": "design_philosophy",
+    "status": "missing",
+    "seen_in": [],
+    "missing": ["No document says what the app should feel like", "Choices like the dark theme are made, but nowhere explained"],
+    "suggestion": "Add DESIGN.md at the root: three to five principles for how the app should feel (for example calm, quick to scan), each with one example from the existing screens, and point to Theme.swift for the values. Link it from CLAUDE.md.",
+    "draft": "design_philosophy.md"
+  }
+]
+```
+
+- `missing`: concrete lines about what is lacking inside the files, not only "the file is missing". For a CLAUDE.md that exists, say which parts are thin ("Nothing on how screens are structured", "No rule on tokens versus raw colors").
+- `suggestion`: an instruction for Claude Code in the product's repo, ready to paste, grounded in what the project has (file names, values, existing patterns). Empty when done.
+- `draft`: when it saves the person real work (a DESIGN.md, a section for CLAUDE.md), write a draft of the file itself to `.groundwork/outputs/drafts/<id>.md` and name it here. Base it only on what the project and the map say; mark guesses as questions in the draft.
+- More items are allowed (for example `tests`), with a `title` and a `group`, when the project type calls for them.
+
 ## Write `.groundwork/readiness/gaps.json`
 
 One entry per concrete thing that is missing or thin. Not one per area: a thin area can have two gaps, an enough area none.
@@ -100,8 +136,8 @@ One entry per concrete thing that is missing or thin. Not one per area: a thin a
 - `suggestions`: two or three concrete answers the person could pick, each `{ "title": ..., "why": ... }`. The title is the answer itself, written so it could be the thought as it stands ("Keep the sizes already in use: 12, 13, 15 and 20 px"), not advice ("Decide a type scale"). Ground them in this project: what the code, docs or map already hold, or the plainest common choice for this kind of project. The `why` is one short line on what picking it means. Make them differ in a way that matters. The person may still write their own.
 - Drop a gap whose `answered_by` node closes it, and every gap with `enough: true`. Keep it, without `answered_by`, if the answer was not enough, and say why in the report.
 
-Write only those three files, inside `.groundwork/readiness/`. Never edit nodes: questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
+Write only those four files inside `.groundwork/readiness/`, and drafts inside `.groundwork/outputs/drafts/`. Never edit nodes: questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
 
 ## Report back
 
-End with what closed since the last check, then the verdict in one sentence, then the smallest set of things to add as a short list. Then say that Focus in the map (the top icon in the rail) goes through the open gaps one at a time, with your suggestions to pick from.
+End with what closed since the last check, then the verdict in one sentence, then the smallest set of things to add as a short list. Then the foundations in one line ("5 of 8 in place: no design philosophy, CLAUDE.md thin on structure, tokens partly") and which drafts you wrote. Then say that Status shows each one with a suggestion to copy for Claude, and that Focus (the top icon in the rail) goes through the open gaps one at a time.

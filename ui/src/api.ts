@@ -29,6 +29,7 @@ export const updateScreen = (id: string, input: { purpose?: string; audience?: s
   request<Screen>('PATCH', `/api/screens/${encodeURIComponent(id)}`, input)
 export const fetchOutput = (name: 'brief.md' | 'CLAUDE.starter.md' | 'survey.md') =>
   request<{ text: string | null }>('GET', `/api/outputs/${encodeURIComponent(name)}`).then((r) => r.text)
+export const fetchDraft = (name: string) => request<{ text: string | null }>('GET', `/api/drafts/${encodeURIComponent(name)}`).then((r) => r.text)
 export const fetchReadiness = () => request<Readiness>('GET', '/api/readiness')
 export const markGapAnswered = (gapId: string, nodeId: string, enough = false) =>
   request<Readiness>('PATCH', `/api/gaps/${encodeURIComponent(gapId)}`, { answered_by: nodeId, ...(enough ? { enough } : {}) })

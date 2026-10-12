@@ -1,8 +1,9 @@
 import Alpine from 'alpinejs'
 import type { DesignCheck, Gap, GNode, NodeInput, NodeType, Readiness, Screen, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
+import { createNode, deleteNode, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
 import { BOX, commentsForScreen, layoutSitemap, screenTree, storiesForScreen } from '../../src/shared/screens'
+import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
@@ -426,6 +427,41 @@ export const state = Alpine.reactive({
     const i = this.screens.findIndex((s) => s.id === screen.id)
     if (i >= 0) this.screens[i] = screen
     else this.screens.push(screen)
+  },
+  // Status: everything a good project has, done or not.
+  get projectStatus(): ProjectStatus {
+    return buildStatus({
+      foundations: this.readiness?.foundations ?? [],
+      screens: this.screens,
+      stories: this.stories,
+      purpose: String(this.project.purpose ?? '').trim(),
+      blocking: this.blockingCount,
+      questions: this.questionIds.length,
+      otherGaps: this.openGaps.length - this.blockingCount,
+    })
+  },
+  /** The status row whose details are open. */
+  statusRow: null as string | null,
+  /** The row's own action: answer in Focus, open the screen, or write the purpose. */
+  openStatusRow(row: StatusRow) {
+    if (row.open?.kind === 'focus') return this.enterFocus()
+    if (row.open?.kind === 'screen' && row.open.id) {
+      this.selectScreen(row.open.id)
+      return this.setView('sitemap')
+    }
+    if (row.open?.kind === 'purpose') {
+      this.statusRow = row.key
+      focusWhenVisible('status-purpose')
+    }
+  },
+  async copyDraft(name: string) {
+    try {
+      const text = await fetchDraft(name)
+      if (text) await this.copyText(text)
+      else this.flash(`No draft ${name} in .groundwork/outputs/drafts/`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
   },
   /** Open a story under Deliverables. */
   openStory(id: string) {

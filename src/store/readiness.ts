@@ -1,7 +1,7 @@
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import matter from 'gray-matter'
-import { DESIGN_ITEMS, SEVERITIES, type DesignCheck, type DesignStatus, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
+import { DESIGN_ITEMS, FOUNDATION_STATUSES, FOUNDATIONS, SEVERITIES, type DesignCheck, type DesignStatus, type Foundation, type FoundationStatus, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
 
 const VERDICTS: Verdict[] = ['ready to build', 'ready to prototype', 'not ready']
 
@@ -9,7 +9,7 @@ const dir = (gwDir: string) => join(gwDir, 'readiness')
 
 /** Read the report and the gaps. Missing or broken files never throw. */
 export async function readReadiness(gwDir: string): Promise<Readiness> {
-  const out: Readiness = { report: null, gaps: [], design: [] }
+  const out: Readiness = { report: null, gaps: [], design: [], foundations: [] }
   try {
     const { data, content } = matter(await readFile(join(dir(gwDir), 'report.md'), 'utf8'), {})
     const v = String(data.verdict ?? '').trim().toLowerCase()
@@ -35,7 +35,46 @@ export async function readReadiness(gwDir: string): Promise<Readiness> {
   } catch {
     // No scorecard yet, or a broken one: show none rather than a wrong one.
   }
+  try {
+    out.foundations = parseFoundations(await readFile(join(dir(gwDir), 'foundations.json'), 'utf8'))
+  } catch {
+    // Not checked yet, or broken: the Status page says to run /readiness.
+  }
   return out
+}
+
+/**
+ * What the project has and lacks. The standard items keep their order and
+ * group; others follow. A bad status reads as missing; a duplicate id is ignored.
+ */
+export function parseFoundations(raw: string): Foundation[] {
+  const data = JSON.parse(raw)
+  if (!Array.isArray(data)) return []
+  const out: Foundation[] = []
+  const texts = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()).map((x) => x.trim()) : [])
+  for (const f of data) {
+    if (!f || typeof f.id !== 'string' || !/^[a-z0-9_]{1,40}$/.test(f.id) || out.some((o) => o.id === f.id)) continue
+    const known = FOUNDATIONS.find((k) => k.id === f.id)
+    const title = typeof f.title === 'string' && f.title.trim() ? f.title.trim() : known?.title
+    if (!title) continue
+    const status = (FOUNDATION_STATUSES as readonly string[]).includes(f.status) ? (f.status as FoundationStatus) : 'missing'
+    const item: Foundation = {
+      id: f.id,
+      group: known?.group ?? (typeof f.group === 'string' && f.group.trim() ? f.group.trim().toLowerCase() : 'other'),
+      title,
+      status,
+      seen_in: texts(f.seen_in),
+      missing: texts(f.missing),
+      suggestion: typeof f.suggestion === 'string' ? f.suggestion.trim() : '',
+    }
+    if (typeof f.draft === 'string' && /^[A-Za-z0-9_.-]{1,80}\.md$/.test(f.draft)) item.draft = f.draft
+    out.push(item)
+  }
+  const rank = (id: string) => {
+    const i = FOUNDATIONS.findIndex((k) => k.id === id)
+    return i < 0 ? FOUNDATIONS.length : i
+  }
+  return out.sort((a, b) => rank(a.id) - rank(b.id))
 }
 
 /**

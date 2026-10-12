@@ -3,7 +3,7 @@ import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, KICKOFF_STEPS, writeFields, writeKickoff, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import { markAnswered, readReadiness } from '../store/readiness.js'
-import { listStories, readOutput } from '../store/stories.js'
+import { listStories, readDraft, readOutput } from '../store/stories.js'
 import { listScreens, updateScreen, type ScreenEdit } from '../store/screens.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
@@ -54,6 +54,10 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       const screen = await updateScreen(ctx.gwDir, screenMatch[1], parseScreenEdit(await readBody(req)))
       if (!screen) throw new NotFound(screenMatch[1])
       return send(res, 200, screen)
+    }
+    const draftMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)$/)
+    if (draftMatch && method === 'GET') {
+      return send(res, 200, { text: await readDraft(ctx.gwDir, decodeURIComponent(draftMatch[1])) })
     }
     const outputMatch = url.pathname.match(/^\/api\/outputs\/([^/]+)$/)
     if (outputMatch && method === 'GET') {

@@ -13,7 +13,7 @@ afterEach(() => rm(root, { recursive: true, force: true }))
 
 describe('readiness', () => {
   it('reads nothing gracefully before the first run', async () => {
-    expect(await readReadiness(root)).toEqual({ report: null, gaps: [], design: [] })
+    expect(await readReadiness(root)).toEqual({ report: null, gaps: [], design: [], foundations: [] })
   })
 
   it('reads the verdict and checked date from the report', async () => {

@@ -99,6 +99,40 @@ export interface DesignCheck {
   seen_in: string[]
 }
 
+export const FOUNDATION_STATUSES = ['done', 'partly', 'missing'] as const
+export type FoundationStatus = (typeof FOUNDATION_STATUSES)[number]
+
+/**
+ * What a good project has, in a fixed order, with the group each sits in on
+ * the Status page. Other ids are allowed and shown after these.
+ */
+export const FOUNDATIONS: { id: string; group: string; title: string }[] = [
+  { id: 'purpose', group: 'purpose', title: 'What it is, who it is for, and what success is' },
+  { id: 'claude_md', group: 'building with claude', title: 'Coding instructions in CLAUDE.md' },
+  { id: 'code_standards', group: 'building with claude', title: 'Code standards: linting and formatting' },
+  { id: 'claude_tools', group: 'building with claude', title: 'Skills and commands for the work' },
+  { id: 'readme', group: 'documentation', title: 'A README: what it is and how to run it' },
+  { id: 'code_docs', group: 'documentation', title: 'How the code is organized' },
+  { id: 'design_philosophy', group: 'design', title: 'Design philosophy, written down' },
+  { id: 'design_tokens', group: 'design', title: 'Design tokens: colors, type and spacing' },
+]
+
+/** One thing a good project has, checked by /readiness or /survey. In readiness/foundations.json. */
+export interface Foundation {
+  id: string
+  group: string
+  title: string
+  status: FoundationStatus
+  /** The files that show it. */
+  seen_in: string[]
+  /** What is lacking inside those files, one plain line each. */
+  missing: string[]
+  /** An instruction to give Claude Code in the product's repo to add what is missing. */
+  suggestion: string
+  /** A fuller draft in .groundwork/outputs/drafts/, by file name, when one was written. */
+  draft?: string
+}
+
 export interface Readiness {
   report: {
     verdict: Verdict | null
@@ -111,6 +145,8 @@ export interface Readiness {
   gaps: Gap[]
   /** The design scorecard, empty until /survey or /readiness writes it. */
   design: DesignCheck[]
+  /** What the project has and lacks, empty until /readiness or /survey writes it. */
+  foundations: Foundation[]
   /** Set when gaps.json could not be read, so the UI can say so. */
   error?: string
 }

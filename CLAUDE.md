@@ -70,11 +70,13 @@ During development of the tool itself, use `npm link` to run it inside a real pr
     checklist.md        # what "ready" means for this project, editable
     report.md           # written by /readiness, shown in the UI
     gaps.json           # ghost nodes for the UI, written by /readiness
+    foundations.json    # what the project has and lacks (purpose, CLAUDE.md, code standards, README, code docs, design philosophy, tokens), written by /readiness and /survey
     design.json         # design scorecard: nine items, found, partly or missing, per platform when a repo holds several apps, written by /survey and /readiness
   outputs/
     survey.md           # state of an existing project and what /survey found, written by /survey
     brief.md            # written by /brief
     CLAUDE.starter.md   # starting context for building the actual product
+    drafts/<id>.md      # drafts /readiness wrote for a missing foundation, to copy into the product
 ```
 
 A node file:
@@ -142,6 +144,8 @@ Entries are `**Claude asks**`, `**Claude**` or `**You**`, a dot and a date. A qu
 - **answered_by:** set from the map when a ghost is answered (the answer becomes a node). `/readiness` checks that node and drops the gap when it closes it. Keep gap ids stable across runs.
 - **enough:** set with `answered_by` when the person chose "Enough for now". The answer node is a settled decision titled "Enough for now: ...", and `/readiness` never raises that gap again.
 - **suggestions:** two or three answers Claude proposes, `{title, why}`, written by `/readiness`. The person can start from one instead of a blank box.
+
+`foundations.json` is a list of `{id, status, seen_in, missing, suggestion, draft?}`, status `done`, `partly` or `missing`. Eight fixed ids: `purpose`, `claude_md`, `code_standards`, `claude_tools`, `readme`, `code_docs`, `design_philosophy`, `design_tokens`; others may be added with a `title` and `group`. `missing` says what is lacking inside the files, `suggestion` is an instruction to paste into Claude Code in the product's repo, and `draft` names a file in `outputs/drafts/`. Groundwork itself still writes nothing outside `.groundwork/`.
 
 `report.md` has `verdict:` (ready to build, ready to prototype, not ready) and `checked:` in its frontmatter, plus `closed:` and `added:` (gap titles since the check before), then the areas and the smallest set of things to add. `/readiness` narrows down: it keeps gap ids, adds a blocking gap only when something changed, and never raises an accepted one.
 
@@ -221,7 +225,7 @@ The map is a board. (A 3D map came first; the person found the flat board cleare
 
 ## Interaction
 
-- A rail at the far left switches views: **Focus** (only what needs the person, one item at a time: blocking gaps, Claude's questions, guesses from `/survey` to confirm, then the other gaps; each with its suggestions or options, an answer box, Skip, and for gaps "Enough for now"; the map stays visible, dimmed around the current item; it ends in "Nothing needs you right now" and the next command to run), **Map** (the board or the outline, with pages, topics and the list), **Readiness** (the kickoff steps on top, then the verdict, what closed since the last check, each checklist area, open gaps, gaps waiting for a check, and everything settled by topic) and **Deliverables** (the brief, the stories and the starter CLAUDE.md, written by `/brief`).
+- A rail at the far left switches views: **Focus** (only what needs the person, one item at a time: blocking gaps, Claude's questions, guesses from `/survey` to confirm, then the other gaps; each with its suggestions or options, an answer box, Skip, and for gaps "Enough for now"; the map stays visible, dimmed around the current item; it ends in "Nothing needs you right now" and the next command to run), **Map** (the board or the outline, with pages, topics and the list), **Status** (new or existing when not said yet, the kickoff steps, then What's left: one count and list of everything not done, then each group done, partly or missing with what is lacking and a suggestion to copy for Claude: open thinking, purpose, parts (each screen, done when built and its stories are done), building with Claude, documentation, design; below that, the thinking in the map: the verdict, what closed since the last check, each checklist area, open gaps, gaps waiting for a check, and everything settled by topic) and **Deliverables** (the brief, the stories and the starter CLAUDE.md, written by `/brief`).
 - The **Sitemap** view sits between Map and Readiness in the rail: the screens drawn as a site map (the product on top, each screen in a box under the one it opens from, with the open screen's `leads_to` as dashed arrows, and zoom) or as a list, and the open screen with its purpose, who it is for, what they do there, where it comes from and leads to, its stories, the comments made on it, its code, and its thread.
 - Writing on a gap has three actions: "Add as a thought" leaves the gap open, "This answers it" sets `answered_by` so `/readiness` checks it next time, and "Enough for now" accepts it as it is, closed at once and for good. A remark never closes a gap by accident.
 

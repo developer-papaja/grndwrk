@@ -220,7 +220,7 @@
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
-      <template x-for="v in [['focus', 'Focus: only what needs you', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['readiness', 'Readiness', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
+      <template x-for="v in [['focus', 'Focus: only what needs you', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
           :class="$store.gw.view === v[0] ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
@@ -743,7 +743,7 @@
     >
       <div class="mx-auto max-w-3xl px-8 pb-24 pt-10">
         <div class="flex items-baseline justify-between gap-4">
-          <h1 class="text-xl font-semibold text-fog">Readiness</h1>
+          <h1 class="text-xl font-semibold text-fog">Status</h1>
           <span class="text-xs text-fog/40" x-show="$store.gw.readiness?.report" x-text="'Checked ' + ($store.gw.readiness?.report?.checked ?? '')"></span>
         </div>
 
@@ -845,6 +845,79 @@
           </template>
         </section>
 
+
+        <!-- Status: everything a good project has, done or not, and what is left -->
+        <section id="status" class="mt-8">
+          <div class="flex items-baseline justify-between gap-4">
+            <h2 class="text-[15px] font-semibold text-fog">What's left</h2>
+            <span class="text-xs text-fog/50" x-text="$store.gw.projectStatus.done + ' of ' + $store.gw.projectStatus.total + ' in place'"></span>
+          </div>
+          <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+            <div class="h-full rounded-full bg-emerald-400/80" :style="{ width: ($store.gw.projectStatus.total ? Math.round($store.gw.projectStatus.done / $store.gw.projectStatus.total * 100) : 0) + '%' }"></div>
+          </div>
+          <p x-show="$store.gw.projectStatus.unchecked" class="mt-2 text-xs text-fog/50" x-text="$store.gw.projectStatus.unchecked + ($store.gw.projectStatus.unchecked === 1 ? ' item is' : ' items are') + ' not checked yet. Run /readiness in Claude Code: it reads the project and says what each one lacks.'"></p>
+          <p x-show="!$store.gw.projectStatus.left.length && !$store.gw.projectStatus.unchecked" class="mt-3 text-emerald-300/90">Everything is in place.</p>
+          <ul class="mt-3 space-y-1" id="status-left">
+            <template x-for="row in $store.gw.projectStatus.left" :key="'left-' + row.key">
+              <li class="flex items-center gap-3 rounded-lg border border-line px-3 py-2">
+                <span class="size-2 shrink-0 rounded-full" :class="row.status === 'missing' ? 'bg-rose-400' : 'bg-question'"></span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-fog" x-text="row.title"></span>
+                  <span x-show="row.detail.length" class="block truncate text-xs text-fog/50" x-text="row.detail[0]"></span>
+                </span>
+                <button x-show="row.suggestion" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Copy an instruction for Claude Code in the product's repo" @click="$store.gw.copyText(row.suggestion)">Copy for Claude</button>
+                <button x-show="row.open" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? 'Answer in Focus' : row.open?.kind === 'screen' ? 'Open the screen' : 'Write it'"></button>
+              </li>
+            </template>
+          </ul>
+
+          <template x-for="g in $store.gw.projectStatus.groups" :key="'group-' + g.key">
+            <div class="mt-6">
+              <h3 class="mb-1.5 text-[12px] font-semibold text-fog/80" x-text="g.name"></h3>
+              <ul class="divide-y divide-line rounded-lg border border-line">
+                <template x-for="row in g.rows" :key="row.key">
+                  <li>
+                    <button class="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.03]" @click="$store.gw.statusRow = $store.gw.statusRow === row.key ? null : row.key">
+                      <span class="min-w-0 flex-1 truncate text-fog" :style="{ paddingLeft: (row.depth || 0) * 16 + 'px' }" x-text="row.title"></span>
+                      <span x-show="row.detail.length && $store.gw.statusRow !== row.key" class="hidden min-w-0 max-w-[45%] truncate text-xs text-fog/45 sm:block" x-text="row.detail[0]"></span>
+                      <span
+                        class="w-16 shrink-0 rounded py-0.5 text-center text-[11px] font-medium"
+                        :class="{ 'bg-emerald-400/15 text-emerald-300': row.status === 'done', 'bg-question/15 text-question': row.status === 'partly', 'bg-rose-400/15 text-rose-300': row.status === 'missing', 'bg-white/8 text-fog/45': !row.status }"
+                        x-text="row.status || 'not checked'"
+                      ></span>
+                    </button>
+                    <div x-show="$store.gw.statusRow === row.key" class="space-y-2 px-4 pb-3">
+                      <template x-if="row.key === 'purpose'">
+                        <textarea id="status-purpose" rows="2" class="field w-full resize-none" placeholder="What it is, and who it is for" :value="$store.gw.project.purpose || ''" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.savePurpose($event.target.value)"></textarea>
+                      </template>
+                      <ul x-show="row.detail.length" class="list-disc space-y-0.5 pl-5 text-fog/70">
+                        <template x-for="(d, i) in row.detail" :key="i"><li x-text="d"></li></template>
+                      </ul>
+                      <p x-show="!row.status" class="text-xs text-fog/45">Not checked yet. /readiness looks at the project and says what this lacks.</p>
+                      <div x-show="row.seen_in.length" class="flex flex-wrap gap-1">
+                        <template x-for="p in row.seen_in" :key="p">
+                          <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/60 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                        </template>
+                      </div>
+                      <div x-show="row.suggestion" class="rounded-lg bg-white/5 px-3 py-2">
+                        <span class="label">Suggestion for Claude</span>
+                        <p class="whitespace-pre-wrap text-fog/80" x-text="row.suggestion"></p>
+                      </div>
+                      <div class="flex flex-wrap gap-2" x-show="row.suggestion || row.draft || row.open">
+                        <button x-show="row.suggestion" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.copyText(row.suggestion)">Copy for Claude</button>
+                        <button x-show="row.draft" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.copyDraft(row.draft)">Copy the draft</button>
+                        <button x-show="row.open && row.open.kind !== 'purpose'" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? 'Answer in Focus' : 'Open the screen'"></button>
+                      </div>
+                    </div>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </template>
+        </section>
+
+        <h2 class="mb-1 mt-10 text-[15px] font-semibold text-fog">The thinking in the map</h2>
+        <p class="text-xs text-fog/45">What /readiness found in the map itself: the verdict, each area, and the gaps.</p>
         <template x-if="!$store.gw.readiness?.report">
           <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Not checked yet. Run <code class="text-fog">/readiness</code> in Claude Code. It judges the map against your checklist and lists what is missing.</p>
         </template>
