@@ -14,7 +14,7 @@ export async function init(projectRoot: string): Promise<void> {
   const templates = join(PACKAGE_ROOT, 'templates')
   const say = (verb: string, path: string) => console.log(`  ${verb.padEnd(8)} ${relative(projectRoot, path)}`)
 
-  for (const dir of ['nodes', 'stories', 'readiness', 'outputs']) {
+  for (const dir of ['nodes', 'stories', 'screens', 'readiness', 'outputs']) {
     await mkdir(join(gw, dir), { recursive: true })
   }
 

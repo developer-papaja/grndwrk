@@ -8,7 +8,7 @@ Turn this project's Groundwork map into what someone needs to start building the
 1. `.groundwork/project.md`: name, purpose, project type, `pages:`.
 2. Every file in `.groundwork/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and notes, including threads. Settled thoughts and decisions carry the most weight. A thread answer from the person counts as decided.
 3. `.groundwork/readiness/report.md` and `gaps.json`, if they exist.
-4. Existing `.groundwork/stories/*.md` and `.groundwork/outputs/*.md`, if they exist. Update them; never duplicate them.
+4. Existing `.groundwork/stories/*.md`, `.groundwork/screens/*.md` and `.groundwork/outputs/*.md`, if they exist. Update stories and outputs; never duplicate them.
 
 Use only what the map says. Where the map is silent, say so in the brief instead of inventing an answer.
 
@@ -35,7 +35,7 @@ Two sentences: what the product is and the problem it solves.
 Each flow as numbered steps from start to end.
 
 ## Site map
-Every screen, page or view the product needs, as a short nested list. For each: what it is for, in one line, and which flows pass through it.
+Every screen, page or view the product needs, as a short nested list. For each: what it is for, in one line, and which flows pass through it. If `.groundwork/screens/` has screens (written by `/sitemap`), follow them and their purpose, `for` and `does`, and cite their ids.
 
 ## In the first version
 ## Not in the first version
@@ -96,7 +96,11 @@ It must end with a section headed exactly `## Working with stories` (the map han
 3. When you build against a story, update its `applies_to` with the routes or component paths, and its `status` to `partial` or `done`, in `.groundwork/stories/`.
 4. Before building something no story covers, stop and ask.
 
-Write only inside `.groundwork/outputs/` and `.groundwork/stories/`. Do not edit nodes. Do not use the dash characters "–" or "—".
+## Screens for a product not built yet
+
+If `.groundwork/screens/` is empty, also write one file per screen of the site map there, with `status: planned`, in the format `/sitemap` uses: `id` (`p_` plus four random lowercase letters or digits), `title`, `parent`, `purpose`, `for`, `does`, `leads_to`, `code: []`, `stories` (the story ids that need the screen), `status: planned`, `source: inferred` when the map does not say who it is for, and `created`. When screens exist, leave them alone; `/sitemap` keeps them in step with the code.
+
+Write only inside `.groundwork/outputs/`, `.groundwork/stories/` and `.groundwork/screens/`. Do not edit nodes. Do not use the dash characters "–" or "—".
 
 ## Report back
 

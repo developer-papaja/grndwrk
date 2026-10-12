@@ -1,7 +1,8 @@
 import Alpine from 'alpinejs'
-import type { DesignCheck, Gap, GNode, NodeInput, NodeType, Readiness, Status, Story } from '../../src/shared/types'
+import type { DesignCheck, Gap, GNode, NodeInput, NodeType, Readiness, Screen, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchStories, markGapAnswered, saveKickoff, savePages, updateNode, uploadImage } from './api'
+import { createNode, deleteNode, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, updateNode, updateScreen, uploadImage } from './api'
+import { commentsForScreen, screenTree, storiesForScreen } from '../../src/shared/screens'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
@@ -12,7 +13,7 @@ import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
 import { buildBoard, buildOutline, firstLine, MAP_LAYOUTS, type Board, type MapLayout, type OutlineSection } from './board'
 
-export type View = 'focus' | 'map' | 'readiness' | 'deliverables'
+export type View = 'focus' | 'map' | 'sitemap' | 'readiness' | 'deliverables'
 
 /** One thing waiting on the person, in focus mode. */
 export interface FocusItem {
@@ -95,6 +96,12 @@ export const state = Alpine.reactive({
   /** Items skipped in focus mode this visit. They wait at the end of the queue. */
   focusSkipped: [] as string[],
   stories: [] as Story[],
+  /** The product's screens, written by /sitemap. */
+  screens: [] as Screen[],
+  /** The screen open in the Sitemap view. */
+  screenId: readStored<string | null>('groundwork.screen', null),
+  screenReply: '',
+  screenStatus: '',
   brief: null as string | null,
   starter: null as string | null,
   deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'starter'>('groundwork.deliverablesTab', 'brief'),
@@ -262,6 +269,103 @@ export const state = Alpine.reactive({
     } catch {
       // Offline: the next reconnect loads them.
     }
+  },
+  // The site map: every screen, what it is for, who it is for, and what they do there.
+  async loadScreens() {
+    try {
+      this.screens = await fetchScreens()
+    } catch {
+      // Offline: the next reconnect loads them.
+    }
+  },
+  get screenRows(): { screen: Screen; depth: number }[] {
+    return screenTree(this.screens)
+  },
+  /** The open screen, or the first one. */
+  get screen(): Screen | null {
+    return this.screens.find((s) => s.id === this.screenId) ?? this.screenRows[0]?.screen ?? null
+  },
+  screenById(id: string): Screen | undefined {
+    return this.screens.find((s) => s.id === id)
+  },
+  storiesOf(screen: Screen): Story[] {
+    return storiesForScreen(screen, this.stories)
+  },
+  commentsOf(screen: Screen): GNode[] {
+    return commentsForScreen(screen, Object.values(this.nodes))
+  },
+  questionsOn(screen: Screen): number {
+    return openQuestions(screen.body)
+  },
+  /** Screens that link here, and the parent, so the way in is visible too. */
+  cameFrom(screen: Screen): Screen[] {
+    return this.screens.filter((s) => s.id !== screen.id && (s.leads_to.includes(screen.id) || s.id === screen.parent))
+  },
+  get screenThread(): Entry[] {
+    return this.screen ? splitBody(this.screen.body).entries : []
+  },
+  get screenNotesHtml(): string {
+    const notes = this.screen ? splitBody(this.screen.body).notes.trim() : ''
+    return notes ? linkIds(marked.parse(notes, { async: false }) as string) : ''
+  },
+  get sitemapSummary(): { screens: number; noStory: number; questions: number; guesses: number } {
+    return {
+      screens: this.screens.length,
+      noStory: this.screens.filter((s) => s.status !== 'planned' && !this.storiesOf(s).length).length,
+      questions: this.screens.reduce((n, s) => n + openQuestions(s.body), 0),
+      guesses: this.screens.filter((s) => s.source === 'inferred').length,
+    }
+  },
+  selectScreen(id: string) {
+    this.screenId = id
+    this.screenReply = ''
+    this.screenStatus = ''
+    store('groundwork.screen', id)
+  },
+  /** Save what the person changed: purpose, who it is for, or what they do there. */
+  async saveScreen(field: 'purpose' | 'audience' | 'tasks', value: string) {
+    const s = this.screen
+    if (!s) return
+    const input =
+      field === 'purpose' ? { purpose: value.trim() }
+      : field === 'audience' ? { audience: value.split(',').map((x) => x.trim()).filter(Boolean) }
+      : { tasks: value.split('\n').map((x) => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean) }
+    const before = field === 'purpose' ? s.purpose : field === 'audience' ? s.audience.join(', ') : s.tasks.join('\n')
+    const after = field === 'purpose' ? input.purpose : field === 'audience' ? input.audience!.join(', ') : input.tasks!.join('\n')
+    if (before === after) return
+    try {
+      this.putScreen(await updateScreen(s.id, input))
+      this.flash('Saved')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async sendScreenReply() {
+    const s = this.screen
+    const text = this.screenReply.trim()
+    if (!s || !text || this.sending) return
+    this.sending = true
+    this.screenStatus = 'Saving...'
+    try {
+      this.putScreen(await updateScreen(s.id, { body: appendEntry(s.body, 'you', text, today()) }))
+      this.screenReply = ''
+      this.screenStatus = ''
+    } catch (err) {
+      this.screenStatus = `Not saved: ${errorText(err)}`
+    } finally {
+      this.sending = false
+    }
+  },
+  putScreen(screen: Screen) {
+    const i = this.screens.findIndex((s) => s.id === screen.id)
+    if (i >= 0) this.screens[i] = screen
+    else this.screens.push(screen)
+  },
+  /** Open a story under Deliverables. */
+  openStory(id: string) {
+    this.setDeliverablesTab('stories')
+    this.openStoryId = id
+    this.setView('deliverables')
   },
   get surveyHtml(): string {
     return linkIds(marked.parse(stripFrontmatter(this.survey ?? ''), { async: false }) as string)

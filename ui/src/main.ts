@@ -47,6 +47,7 @@ const handlers = {
     void fetchProject().then((p) => (state.project = p))
     void state.loadReadiness()
     void state.loadDeliverables()
+    void state.loadScreens()
   },
   onError: () => {
     state.live = false
@@ -63,6 +64,8 @@ const handlers = {
       void fetchProject().then((p) => (state.project = p))
     } else if (event.type === 'file:change' && event.path.startsWith('readiness/')) {
       void state.loadReadiness()
+    } else if (event.type === 'file:change' && event.path.startsWith('screens/')) {
+      void state.loadScreens()
     } else if (event.type === 'file:change' && (event.path.startsWith('stories/') || event.path.startsWith('outputs/'))) {
       void state.loadDeliverables()
     }

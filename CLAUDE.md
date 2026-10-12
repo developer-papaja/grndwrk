@@ -64,6 +64,8 @@ During development of the tool itself, use `npm link` to run it inside a real pr
     <node id>/<name>    # images pasted into a node, linked from its notes
   stories/
     <id>.md             # one user story per file, first written by /brief
+  screens/
+    <id>.md             # one screen, page or view of the product per file, written by /sitemap (or planned by /brief)
   readiness/
     checklist.md        # what "ready" means for this project, editable
     report.md           # written by /readiness, shown in the UI
@@ -171,6 +173,34 @@ so that booking never feels like a chore.
 
 Decisions stay as nodes with `type: decision`. Stories reference them through `from`.
 
+A screen file:
+
+```md
+---
+id: p_k2m4
+title: Booking
+parent: p_home
+purpose: Book a desk for one day, in as few steps as possible.
+for: [someone arriving at the office]
+does:
+  - pick a day
+  - confirm the booking
+leads_to: [p_conf]
+code: [/booking, App/Booking/BookingView.swift]
+stories: [s_k3f9]
+status: built
+source: code
+created: 2026-10-12
+---
+What is on the screen. Can end in a thread, like a node.
+```
+
+- **purpose, for, does:** what it is for, who it is meant for, and what the person is expected to do there. The person can change these three and answer the thread from the Sitemap view; the rest belongs to `/sitemap`.
+- **parent** builds the tree; **leads_to** says where the screen goes.
+- **code:** routes and source files. They connect the screen to stories (by `applies_to`) and to comments made in the running product (by topic or `seen_in`).
+- **status:** built, partial or planned. **source:** code, or inferred when purpose or audience is Claude's guess, with a question in the thread.
+- **id:** `p_` plus four characters, never changed.
+
 ## Spatial model
 
 The map is a board. (A 3D map came first; the person found the flat board clearer and it was removed.)
@@ -190,6 +220,7 @@ The map is a board. (A 3D map came first; the person found the flat board cleare
 ## Interaction
 
 - A rail at the far left switches views: **Focus** (only what needs the person, one item at a time: blocking gaps, Claude's questions, guesses from `/survey` to confirm, then the other gaps; each with its suggestions or options, an answer box, Skip, and for gaps "Enough for now"; the map stays visible, dimmed around the current item; it ends in "Nothing needs you right now" and the next command to run), **Map** (the board or the outline, with pages, topics and the list), **Readiness** (the kickoff steps on top, then the verdict, what closed since the last check, each checklist area, open gaps, gaps waiting for a check, and everything settled by topic) and **Deliverables** (the brief, the stories and the starter CLAUDE.md, written by `/brief`).
+- The **Sitemap** view sits between Map and Readiness in the rail: the screens as a tree, and the open screen with its purpose, who it is for, what they do there, where it comes from and leads to, its stories, the comments made on it, its code, and its thread.
 - Writing on a gap has three actions: "Add as a thought" leaves the gap open, "This answers it" sets `answered_by` so `/readiness` checks it next time, and "Enough for now" accepts it as it is, closed at once and for good. A remark never closes a gap by accident.
 
 - Click a card: it opens in the side panel, where all text editing happens. Opening a card from elsewhere (the list, Focus, a link) scrolls it into view.
@@ -209,6 +240,7 @@ Shipped with the package in `commands/` and copied into the host project's `.cla
 - **/topics** reads all nodes and writes `topic:` into them: three to seven topics, reusing existing ones, never touching titles or notes. Ends with which topics look thin.
 - **/readiness** reads `project.md`, all nodes and `checklist.md`. Judges each checklist area as missing, thin or enough, relative to the project type. Writes `report.md` and `gaps.json`. Ends with a clear verdict: ready to build, ready to prototype, or not ready, plus the smallest set of things to add.
 - **/challenge** looks at the thinnest areas and asks three to five choice forcing questions: in the thread of the thought they concern, or as a new question node where an area is empty. This is the seed of the later interview feature.
+- **/sitemap** reads the code (navigation, routes, what each screen asks of the person) and writes `screens/`: one file per screen with purpose, `for` and `does`, the tree, links between screens, code paths and stories. Guesses about purpose or audience are marked inferred and asked about. A re-run keeps what the person wrote and updates the rest from the code.
 - **/brief** writes `outputs/brief.md`, `outputs/CLAUDE.starter.md` and the first set of stories in `stories/`, one file each, every story linked to the nodes it came from. If readiness has blocking gaps, it says so at the top instead of hiding them.
 - **/review** (later phase, do not build yet) reads a page's code and its stories and writes arguments: drift, orphans, conflicts, and requests that contradict earlier decisions. See PLAN.md Phase 6.
 

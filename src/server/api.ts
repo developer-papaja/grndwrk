@@ -4,6 +4,7 @@ import { readProject, KICKOFF_STEPS, writeKickoff, writePages } from '../store/p
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import { markAnswered, readReadiness } from '../store/readiness.js'
 import { listStories, readOutput } from '../store/stories.js'
+import { listScreens, updateScreen, type ScreenEdit } from '../store/screens.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
 
@@ -44,6 +45,15 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     if (url.pathname === '/api/stories' && method === 'GET') {
       return send(res, 200, await listStories(ctx.gwDir))
+    }
+    if (url.pathname === '/api/screens' && method === 'GET') {
+      return send(res, 200, await listScreens(ctx.gwDir))
+    }
+    const screenMatch = url.pathname.match(/^\/api\/screens\/([A-Za-z0-9_-]{1,64})$/)
+    if (screenMatch && method === 'PATCH') {
+      const screen = await updateScreen(ctx.gwDir, screenMatch[1], parseScreenEdit(await readBody(req)))
+      if (!screen) throw new NotFound(screenMatch[1])
+      return send(res, 200, screen)
     }
     const outputMatch = url.pathname.match(/^\/api\/outputs\/([^/]+)$/)
     if (outputMatch && method === 'GET') {
@@ -174,4 +184,25 @@ export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwD
 function send(res: ServerResponse, status: number, body: unknown): true {
   res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body))
   return true
+}
+
+/** Only the words and the notes can change from the map. Ids, links and code paths belong to /sitemap. */
+function parseScreenEdit(input: unknown): ScreenEdit {
+  const o = (input ?? {}) as Record<string, unknown>
+  const out: ScreenEdit = {}
+  const words = (v: unknown, name: string) => {
+    if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) throw new BadInput(`${name} must be a list of text`)
+    return v.map((x: string) => x.trim()).filter(Boolean).slice(0, 50)
+  }
+  if (o.purpose !== undefined) {
+    if (typeof o.purpose !== 'string') throw new BadInput('purpose must be text')
+    out.purpose = o.purpose.trim().replace(/\s*\n\s*/g, ' ')
+  }
+  if (o.audience !== undefined) out.audience = words(o.audience, 'audience')
+  if (o.tasks !== undefined) out.tasks = words(o.tasks, 'tasks')
+  if (o.body !== undefined) {
+    if (typeof o.body !== 'string') throw new BadInput('body must be text')
+    out.body = o.body
+  }
+  return out
 }

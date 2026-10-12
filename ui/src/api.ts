@@ -1,4 +1,4 @@
-import type { GNode, NodeInput, Readiness, ServerEvent, Story } from '../../src/shared/types'
+import type { GNode, NodeInput, Readiness, Screen, ServerEvent, Story } from '../../src/shared/types'
 
 export const OFFLINE_MESSAGE = "Can't reach Groundwork. Is `groundwork` still running in your terminal?"
 
@@ -24,6 +24,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const fetchNodes = () => request<GNode[]>('GET', '/api/nodes')
 export const fetchProject = () => request<Record<string, unknown>>('GET', '/api/project').catch(() => ({}))
 export const fetchStories = () => request<Story[]>('GET', '/api/stories')
+export const fetchScreens = () => request<Screen[]>('GET', '/api/screens')
+export const updateScreen = (id: string, input: { purpose?: string; audience?: string[]; tasks?: string[]; body?: string }) =>
+  request<Screen>('PATCH', `/api/screens/${encodeURIComponent(id)}`, input)
 export const fetchOutput = (name: 'brief.md' | 'CLAUDE.starter.md' | 'survey.md') =>
   request<{ text: string | null }>('GET', `/api/outputs/${encodeURIComponent(name)}`).then((r) => r.text)
 export const fetchReadiness = () => request<Readiness>('GET', '/api/readiness')

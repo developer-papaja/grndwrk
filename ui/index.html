@@ -26,6 +26,7 @@
       <symbol id="i-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" /></symbol>
       <symbol id="i-columns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125Z" /></symbol>
       <symbol id="i-outline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></symbol>
+      <symbol id="i-screens" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" /></symbol>
     </svg>
 
     <!-- Board: the same cards, a column per topic and a row per altitude -->
@@ -218,7 +219,7 @@
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
-      <template x-for="v in [['focus', 'Focus: only what needs you', 'i-inbox'], ['map', 'Map', 'i-map'], ['readiness', 'Readiness', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
+      <template x-for="v in [['focus', 'Focus: only what needs you', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['readiness', 'Readiness', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
           :class="$store.gw.view === v[0] ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
@@ -232,6 +233,11 @@
             x-show="v[0] === 'focus' && $store.gw.focusQueue.length"
             class="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white"
             x-text="$store.gw.focusQueue.length"
+          ></span>
+          <span
+            x-show="v[0] === 'sitemap' && $store.gw.sitemapSummary.questions"
+            class="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-question text-[10px] font-semibold text-ink"
+            x-text="$store.gw.sitemapSummary.questions"
           ></span>
           <span
             x-show="v[0] === 'readiness' && $store.gw.blockingCount"
@@ -474,6 +480,201 @@
         </div>
       </form>
     </div>
+
+    <!-- Sitemap: every screen, what it is for, who it is for, and what they do there -->
+    <main
+      x-cloak
+      x-show="$store.gw.view === 'sitemap'"
+      id="sitemap-view"
+      class="fixed inset-y-0 left-16 flex bg-ink text-[13px]"
+      :style="{ right: $store.gw.detailsVisible ? '360px' : '0px' }"
+    >
+      <template x-if="!$store.gw.screens.length">
+        <div class="mx-auto max-w-3xl flex-1 px-8 pt-10">
+          <h1 class="text-xl font-semibold text-fog">Sitemap</h1>
+          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">No screens yet. Run <code class="text-fog">/sitemap</code> in Claude Code. It reads the code and writes every screen: what it is for, who it is meant for, and what the person is expected to do there.</p>
+        </div>
+      </template>
+
+      <template x-if="$store.gw.screens.length">
+        <div class="flex min-w-0 flex-1">
+          <!-- The tree -->
+          <div class="flex w-[380px] shrink-0 flex-col border-r border-line">
+            <div class="px-5 pb-3 pt-6">
+              <h1 class="text-xl font-semibold text-fog">Sitemap</h1>
+              <p class="mt-1 text-xs text-fog/50">
+                <span x-text="$store.gw.sitemapSummary.screens + ($store.gw.sitemapSummary.screens === 1 ? ' screen' : ' screens')"></span>
+                <span x-show="$store.gw.sitemapSummary.noStory" x-text="' · ' + $store.gw.sitemapSummary.noStory + ' without a story'"></span>
+                <span x-show="$store.gw.sitemapSummary.questions" class="text-question" x-text="' · ' + $store.gw.sitemapSummary.questions + ($store.gw.sitemapSummary.questions === 1 ? ' question' : ' questions')"></span>
+              </p>
+            </div>
+            <ol class="flex-1 overflow-y-auto px-2 pb-24" id="screens">
+              <template x-for="row in $store.gw.screenRows" :key="row.screen.id">
+                <li>
+                  <button
+                    class="flex w-full items-start gap-2 rounded-md py-2 pr-2 text-left"
+                    :class="$store.gw.screen?.id === row.screen.id ? 'bg-white/10' : 'hover:bg-white/5'"
+                    :style="{ paddingLeft: (10 + row.depth * 18) + 'px' }"
+                    :data-screen="row.screen.id"
+                    @click="$store.gw.selectScreen(row.screen.id)"
+                  >
+                    <span
+                      class="mt-[7px] size-1.5 shrink-0 rounded-full"
+                      :class="{ 'bg-emerald-400': row.screen.status === 'built', 'bg-question': row.screen.status === 'partial', 'bg-white/30': row.screen.status === 'planned' }"
+                      :title="row.screen.status"
+                    ></span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate font-medium text-fog" x-text="row.screen.title"></span>
+                      <span class="block truncate text-xs text-fog/50" x-text="row.screen.purpose || 'No purpose written yet'"></span>
+                    </span>
+                    <span x-show="$store.gw.questionsOn(row.screen)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
+                  </button>
+                </li>
+              </template>
+            </ol>
+          </div>
+
+          <!-- The open screen -->
+          <template x-if="$store.gw.screen">
+            <div class="min-w-0 flex-1 overflow-y-auto" id="screen">
+              <div class="max-w-2xl px-8 pb-24 pt-6">
+                <div class="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span
+                    class="rounded px-1.5 py-0.5 font-medium"
+                    :class="{ 'bg-emerald-400/15 text-emerald-300': $store.gw.screen.status === 'built', 'bg-question/15 text-question': $store.gw.screen.status === 'partial', 'bg-white/10 text-fog/60': $store.gw.screen.status === 'planned' }"
+                    x-text="$store.gw.screen.status"
+                  ></span>
+                  <span x-show="$store.gw.screen.source === 'inferred'" class="rounded bg-question/15 px-1.5 py-0.5 text-question">Claude's guess. Check it.</span>
+                  <span class="font-mono text-fog/35" x-text="$store.gw.screen.id"></span>
+                </div>
+                <h2 class="mt-2 text-[20px] font-semibold text-fog" x-text="$store.gw.screen.title"></h2>
+                <p x-show="$store.gw.screen.error" class="mt-1 text-xs text-rose-300" x-text="$store.gw.screen.error"></p>
+
+                <div class="mt-5 space-y-4">
+                  <label class="block">
+                    <span class="label">What it is for</span>
+                    <textarea
+                      rows="2"
+                      class="field w-full resize-none text-[14px]"
+                      placeholder="One sentence, from the person's side"
+                      :value="$store.gw.screen.purpose"
+                      @keydown.enter.prevent="$event.target.blur()"
+                      @blur="$store.gw.saveScreen('purpose', $event.target.value)"
+                    ></textarea>
+                  </label>
+                  <label class="block">
+                    <span class="label">Who it is for</span>
+                    <input
+                      class="field w-full"
+                      placeholder="Separate several with commas"
+                      :value="$store.gw.screen.audience.join(', ')"
+                      @keydown.enter.prevent="$event.target.blur()"
+                      @blur="$store.gw.saveScreen('audience', $event.target.value)"
+                    />
+                  </label>
+                  <label class="block">
+                    <span class="label">What they do here</span>
+                    <textarea
+                      class="field w-full resize-none"
+                      placeholder="One thing per line"
+                      :rows="Math.max(3, $store.gw.screen.tasks.length + 1)"
+                      :value="$store.gw.screen.tasks.join('\n')"
+                      @blur="$store.gw.saveScreen('tasks', $event.target.value)"
+                    ></textarea>
+                  </label>
+                </div>
+
+                <div class="mt-6 grid gap-5 sm:grid-cols-2">
+                  <div>
+                    <span class="label">Comes from</span>
+                    <p x-show="!$store.gw.cameFrom($store.gw.screen).length" class="text-fog/40">Top level</p>
+                    <template x-for="s in $store.gw.cameFrom($store.gw.screen)" :key="s.id">
+                      <button class="block py-0.5 text-left text-accent hover:underline" @click="$store.gw.selectScreen(s.id)" x-text="s.title"></button>
+                    </template>
+                  </div>
+                  <div>
+                    <span class="label">Leads to</span>
+                    <p x-show="!$store.gw.screen.leads_to.length" class="text-fog/40">Nowhere else</p>
+                    <template x-for="id in $store.gw.screen.leads_to" :key="id">
+                      <button class="block py-0.5 text-left text-accent hover:underline" @click="$store.gw.selectScreen(id)" x-text="$store.gw.screenById(id)?.title ?? id + ' (missing)'"></button>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="mt-6">
+                  <span class="label">Stories</span>
+                  <p x-show="!$store.gw.storiesOf($store.gw.screen).length" class="text-fog/40">No story covers this screen.</p>
+                  <template x-for="st in $store.gw.storiesOf($store.gw.screen)" :key="st.id">
+                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-white/5 hover:text-fog" @click="$store.gw.openStory(st.id)">
+                      <span class="shrink-0 text-[11px]" :class="{ 'text-fog/45': st.status === 'not-started', 'text-question': st.status === 'partial', 'text-emerald-300': st.status === 'done' }" x-text="st.status.replace('-', ' ')"></span>
+                      <span class="truncate" x-text="st.title"></span>
+                    </button>
+                  </template>
+                </div>
+
+                <div class="mt-6" x-show="$store.gw.commentsOf($store.gw.screen).length">
+                  <span class="label" x-text="'Comments from the running product · ' + $store.gw.commentsOf($store.gw.screen).length"></span>
+                  <template x-for="n in $store.gw.commentsOf($store.gw.screen)" :key="n.id">
+                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
+                      <span class="size-1.5 shrink-0 rounded-full" :class="n.status === 'settled' ? 'bg-emerald-400' : 'bg-question'"></span>
+                      <span class="truncate" x-text="n.title"></span>
+                    </button>
+                  </template>
+                </div>
+
+                <div class="mt-6" x-show="$store.gw.screen.code.length">
+                  <span class="label">In the code</span>
+                  <div class="flex flex-wrap gap-1">
+                    <template x-for="p in $store.gw.screen.code" :key="p">
+                      <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[11px] text-fog/70 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="mt-6" x-show="$store.gw.screenNotesHtml">
+                  <span class="label">Notes</span>
+                  <div class="report" @click="$store.gw.openIdLink($event)" x-html="$store.gw.screenNotesHtml"></div>
+                </div>
+
+                <div class="mt-6">
+                  <span class="label">Thread</span>
+                  <ol class="space-y-2">
+                    <template x-for="(e, i) in $store.gw.screenThread" :key="i">
+                      <li class="rounded-lg border px-3 py-2" :class="e.open ? 'border-question/50 bg-question/10' : e.who === 'you' ? 'border-transparent bg-white/5' : 'border-line'">
+                        <div class="mb-0.5 flex items-center justify-between text-[11px]">
+                          <span class="font-medium" :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Claude asks you' : 'Claude asked') : 'Claude'"></span>
+                          <span class="text-fog/35" x-text="e.date"></span>
+                        </div>
+                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.options(e.text).question"></p>
+                        <div x-show="e.open && $store.gw.options(e.text).options.length" class="mt-2 flex flex-col gap-1">
+                          <template x-for="(o, j) in $store.gw.options(e.text).options" :key="j">
+                            <button class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Start your answer from this" @click="$store.gw.screenReply = o; $nextTick(() => document.getElementById('screen-reply')?.focus())" x-text="o"></button>
+                          </template>
+                        </div>
+                      </li>
+                    </template>
+                  </ol>
+                  <form class="mt-2" @submit.prevent="$store.gw.sendScreenReply()">
+                    <textarea
+                      id="screen-reply"
+                      rows="2"
+                      x-model="$store.gw.screenReply"
+                      @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendScreenReply() }"
+                      :placeholder="$store.gw.screenThread.some((e) => e.open) ? 'Answer Claude' : 'Add a comment for the next /sitemap run'"
+                      class="field w-full resize-none"
+                    ></textarea>
+                    <div class="mt-1.5 flex items-center justify-between gap-2">
+                      <span class="min-w-0 text-[11px]" :class="$store.gw.screenStatus.startsWith('Not saved') ? 'text-rose-300' : 'text-fog/45'" x-text="$store.gw.screenStatus || 'Enter sends, Shift Enter for a new line'"></span>
+                      <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.screenReply.trim() || $store.gw.sending">Send</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+    </main>
 
     <!-- Readiness view -->
     <main

@@ -115,6 +115,39 @@ export interface Readiness {
   error?: string
 }
 
+export const SCREEN_STATUSES = ['built', 'partial', 'planned'] as const
+export type ScreenStatus = (typeof SCREEN_STATUSES)[number]
+
+/**
+ * One screen, page or view of the product, written by /sitemap from the code
+ * (or by /brief for a product not built yet). Kept in .groundwork/screens/.
+ */
+export interface Screen {
+  id: string
+  title: string
+  /** The screen this one sits under, for the tree. Empty at the top. */
+  parent: string
+  /** What the screen is for, in a sentence. */
+  purpose: string
+  /** Who it is meant for. `for:` in the file. */
+  audience: string[]
+  /** What the person is expected to do there. `does:` in the file. */
+  tasks: string[]
+  /** Screens reached from here. */
+  leads_to: string[]
+  /** Routes and source files that make up the screen. */
+  code: string[]
+  /** Stories that cover the screen. */
+  stories: string[]
+  status: ScreenStatus
+  /** code when read from the code, inferred when Claude guessed. */
+  source: string
+  created: string
+  body: string
+  /** Set when the file could not be read. */
+  error?: string
+}
+
 export const STORY_STATUSES = ['not-started', 'partial', 'done'] as const
 export type StoryStatus = (typeof STORY_STATUSES)[number]
 
