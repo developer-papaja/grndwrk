@@ -156,8 +156,46 @@ export const state = Alpine.reactive({
   /** The nodes on the page in view. Everything on All. */
   get visibleNodes(): GNode[] {
     const all = Object.values(this.nodes)
+    // Working on one part shows its thoughts from every page.
+    if (this.scopeScreen) return all.filter((n) => this.inScope(n))
     if (this.onAll) return all
     return all.filter((n) => samePage(pageOf(n, this.pageNames), this.currentPage))
+  },
+  // Working on one part: the whole map stays one map, a screen is a filter on it.
+  /** The screen being worked on, or null for the whole product. */
+  scope: readStored<string | null>('groundwork.scope', null),
+  get scopeScreen(): Screen | null {
+    return this.scope ? (this.screens.find((s) => s.id === this.scope) ?? null) : null
+  },
+  /** Ids of the thoughts about the scoped screen: marked with screen:, or comments made on it. */
+  get scopeIds(): Set<string> {
+    const s = this.scopeScreen
+    if (!s) return new Set()
+    const nodes = Object.values(this.nodes)
+    return new Set([...nodes.filter((n) => n.extra?.screen === s.id), ...commentsForScreen(s, nodes)].map((n) => n.id))
+  },
+  inScope(n: GNode): boolean {
+    return !this.scopeScreen || this.scopeIds.has(n.id)
+  },
+  gapInScope(g: Gap): boolean {
+    return !this.scopeScreen || g.screen === this.scopeScreen.id
+  },
+  /** How many thoughts are about a screen. */
+  thoughtsOn(id: string): number {
+    return Object.values(this.nodes).filter((n) => n.extra?.screen === id).length
+  },
+  setScope(id: string | null) {
+    this.scope = id
+    store('groundwork.scope', id)
+    this.select(null)
+    this.focusSkipped = []
+    const s = this.scopeScreen
+    this.flash(s ? `Working on ${s.title}. New thoughts belong to it.` : 'The whole product')
+  },
+  /** Open the map on one screen, from the sitemap. */
+  workOn(id: string) {
+    this.setScope(id)
+    this.setView('map')
   },
   /** The open card's free notes, without its thread. */
   get notesText(): string {
@@ -223,6 +261,7 @@ export const state = Alpine.reactive({
   },
   /** Stories whose first source thought is on the page in view. */
   get visibleStories(): Story[] {
+    if (this.scopeScreen) return storiesForScreen(this.scopeScreen, this.stories)
     if (this.onAll) return this.stories
     return this.stories.filter((st) => {
       const first = this.nodes[st.from[0]]
@@ -240,6 +279,7 @@ export const state = Alpine.reactive({
   /** Gaps on the page in view. Everything on All. */
   get visibleGaps(): Gap[] {
     const gaps = this.readiness?.gaps ?? []
+    if (this.scopeScreen) return gaps.filter((g) => this.gapInScope(g))
     if (this.onAll) return gaps
     return gaps.filter((g) => samePage(g.page || this.pageNames[0], this.currentPage))
   },
@@ -786,8 +826,8 @@ export const state = Alpine.reactive({
    * gaps. Skipped items wait at the end, in the order they were skipped.
    */
   get focusQueue(): FocusItem[] {
-    const gaps = this.openGaps
-    const nodes = groupForList(Object.values(this.nodes), '').flatMap((g) => g.nodes)
+    const gaps = this.openGaps.filter((g) => this.gapInScope(g))
+    const nodes = groupForList(Object.values(this.nodes).filter((n) => this.inScope(n)), '').flatMap((g) => g.nodes)
     const guess = (n: GNode) => n.extra?.source === 'inferred' && n.status === 'open' && !splitBody(n.body).entries.some((e) => e.who === 'you')
     const items: FocusItem[] = [
       ...gaps.filter((g) => g.severity === 'blocking').map((g) => ({ key: `gap:${g.id}`, kind: 'gap' as const, id: g.id })),
@@ -965,7 +1005,7 @@ export const state = Alpine.reactive({
   goToNode(id: string) {
     const node = this.nodes[id]
     if (!node) return
-    if (!this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.showPage(pageOf(node, this.pageNames))
+    if (!(this.scopeScreen && this.inScope(node)) && !this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.showPage(pageOf(node, this.pageNames))
     if (this.view !== 'map') this.setView('map')
     this.select(id)
   },
@@ -1128,7 +1168,7 @@ export const state = Alpine.reactive({
       const links = gap.near.filter((id) => this.nodes[id])
       // The thought keeps its context: which gap it answers and why that gap mattered.
       const body = `Answer to the gap "${gap.title}": ${gap.why}\n`
-      const node = await createNode({ title, topic: gap.topic ?? '', page: gap.page ?? '', altitude: gap.altitude ?? 3, links, body, answers: gap.id })
+      const node = await createNode({ title, topic: gap.topic ?? '', page: gap.page ?? '', altitude: gap.altitude ?? 3, links, body, answers: gap.id, ...(gap.screen ? { screen: gap.screen } : {}) })
       this.upsert(node)
       this.markFresh(node.id)
       if (closes) this.readiness = await markGapAnswered(gap.id, node.id)
@@ -1201,7 +1241,8 @@ export const state = Alpine.reactive({
       // A thought linked to the open node joins its topic too.
       // New thoughts land on the page in view, or next to the node they link to.
       const page = linkTo ? linkTo.page : this.onAll ? '' : this.currentPage
-      const node = await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '', page })
+      const screen = this.scopeScreen?.id ?? (typeof linkTo?.extra?.screen === 'string' ? linkTo.extra.screen : undefined)
+      const node = await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '', page, ...(screen ? { screen } : {}) })
       this.upsert(node)
       this.markFresh(node.id)
       this.flash(`Added to ${node.topic || 'no topic'}`)
@@ -1341,11 +1382,16 @@ export const state = Alpine.reactive({
     const at = this.selectedId ? ids.indexOf(this.selectedId) : -1
     const id = ids[(at + 1) % ids.length]
     const node = this.nodes[id]
-    if (!this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.showPage(pageOf(node, this.pageNames))
+    if (!(this.scopeScreen && this.inScope(node)) && !this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.showPage(pageOf(node, this.pageNames))
     this.select(id)
   },
 
   showPage(page: string) {
+    // Choosing a page goes back to the whole product.
+    if (this.scope) {
+      this.scope = null
+      store('groundwork.scope', null)
+    }
     this.currentPage = page
     store('groundwork.page', page)
   },

@@ -3,6 +3,16 @@ description: Ask a few sharp questions about the thinnest parts of the Groundwor
 ---
 Find where this project's Groundwork map is thinnest and ask the person a few sharp questions there. You ask; you never answer your own questions.
 
+## One part, or the whole
+
+`$ARGUMENTS` may name one screen: an id from `.groundwork/screens/` (like `p_k2m4`) or its title. Then work on that part only:
+- Read the screen file: its purpose, `for`, `does`, and thread.
+- The thoughts that belong to it have `screen: <id>` in their frontmatter. Ask about its features and details: what each feature must do, edge cases, empty and error states, what is out of scope for this screen.
+- Every new question node you write gets `screen: <id>` too, and the page and topic of the screen's other thoughts.
+- Do not ask about the rest of the product.
+
+Without an argument, work on the whole map as below.
+
 ## Read
 
 1. `.groundwork/project.md`: purpose, type, `pages:`.

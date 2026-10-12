@@ -5,6 +5,8 @@ Read this product's code and write its site map into Groundwork: one file per sc
 
 The rule above all: **code shows what a screen contains, rarely why it exists or who it is for.** Say what the code shows. Where purpose or audience is your guess, mark it as a guess and ask.
 
+`$ARGUMENTS` may name one screen (an id or a title). Then update only that screen and the screens directly under it, and add screens for parts of it the code has that the sitemap lacks. Leave the rest alone.
+
 ## Read
 
 1. **Screens and how they connect.**

@@ -107,3 +107,17 @@ describe('NodeStore', () => {
     expect(n).toMatchObject({ altitude: 5, type: 'idea' })
   })
 })
+
+describe('a thought about one screen', () => {
+  it('keeps screen: from capture, moves it, and removes it, without touching the rest', async () => {
+    const [n] = (await store.create({ title: 'Filters on the floor plan', screen: 'p_book' })).upserted
+    expect(n.extra.screen).toBe('p_book')
+    expect(await readFile(join(root, 'nodes', `${n.id}.md`), 'utf8')).toMatch(/^screen: p_book$/m)
+    const [moved] = (await store.update(n.id, { screen: 'p_home' })).upserted
+    expect(moved.extra.screen).toBe('p_home')
+    const [gone] = (await store.update(n.id, { screen: '' })).upserted
+    expect(gone.extra.screen).toBeUndefined()
+    const [bad] = (await store.create({ title: 'Other', screen: '../x' })).upserted
+    expect(bad.extra.screen).toBeUndefined()
+  })
+})

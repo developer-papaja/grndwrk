@@ -130,6 +130,7 @@ export function parseGaps(raw: string): Gap[] {
     if (typeof g.topic === 'string' && g.topic.trim()) gap.topic = g.topic.trim()
     const alt = Math.round(Number(g.altitude))
     if (Number.isFinite(alt) && g.altitude != null) gap.altitude = Math.min(5, Math.max(1, alt))
+    if (typeof g.screen === 'string' && /^p_[A-Za-z0-9_-]{1,60}$/.test(g.screen)) gap.screen = g.screen
     if (typeof g.answered_by === 'string' && g.answered_by) gap.answered_by = g.answered_by
     if (gap.answered_by && g.enough === true) gap.enough = true
     if (Array.isArray(g.suggestions)) {

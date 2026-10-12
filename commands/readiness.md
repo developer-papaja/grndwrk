@@ -3,6 +3,17 @@ description: Judge whether the Groundwork map is ready to build, and write the r
 ---
 Judge whether this project's Groundwork map holds enough to start building, and write down exactly what is missing.
 
+## One part, or the whole
+
+`$ARGUMENTS` may name one screen: an id from `.groundwork/screens/` (like `p_k2m4`) or its title. Then judge that part only, and leave everything else as it is:
+- Read the screen file and the thoughts with `screen: <id>` (plus comments made on it: `source: app` in its topic).
+- Judge whether the part is ready to build: is its purpose clear, are its features and states decided, does a story cover it.
+- Write gaps for it into `gaps.json` with `"screen": "<id>"`, keeping every other gap as it is. Close its own gaps that are answered.
+- Do not rewrite `report.md` or `foundations.json`; add one line under a `## Parts` heading in `report.md` for this screen instead (replace that screen's line if it is there).
+- Report back on that part only.
+
+Without an argument, judge the whole project as below.
+
 ## Read
 
 1. `.groundwork/project.md`: name, purpose, project type, and `pages:` for the page order.

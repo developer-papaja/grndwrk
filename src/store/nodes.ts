@@ -87,6 +87,7 @@ export class NodeStore {
       Object.assign(node, clean(input))
       // A thought written as the answer to a gap remembers which gap, even after the gap closes.
       if (typeof input.answers === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(input.answers)) node.extra = { answers: input.answers }
+      if (typeof input.screen === 'string' && SCREEN_ID.test(input.screen)) node.extra = { ...node.extra, screen: input.screen }
       node.extra = { ...node.extra, ...extra }
       node.links = [...new Set(input.links ?? [])].filter((l) => byId.has(l))
       byId.set(id, node)
@@ -108,6 +109,10 @@ export class NodeStore {
       if (input.topic !== undefined) {
         const { topic_by: _, ...rest } = current.extra
         next.extra = rest
+      }
+      if (input.screen !== undefined) {
+        const { screen: _, ...rest } = next.extra
+        next.extra = typeof input.screen === 'string' && SCREEN_ID.test(input.screen) ? { ...rest, screen: input.screen } : rest
       }
       if (input.links) next.links = [...new Set(input.links)].filter((l) => l !== id && byId.has(l))
       byId.set(id, next)
@@ -172,6 +177,9 @@ export class NodeStore {
 }
 
 /** Normalize client input the same way a file is normalized. Bad values fall back to defaults. */
+/** A screen id from screens/, like p_k2m4. */
+const SCREEN_ID = /^p_[A-Za-z0-9_-]{1,60}$/
+
 function clean(input: NodeInput): Partial<GNode> {
   const out: Partial<GNode> = {}
   if (input.title !== undefined) out.title = String(input.title).trim()

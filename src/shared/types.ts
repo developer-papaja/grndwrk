@@ -40,6 +40,8 @@ export interface GNode {
 export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'page' | 'altitude' | 'links' | 'status' | 'body'>> & {
   /** On create: the id of the gap this thought answers. Kept as `answers:` in the file. */
   answers?: string
+  /** The screen this thought is about, a p_ id from screens/. Empty removes it. Kept as `screen:` in the file. */
+  screen?: string
 }
 
 export type ServerEvent =
@@ -69,6 +71,8 @@ export interface Gap {
   enough?: boolean
   /** Answers Claude proposes, written by /readiness, so the person can start from one. */
   suggestions?: { title: string; why: string }[]
+  /** The screen the gap is about, when /readiness judged one part. */
+  screen?: string
 }
 
 export type Verdict = 'ready to build' | 'ready to prototype' | 'not ready'

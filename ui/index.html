@@ -39,7 +39,7 @@
       :style="$store.gw.mapArea"
       @click.self="$store.gw.clickBackground()"
     >
-      <p x-show="!$store.gw.board.columns.length" class="px-8 pt-20 text-fog/50">Nothing on this page yet. Add a thought below.</p>
+      <p x-show="!$store.gw.board.columns.length" class="px-8 text-fog/50" :class="$store.gw.scopeScreen ? 'pt-40' : 'pt-20'" x-text="$store.gw.scopeScreen ? 'Nothing about ' + $store.gw.scopeScreen.title + ' yet. Add its features and details below: they belong to this screen.' : 'Nothing on this page yet. Add a thought below.'"></p>
       <div
         x-show="$store.gw.board.columns.length"
         class="inline-grid gap-x-2 px-4 pb-32"
@@ -48,7 +48,7 @@
       >
         <div class="sticky left-0 top-0 z-[3] bg-ink"></div>
         <template x-for="col in $store.gw.board.columns" :key="col.key">
-          <div class="sticky top-0 z-[2] flex items-baseline justify-between gap-2 bg-ink px-1 pb-2 pt-16">
+          <div class="sticky top-0 z-[2] flex items-baseline justify-between gap-2 bg-ink px-1 pb-2" :class="$store.gw.scopeScreen ? 'pt-36' : 'pt-16'">
             <span class="truncate font-semibold text-fog" :class="!col.key && 'text-fog/50'" x-text="$store.gw.label(col.name)"></span>
             <span class="flex shrink-0 gap-2 text-[11px]">
               <span x-show="col.missing" class="text-rose-300/80" x-text="col.missing + ' missing'"></span>
@@ -147,7 +147,7 @@
       :style="$store.gw.mapArea"
       @click.self="$store.gw.clickBackground()"
     >
-      <div class="mx-auto max-w-2xl px-8 pb-32 pt-16" @click.self="$store.gw.clickBackground()">
+      <div class="mx-auto max-w-2xl px-8 pb-32" :class="$store.gw.scopeScreen ? 'pt-36' : 'pt-16'" @click.self="$store.gw.clickBackground()">
         <p x-show="!$store.gw.outline.length" class="text-fog/50">Nothing on this page yet. Add a thought below.</p>
         <template x-for="sec in $store.gw.outline" :key="sec.key">
           <section class="mb-8">
@@ -199,8 +199,18 @@
       </div>
     </main>
 
-    <!-- How the map draws its cards -->
-    <div x-cloak x-show="$store.gw.view === 'map'" class="pointer-events-none fixed top-3 z-[5] flex justify-center px-4" :style="$store.gw.mapArea">
+    <!-- Which part of the product, and how the map draws its cards -->
+    <div x-cloak x-show="$store.gw.view === 'map'" class="pointer-events-none fixed top-3 z-[5] flex flex-col items-center gap-2 px-4" :style="$store.gw.mapArea">
+      <div class="flex items-center gap-2">
+      <label x-show="$store.gw.screens.length" class="pointer-events-auto flex h-10 items-center gap-2 rounded-xl border bg-panel pl-3 pr-1 text-[13px] shadow-md shadow-black/20" :class="$store.gw.scopeScreen ? 'border-accent/60' : 'border-line'" title="Work on the whole product, or only one screen from the sitemap">
+        <svg class="size-4 shrink-0 text-fog/50"><use href="#i-screens" /></svg>
+        <select id="scope" class="h-8 max-w-[220px] cursor-pointer rounded-md bg-transparent pr-1 text-fog focus:outline-none" :value="$store.gw.scope || ''" @change="$store.gw.setScope($event.target.value || null)">
+          <option value="">Whole product</option>
+          <template x-for="row in $store.gw.screenRows" :key="row.screen.id">
+            <option :value="row.screen.id" :selected="$store.gw.scope === row.screen.id" x-text="'\u00a0\u00a0'.repeat(row.depth) + row.screen.title + ($store.gw.thoughtsOn(row.screen.id) ? ' (' + $store.gw.thoughtsOn(row.screen.id) + ')' : '')"></option>
+          </template>
+        </select>
+      </label>
       <div id="layouts" class="pointer-events-auto flex gap-0.5 rounded-xl border border-line bg-panel p-1 shadow-md shadow-black/20">
         <template x-for="l in $store.gw.mapLayouts" :key="l.key">
           <button
@@ -215,6 +225,16 @@
             <svg class="size-[18px]"><use :href="'#' + l.icon" /></svg>
           </button>
         </template>
+      </div>
+      </div>
+      <!-- The part being worked on: what it is for, who it is for, what they do there -->
+      <div x-show="$store.gw.scopeScreen" id="scope-card" class="pointer-events-auto flex max-w-xl items-start gap-3 rounded-xl border border-line bg-panel px-4 py-2 text-xs shadow-md shadow-black/20">
+        <div class="min-w-0 flex-1">
+          <span class="block text-fog/80" x-text="$store.gw.scopeScreen?.purpose || 'No purpose written yet'"></span>
+          <span x-show="$store.gw.scopeScreen?.audience.length" class="block text-fog/45" x-text="'For ' + ($store.gw.scopeScreen?.audience ?? []).join(', ') + (($store.gw.scopeScreen?.tasks ?? []).length ? '. They ' + $store.gw.scopeScreen.tasks.slice(0, 3).join(', ') + '.' : '')"></span>
+        </div>
+        <button class="shrink-0 rounded-md px-2 py-1 text-fog/60 hover:bg-white/8 hover:text-fog" title="Open it in the sitemap" @click="$store.gw.selectScreen($store.gw.scope); $store.gw.setView('sitemap')">Sitemap</button>
+        <button class="shrink-0 rounded-md px-2 py-1 text-fog/60 hover:bg-white/8 hover:text-fog" @click="$store.gw.setScope(null)">Whole product</button>
       </div>
     </div>
 
@@ -297,7 +317,11 @@
           <svg class="size-[18px]"><use href="#i-plus" /></svg>
         </button>
       </div>
-      <div class="px-2 pb-2" id="pages">
+      <p x-show="$store.gw.scopeScreen" class="px-4 pb-1 text-xs text-fog/50">
+        <span x-text="'Showing ' + ($store.gw.scopeScreen?.title ?? '') + ' from every page.'"></span>
+        <button class="text-accent hover:underline" @click="$store.gw.setScope(null)">Whole product</button>
+      </p>
+      <div class="px-2 pb-2" id="pages" :class="$store.gw.scopeScreen && 'opacity-50'">
         <button
           class="flex h-8 w-full items-center justify-between rounded-md px-2"
           :class="$store.gw.onAll ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
@@ -556,7 +580,10 @@
                             <span x-show="$store.gw.questionsOn(b.screen)" class="size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
                           </span>
                           <span class="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-fog/55" x-text="b.screen.purpose || 'No purpose written yet'"></span>
-                          <span class="mt-auto truncate text-[10.5px] text-fog/35" x-text="b.screen.audience.length ? 'For ' + b.screen.audience.join(', ') : ''"></span>
+                          <span class="mt-auto flex w-full gap-2 text-[10.5px] text-fog/35">
+                            <span class="min-w-0 flex-1 truncate" x-text="b.screen.audience.length ? 'For ' + b.screen.audience.join(', ') : ''"></span>
+                            <span x-show="$store.gw.thoughtsOn(b.id)" class="shrink-0" x-text="$store.gw.thoughtsOn(b.id) + ($store.gw.thoughtsOn(b.id) === 1 ? ' thought' : ' thoughts')"></span>
+                          </span>
                         </button>
                       </template>
                     </div>
@@ -604,7 +631,10 @@
                   <span x-show="$store.gw.screen.source === 'inferred'" class="rounded bg-question/15 px-1.5 py-0.5 text-question">Claude's guess. Check it.</span>
                   <span class="font-mono text-fog/35" x-text="$store.gw.screen.id"></span>
                 </div>
-                <h2 class="mt-2 text-[20px] font-semibold text-fog" x-text="$store.gw.screen.title"></h2>
+                <div class="mt-2 flex items-center justify-between gap-3">
+                  <h2 class="text-[20px] font-semibold text-fog" x-text="$store.gw.screen.title"></h2>
+                  <button id="work-on" class="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" title="Open the map with only this screen's thoughts; new ones belong to it" @click="$store.gw.workOn($store.gw.screen.id)" x-text="'Work on this part' + ($store.gw.thoughtsOn($store.gw.screen.id) ? ' (' + $store.gw.thoughtsOn($store.gw.screen.id) + ')' : '')"></button>
+                </div>
                 <p x-show="$store.gw.screen.error" class="mt-1 text-xs text-rose-300" x-text="$store.gw.screen.error"></p>
 
                 <div class="mt-5 space-y-4">
@@ -1154,7 +1184,7 @@
       class="fixed inset-y-0 right-0 flex w-[400px] max-w-full flex-col border-l border-line bg-panel text-[13px]"
     >
       <div class="flex items-center justify-between px-4 py-3">
-        <span class="font-semibold text-fog">Focus</span>
+        <span class="min-w-0 truncate font-semibold text-fog">Focus<span x-show="$store.gw.scopeScreen" class="font-normal text-fog/50" x-text="' · ' + ($store.gw.scopeScreen?.title ?? '')"></span></span>
         <span class="-mr-1.5 flex items-center gap-2">
           <span id="focus-count" class="text-xs text-fog/45" x-show="$store.gw.focusQueue.length" x-text="$store.gw.focusQueue.length + ' left'"></span>
           <button class="icon-btn" title="Back to the map ( Esc )" @click="$store.gw.setView('map')">
