@@ -22,11 +22,17 @@ public enum GroundworkFeedback {
   private static var overlay: OverlayWindow?
   static var controller: OverlayController? { overlay?.rootViewController as? OverlayController }
 
-  /// Show the Comment button. Without `server`, it finds Groundwork by itself:
+  /// Show the Groundwork button. Without `server`, it finds Groundwork by itself:
   /// on the same Wi-Fi when `groundwork --lan` runs, and in the Simulator also
   /// at localhost:7777. Comments written while Groundwork cannot be reached
   /// are kept on the device and sent once it can.
-  public static func start(server: URL? = nil) {
+  ///
+  /// It is a tool for your own debug builds. In an App Store build it never
+  /// runs. In other builds that are not Debug (an Ad Hoc or TestFlight build
+  /// for testers) it runs only with `allowOutsideDebug: true`; never submit
+  /// such a build to the App Store.
+  public static func start(server: URL? = nil, allowOutsideDebug: Bool = false) {
+    guard Distribution.mayRun(allowOutsideDebug: allowOutsideDebug) else { return }
     Locator.fixed = server
     Connection.start()
     if attach() { return }
@@ -41,12 +47,32 @@ public enum GroundworkFeedback {
   }
 
   /// Open the list of comments: the ones waiting to be sent, and the ones sent.
-  /// The same as a long press on the Comment button, then Show comments.
+  /// The same as a long press on the Groundwork button, then Show comments.
   public static func showComments() {
     controller?.showComments()
   }
 
-  /// Hide the Comment button until the next `start()`.
+  /// Send a picture of each screen the app shows to Groundwork, for its
+  /// Sitemap view: once per screen per launch, while connected. On by default.
+  public static var collectsScreenshots: Bool {
+    get { Snapshots.enabled }
+    set { Snapshots.enabled = newValue }
+  }
+
+  /// Opens a screen of the app by the name comments carry (its navigation
+  /// title, `.groundworkScreen` name or view type). When set, a comment's page
+  /// in the list has a Go to button, to test a fix where the comment was made.
+  /// Return false when the name is not one the app can open.
+  ///
+  ///     GroundworkFeedback.openScreen = { name in
+  ///       switch name {
+  ///       case "Planner": router.show(.planner); return true
+  ///       default: return false
+  ///       }
+  ///     }
+  public static var openScreen: ((String) -> Bool)?
+
+  /// Hide the Groundwork button until the next `start()`.
   public static func stop() {
     overlay?.isHidden = true
     overlay = nil

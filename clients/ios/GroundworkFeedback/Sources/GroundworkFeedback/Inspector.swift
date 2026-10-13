@@ -18,10 +18,14 @@ enum Inspector {
   }
 
   struct Screen {
-    /// The navigation title when there is one, or the view controller's or SwiftUI view's name.
+    /// The navigation title when there is one, the name given with
+    /// `.groundworkScreen`, or the view controller's or SwiftUI view's name.
     var name: String
     /// The view type, like BookingView, when it can be read.
     var component: String?
+    /// Whether the name is the screen's own: a title, or `.groundworkScreen`.
+    /// Without one, screens that look nothing alike can share a name like App.
+    var named: Bool
   }
 
   /// How many elements VoiceOver knows on screen, from the last search. None
@@ -33,6 +37,10 @@ enum Inspector {
   /// for as long as the app is in front. Debug builds only, like the rest of
   /// this package. Returns false when it cannot.
   static func wakeAccessibility() -> Bool {
+    // A private switch: in Debug builds only, so it is not even in other builds.
+    #if !DEBUG
+    return false
+    #else
     guard setAutomation == nil, let lib = dlopen("/usr/lib/libAccessibility.dylib", RTLD_NOW),
       let set = dlsym(lib, "_AXSSetAutomationEnabled"), let get = dlsym(lib, "_AXSAutomationEnabled") else { return false }
     guard unsafeBitCast(get, to: Getter.self)() == 0 else { return false }
@@ -47,6 +55,7 @@ enum Inspector {
       }
     }
     return true
+    #endif
   }
   private typealias Setter = @convention(c) (Int32) -> Void
   private typealias Getter = @convention(c) () -> Int32
@@ -201,11 +210,58 @@ enum Inspector {
       else if let nav = vc as? UINavigationController { vc = nav.visibleViewController ?? nav.topViewController }
       else if let tabs = vc as? UITabBarController { vc = tabs.selectedViewController }
       else if let child = vc?.children.last(where: { $0.isViewLoaded && $0.view.window != nil }), vc is UISplitViewController { vc = child }
+      // SwiftUI's NavigationStack and TabView keep a navigation or tab controller as a child of the hosting controller.
+      else if let child = vc?.children.last(where: { ($0 is UINavigationController || $0 is UITabBarController) && $0.isViewLoaded && $0.view.window != nil }) { vc = child }
       else { break }
     }
     let component = vc.flatMap { typeName(String(describing: type(of: $0))) }
-    let title = vc?.navigationItem.title ?? vc?.title
-    return Screen(name: clean(title) ?? component ?? "App", component: component)
+    let title = clean(vc?.navigationItem.title ?? vc?.title)
+    let given = title == nil ? givenName(in: vc?.viewIfLoaded ?? window) ?? givenName(in: window) : nil
+    return Screen(name: title ?? given ?? component ?? "App", component: component, named: title != nil || given != nil)
+  }
+
+  /// The name from `.groundworkScreen("Connect")`: the frontmost one on screen.
+  private static func givenName(in root: UIView) -> String? {
+    var found: String?
+    var visited = 0
+    func visit(_ view: UIView) {
+      visited += 1
+      guard visited < 6000, !view.isHidden, view.alpha > 0.01 else { return }
+      if let marker = view as? GroundworkScreenName, let window = view.window,
+        view.convert(view.bounds, to: window).intersects(window.bounds), let name = clean(marker.name) {
+        found = name
+      }
+      for sub in view.subviews { visit(sub) }
+    }
+    visit(root)
+    return found
+  }
+
+  /// What the screen shows: the texts VoiceOver would read and the
+  /// accessibility identifiers, top to bottom, without the tab bar, which
+  /// every screen shares. Enough to tell two screens with the same name apart.
+  static func contents(of window: UIWindow) -> (texts: [String], ids: [String]) {
+    var found: [(text: String?, id: String?, frame: CGRect)] = []
+    var visited = 0
+    func visit(_ object: NSObject, depth: Int) {
+      visited += 1
+      guard depth < 60, visited < 8000 else { return }
+      if let view = object as? UIView, view.isHidden || view.alpha < 0.01 || view is UITabBar { return }
+      if object.accessibilityTraits.contains(.tabBar) { return }
+      let frame = object.accessibilityFrame
+      if !frame.isEmpty, frame.intersects(window.bounds) {
+        let id = identifier(of: object)
+        let text = object.isAccessibilityElement ? clean(object.accessibilityLabel) : nil
+        if id != nil || text != nil { found.append((text, id, frame)) }
+      }
+      for child in children(of: object) { visit(child, depth: depth + 1) }
+    }
+    visit(window, depth: 0)
+    found.sort { abs($0.frame.minY - $1.frame.minY) > 4 ? $0.frame.minY < $1.frame.minY : $0.frame.minX < $1.frame.minX }
+    var seenText = Set<String>(), seenId = Set<String>()
+    let texts = found.compactMap { $0.text.map { String($0.prefix(80)) } }.filter { seenText.insert($0).inserted }
+    let ids = found.compactMap(\.id).filter { seenId.insert($0).inserted }
+    return (Array(texts.prefix(60)), Array(ids.prefix(60)))
   }
 
   /// "UIHostingController<ModifiedContent<BookingView, ...>>" gives BookingView.
@@ -213,7 +269,29 @@ enum Inspector {
     let wrappers: Set<String> = ["UIHostingController", "ModifiedContent", "AnyView", "Optional", "TupleView", "NavigationStack", "NavigationView", "Group", "VStack", "HStack", "ZStack", "EmptyView", "Never", "Text"]
     let words = raw.split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "_" }).map(String.init)
     // Only wrappers, like UIHostingController<AnyView>: the view's name cannot be read.
-    return words.first(where: { !wrappers.contains($0) && !$0.hasPrefix("_") && $0.first?.isUppercase == true && !$0.hasSuffix("Modifier") })
+    return words.first(where: { !wrappers.contains($0) && !$0.hasPrefix("_") && $0.first?.isUppercase == true && !$0.hasSuffix("Modifier") && !$0.hasSuffix("HostingController") })
+  }
+
+  /// An area the person framed by hand: what VoiceOver reads inside it, top
+  /// to bottom, and the first accessibility identifier there.
+  static func area(_ frame: CGRect, in window: UIWindow) -> Found {
+    var inside: [(text: String?, id: String?, frame: CGRect)] = []
+    var visited = 0
+    func visit(_ object: NSObject, depth: Int) {
+      visited += 1
+      guard depth < 60, visited < 8000 else { return }
+      if let view = object as? UIView, view.isHidden || view.alpha < 0.01 { return }
+      let f = object.accessibilityFrame
+      if object.isAccessibilityElement, !f.isEmpty, frame.insetBy(dx: -2, dy: -2).contains(f) {
+        inside.append((clean(object.accessibilityLabel), identifier(of: object), f))
+      }
+      for child in children(of: object) { visit(child, depth: depth + 1) }
+    }
+    visit(window, depth: 0)
+    inside.sort { abs($0.frame.minY - $1.frame.minY) > 4 ? $0.frame.minY < $1.frame.minY : $0.frame.minX < $1.frame.minX }
+    var seen = Set<String>()
+    let label = inside.compactMap(\.text).filter { seen.insert($0).inserted }.prefix(4).joined(separator: " · ")
+    return Found(frame: frame, label: label.isEmpty ? nil : String(label.prefix(120)), identifier: inside.compactMap(\.id).first, role: "area")
   }
 
   /// A picture of the area around the element, at most 2x, for context in the map.
