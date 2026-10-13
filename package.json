@@ -1,7 +1,9 @@
 {
   "name": "groundwork",
   "version": "0.0.1",
+  "private": true,
   "description": "Explore a product idea as a map of cards and find out if you are ready to build",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "groundwork": "bin/groundwork.js"
@@ -11,29 +13,38 @@
     "dist",
     "templates",
     "commands",
-    "overlay"
+    "overlay",
+    "clients/ios/GroundworkFeedback/Package.swift",
+    "clients/ios/GroundworkFeedback/Sources",
+    "clients/ios/GroundworkFeedback/README.md",
+    "clients/ios/Loader",
+    "clients/ios/build-loader.sh"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20.16"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build",
     "dev": "mkdir -p playground && cd playground && tsx ../src/cli.ts init >/dev/null && tsx watch --clear-screen=false --exclude \"../node_modules/**\" --exclude \"../ui/**\" ../src/cli.ts start --dev --no-open",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit",
+    "prepack": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
-    "chokidar": "^5.0.0",
-    "gray-matter": "^4.0.3",
-    "open": "^11.0.0",
-    "sirv": "^3.0.2"
+    "chokidar": "5.0.0",
+    "open": "11.0.0",
+    "playwright-core": "1.64.0",
+    "sirv": "3.0.2",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/alpinejs": "^3.17.0",
     "@types/node": "^26.6.4",
+    "@vue/reactivity": "^3.5.43",
     "alpinejs": "^3.17.4",
-    "marked": "^18.0.14",
+    "dompurify": "^3.4.17",
+    "marked": "^18.1.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
