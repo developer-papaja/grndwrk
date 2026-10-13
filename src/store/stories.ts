@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import matter from 'gray-matter'
+import { readMatter } from './matter.js'
 import { STORY_STATUSES, type Story, type StoryStatus } from '../shared/types.js'
 
 const ID = /^s_[A-Za-z0-9_-]{1,60}$/
@@ -31,7 +31,7 @@ export function parseStory(id: string, raw: string): Story {
   let data: Record<string, unknown>
   let body: string
   try {
-    const parsed = matter(raw, {})
+    const parsed = readMatter(raw)
     data = parsed.data
     body = parsed.content
   } catch (err) {

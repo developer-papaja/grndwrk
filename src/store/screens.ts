@@ -1,6 +1,6 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import matter from 'gray-matter'
+import { readMatter } from './matter.js'
 import { SCREEN_STATUSES, type Screen } from '../shared/types.js'
 import { oneOf, scalar } from './frontmatter.js'
 
@@ -19,7 +19,11 @@ export async function listScreens(gwDir: string): Promise<Screen[]> {
   const screens: Screen[] = []
   for (const file of files) {
     const id = file.slice(0, -3)
-    if (!ID.test(id)) continue
+    if (!ID.test(id)) {
+      // Shown, not skipped: a screen that silently disappears is worse than one that says why.
+      screens.push({ ...empty(id), error: `The file name must be p_ and letters or digits, like p_k2m4.md, not ${file}.` })
+      continue
+    }
     try {
       screens.push(parseScreen(id, await readFile(join(dir, file), 'utf8')))
     } catch {
@@ -29,27 +33,41 @@ export async function listScreens(gwDir: string): Promise<Screen[]> {
   return screens
 }
 
-const KNOWN = ['id', 'title', 'parent', 'purpose', 'for', 'does', 'leads_to', 'code', 'stories', 'status', 'source', 'created']
+const KNOWN = ['id', 'title', 'parent', 'in', 'replaced_by', 'purpose', 'for', 'does', 'leads_to', 'code', 'open', 'seen_as', 'shots', 'stories', 'status', 'source', 'created']
 
 export function parseScreen(id: string, raw: string): Screen {
   let data: Record<string, unknown>
   let body: string
   try {
-    const parsed = matter(raw, {})
+    const parsed = readMatter(raw)
     data = parsed.data
     body = parsed.content
   } catch (err) {
-    return { ...empty(id), body: raw, error: (err as Error).message.split('\n')[0] }
+    return { ...empty(id), body: raw, error: `The frontmatter is not valid YAML: ${(err as Error).message.split('\n')[0]}${/^[\w-]+: [^"'\n]*: /m.test(raw) ? '. A value with a colon in it needs quotes around it.' : ''}` }
+  }
+  // Without frontmatter nothing is read, and the screen would show as an empty box.
+  if (!Object.keys(data).length) {
+    const why = !raw.trim()
+      ? 'The file is empty.'
+      : /^\s+---/.test(raw) || /^\uFEFF/.test(raw)
+        ? 'The frontmatter must start with --- on the very first line, with nothing before it.'
+        : 'No frontmatter: the file must start with a --- line, the fields, and another --- line.'
+    return { ...empty(id), body: raw, error: why }
   }
   return {
     id,
     title: text(data.title) || id,
     parent: text(data.parent),
+    in: list(data.in),
+    replaced_by: ID.test(text(data.replaced_by)) && text(data.replaced_by) !== id ? text(data.replaced_by) : '',
     purpose: text(data.purpose),
     audience: list(data.for),
     tasks: list(data.does),
     leads_to: list(data.leads_to).filter((x) => ID.test(x) && x !== id),
     code: list(data.code),
+    open: list(data.open).filter((p) => p.startsWith('/')),
+    seen_as: list(data.seen_as),
+    shots: list(data.shots).map(shotRef).filter(Boolean),
     stories: list(data.stories),
     status: oneOf(data.status, SCREEN_STATUSES, 'built'),
     source: text(data.source),
@@ -58,8 +76,18 @@ export function parseScreen(id: string, raw: string): Screen {
   }
 }
 
+/** A picture as `shots:` names it, the way `listShots` gives it: ios/App-2.jpg, with %20 read as a space. */
+export function shotRef(ref: string): string {
+  const r = ref.trim().replace(/^\/?(\.groundwork\/)?shots\//, '').replace(/^\//, '')
+  try {
+    return decodeURIComponent(r)
+  } catch {
+    return r
+  }
+}
+
 function empty(id: string): Screen {
-  return { id, title: id, parent: '', purpose: '', audience: [], tasks: [], leads_to: [], code: [], stories: [], status: 'built', source: '', created: '', body: '' }
+  return { id, title: id, parent: '', in: [], replaced_by: '', purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], stories: [], status: 'built', source: '', created: '', body: '' }
 }
 
 function text(v: unknown): string {
@@ -77,6 +105,7 @@ export interface ScreenEdit {
   audience?: string[]
   tasks?: string[]
   body?: string
+  shots?: string[]
 }
 
 /**
@@ -92,13 +121,30 @@ export async function updateScreen(gwDir: string, id: string, edit: ScreenEdit):
   } catch {
     return null
   }
-  const { data, content } = matter(raw, {})
+  const { data, content } = readMatter(raw)
   const screen = parseScreen(id, raw)
   if (screen.error) throw new Error(`screens/${id}.md cannot be read: ${screen.error}`)
   const next = { ...screen, ...defined(edit) }
   const extra = Object.fromEntries(Object.entries(data).filter(([k]) => !KNOWN.includes(k)))
   await writeFile(path, serializeScreen(next, extra, edit.body ?? content))
   return parseScreen(id, await readFile(path, 'utf8'))
+}
+
+/**
+ * Put a picture on a screen (`shots:`), taking it off any other screen that
+ * named it. An empty screen id only takes it off. Returns false when the
+ * screen does not exist or cannot be read.
+ */
+export async function placeShot(gwDir: string, file: string, screenId: string): Promise<boolean> {
+  const ref = shotRef(file)
+  const screens = await listScreens(gwDir)
+  const target = screenId ? screens.find((s) => s.id === screenId) : null
+  if (screenId && (!target || target.error)) return false
+  for (const s of screens) {
+    if (s.id !== screenId && !s.error && s.shots.includes(ref)) await updateScreen(gwDir, s.id, { shots: s.shots.filter((x) => x !== ref) })
+  }
+  if (target && !target.shots.includes(ref)) await updateScreen(gwDir, target.id, { shots: [...target.shots, ref] })
+  return true
 }
 
 function defined<T extends object>(o: T): Partial<T> {
@@ -112,18 +158,23 @@ export function serializeScreen(s: Screen, extra: Record<string, unknown>, body:
     `id: ${s.id}`,
     `title: ${scalar(s.title)}`,
     ...(s.parent ? [`parent: ${s.parent}`] : []),
+    ...(s.in.length ? [`in: ${inline(s.in)}`] : []),
+    ...(s.replaced_by ? [`replaced_by: ${s.replaced_by}`] : []),
     `purpose: ${scalar(s.purpose)}`,
     `for: ${inline(s.audience)}`,
     ...(s.tasks.length ? ['does:', ...s.tasks.map((t) => `  - ${scalar(t)}`)] : ['does: []']),
     `leads_to: ${inline(s.leads_to)}`,
     `code: ${inline(s.code)}`,
+    ...(s.open.length ? [`open: ${inline(s.open)}`] : []),
+    ...(s.seen_as.length ? [`seen_as: ${inline(s.seen_as)}`] : []),
+    ...(s.shots.length ? [`shots: ${inline(s.shots)}`] : []),
     `stories: ${inline(s.stories)}`,
     `status: ${s.status}`,
     ...(s.source ? [`source: ${s.source}`] : []),
     ...(s.created ? [`created: ${s.created}`] : []),
   ]
   for (const [k, v] of Object.entries(extra)) {
-    lines.push(`${scalar(k)}: ${typeof v === 'string' ? scalar(v) : JSON.stringify(v instanceof Date ? v.toISOString().slice(0, 10) : v)}`)
+    lines.push(`${scalar(k)}: ${typeof v === 'string' ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : scalar(v)) : JSON.stringify(v instanceof Date ? v.toISOString().slice(0, 10) : v)}`)
   }
   return `---\n${lines.join('\n')}\n---\n${body}`
 }

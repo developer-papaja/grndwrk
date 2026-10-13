@@ -3,6 +3,12 @@
 // The comment lands in the Groundwork map, on the Feedback page.
 ;(() => {
   if (window.__groundworkFeedback) return
+  // A tool for your own machine. Pasted into a page that is served from
+  // anywhere else, it does nothing and says why.
+  if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+    console.warn('Groundwork comments only run on localhost, through `groundwork --app`. Remove this script from the page.')
+    return
+  }
   window.__groundworkFeedback = true
 
   const host = document.createElement('groundwork-feedback')
@@ -205,7 +211,8 @@
       text,
       platform: 'Web',
       screen: location.pathname,
-      url: location.href,
+      // Without the query and the hash, which can hold tokens or personal data.
+      url: location.origin + location.pathname,
       written: new Date().toISOString(),
       element: { label: labelOf(el), id: idOf(el), role: roleOf(el), component: componentOf(el), selector: selectorOf(el) },
     }

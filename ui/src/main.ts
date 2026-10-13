@@ -7,16 +7,6 @@ import { state } from './state'
 // A handle for poking at the map from the browser console.
 Object.assign(window, { groundwork: { state } })
 
-// In focus mode the map follows the queue: when the current item changes,
-// for any reason (an answer, a skip, a file changed on disk), show the next.
-let lastFocus: string | undefined
-Alpine.effect(() => {
-  const key = state.view === 'focus' ? (state.focusCurrent?.key ?? '') : undefined
-  if (key === lastFocus) return
-  lastFocus = key
-  if (key !== undefined) setTimeout(() => state.focusShow())
-})
-
 bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
   layout: () => state.cycleLayout(),
 })
@@ -48,6 +38,9 @@ const handlers = {
     void state.loadReadiness()
     void state.loadDeliverables()
     void state.loadScreens()
+    void state.loadPairRequests()
+    void state.loadShots()
+    void state.loadRuntime()
   },
   onError: () => {
     state.live = false
@@ -60,8 +53,12 @@ const handlers = {
       if (state.nodes[event.id]) state.writeComment(event.id)
       else writeWhenLoaded = event.id
     }
+    else if (event.type === 'pair:request') state.addPairRequest(event.request)
+    else if (event.type === 'pair:done') state.dropPairRequest(event.id)
+    else if (event.type === 'file:change' && event.path.startsWith('shots/')) void state.loadShots()
     else if (event.type === 'file:change' && event.path === 'project.md') {
       void fetchProject().then((p) => (state.project = p))
+      void state.loadRuntime()
     } else if (event.type === 'file:change' && event.path.startsWith('readiness/')) {
       void state.loadReadiness()
     } else if (event.type === 'file:change' && event.path.startsWith('screens/')) {

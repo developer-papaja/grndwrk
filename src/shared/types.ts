@@ -42,6 +42,12 @@ export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'page' 
   answers?: string
   /** The screen this thought is about, a p_ id from screens/. Empty removes it. Kept as `screen:` in the file. */
   screen?: string
+  /** A comment from the running product: the date the person marked it fixed, or empty to undo. Kept as `fixed:` in the file. */
+  fixed?: string
+  /** A comment from the running product: the date a fix was proposed, or empty when the fix turned out not to work. */
+  proposed?: string
+  /** A comment from the running product: the date its fix was built, ready to test, or empty when a test rejected it. */
+  built?: string
 }
 
 export type ServerEvent =
@@ -50,6 +56,29 @@ export type ServerEvent =
   | { type: 'file:change'; path: string }
   /** A comment pointed out on the phone, to be written in the browser. */
   | { type: 'node:open'; id: string }
+  /** A phone on the network asks to send comments; the map asks the person to allow it. */
+  | { type: 'pair:request'; request: PairRequest }
+  /** That request was answered, or ran out. */
+  | { type: 'pair:done'; id: string }
+
+/** A phone asking to send comments, as the map shows it. */
+export interface PairRequest {
+  id: string
+  /** What the phone calls itself, like "iPhone". */
+  device: string
+  /** The app the Comment button sits in. */
+  app: string
+  /** When it asked (ISO). */
+  at: string
+  /** The network address it asked from. */
+  from: string
+  /**
+   * Four digits the phone shows too, worked out from its secret. The person
+   * compares them before allowing, so a request from another device under
+   * the same name is caught.
+   */
+  check: string
+}
 
 export const SEVERITIES = ['blocking', 'important', 'nice'] as const
 export type Severity = (typeof SEVERITIES)[number]
@@ -167,6 +196,10 @@ export interface Screen {
   title: string
   /** The screen this one sits under, for the tree. Empty at the top. */
   parent: string
+  /** The variants it is in, from project.md's `variants:`. Empty means every variant. */
+  in: string[]
+  /** For a screen in one variant only: the screen that stands for it in the other. */
+  replaced_by: string
   /** What the screen is for, in a sentence. */
   purpose: string
   /** Who it is meant for. `for:` in the file. */
@@ -177,6 +210,19 @@ export interface Screen {
   leads_to: string[]
   /** Routes and source files that make up the screen. */
   code: string[]
+  /**
+   * Paths that open the screen in the running product, with real values for
+   * any parameters, like /booking/42. Without it, a route in code: with no
+   * parameters is opened.
+   */
+  open: string[]
+  /**
+   * What the running app calls the screen, when that is not in code: its
+   * navigation title or view name, as comments and pictures from the app carry it.
+   */
+  seen_as: string[]
+  /** Pictures this screen claims, as ios/App-2.jpg. They win over matching by name. */
+  shots: string[]
   /** Stories that cover the screen. */
   stories: string[]
   status: ScreenStatus

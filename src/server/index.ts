@@ -5,9 +5,10 @@ import { PACKAGE_ROOT } from '../root.js'
 import { NodeStore } from '../store/nodes.js'
 import { handleApi, handleFiles } from './api.js'
 import { createProxy } from './proxy.js'
-import { advertise, createLanServer, lanAddresses } from './lan.js'
-import { readProject } from '../store/project.js'
-import { NodeSync } from './events.js'
+import { advertise, createLanServer, lanAddresses, pairingCode } from './lan.js'
+import { readProject, writeFields } from '../store/project.js'
+import { broadcast, NodeSync } from './events.js'
+import { Pairings } from './pairing.js'
 import { handleComments, type CommentsCtx } from './comments.js'
 import { watchGroundwork } from './watcher.js'
 
@@ -25,7 +26,7 @@ export interface StartOptions {
   lanPort?: number
 }
 
-export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort }: StartOptions): Promise<{ server: Server; url: string; appUrl?: string; lanUrls?: string[] }> {
+export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort }: StartOptions): Promise<{ server: Server; url: string; appUrl?: string; lanUrls?: string[]; lanCode?: string }> {
   const store = new NodeStore(gwDir)
   const nodes = new NodeSync(() => store.list())
   await nodes.prime()
@@ -34,13 +35,20 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   // Comments from the iOS package: in the Simulator on this port, from a phone on the LAN port.
   const comments: CommentsCtx = { gwDir, store, nodes, project, uiUrl: `http://localhost:${port}` }
 
+  // With --lan: the pairing code, and phones asking the person here to allow them.
+  const lanCode = lan ? await pairingCode(gwDir) : undefined
+  const pairings = lanCode ? new Pairings(lanCode, broadcast) : undefined
+
+  /** Where the product runs with the Comment button, once the proxy listens. */
+  const runtime: { app?: string } = {}
+
   let ui: Middleware = (_req, res) => res.writeHead(404).end()
   const server = createServer(async (req, res) => {
     // Only answer requests addressed to this machine. This blocks DNS rebinding,
     // where another site points its own hostname at 127.0.0.1.
     if (!isLocalHost(req.headers.host)) return res.writeHead(403).end('Forbidden')
     if (await handleComments(req, res, comments)) return
-    if (await handleApi(req, res, { gwDir, store, nodes })) return
+    if (await handleApi(req, res, { gwDir, store, nodes, pairings, runtime })) return
     if (await handleFiles(req, res, gwDir)) return
     ui(req, res, () => res.writeHead(404).end())
   })
@@ -70,17 +78,20 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   watchGroundwork(gwDir, nodes)
   let appUrl: string | undefined
   if (app) {
+    // Remembered, so the map can open screens and `groundwork screenshots` knows where the product runs.
+    if ((await readProject(gwDir)).data.app !== app.origin) await writeFields(gwDir, { app: app.origin }).catch(() => {})
     const proxy = createProxy({ target: app, gwDir, store, nodes })
     appUrl = `http://localhost:${await listen(proxy, appPort ?? actualPort + 1)}`
+    runtime.app = appUrl
   }
   let lanUrls: string[] | undefined
-  if (lan) {
-    const lanServer = createLanServer(comments)
+  if (lanCode) {
+    const lanServer = createLanServer(comments, lanCode, pairings)
     const p = await listen(lanServer, lanPort ?? actualPort + 2, 20, '0.0.0.0')
     advertise(p, project)
     lanUrls = lanAddresses().map((a) => `http://${a}:${p}`)
   }
-  return { server, url: `http://localhost:${actualPort}`, appUrl, lanUrls }
+  return { server, url: `http://localhost:${actualPort}`, appUrl, lanUrls, lanCode }
 }
 
 function isLocalHost(host: string | undefined): boolean {

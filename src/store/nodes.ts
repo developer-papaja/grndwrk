@@ -114,6 +114,19 @@ export class NodeStore {
         const { screen: _, ...rest } = next.extra
         next.extra = typeof input.screen === 'string' && SCREEN_ID.test(input.screen) ? { ...rest, screen: input.screen } : rest
       }
+      // Only the person marks a comment fixed, from the panel. A date sets it, empty takes it back.
+      if (input.fixed !== undefined) {
+        const { fixed: _, ...rest } = next.extra
+        next.extra = typeof input.fixed === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.fixed) ? { ...rest, fixed: input.fixed } : rest
+      }
+      if (input.built !== undefined) {
+        const { built: _, ...rest } = next.extra
+        next.extra = typeof input.built === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.built) ? { ...rest, built: input.built } : rest
+      }
+      if (input.proposed !== undefined) {
+        const { proposed: _, ...rest } = next.extra
+        next.extra = typeof input.proposed === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.proposed) ? { ...rest, proposed: input.proposed } : rest
+      }
       if (input.links) next.links = [...new Set(input.links)].filter((l) => l !== id && byId.has(l))
       byId.set(id, next)
       return this.writeWithLinks(byId, next, current.links)

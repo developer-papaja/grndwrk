@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Nothing in the map loads from or sends to another server: pictures, requests, frames and forms stay on this one. -->
+    <meta http-equiv="Content-Security-Policy" content="img-src 'self' data: blob:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'" />
     <title>Groundwork</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%225%22 fill=%22%230d99ff%22/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style.css" />
@@ -27,19 +29,32 @@
       <symbol id="i-columns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125Z" /></symbol>
       <symbol id="i-outline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></symbol>
       <symbol id="i-tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="4.5" rx="1" /><rect x="3" y="16.5" width="6" height="4.5" rx="1" /><rect x="15" y="16.5" width="6" height="4.5" rx="1" /><path d="M12 7.5v4.5M6 16.5V12h12v4.5" /></symbol>
+      <symbol id="i-stack" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v8.25A2.25 2.25 0 0 0 6 16.5h2.25m8.25-8.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-7.5A2.25 2.25 0 0 1 8.25 18v-1.5m8.25-8.25h-6a2.25 2.25 0 0 0-2.25 2.25v6" /></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></symbol>
+      <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path d="M6 6h.008v.008H6V6Z" /></symbol>
       <symbol id="i-screens" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" /></symbol>
     </svg>
 
     <!-- Board: a column per screen (General first) or per topic; the level is a tag on each card -->
     <main
       x-cloak
-      x-show="['map', 'focus'].includes($store.gw.view) && $store.gw.mapLayout === 'board'"
+      x-show="$store.gw.view === 'map' && $store.gw.mapLayout === 'board'"
       id="board-view"
       class="fixed inset-y-0 overflow-auto bg-ink text-[12.5px]"
       :style="$store.gw.mapArea"
       @click.self="$store.gw.clickBackground()"
     >
-      <p x-show="!$store.gw.board.columns.some((c) => c.items.length)" class="px-8 text-fog/50" :class="$store.gw.scopeScreen ? 'pt-40' : 'pt-20'" x-text="$store.gw.scopeScreen ? 'Nothing about ' + $store.gw.scopeScreen.title + ' yet. Add its features and details below: they belong to this screen.' : 'Nothing on this page yet. Add a thought below.'"></p>
+      <div x-show="!$store.gw.board.columns.some((c) => c.items.length)" class="max-w-xl px-8 pt-20 text-fog/50">
+        <template x-if="$store.gw.scopeScreen">
+          <div>
+            <p class="text-[15px] font-semibold text-fog" x-text="$store.gw.scopeScreen.title"></p>
+            <p class="mt-1 text-fog/75" x-text="$store.gw.scopeScreen.purpose || 'No purpose written yet.'"></p>
+            <p x-show="$store.gw.scopeScreen.audience.length" class="mt-0.5" x-text="'For ' + $store.gw.scopeScreen.audience.join(', ') + ($store.gw.scopeScreen.tasks.length ? '. They ' + $store.gw.scopeScreen.tasks.slice(0, 3).join(', ') + '.' : '')"></p>
+            <p class="mt-4">No thoughts about this screen yet. Add its features and details below: they belong to it.</p>
+          </div>
+        </template>
+        <p x-show="!$store.gw.scopeScreen">Nothing on this page yet. Add a thought below.</p>
+      </div>
       <div x-show="$store.gw.board.columns.some((c) => c.items.length)" class="flex min-h-full w-max items-stretch gap-3 px-4 pb-32" @click.self="$store.gw.clickBackground()">
         <template x-for="col in $store.gw.board.columns" :key="col.key">
           <section
@@ -49,7 +64,7 @@
             @dragover.prevent="$store.gw.dragId && ($store.gw.dropCell = col.key)"
             @drop.prevent="$store.gw.moveCard($store.gw.dragId, col.key)"
           >
-            <header class="sticky top-0 z-[2] bg-ink px-1 pb-2" :class="$store.gw.scopeScreen ? 'pt-36' : 'pt-16'">
+            <header class="sticky top-0 z-[2] bg-ink px-1 pb-2 pt-16">
               <div class="flex items-baseline justify-between gap-2">
                 <span class="truncate font-semibold" :class="col.key ? 'text-fog' : 'text-fog/70'" x-text="$store.gw.label(col.name)"></span>
                 <span class="flex shrink-0 gap-2 text-[11px]">
@@ -85,7 +100,10 @@
                       @dragstart="$store.gw.dragId = it.id; $event.dataTransfer.setData('text/plain', it.id); $event.dataTransfer.effectAllowed = 'move'"
                       @dragend="$store.gw.dragId = null; $store.gw.dropCell = ''"
                     >
-                      <span class="mb-0.5 block text-[10px] tracking-wide text-fog/40" :title="'Level ' + it.altitude + ': ' + $store.gw.altitudeWords[it.altitude]" x-text="$store.gw.label($store.gw.altitudeWords[it.altitude])"></span>
+                      <span class="mb-0.5 flex gap-1.5 text-[10px] tracking-wide">
+                        <span class="text-fog/40" :title="'Level ' + it.altitude + ': ' + $store.gw.altitudeWords[it.altitude]" x-text="$store.gw.label($store.gw.altitudeWords[it.altitude])"></span>
+                        <span x-show="['proposed', 'ready', 'fixed'].includes($store.gw.feedbackState(it.node))" :class="{ fixed: 'text-emerald-300/80', ready: 'text-violet-300', proposed: 'text-accent' }[$store.gw.feedbackState(it.node)]" x-text="{ fixed: 'Fixed', ready: 'Ready to test', proposed: 'Fix proposed' }[$store.gw.feedbackState(it.node)]"></span>
+                      </span>
                       <span class="line-clamp-3" x-text="it.node.title"></span>
                       <span x-show="$store.gw.hasQuestion(it.id)" class="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-question" title="Claude asked something"></span>
                     </button>
@@ -133,13 +151,13 @@
     <!-- Outline: the same columns as a document, a section each, read from vision to detail -->
     <main
       x-cloak
-      x-show="['map', 'focus'].includes($store.gw.view) && $store.gw.mapLayout === 'outline'"
+      x-show="$store.gw.view === 'map' && $store.gw.mapLayout === 'outline'"
       id="outline-view"
       class="fixed inset-y-0 overflow-y-auto bg-ink text-[13px]"
       :style="$store.gw.mapArea"
       @click.self="$store.gw.clickBackground()"
     >
-      <div class="mx-auto max-w-2xl px-8 pb-32" :class="$store.gw.scopeScreen ? 'pt-36' : 'pt-16'" @click.self="$store.gw.clickBackground()">
+      <div class="mx-auto max-w-2xl px-8 pb-32 pt-16" @click.self="$store.gw.clickBackground()">
         <p x-show="!$store.gw.outline.length" class="text-fog/50">Nothing on this page yet. Add a thought below.</p>
         <template x-for="sec in $store.gw.outline" :key="sec.key">
           <section class="mb-8">
@@ -170,6 +188,7 @@
                           <span x-show="$store.gw.firstLine(it.node.body)" class="mt-0.5 line-clamp-2 block text-fog/50" x-text="$store.gw.firstLine(it.node.body)"></span>
                         </span>
                         <span x-show="$store.gw.hasQuestion(it.id)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
+                        <span x-show="['proposed', 'ready', 'fixed'].includes($store.gw.feedbackState(it.node))" class="mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[10.5px]" :class="{ fixed: 'bg-emerald-400/10 text-emerald-300/80', ready: 'bg-violet-400/15 text-violet-300', proposed: 'bg-accent/15 text-accent' }[$store.gw.feedbackState(it.node)]" x-text="{ fixed: 'fixed', ready: 'ready to test', proposed: 'fix proposed' }[$store.gw.feedbackState(it.node)]"></span>
                         <span x-show="it.node.status !== 'open'" class="mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[10.5px]" :class="it.node.status === 'settled' ? 'bg-emerald-400/10 text-emerald-300/80' : 'bg-white/8 text-fog/50'" x-text="it.node.status"></span>
                       </button>
                     </template>
@@ -197,22 +216,22 @@
     </main>
 
     <!-- Which part of the product, and how the map draws its cards -->
-    <div x-cloak x-show="$store.gw.view === 'map'" class="pointer-events-none fixed top-3 z-[5] flex flex-col items-center gap-2 px-4" :style="$store.gw.mapArea">
-      <div class="flex items-center gap-2">
+    <div x-cloak x-show="$store.gw.view === 'map'" class="pointer-events-none fixed top-0 z-[5] flex flex-col items-center gap-2" :style="$store.gw.mapArea">
+      <div id="map-toolbar" class="pointer-events-auto flex h-12 w-full items-center gap-2 whitespace-nowrap [&>*]:shrink-0 border-b border-line bg-panel/95 px-3 text-[12.5px] backdrop-blur">
       <!-- The part picker: search the screens, or walk the tree -->
       <div x-show="$store.gw.screens.length" class="pointer-events-auto relative" @keydown.escape.stop="$store.gw.scopeOpen = false" @click.outside="$store.gw.scopeOpen = false">
         <button
           id="scope"
-          class="flex h-10 max-w-[280px] items-center gap-2 rounded-xl border bg-panel pl-3 pr-2.5 text-[13px] shadow-md shadow-black/20"
-          :class="$store.gw.scopeScreen ? 'border-accent bg-accent/15 text-white' : 'border-line text-fog hover:border-white/25'"
-          title="Work on the whole product, or only one screen from the sitemap"
+          class="menu-btn max-w-[280px]"
+          :class="$store.gw.scopeScreen && 'menu-btn-on'"
+:title="$store.gw.scopeScreen ? ($store.gw.scopeScreen.purpose || $store.gw.scopeScreen.title) + ' · Work on another part, or the whole product' : 'Work on the whole product, or only one screen from the sitemap'"
           @click="$store.gw.scopeOpen ? ($store.gw.scopeOpen = false) : $store.gw.openScopePicker()"
         >
           <svg class="size-4 shrink-0" :class="$store.gw.scopeScreen ? 'text-accent' : 'text-fog/50'"><use href="#i-screens" /></svg>
           <span class="truncate" x-text="$store.gw.scopeScreen ? $store.gw.scopeScreen.title : 'Whole product'"></span>
           <svg class="size-3.5 shrink-0 rotate-90 text-fog/50"><use href="#i-chevron" /></svg>
         </button>
-        <div x-show="$store.gw.scopeOpen" x-transition.opacity.duration.100ms class="absolute left-0 top-12 z-20 flex max-h-[min(520px,70vh)] w-[340px] flex-col overflow-hidden rounded-xl border border-line bg-panel text-[13px] shadow-xl shadow-black/40">
+        <div x-show="$store.gw.scopeOpen" x-transition.opacity.duration.100ms class="absolute left-0 top-10 z-20 flex max-h-[min(520px,70vh)] w-[340px] flex-col overflow-hidden rounded-xl border border-line bg-panel text-[13px] shadow-xl shadow-black/40">
           <div class="border-b border-line p-2">
             <input
               id="scope-search"
@@ -249,42 +268,79 @@
             </template>
             <li x-show="!$store.gw.scopeOptions.length" class="px-3 py-2 text-xs text-fog/45">No screen matches.</li>
           </ul>
+          <div x-show="$store.gw.scopeScreen" class="border-t border-line p-2 text-xs">
+            <p class="px-1 text-fog/60" x-text="$store.gw.scopeScreen?.purpose || 'No purpose written yet.'"></p>
+            <button class="mt-1.5 rounded-md px-1.5 py-1 text-accent hover:bg-white/5" @click="$store.gw.scopeOpen = false; $store.gw.selectScreen($store.gw.scope); $store.gw.setView('sitemap')">Open in the Sitemap</button>
+          </div>
         </div>
       </div>
-      <div x-show="$store.gw.screens.length && !$store.gw.scopeScreen" id="group-by" class="pointer-events-auto flex h-10 items-center gap-0.5 rounded-xl border border-line bg-panel p-1 text-[12.5px] shadow-md shadow-black/20" title="What the columns are">
-        <button class="h-8 rounded-lg px-2.5" :class="$store.gw.groupBy === 'page' ? 'bg-white/12 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'" @click="$store.gw.setGroupBy('page')">Screens</button>
-        <button class="h-8 rounded-lg px-2.5" :class="$store.gw.groupBy === 'topic' ? 'bg-white/12 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'" @click="$store.gw.setGroupBy('topic')">Topics</button>
-      </div>
-      <div id="layouts" class="pointer-events-auto flex gap-0.5 rounded-xl border border-line bg-panel p-1 shadow-md shadow-black/20">
-        <template x-for="l in $store.gw.mapLayouts" :key="l.key">
-          <button
-            class="grid size-8 place-items-center rounded-lg"
-            :class="$store.gw.mapLayout === l.key ? 'bg-white/12 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
-            :id="'layout-' + l.key"
-            :title="l.name + ' ( V )'"
-            :aria-label="l.name"
-            :aria-pressed="$store.gw.mapLayout === l.key"
-            @click="$store.gw.setMapLayout(l.key)"
-          >
-            <svg class="size-[18px]"><use :href="'#' + l.icon" /></svg>
+      <!-- Each setting is a menu: its current value shows, the choices only when opened -->
+      <template x-for="m in $store.gw.mapMenus" :key="m.key">
+        <div class="relative" :class="m.right && 'ml-auto'" :id="m.key" @click.outside="$store.gw.openMenu === m.key && ($store.gw.openMenu = '')" @keydown.escape.stop="$store.gw.openMenu = ''">
+          <button class="menu-btn" :class="m.active && 'menu-btn-on'" :title="m.title" :aria-expanded="$store.gw.openMenu === m.key" @click="$store.gw.openMenu = $store.gw.openMenu === m.key ? '' : m.key">
+            <svg class="size-4 shrink-0 text-fog/55"><use :href="'#' + m.icon" /></svg>
+            <span x-show="!m.iconOnly" x-text="m.value"></span>
+            <svg class="size-3.5 shrink-0 rotate-90 text-fog/40"><use href="#i-chevron" /></svg>
           </button>
-        </template>
-      </div>
-      </div>
-      <!-- The part being worked on: what it is for, who it is for, what they do there -->
-      <div x-show="$store.gw.scopeScreen" id="scope-card" class="pointer-events-auto flex max-w-xl items-start gap-3 rounded-xl border border-line bg-panel px-4 py-2 text-xs shadow-md shadow-black/20">
-        <div class="min-w-0 flex-1">
-          <span class="block text-fog/80" x-text="$store.gw.scopeScreen?.purpose || 'No purpose written yet'"></span>
-          <span x-show="$store.gw.scopeScreen?.audience.length" class="block text-fog/45" x-text="'For ' + ($store.gw.scopeScreen?.audience ?? []).join(', ') + (($store.gw.scopeScreen?.tasks ?? []).length ? '. They ' + $store.gw.scopeScreen.tasks.slice(0, 3).join(', ') + '.' : '')"></span>
+          <div x-show="$store.gw.openMenu === m.key" x-transition.opacity.duration.100ms class="menu-pop" :class="m.right && 'right-0 left-auto'">
+            <template x-for="o in m.options" :key="o.key">
+              <button class="menu-item" :data-option="o.key" @click="$store.gw.chooseMenu(m.key, o.key)">
+                <span class="min-w-0 flex-1">
+                  <span class="block" x-text="o.label"></span>
+                  <span x-show="o.hint" class="block text-[11px] text-fog/45" x-text="o.hint"></span>
+                </span>
+                <span x-show="o.count !== undefined" class="shrink-0 text-[11px] text-fog/40" x-text="o.count"></span>
+                <svg x-show="o.on" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+              </button>
+            </template>
+          </div>
         </div>
-        <button class="shrink-0 rounded-md px-2 py-1 text-fog/60 hover:bg-white/8 hover:text-fog" title="Open it in the sitemap" @click="$store.gw.selectScreen($store.gw.scope); $store.gw.setView('sitemap')">Sitemap</button>
-        <button class="shrink-0 rounded-md px-2 py-1 text-fog/60 hover:bg-white/8 hover:text-fog" @click="$store.gw.setScope(null)">Whole product</button>
+      </template>
+      </div>
+    </div>
+
+    <!-- A phone on the network asks to send comments: allow it here, and it gets the pairing code -->
+    <div x-cloak x-show="$store.gw.pairRequests.length" id="pair-requests" class="pointer-events-none fixed inset-x-0 top-16 z-40 flex flex-col items-center gap-2 px-4">
+      <template x-for="p in $store.gw.pairRequests" :key="p.id">
+        <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-[13px] shadow-xl shadow-black/40" x-transition.opacity>
+          <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
+          <span class="min-w-0 flex-1">
+            <span class="block text-fog" x-text="(p.app ? p.app + ' on ' : '') + p.device + ' wants to send comments'"></span>
+            <span class="block text-xs text-fog/50">Allow only if your phone shows <span class="font-mono font-semibold tracking-wider text-fog" x-text="p.check"></span> too. From <span class="font-mono" x-text="p.from"></span>.</span>
+          </span>
+          <button class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-white/8 hover:text-fog" @click="$store.gw.answerPair(p.id, false)">Not allowed</button>
+          <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/85" :id="'allow-' + p.id" @click="$store.gw.answerPair(p.id, true)">Allow</button>
+        </div>
+      </template>
+    </div>
+
+    <!-- A picture of a screen, large, on top of everything. Esc or a click outside closes it. -->
+    <div
+      x-cloak
+      x-show="$store.gw.viewing"
+      x-transition.opacity.duration.100ms
+      id="shot-viewer"
+      class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/85 p-6"
+      @click.self="$store.gw.closeShot()"
+    >
+      <template x-if="$store.gw.viewing">
+        <img :src="$store.gw.viewing.url" alt="" class="max-h-[calc(100vh-110px)] max-w-full rounded-lg border border-white/10 object-contain shadow-2xl shadow-black/60" />
+      </template>
+      <div class="flex items-center gap-3 text-[13px] text-fog/70">
+        <button x-show="$store.gw.viewingSet.length > 1" class="grid size-8 place-items-center rounded-lg hover:bg-white/10 hover:text-fog" title="Previous picture ( ← )" aria-label="Previous picture" @click="$store.gw.stepShot(-1)">
+          <svg class="size-4 rotate-180"><use href="#i-chevron" /></svg>
+        </button>
+        <span x-text="$store.gw.viewing ? ($store.gw.screen ? $store.gw.screen.title + ' · ' : '') + $store.gw.shotLabel($store.gw.viewing) : ''"></span>
+        <button x-show="$store.gw.viewingSet.length > 1" class="grid size-8 place-items-center rounded-lg hover:bg-white/10 hover:text-fog" title="Next picture ( → )" aria-label="Next picture" @click="$store.gw.stepShot(1)">
+          <svg class="size-4"><use href="#i-chevron" /></svg>
+        </button>
+        <button class="ml-2 rounded-md px-2.5 py-1 hover:bg-white/10 hover:text-fog" title="Close ( Esc )" @click="$store.gw.closeShot()">Close</button>
       </div>
     </div>
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
-      <template x-for="v in [['focus', 'Focus: only what needs you', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
+      <template x-for="v in [['focus', 'Inbox: Claude\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
           :class="$store.gw.view === v[0] ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
@@ -295,9 +351,9 @@
         >
           <svg class="size-5"><use :href="'#' + v[2]" /></svg>
           <span
-            x-show="v[0] === 'focus' && $store.gw.focusQueue.length"
+            x-show="v[0] === 'focus' && $store.gw.inbox.length"
             class="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white"
-            x-text="$store.gw.focusQueue.length"
+            x-text="$store.gw.inbox.length"
           ></span>
           <span
             x-show="v[0] === 'sitemap' && $store.gw.sitemapSummary.questions"
@@ -582,10 +638,34 @@
               <p class="mt-1 text-xs text-fog/50">
                 <span x-text="$store.gw.sitemapSummary.screens + ($store.gw.sitemapSummary.screens === 1 ? ' screen' : ' screens')"></span>
                 <span x-show="$store.gw.sitemapSummary.noStory" x-text="' · ' + $store.gw.sitemapSummary.noStory + ' without a story'"></span>
+                <span x-show="$store.gw.unplacedShots.length"> · <button id="unplaced-toggle" class="underline decoration-white/25 underline-offset-2 hover:text-fog" :aria-expanded="$store.gw.shotTray" title="Pictures from the app that no screen has yet. Drag one onto its screen, or run /sitemap." @click="$store.gw.shotTray = !$store.gw.shotTray" x-text="$store.gw.unplacedShots.length + ($store.gw.unplacedShots.length === 1 ? ' picture' : ' pictures') + ' not placed yet'"></button></span>
+                <span x-show="$store.gw.sitemapSummary.unreadable" class="text-rose-300" x-text="' · ' + $store.gw.sitemapSummary.unreadable + ($store.gw.sitemapSummary.unreadable === 1 ? ' file can\'t be read' : ' files can\'t be read')"></span>
                 <span x-show="$store.gw.sitemapSummary.questions" class="text-question" x-text="' · ' + $store.gw.sitemapSummary.questions + ($store.gw.sitemapSummary.questions === 1 ? ' question' : ' questions')"></span>
               </p>
              </div>
-             <div class="flex shrink-0 items-center gap-2">
+             <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <!-- Which variant: a menu, like in the map -->
+              <template x-for="m in $store.gw.sitemapMenus" :key="m.key">
+                <div class="relative" :class="m.right && 'ml-auto'" :id="m.key" @click.outside="$store.gw.openMenu === m.key && ($store.gw.openMenu = '')" @keydown.escape.stop="$store.gw.openMenu = ''">
+                  <button class="menu-btn" :class="m.active && 'menu-btn-on'" :title="m.title" :aria-expanded="$store.gw.openMenu === m.key" @click="$store.gw.openMenu = $store.gw.openMenu === m.key ? '' : m.key">
+                    <svg class="size-4 shrink-0 text-fog/55"><use :href="'#' + m.icon" /></svg>
+                    <span x-show="!m.iconOnly" x-text="m.value"></span>
+                    <svg class="size-3.5 shrink-0 rotate-90 text-fog/40"><use href="#i-chevron" /></svg>
+                  </button>
+                  <div x-show="$store.gw.openMenu === m.key" x-transition.opacity.duration.100ms class="menu-pop" :class="m.right && 'right-0 left-auto'">
+                    <template x-for="o in m.options" :key="o.key">
+                      <button class="menu-item" :data-option="o.key" @click="$store.gw.chooseMenu(m.key, o.key)">
+                        <span class="min-w-0 flex-1">
+                          <span class="block" x-text="o.label"></span>
+                          <span x-show="o.hint" class="block text-[11px] text-fog/45" x-text="o.hint"></span>
+                        </span>
+                        <span x-show="o.count !== undefined" class="shrink-0 text-[11px] text-fog/40" x-text="o.count"></span>
+                        <svg x-show="o.on" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </template>
               <div x-show="$store.gw.sitemapLayout === 'drawn'" class="flex items-center gap-0.5 rounded-lg bg-white/5 p-0.5 text-xs text-fog/60">
                 <button class="grid size-7 place-items-center rounded-md hover:bg-white/10 hover:text-fog" title="Smaller" @click="$store.gw.zoomSitemap(1 / 1.2)">−</button>
                 <button class="h-7 rounded-md px-1.5 hover:bg-white/10 hover:text-fog" title="Fit to the window" @click="$store.gw.zoomSitemap('fit')" x-text="Math.round($store.gw.sitemapZoom * 100) + '%'"></button>
@@ -602,6 +682,21 @@
              </div>
             </div>
 
+            <!-- Pictures from the app that no screen has yet, to drag onto their screen -->
+            <div x-show="$store.gw.shotTray && $store.gw.unplacedShots.length" id="unplaced-shots" class="mx-5 mb-3 rounded-lg border border-line bg-white/[0.03] p-3">
+              <p class="mb-2 text-xs text-fog/55">Drag a picture onto the screen it shows. Or run /sitemap, which reads what each one shows.</p>
+              <div class="flex gap-3 overflow-x-auto pb-1">
+                <template x-for="shot in $store.gw.unplacedShots" :key="shot.url">
+                  <div class="shrink-0 cursor-grab active:cursor-grabbing" draggable="true" :data-shot="shot.file" :title="shot.texts?.length ? 'It shows: ' + shot.texts.slice(0, 8).join(' · ') : shot.key" @dragstart="$store.gw.dragShot(shot, $event)" @dragend="$store.gw.endDragShot()">
+                    <button class="block cursor-zoom-in" @click="$store.gw.viewShot(shot, $store.gw.unplacedShots)">
+                      <img :src="shot.url" alt="" draggable="false" class="h-32 w-auto rounded-md border border-line object-cover object-top hover:border-white/30" />
+                    </button>
+                    <span class="mt-1 block max-w-[90px] truncate text-[11px] text-fog/45" x-text="shot.key"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+
             <!-- Drawn: the product on top, each screen under the one it opens from -->
             <div x-show="$store.gw.sitemapLayout === 'drawn'" id="sitemap-drawn" class="flex-1 overflow-auto">
               <div class="relative" :style="{ width: $store.gw.sitemapDrawing.width * $store.gw.sitemapZoom + 'px', height: $store.gw.sitemapDrawing.height * $store.gw.sitemapZoom + 'px' }">
@@ -612,29 +707,46 @@
                       <template x-if="!b.screen">
                         <div class="flex h-full flex-col justify-center rounded-lg border border-white/20 bg-white/8 px-3">
                           <span class="truncate font-semibold text-fog" x-text="$store.gw.project.name || 'The product'"></span>
-                          <span class="text-xs text-fog/50" x-text="$store.gw.screens.length + ($store.gw.screens.length === 1 ? ' screen' : ' screens')"></span>
+                          <span class="text-xs text-fog/50" x-text="$store.gw.viewScreens.length + ($store.gw.viewScreens.length === 1 ? ' screen' : ' screens')"></span>
                         </div>
                       </template>
                       <template x-if="b.screen">
                         <button
-                          class="flex h-full w-full flex-col rounded-lg border bg-panel px-3 py-2 text-left shadow-sm shadow-black/30"
+                          class="flex h-full w-full gap-2 rounded-lg border bg-panel px-3 py-2 text-left shadow-sm shadow-black/30"
                           :class="[
-                            $store.gw.screen?.id === b.id ? 'border-accent ring-1 ring-accent' : $store.gw.screen?.leads_to.includes(b.id) ? 'border-accent/50' : 'border-line hover:border-white/25',
+                            $store.gw.dropOn === b.id ? 'border-accent ring-2 ring-accent' : $store.gw.screen?.id === b.id ? 'border-accent ring-1 ring-accent' : $store.gw.screen?.leads_to.includes(b.id) ? 'border-accent/50' : 'border-line hover:border-white/25',
                             b.screen.status === 'planned' && 'border-dashed'
                           ]"
                           :data-screen="b.id"
                           @click="$store.gw.selectScreen(b.id)"
+                          @dragover="$store.gw.overScreen(b.id, $event)"
+                          @dragleave="$store.gw.dropOn === b.id && ($store.gw.dropOn = '')"
+                          @drop.prevent="$store.gw.dropShot(b.id)"
                         >
+                          <span class="flex min-w-0 flex-1 flex-col">
                           <span class="flex w-full items-center gap-1.5">
-                            <span class="size-1.5 shrink-0 rounded-full" :class="{ 'bg-emerald-400': b.screen.status === 'built', 'bg-question': b.screen.status === 'partial', 'bg-white/30': b.screen.status === 'planned' }" :title="b.screen.status"></span>
+                            <span class="size-1.5 shrink-0 rounded-full" :class="b.screen.error ? 'bg-rose-400' : { 'bg-emerald-400': b.screen.status === 'built', 'bg-question': b.screen.status === 'partial', 'bg-white/30': b.screen.status === 'planned' }" :title="b.screen.error ? 'Can\'t be read' : b.screen.status"></span>
                             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-fog" x-text="b.screen.title"></span>
                             <span x-show="$store.gw.questionsOn(b.screen)" class="size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
                           </span>
-                          <span class="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-fog/55" x-text="b.screen.purpose || 'No purpose written yet'"></span>
+                          <span x-show="b.screen.error" class="mt-0.5 line-clamp-3 text-[11.5px] leading-snug text-rose-300" :title="b.screen.error" x-text="'Can\'t read this file. ' + b.screen.error"></span>
+                          <span x-show="!b.screen.error" class="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-fog/55" x-text="b.screen.purpose || 'No purpose written yet'"></span>
                           <span class="mt-auto flex w-full gap-2 text-[10.5px] text-fog/35">
+                            <span x-show="$store.gw.variantTag(b.screen)" class="shrink-0 rounded bg-violet-400/15 px-1 text-violet-200/90" x-text="$store.gw.variantTag(b.screen)"></span>
                             <span class="min-w-0 flex-1 truncate" x-text="b.screen.audience.length ? 'For ' + b.screen.audience.join(', ') : ''"></span>
                             <span x-show="$store.gw.thoughtsOn(b.id)" class="shrink-0" x-text="$store.gw.thoughtsOn(b.id) + ($store.gw.thoughtsOn(b.id) === 1 ? ' thought' : ' thoughts')"></span>
                           </span>
+                          </span>
+                          <!-- What the screen looks like, when a picture of it exists -->
+                          <template x-if="$store.gw.shotsOf(b.screen).length">
+                            <img
+                              :src="$store.gw.shotsOf(b.screen)[0].url"
+                              alt=""
+                              loading="lazy"
+                              class="h-full max-w-[64px] shrink-0 rounded border border-line object-cover object-top"
+                              :class="$store.gw.shotsOf(b.screen)[0].platform === 'ios' ? 'w-[38px]' : 'w-[64px]'"
+                            />
+                          </template>
                         </button>
                       </template>
                     </div>
@@ -648,19 +760,26 @@
                 <li>
                   <button
                     class="flex w-full items-start gap-2 rounded-md py-2 pr-2 text-left"
-                    :class="$store.gw.screen?.id === row.screen.id ? 'bg-white/10' : 'hover:bg-white/5'"
+                    :class="$store.gw.dropOn === row.screen.id ? 'bg-accent/20 ring-1 ring-accent' : $store.gw.screen?.id === row.screen.id ? 'bg-white/10' : 'hover:bg-white/5'"
                     :style="{ paddingLeft: (10 + row.depth * 18) + 'px' }"
                     :data-screen="row.screen.id"
                     @click="$store.gw.selectScreen(row.screen.id)"
+                    @dragover="$store.gw.overScreen(row.screen.id, $event)"
+                    @dragleave="$store.gw.dropOn === row.screen.id && ($store.gw.dropOn = '')"
+                    @drop.prevent="$store.gw.dropShot(row.screen.id)"
                   >
                     <span
                       class="mt-[7px] size-1.5 shrink-0 rounded-full"
-                      :class="{ 'bg-emerald-400': row.screen.status === 'built', 'bg-question': row.screen.status === 'partial', 'bg-white/30': row.screen.status === 'planned' }"
-                      :title="row.screen.status"
+                      :class="row.screen.error ? 'bg-rose-400' : { 'bg-emerald-400': row.screen.status === 'built', 'bg-question': row.screen.status === 'partial', 'bg-white/30': row.screen.status === 'planned' }"
+                      :title="row.screen.error ? 'Can\'t be read' : row.screen.status"
                     ></span>
                     <span class="min-w-0 flex-1">
-                      <span class="block truncate font-medium text-fog" x-text="row.screen.title"></span>
-                      <span class="block truncate text-xs text-fog/50" x-text="row.screen.purpose || 'No purpose written yet'"></span>
+                      <span class="flex items-center gap-1.5">
+                        <span class="truncate font-medium text-fog" x-text="row.screen.title"></span>
+                        <span x-show="$store.gw.variantTag(row.screen)" class="shrink-0 rounded bg-violet-400/15 px-1 text-[10.5px] text-violet-200/90" x-text="$store.gw.variantTag(row.screen)"></span>
+                      </span>
+                      <span x-show="row.screen.error" class="block truncate text-xs text-rose-300" :title="row.screen.error" x-text="'Can\'t read this file. ' + row.screen.error"></span>
+                      <span x-show="!row.screen.error" class="block truncate text-xs text-fog/50" x-text="row.screen.purpose || 'No purpose written yet'"></span>
                     </span>
                     <span x-show="$store.gw.questionsOn(row.screen)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
                   </button>
@@ -684,9 +803,52 @@
                 </div>
                 <div class="mt-2 flex items-center justify-between gap-3">
                   <h2 class="text-[20px] font-semibold text-fog" x-text="$store.gw.screen.title"></h2>
+                  <a
+                    x-show="$store.gw.openUrl($store.gw.screen)"
+                    id="open-screen"
+                    :href="$store.gw.openUrl($store.gw.screen)"
+                    target="_blank"
+                    rel="noopener"
+                    class="ml-auto shrink-0 rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog"
+                    :title="'Open ' + $store.gw.openUrl($store.gw.screen) + ($store.gw.runtime.proxied ? ', with the Comment button' : '')"
+                  >Open</a>
                   <button id="work-on" class="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" title="Open the map with only this screen's thoughts; new ones belong to it" @click="$store.gw.workOn($store.gw.screen.id)" x-text="'Work on this part' + ($store.gw.thoughtsOn($store.gw.screen.id) ? ' (' + $store.gw.thoughtsOn($store.gw.screen.id) + ')' : '')"></button>
                 </div>
-                <p x-show="$store.gw.screen.error" class="mt-1 text-xs text-rose-300" x-text="$store.gw.screen.error"></p>
+                <div x-show="$store.gw.screen.error" id="screen-error" class="mt-2 rounded-lg border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">
+                  <span class="block font-medium">This file can't be read, so what is shown here is not what it says.</span>
+                  <span class="mt-0.5 block" x-text="$store.gw.screen.error"></span>
+                  <span class="mt-1 block font-mono text-rose-200/70" x-text="'.groundwork/screens/' + $store.gw.screen.id + '.md'"></span>
+                </div>
+                <div x-show="$store.gw.variantTag($store.gw.screen) || $store.gw.counterpartOf($store.gw.screen)" id="screen-variant" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span x-show="$store.gw.variantTag($store.gw.screen)" class="rounded bg-violet-400/15 px-1.5 py-0.5 text-violet-200/90" x-text="$store.gw.variantTag($store.gw.screen)"></span>
+                  <template x-if="$store.gw.counterpartOf($store.gw.screen)">
+                    <span class="text-fog/55">
+                      <span x-text="'In ' + $store.gw.counterpartOf($store.gw.screen).variant + ':'"></span>
+                      <button class="text-accent hover:underline" @click="$store.gw.goToCounterpart($store.gw.counterpartOf($store.gw.screen).screen.id)" x-text="$store.gw.counterpartOf($store.gw.screen).screen.title"></button>
+                    </span>
+                  </template>
+                  <span x-show="$store.gw.unknownVariants($store.gw.screen).length" class="text-question" x-text="'Not a variant in project.md: ' + $store.gw.unknownVariants($store.gw.screen).join(', ')"></span>
+                </div>
+                <p x-show="!$store.gw.openUrl($store.gw.screen) && $store.gw.needsExample($store.gw.screen)" class="mt-1 text-xs text-fog/45">Its route needs a value, like an id, to open. Run /sitemap, or add <code>open: [/booking/42]</code> to the screen file.</p>
+                <p x-show="!$store.gw.runtime.app && $store.gw.screen.code.some((c) => c.startsWith('/'))" class="mt-1 text-xs text-fog/45">Start Groundwork with <code>--app</code> and your dev server's address to open screens from here.</p>
+
+                <!-- What it looks like: from groundwork screenshots on the web, from the Comment button on iOS -->
+                <div id="screen-shots" class="mt-4">
+                  <div x-show="$store.gw.shotsOf($store.gw.screen).length" class="flex gap-3 overflow-x-auto pb-1">
+                    <template x-for="shot in $store.gw.shotsOf($store.gw.screen)" :key="shot.url">
+                      <div class="shrink-0" :draggable="shot.platform === 'ios'" @dragstart="$store.gw.dragShot(shot, $event)" @dragend="$store.gw.endDragShot()">
+                        <button class="block cursor-zoom-in text-left" :title="'Look closer: ' + $store.gw.shotLabel(shot) + (shot.platform === 'ios' ? '. Drag it onto another screen to move it.' : '')" @click="$store.gw.viewShot(shot, $store.gw.shotsOf($store.gw.screen))">
+                          <img :src="shot.url" alt="" draggable="false" class="rounded-lg border border-line object-cover object-top hover:border-white/30" :class="shot.platform === 'ios' ? 'h-64 w-auto' : 'h-48 w-auto max-w-[380px]'" />
+                        </button>
+                        <span class="mt-1 flex items-center gap-2 text-[11px] text-fog/45">
+                          <span x-text="$store.gw.shotLabel(shot)"></span>
+                          <button x-show="$store.gw.placedOn(shot, $store.gw.screen)" class="hover:text-fog" title="Take this picture off the screen. It goes back to the pictures not placed yet." @click="$store.gw.putShot(shot, '')">Not this screen</button>
+                        </span>
+                      </div>
+                    </template>
+                  </div>
+                  <p x-show="!$store.gw.shotsOf($store.gw.screen).length" class="text-xs text-fog/45">No picture yet. For the web, run <code>groundwork screenshots</code>. For iOS, open this screen in the app with the Comment button on.</p>
+                </div>
 
                 <div class="mt-5 space-y-4">
                   <label class="block">
@@ -783,7 +945,14 @@
                           <span class="font-medium" :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Claude asks you' : 'Claude asked') : 'Claude'"></span>
                           <span class="text-fog/35" x-text="e.date"></span>
                         </div>
-                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.options(e.text).question"></p>
+                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords($store.gw.options(e.text).question)"></p>
+                        <div x-show="$store.gw.entryShots(e.text).length" class="mt-2 flex gap-2">
+                          <template x-for="shot in $store.gw.entryShots(e.text)" :key="shot.url">
+                            <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryShots(e.text))">
+                              <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-white/30" />
+                            </button>
+                          </template>
+                        </div>
                         <div x-show="e.open && $store.gw.options(e.text).options.length" class="mt-2 flex flex-col gap-1">
                           <template x-for="(o, j) in $store.gw.options(e.text).options" :key="j">
                             <button class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Start your answer from this" @click="$store.gw.screenReply = o; $nextTick(() => document.getElementById('screen-reply')?.focus())" x-text="o"></button>
@@ -903,10 +1072,11 @@
 
               <div class="mt-4 flex items-center gap-2">
                 <button
-                  x-show="$store.gw.kickoffShown.key === 'answer' && $store.gw.focusQueue.length"
+                  x-show="$store.gw.kickoffShown.key === 'answer' && ($store.gw.inbox.length || $store.gw.openGaps.length)"
                   class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog"
-                  @click="$store.gw.enterFocus()"
-                >Open Focus</button>
+                  @click="$store.gw.inbox.length ? $store.gw.enterFocus() : $store.gw.showGaps()"
+                  x-text="$store.gw.inbox.length ? 'Open the Inbox' : 'Show the gaps on the map'"
+                ></button>
                 <span class="flex-1"></span>
                 <button
                   x-show="$store.gw.kickoffShown.done"
@@ -947,7 +1117,7 @@
                   <span x-show="row.detail.length" class="block truncate text-xs text-fog/50" x-text="row.detail[0]"></span>
                 </span>
                 <button x-show="row.suggestion" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Copy an instruction for Claude Code in the product's repo" @click="$store.gw.copyText(row.suggestion)">Copy for Claude</button>
-                <button x-show="row.open" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? 'Answer in Focus' : row.open?.kind === 'screen' ? 'Open the screen' : 'Write it'"></button>
+                <button x-show="row.open" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer in the Inbox' : 'Show on the map') : row.open?.kind === 'screen' ? 'Open the screen' : 'Write it'"></button>
               </li>
             </template>
           </ul>
@@ -987,7 +1157,7 @@
                       <div class="flex flex-wrap gap-2" x-show="row.suggestion || row.draft || row.open">
                         <button x-show="row.suggestion" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.copyText(row.suggestion)">Copy for Claude</button>
                         <button x-show="row.draft" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.copyDraft(row.draft)">Copy the draft</button>
-                        <button x-show="row.open && row.open.kind !== 'purpose'" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? 'Answer in Focus' : 'Open the screen'"></button>
+                        <button x-show="row.open && row.open.kind !== 'purpose'" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer in the Inbox' : 'Show on the map') : 'Open the screen'"></button>
                       </div>
                     </div>
                   </li>
@@ -1022,7 +1192,7 @@
               <span x-text="'Closed since the last check: ' + $store.gw.readiness.report.closed.join(', ') + '.'"></span>
               <span x-show="$store.gw.readiness.report.added.length" class="text-fog/50" x-text="' New: ' + $store.gw.readiness.report.added.join(', ') + '.'"></span>
             </p>
-            <button x-show="$store.gw.focusQueue.length" id="readiness-focus" class="mt-4 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.enterFocus()" x-text="'Go through what needs you, one at a time (' + $store.gw.focusQueue.length + ')'"></button>
+            <button x-show="$store.gw.inbox.length" id="readiness-focus" class="mt-4 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.enterFocus()" x-text="'Answer Claude\'s questions (' + $store.gw.inbox.length + ')'"></button>
             <p class="mt-3 text-xs text-fog/40">Run <code class="text-fog/70">/readiness</code> to check again, or <code class="text-fog/70">/challenge</code> for questions on the thinnest parts.</p>
 
             <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Areas</h2>
@@ -1227,155 +1397,102 @@
       </div>
     </main>
 
-    <!-- Focus: one thing that needs the person at a time, over a dimmed map -->
-    <aside
-      x-cloak
-      x-show="$store.gw.view === 'focus'"
-      id="focus"
-      class="fixed inset-y-0 right-0 flex w-[400px] max-w-full flex-col border-l border-line bg-panel text-[13px]"
-    >
-      <div class="flex items-center justify-between px-4 py-3">
-        <span class="min-w-0 truncate font-semibold text-fog">Focus<span x-show="$store.gw.scopeScreen" class="font-normal text-fog/50" x-text="' · ' + ($store.gw.scopeScreen?.title ?? '')"></span></span>
-        <span class="-mr-1.5 flex items-center gap-2">
-          <span id="focus-count" class="text-xs text-fog/45" x-show="$store.gw.focusQueue.length" x-text="$store.gw.focusQueue.length + ' left'"></span>
-          <button class="icon-btn" title="Back to the map ( Esc )" @click="$store.gw.setView('map')">
-            <svg class="size-5"><use href="#i-close" /></svg>
-          </button>
-        </span>
-      </div>
-      <div class="border-t border-line"></div>
+    <!-- Inbox: Claude's questions, each answered here, with a way to see it on the map -->
+    <main x-cloak x-show="$store.gw.view === 'focus'" id="focus" class="fixed inset-y-0 left-16 right-0 overflow-y-auto bg-ink text-[13px]">
+      <div class="mx-auto max-w-2xl px-8 pb-24 pt-8">
+        <div class="flex items-baseline justify-between gap-4">
+          <h1 class="text-xl font-semibold text-fog">Inbox<span x-show="$store.gw.scopeScreen" class="font-normal text-fog/50" x-text="' · ' + ($store.gw.scopeScreen?.title ?? '')"></span></h1>
+          <span id="focus-count" class="text-xs text-fog/45" x-text="$store.gw.inbox.length ? $store.gw.inbox.length + ($store.gw.inbox.length === 1 ? ' question' : ' questions') : ''"></span>
+        </div>
+        <p class="mt-1 text-xs text-fog/50">What Claude asked you. Answer here; Claude reads it the next time a command runs.</p>
 
-      <div class="flex-1 overflow-y-auto p-5">
-        <template x-if="!$store.gw.focusCurrent">
-          <div id="focus-done" class="flex flex-col items-start gap-3 pt-6">
-            <span class="grid size-10 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
-              <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
-            </span>
-            <h2 class="text-[17px] font-semibold text-fog">Nothing needs you right now</h2>
-            <p class="text-fog/70" x-text="$store.gw.focusNextStep"></p>
-            <button class="mt-2 rounded-md px-3 py-1.5 text-xs text-fog/70 hover:bg-white/8 hover:text-fog" @click="$store.gw.setView('map')">Back to the map</button>
-          </div>
-        </template>
+        <div x-show="!$store.gw.inbox.length" id="focus-done" class="mt-10 flex flex-col items-start gap-3">
+          <span class="grid size-10 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
+            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+          </span>
+          <h2 class="text-[17px] font-semibold text-fog">No questions waiting</h2>
+          <p class="text-fog/70" x-text="$store.gw.inboxNextStep"></p>
+          <button x-show="$store.gw.openGaps.length" class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.showGaps()">Show the gaps on the map</button>
+        </div>
 
-        <template x-if="$store.gw.focusCurrent">
-          <div class="flex flex-col gap-5">
-            <div x-show="$store.gw.focusOnlySkipped" class="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-xs text-fog/60">
-              <span>Only skipped ones are left.</span>
-              <button class="text-accent hover:underline" @click="$store.gw.focusRestart()">Start over</button>
-            </div>
-
-            <!-- A gap from /readiness -->
-            <template x-if="$store.gw.focusGap">
-              <div class="flex flex-col gap-4">
-                <div>
-                  <span
-                    class="inline-block rounded px-1.5 py-0.5 text-[11px] font-medium"
-                    :class="{ 'bg-rose-400/15 text-rose-300': $store.gw.focusGap.severity === 'blocking', 'bg-question/15 text-question': $store.gw.focusGap.severity === 'important', 'bg-white/10 text-fog/60': $store.gw.focusGap.severity === 'nice' }"
-                    :title="$store.gw.meaning[$store.gw.focusGap.severity]"
-                    x-text="'Missing · ' + $store.gw.focusGap.severity"
-                  ></span>
-                  <span class="ml-1 text-[11px] text-fog/45" x-text="$store.gw.label($store.gw.focusGap.area)"></span>
-                  <h2 class="mt-2 text-[17px] font-semibold leading-snug text-fog" x-text="$store.gw.focusGap.title"></h2>
-                  <p class="mt-1.5 text-fog/70" x-text="$store.gw.focusGap.why"></p>
-                </div>
-                <div x-show="$store.gw.focusGap.near.some((id) => $store.gw.nodes[id])">
-                  <span class="label">Related</span>
-                  <template x-for="id in $store.gw.focusGap.near.filter((id) => $store.gw.nodes[id])" :key="id">
-                    <p class="flex items-center gap-2 py-1 text-fog/70">
-                      <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[$store.gw.nodes[id].type] }"></span>
-                      <span class="truncate" x-text="$store.gw.nodes[id].title"></span>
-                    </p>
-                  </template>
-                </div>
+        <ol class="mt-6 flex flex-col gap-3" id="inbox">
+          <template x-for="item in $store.gw.inbox" :key="item.key">
+            <li class="rounded-xl border border-line bg-panel p-4" :data-inbox="item.key">
+              <div class="flex items-center gap-2 text-[11px]">
+                <span class="rounded bg-question/15 px-1.5 py-0.5 font-medium text-question" x-text="item.kind === 'guess' ? 'Is this right?' : 'Claude asks'"></span>
+                <span class="min-w-0 flex-1 truncate text-fog/55">
+                  <span x-text="item.kind === 'screen' ? 'about the screen' : item.kind === 'guess' ? 'a guess from the code' : 'about'"></span>
+                  <span x-show="item.kind !== 'guess'" class="text-fog/85" x-text="'\u201C' + item.about + '\u201D'"></span>
+                  <span x-show="item.where" class="text-fog/40" x-text="' in ' + $store.gw.label(item.where)"></span>
+                </span>
+                <span class="shrink-0 text-fog/35" x-text="item.date"></span>
               </div>
-            </template>
-
-            <!-- A question from Claude, or a guess from /survey -->
-            <template x-if="$store.gw.focusNode">
-              <div class="flex flex-col gap-4">
-                <div>
-                  <span
-                    class="inline-block rounded bg-question/15 px-1.5 py-0.5 text-[11px] font-medium text-question"
-                    x-text="$store.gw.focusCurrent.kind === 'guess' ? 'Claude\'s guess. Is it right?' : 'Claude asks'"
-                  ></span>
-                  <span class="ml-1 text-[11px] text-fog/45" x-text="$store.gw.label($store.gw.focusNode.topic || 'no topic')"></span>
-                  <h2
-                    class="mt-2 text-[17px] font-semibold leading-snug text-fog"
-                    x-text="$store.gw.focusCurrent.kind === 'guess' || !$store.gw.focusQuestion ? $store.gw.focusNode.title : $store.gw.focusQuestion.question"
-                  ></h2>
-                  <p x-show="$store.gw.focusCurrent.kind === 'question'" class="mt-1.5 text-xs text-fog/50" x-text="'On: ' + $store.gw.focusNode.title"></p>
-                </div>
-                <p x-show="$store.gw.focusNotes" class="line-clamp-6 whitespace-pre-line text-fog/70" x-text="$store.gw.focusNotes"></p>
-                <div x-show="$store.gw.seenIn($store.gw.focusNode).length" class="flex flex-wrap items-center gap-1 text-[11px]">
-                  <span class="text-fog/50">Seen in</span>
-                  <template x-for="p in $store.gw.seenIn($store.gw.focusNode)" :key="p">
-                    <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/70 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
-                  </template>
-                </div>
-                <p x-show="$store.gw.focusCurrent.kind === 'guess' && $store.gw.focusQuestion" class="rounded-lg bg-white/5 px-3 py-2 text-fog/80" x-text="$store.gw.focusQuestion?.question"></p>
-              </div>
-            </template>
-
-            <!-- Suggestions and options to start from -->
-            <div x-show="$store.gw.focusOptions.length" id="focus-options">
-              <span class="label">Start from one of these</span>
-              <div class="flex flex-col gap-1.5">
-                <template x-for="(o, i) in $store.gw.focusOptions" :key="i">
-                  <button
-                    class="rounded-lg border border-line px-3 py-2 text-left text-fog/85 hover:border-accent/60 hover:bg-accent/10"
-                    @click="$store.gw.pickOption(o)"
-                  >
-                    <span class="block" x-text="o"></span>
-                    <span class="mt-0.5 block text-xs text-fog/50" x-show="$store.gw.focusGap?.suggestions?.[i]?.why" x-text="$store.gw.focusGap?.suggestions?.[i]?.why"></span>
+              <h2 class="mt-2 text-[15px] font-medium leading-snug text-fog" x-text="item.kind === 'guess' ? item.about : item.question || item.about"></h2>
+              <p x-show="item.kind === 'guess' && item.question" class="mt-1.5 text-fog/70" x-text="item.question"></p>
+              <p x-show="item.kind === 'guess' && $store.gw.notesOf(item.id)" class="mt-1.5 line-clamp-3 whitespace-pre-line text-xs text-fog/55" x-text="$store.gw.notesOf(item.id)"></p>
+              <div x-show="$store.gw.entryShots(item.text).length" class="mt-3 flex gap-2">
+                <template x-for="shot in $store.gw.entryShots(item.text)" :key="shot.url">
+                  <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryShots(item.text))">
+                    <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-white/30" />
                   </button>
                 </template>
               </div>
-            </div>
-
-            <!-- Answer -->
-            <template x-if="$store.gw.focusGap">
-              <form @submit.prevent="$store.gw.answerGap(true)">
-                <span class="label" x-text="$store.gw.focusOptions.length ? 'Or write your own' : 'Your answer'"></span>
-                <textarea
-                  id="focus-answer"
-                  rows="3"
-                  x-model="$store.gw.gapAnswer"
-                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerGap(true) }"
-                  placeholder="It becomes a thought next to the gap"
-                  class="field w-full resize-none"
-                ></textarea>
-                <div class="mt-2 flex items-center gap-2">
-                  <button type="button" class="rounded-md px-3 py-1 text-xs text-fog/60 hover:bg-white/8 hover:text-fog" title="Come back to it later" @click="$store.gw.focusSkip()">Skip</button>
-                  <span class="flex-1"></span>
-                  <button id="focus-enough" type="button" class="rounded-md px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Accept it as it is. What you wrote is kept as the reason." @click="$store.gw.acceptGap()">Enough for now</button>
-                  <button id="focus-submit" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()">This answers it</button>
+              <!-- The whole thought or screen, to read without leaving the Inbox -->
+              <button class="mt-2 flex items-center gap-1 text-xs text-fog/55 hover:text-fog" :aria-expanded="!!$store.gw.inboxOpen[item.key]" @click="$store.gw.inboxOpen[item.key] = !$store.gw.inboxOpen[item.key]">
+                <svg class="size-3 transition-transform" :class="$store.gw.inboxOpen[item.key] && 'rotate-90'"><use href="#i-chevron" /></svg>
+                <span x-text="$store.gw.inboxOpen[item.key] ? 'Hide' : item.kind === 'screen' ? 'Show the whole screen' : 'Show the whole thought'"></span>
+              </button>
+              <template x-if="$store.gw.inboxOpen[item.key]">
+                <div class="mt-2 space-y-3 rounded-lg bg-black/20 p-3 text-xs" x-data="{ d: $store.gw.inboxDetail(item) }">
+                  <div x-show="d.facts.length" class="flex flex-wrap gap-1">
+                    <template x-for="f in d.facts" :key="f"><span class="rounded bg-white/8 px-1.5 py-0.5 text-fog/65" x-text="f"></span></template>
+                  </div>
+                  <div x-show="d.purpose || d.audience.length || d.tasks.length" class="space-y-0.5 text-fog/75">
+                    <p x-show="d.purpose" x-text="d.purpose"></p>
+                    <p x-show="d.audience.length" class="text-fog/55" x-text="'For ' + d.audience.join(', ')"></p>
+                    <p x-show="d.tasks.length" class="text-fog/55" x-text="'They ' + d.tasks.join(', ')"></p>
+                  </div>
+                  <div x-show="d.notesHtml" class="report text-[12.5px]" @click="$store.gw.openIdLink($event)" x-html="d.notesHtml"></div>
+                  <div x-show="d.earlier.length">
+                    <span class="label">Before the question</span>
+                    <template x-for="(e, j) in d.earlier" :key="j">
+                      <div class="mb-1.5">
+                        <span class="text-[11px]" :class="e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="(e.who === 'you' ? 'You' : 'Claude') + ' · ' + e.date"></span>
+                        <p class="whitespace-pre-wrap text-fog/75" x-text="$store.gw.entryWords(e.text)"></p>
+                      </div>
+                    </template>
+                  </div>
+                  <div x-show="d.links.length" class="text-fog/55">
+                    <span>Linked to </span><span x-text="d.links.map((l) => l.title).join(', ')"></span>
+                  </div>
+                  <p x-show="!d.notesHtml && !d.earlier.length && !d.purpose && !d.links.length" class="text-fog/45">Nothing more is written about it yet.</p>
                 </div>
-              </form>
-            </template>
-            <template x-if="$store.gw.focusNode">
-              <form @submit.prevent="$store.gw.sendReply()">
-                <span class="label" x-text="$store.gw.focusCurrent.kind === 'guess' ? 'Or correct it' : $store.gw.focusOptions.length ? 'Or write your own' : 'Your answer'"></span>
+              </template>
+              <div x-show="item.options.length" class="mt-3 flex flex-wrap gap-1.5">
+                <template x-for="(o, j) in item.options" :key="j">
+                  <button class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Answer with this" :disabled="$store.gw.inboxSending === item.key" @click="$store.gw.answerInbox(item, o)" x-text="o"></button>
+                </template>
+              </div>
+              <form class="mt-3 flex items-end gap-2" @submit.prevent="$store.gw.answerInbox(item)">
                 <textarea
-                  id="focus-answer"
-                  rows="3"
-                  x-model="$store.gw.reply"
-                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendReply() }"
-                  :placeholder="$store.gw.focusCurrent.kind === 'guess' ? 'Not quite: ...' : 'A sentence is enough'"
-                  class="field w-full resize-none"
+                  rows="1"
+                  x-model="$store.gw.inboxDrafts[item.key]"
+                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerInbox(item) }"
+                  :placeholder="item.kind === 'guess' ? 'Not quite: ...' : item.options.length ? 'Or write your own' : 'A sentence is enough'"
+                  class="field min-h-[34px] flex-1 resize-y"
                 ></textarea>
-                <p x-show="$store.gw.replyStatus" class="mt-1 text-xs text-rose-300" x-text="$store.gw.replyStatus"></p>
-                <div class="mt-2 flex items-center gap-2">
-                  <button type="button" class="rounded-md px-3 py-1 text-xs text-fog/60 hover:bg-white/8 hover:text-fog" title="Come back to it later" @click="$store.gw.focusSkip()">Skip</button>
-                  <span class="flex-1"></span>
-                  <button x-show="$store.gw.focusCurrent.kind === 'guess'" id="focus-confirm" type="button" class="rounded-md px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-400/15" title="Settle it as it is" @click="$store.gw.confirmGuess()">Yes, that is right</button>
-                  <button id="focus-submit" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.reply.trim() || $store.gw.sending" x-text="$store.gw.focusCurrent.kind === 'guess' ? 'Send correction' : 'Answer'"></button>
-                </div>
+                <button type="submit" class="h-[34px] rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!($store.gw.inboxDrafts[item.key] ?? '').trim() || $store.gw.inboxSending === item.key">Answer</button>
               </form>
-            </template>
-          </div>
-        </template>
+              <div class="mt-2 flex items-center gap-3 text-xs">
+                <button class="text-accent hover:underline" @click="$store.gw.viewInMap(item)" x-text="item.kind === 'screen' ? 'View in the sitemap' : 'View on the map'"></button>
+                <span class="flex-1"></span>
+                <button x-show="item.kind === 'guess'" class="rounded-md px-2.5 py-1 text-emerald-300 hover:bg-emerald-400/15" title="Settle it as it is" @click="$store.gw.confirmGuess(item.id)">Yes, that is right</button>
+              </div>
+            </li>
+          </template>
+        </ol>
       </div>
-    </aside>
+    </main>
 
     <!-- Details: docked on the right, or a small pill when minimized -->
     <button
@@ -1561,6 +1678,30 @@
                   <template x-for="p in $store.gw.seenIn($store.gw.selected)" :key="p">
                     <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/70 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
                   </template>
+                </div>
+              </template>
+              <!-- A comment is fixed only when the person says so -->
+              <template x-if="$store.gw.feedbackState($store.gw.selected)">
+                <div id="feedback-state" class="mt-3 flex items-center gap-2 rounded-lg border border-line bg-white/[0.03] py-1.5 pl-3 pr-1.5 text-xs">
+                  <span class="size-1.5 shrink-0 rounded-full" :class="{ 'bg-question': $store.gw.feedbackState($store.gw.selected) === 'incoming', 'bg-accent': $store.gw.feedbackState($store.gw.selected) === 'proposed', 'bg-violet-400': $store.gw.feedbackState($store.gw.selected) === 'ready', 'bg-emerald-400': $store.gw.feedbackState($store.gw.selected) === 'fixed' }"></span>
+                  <span class="min-w-0 flex-1 text-fog/70" x-text="{ incoming: 'Incoming. No fix proposed yet.', proposed: 'Fix proposed, not built yet. See the thread.', ready: 'Built, ready to test. Test it in the app, then mark it fixed.', fixed: 'Fixed on ' + $store.gw.selected.extra.fixed }[$store.gw.feedbackState($store.gw.selected)]"></span>
+                  <button
+                    x-show="$store.gw.feedbackState($store.gw.selected) === 'proposed'"
+                    class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-white/8 hover:text-fog"
+                    title="The proposed fix is in the code now: test it in the app"
+                    @click="$store.gw.markBuilt()"
+                  >Built</button>
+                  <button
+                    x-show="$store.gw.feedbackState($store.gw.selected) !== 'fixed'"
+                    id="mark-fixed"
+                    class="shrink-0 rounded-md bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/85"
+                    @click="$store.gw.markFixed(true)"
+                  >Mark fixed</button>
+                  <button
+                    x-show="$store.gw.feedbackState($store.gw.selected) === 'fixed'"
+                    class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-white/8 hover:text-fog"
+                    @click="$store.gw.markFixed(false)"
+                  >Not fixed</button>
                 </div>
               </template>
             </div>

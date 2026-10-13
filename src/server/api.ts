@@ -4,14 +4,20 @@ import { readProject, KICKOFF_STEPS, writeFields, writeKickoff, writePages } fro
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import { markAnswered, readReadiness } from '../store/readiness.js'
 import { listStories, readDraft, readOutput } from '../store/stories.js'
-import { listScreens, updateScreen, type ScreenEdit } from '../store/screens.js'
+import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
+import { listShots, readShot } from '../store/shots.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
+import type { Pairings } from './pairing.js'
 
 interface Ctx {
   gwDir: string
   store: NodeStore
   nodes: NodeSync
+  /** Phones asking to send comments, when `--lan` is on. */
+  pairings?: Pairings
+  /** Where the product runs behind the comment proxy, when `--app` is on. */
+  runtime?: { app?: string }
 }
 
 /** Handles /api/*. Returns false when the request is not an API route. */
@@ -42,6 +48,32 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (url.pathname === '/api/events' && method === 'GET') {
       subscribe(res)
       return true
+    }
+    // Phones asking to send comments, answered by the person at the Mac. Only on this machine.
+    if (url.pathname === '/api/pair' && method === 'GET') {
+      return send(res, 200, ctx.pairings?.list() ?? [])
+    }
+    const pairMatch = url.pathname.match(/^\/api\/pair\/(pair_[a-f0-9]{12})$/)
+    if (pairMatch && method === 'POST') {
+      const body = (await readBody(req)) as { allow?: unknown }
+      if (!ctx.pairings?.answer(pairMatch[1], body.allow === true)) throw new NotFound(pairMatch[1])
+      return send(res, 200, { ok: true })
+    }
+    // Where to open a screen: the proxy with the Comment button, or the address --app was given last time.
+    if (url.pathname === '/api/runtime' && method === 'GET') {
+      const remembered = (await readProject(ctx.gwDir)).data.app
+      return send(res, 200, { app: ctx.runtime?.app ?? (typeof remembered === 'string' ? remembered : null), proxied: !!ctx.runtime?.app })
+    }
+    if (url.pathname === '/api/shots' && method === 'GET') {
+      return send(res, 200, await listShots(ctx.gwDir))
+    }
+    // Put a picture on a screen, from the map: { file: "ios/App-2.jpg", screen: "p_home" }, or screen "" to take it off.
+    if (url.pathname === '/api/shots/place' && method === 'POST') {
+      const input = (await readBody(req)) as { file?: unknown; screen?: unknown }
+      if (typeof input.file !== 'string' || typeof input.screen !== 'string') throw new BadInput('Say which picture and which screen')
+      if (!(await listShots(ctx.gwDir)).some((s) => s.file === input.file)) throw new NotFound(input.file)
+      if (!(await placeShot(ctx.gwDir, input.file, input.screen))) throw new NotFound(input.screen)
+      return send(res, 200, await listScreens(ctx.gwDir))
     }
     if (url.pathname === '/api/stories' && method === 'GET') {
       return send(res, 200, await listStories(ctx.gwDir))
@@ -182,9 +214,16 @@ async function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks)
 }
 
-/** Serve /files/<node id>/<name>, and nothing else from disk. */
+/** Serve /files/<node id>/<name> and /shots/<platform>/<name>, and nothing else from disk. */
 export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwDir: string): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost')
+  const shot = url.pathname.match(/^\/shots\/(web|ios)\/([^/]+)$/)
+  if (shot && req.method === 'GET') {
+    const found = await readShot(gwDir, shot[1], decodeURIComponent(shot[2]))
+    if (!found) res.writeHead(404).end()
+    else res.writeHead(200, { 'Content-Type': found.type, 'Cache-Control': 'private, max-age=31536000, immutable' }).end(found.data)
+    return true
+  }
   const m = url.pathname.match(/^\/files\/([^/]+)\/([^/]+)$/)
   if (!m || req.method !== 'GET') return false
   const image = await readImage(gwDir, decodeURIComponent(m[1]), decodeURIComponent(m[2]))

@@ -116,7 +116,7 @@ export function buildBoard(nodes: GNode[], gaps: Gap[], stories: Story[], option
       stories: stories.filter((st) => storyAt.get(st.id) === key),
     }
   }
-  const columns = [column('', 'General', 'The whole product'), ...screenTree(screens).map(({ screen }) => column(screen.id, screen.title, pathOf(screen)))]
+  const columns = [column('', 'General', ''), ...screenTree(screens).map(({ screen }) => column(screen.id, screen.title, pathOf(screen)))]
   // Screens with nothing on them yet stay out of the way; General always shows.
   return { groupBy, columns: columns.filter((c, i) => i === 0 || c.items.length || c.stories.length) }
 }

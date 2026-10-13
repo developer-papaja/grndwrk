@@ -77,7 +77,7 @@ export function buildStatus(input: {
   const other = input.otherGaps ?? 0
   add('thinking', {
     key: 'thinking',
-    title: 'Nothing blocking, no questions waiting',
+    title: open || other ? 'Questions and gaps waiting on you' : 'No questions or gaps waiting',
     status: open ? 'missing' : other ? 'partly' : 'done',
     detail: [
       ...(input.blocking ? [`${input.blocking} blocking ${input.blocking === 1 ? 'gap' : 'gaps'}`] : []),

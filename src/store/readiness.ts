@@ -1,6 +1,6 @@
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import matter from 'gray-matter'
+import { readMatter } from './matter.js'
 import { DESIGN_ITEMS, FOUNDATION_STATUSES, FOUNDATIONS, SEVERITIES, type DesignCheck, type DesignStatus, type Foundation, type FoundationStatus, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
 
 const VERDICTS: Verdict[] = ['ready to build', 'ready to prototype', 'not ready']
@@ -11,7 +11,7 @@ const dir = (gwDir: string) => join(gwDir, 'readiness')
 export async function readReadiness(gwDir: string): Promise<Readiness> {
   const out: Readiness = { report: null, gaps: [], design: [], foundations: [] }
   try {
-    const { data, content } = matter(await readFile(join(dir(gwDir), 'report.md'), 'utf8'), {})
+    const { data, content } = readMatter(await readFile(join(dir(gwDir), 'report.md'), 'utf8'))
     const v = String(data.verdict ?? '').trim().toLowerCase()
     const checked = data.checked instanceof Date ? data.checked.toISOString().slice(0, 10) : String(data.checked ?? '')
     const titles = (x: unknown) => (Array.isArray(x) ? x.filter((t) => typeof t === 'string' && t.trim()).map((t: string) => t.trim()) : [])

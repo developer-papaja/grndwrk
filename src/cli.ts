@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { init } from './init.js'
-import { findProjectRoot, GW_DIR } from './root.js'
+import { findProjectRoot, GW_DIR, PACKAGE_ROOT } from './root.js'
 import { startServer } from './server/index.js'
 import { clientCount } from './server/events.js'
 
@@ -10,6 +10,15 @@ const HELP = `Usage:
   groundwork [start]     open the map in the browser
   groundwork import-feedback <file>
                          add comments a tester shared as a file
+  groundwork screenshots [screen...]
+                         take a picture of each screen in the running product,
+                         for the Sitemap view. Uses Chrome.
+      --app <url>        where the product runs (default: the last --app)
+      --login            log in once in a Chrome window; the session is kept
+  groundwork build-ios-loader [path]
+                         build GroundworkFeedback for injecting into an app in
+                         the iOS Simulator, without changing the app; prints
+                         the path for DYLD_INSERT_LIBRARIES
 
 Options for start:
   --port <n>   port to use (default 7777, or the next free one)
@@ -35,6 +44,7 @@ async function main() {
       'lan-port': { type: 'string' },
       open: { type: 'boolean', default: true },
       dev: { type: 'boolean', default: false },
+      login: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   })
@@ -45,6 +55,33 @@ async function main() {
   if (command === 'init') {
     console.log(`Setting up ${GW_DIR}/ in ${process.cwd()}\n`)
     return init(process.cwd())
+  }
+
+  if (command === 'screenshots') {
+    const root = findProjectRoot(process.cwd())
+    if (!root) {
+      console.error(`No ${GW_DIR}/ folder found here. Run \`groundwork init\` first.`)
+      process.exit(1)
+    }
+    const { takeScreenshots } = await import('./screenshots.js')
+    try {
+      await takeScreenshots(join(root, GW_DIR), { app: values.app, login: values.login, only: positionals.slice(1) })
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+    return
+  }
+
+  if (command === 'build-ios-loader') {
+    if (process.platform !== 'darwin') {
+      console.error('Building for the iOS Simulator needs a Mac with Xcode.')
+      process.exit(1)
+    }
+    const { spawnSync } = await import('node:child_process')
+    const script = join(PACKAGE_ROOT, 'clients', 'ios', 'build-loader.sh')
+    const run = spawnSync('/bin/sh', [script, ...positionals.slice(1, 2)], { stdio: 'inherit' })
+    return void process.exit(run.status ?? 1)
   }
 
   if (command === 'import-feedback') {
@@ -87,11 +124,12 @@ async function main() {
     }
     const appPort = values['app-port'] ? Number(values['app-port']) : undefined
     const lanPort = values['lan-port'] ? Number(values['lan-port']) : undefined
-    const { url, appUrl, lanUrls } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort, lan: values.lan, lanPort })
+    const { url, appUrl, lanUrls, lanCode } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort, lan: values.lan, lanPort })
     console.log(`Groundwork is running at ${url}\nWatching ${join(root, GW_DIR)}`)
     if (appUrl) console.log(`Your product with the Comment button: ${appUrl} (passes through to ${app!.origin})`)
     if (lanUrls) {
       console.log(`Phones on this network can send comments: ${lanUrls.join(', ') || 'no network found'}`)
+      console.log(`  Pairing code: ${lanCode}. Enter it once on each phone. Delete .groundwork/lan-code for a new one.`)
       console.log('  Only comments can be sent from there. The map stays on this Mac.')
     }
     console.log('Press Ctrl+C to stop.')

@@ -1,4 +1,4 @@
-import type { GNode, NodeInput, Readiness, Screen, ServerEvent, Story } from '../../src/shared/types'
+import type { GNode, NodeInput, PairRequest, Readiness, Screen, ServerEvent, Story } from '../../src/shared/types'
 
 export const OFFLINE_MESSAGE = "Can't reach Groundwork. Is `groundwork` still running in your terminal?"
 
@@ -50,6 +50,22 @@ export async function uploadImage(id: string, file: Blob): Promise<{ markdown: s
   if (!res.ok) throw new Error((await res.json().then((j) => j.error, () => null)) ?? `Upload failed (${res.status})`)
   return res.json()
 }
+export interface Shot {
+  platform: 'web' | 'ios'
+  key: string
+  /** How a screen names it in shots: ios/App-2.jpg. */
+  file: string
+  url: string
+  taken: string
+  /** What the screen showed, from the app. */
+  texts?: string[]
+}
+export const fetchShots = () => request<Shot[]>('GET', '/api/shots').catch(() => [] as Shot[])
+/** Put a picture on a screen, taking it off any other; an empty screen only takes it off. */
+export const placeShot = (file: string, screen: string) => request<Screen[]>('POST', '/api/shots/place', { file, screen })
+export const fetchRuntime = () => request<{ app: string | null; proxied: boolean }>('GET', '/api/runtime').catch(() => ({ app: null, proxied: false }))
+export const fetchPairRequests = () => request<PairRequest[]>('GET', '/api/pair').catch(() => [] as PairRequest[])
+export const answerPairRequest = (id: string, allow: boolean) => request<{ ok: true }>('POST', `/api/pair/${encodeURIComponent(id)}`, { allow })
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
 
 /** Subscribe to server events. EventSource reconnects on its own after a drop. */

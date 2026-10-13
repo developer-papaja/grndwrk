@@ -36,6 +36,19 @@
   .tools-off .tool {
     @apply pointer-events-none opacity-35;
   }
+  /* A setting in the map's toolbar: its current value, the choices in a menu. */
+  .menu-btn {
+    @apply flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-fog hover:bg-white/8;
+  }
+  .menu-btn-on {
+    @apply bg-accent/20 text-white ring-1 ring-accent hover:bg-accent/25;
+  }
+  .menu-pop {
+    @apply absolute left-0 top-10 z-20 flex min-w-[220px] flex-col rounded-xl border border-line bg-panel p-1 text-[13px] shadow-xl shadow-black/40;
+  }
+  .menu-item {
+    @apply flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-fog/85 hover:bg-white/8 hover:text-fog;
+  }
   /* A card on the board: the type as a thin edge, settled as an outline in that color. */
   .board-card {
     @apply relative rounded-md border border-line bg-panel py-2 pl-2.5 pr-4 text-left leading-snug text-fog/90 shadow-sm shadow-black/20 hover:border-white/25;
