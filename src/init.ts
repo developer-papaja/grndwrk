@@ -65,6 +65,24 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
     }
     installed[file] = hash(shipped)
   }
+  // The rules for working with the map, read by Claude Code whenever it opens a
+  // file in .groundwork/: a comment fixed without /feedback still becomes ready to test.
+  const rules = await readFile(join(templates, 'CLAUDE.md'), 'utf8')
+  const rulesPath = join(gw, 'CLAUDE.md')
+  const currentRules = await readFile(rulesPath, 'utf8').catch(() => null)
+  if (currentRules === null) {
+    await writeFile(rulesPath, rules)
+    say('created', rulesPath)
+  } else if (currentRules === rules) {
+    say('ok', rulesPath)
+  } else if (installed['.groundwork/CLAUDE.md'] && installed['.groundwork/CLAUDE.md'] !== hash(currentRules)) {
+    say('kept', rulesPath)
+    console.log('           you changed it, so it was not updated')
+  } else {
+    await writeFile(rulesPath, rules)
+    say('updated', rulesPath)
+  }
+  if (currentRules === null || currentRules === rules || installed['.groundwork/CLAUDE.md'] === hash(currentRules)) installed['.groundwork/CLAUDE.md'] = hash(rules)
   await writeFile(manifestPath, JSON.stringify(installed, null, 2) + '\n')
 
   console.log(`\n${nextSteps(start)}\n\nAfter updating Groundwork, run \`groundwork init\` again to update the commands.`)

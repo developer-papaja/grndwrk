@@ -35,6 +35,18 @@ describe('init', () => {
     expect(await readFile(command('brief.md'), 'utf8')).toBe('my own brief\n')
   })
 
+  it('gives Claude the map rules in .groundwork/CLAUDE.md, and keeps them when the person changed them', async () => {
+    const rules = join(root, '.groundwork', 'CLAUDE.md')
+    await init(root)
+    const shippedRules = await readFile(join(PACKAGE_ROOT, 'templates', 'CLAUDE.md'), 'utf8')
+    expect(await readFile(rules, 'utf8')).toBe(shippedRules)
+    expect(shippedRules).toContain('built:')
+    expect(await readFile(join(root, '.groundwork', '.gitignore'), 'utf8')).toContain('local.json')
+    await writeFile(rules, 'my own rules\n')
+    await init(root)
+    expect(await readFile(rules, 'utf8')).toBe('my own rules\n')
+  })
+
   it('backs up a command installed before init kept track, then updates it', async () => {
     await init(root)
     await rm(join(root, '.groundwork', 'commands.json'))

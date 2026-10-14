@@ -38,6 +38,8 @@ The rule above all: **only the person marks a comment fixed.** Never set `fixed:
 3. The stories in `.groundwork/stories/` the comment names, or whose `applies_to` covers its screen, so a fix does not break what a story promises.
 4. The code for the screen and the element. Read it; do not change it unless the person asked you to fix the comments in this conversation.
 
+**Catch up first.** A comment whose thread already has a `**Claude**` entry saying a fix was made (in this or an earlier session, or a commit names it) but has no `built:` was fixed without being marked. Check in the code that the fix is there; if it is, set `built:` to the date of that entry and add an entry with `To test:` steps (see Write) when it has none. If you cannot find the fix in the code, leave it as it is and say so in the report.
+
 Skip comments that already have `proposed:`, `built:` or `fixed:`, unless the person named them. A comment the person rejected after testing is back to incoming: its thread ends in a `**You**` entry "Tested on the phone: rejected, not fixed yet.", sometimes with their note quoted below it. What you built did not work: read the note, look again, and propose something different. An approved comment is fixed and needs nothing.
 
 ## Write
@@ -79,4 +81,4 @@ Write only inside `.groundwork/nodes/`, unless the person asked you to fix comme
 
 ## Report back
 
-A short list: each comment with the fix you proposed, the ones you asked about, and the ones you marked fixed because the person asked. End with what is ready to test, and: "Test them in the app: the Comment button shows how many are ready. Approve or reject each one there, or in the map under Ready to test." Write plainly and directly. Do not use the dash characters "–" or "—".
+A short list: the comments you caught up as ready to test, each comment with the fix you proposed, the ones you asked about, and the ones you marked fixed because the person asked. End with what is ready to test, and: "Test them in the app: the Comment button shows how many are ready. Approve or reject each one there, or in the map under Ready to test." Write plainly and directly. Do not use the dash characters "–" or "—".
