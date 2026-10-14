@@ -94,7 +94,7 @@ In Laravel:
 @env('local')<script src="http://localhost:7777/__groundwork/feedback.js" defer></script>@endenv
 ```
 
-The button only runs on addresses on your own machine (`localhost`, `*.test`, `*.localhost`), and Groundwork only takes comments from such pages. The first comment from a site asks in the map: "shop.test wants to send comments". Allow it once, and the waiting comment arrives; from then on that site sends straight away. A site you did not allow, such as another project's dev server, cannot add anything to your map. On an https site this works in Chrome, Arc, Edge, Brave and Firefox. Safari blocks it: use the first way there.
+The button only runs on addresses on your own machine (`localhost`, `*.test`, `*.localhost`), and Groundwork only takes comments from such pages. The first comment from a site asks in the map: "shop.test wants to send comments". The map's tab shows it too, as "(1) Allow to send comments" with a red dot on its icon, so you see it from any tab. Allow it once, and the waiting comment arrives; from then on that site sends straight away. A site you did not allow, such as another project's dev server, cannot add anything to your map. On an https site this works in Chrome, Arc, Edge, Brave and Firefox. Safari blocks it: use the first way there.
 
 ### In an iOS app
 
@@ -102,7 +102,9 @@ Add the Swift package in `clients/ios/GroundworkFeedback` to the app's debug bui
 
 ### Testing fixes
 
-When Claude builds a fix for a comment, it writes what changed and how to test it. The comment is then **ready to test**. On the iPhone, the Groundwork button shows how many are waiting. Tap one: the app goes to the screen, and a card shows the steps with **Approve** and **Reject**. Approved comments are fixed. Rejected ones go back to Claude with your note. In the map, the Comments menu on the Feedback page shows each state.
+When Claude builds a fix for a comment, it writes what changed and how to test it. The comment is then **ready to test**. On the iPhone, the Groundwork button shows how many are waiting. Tap one: the app goes to the screen, and a card shows the steps with **Approve** and **Reject**. On a website, the Comment button shows a test icon and a count after a thin line: press it for the list, and **Test** opens the page the comment was made on, marks the element, and shows the same card, which you can drag anywhere. Approved comments are fixed. Rejected ones go back to Claude with your note. In the map, the Comments menu on the Feedback page shows each state, and which sites may send comments (remove one, and its next comment asks again).
+
+`groundwork init` puts a short `CLAUDE.md` in `.groundwork/` with these rules. Claude Code reads it whenever it opens the map's files, so a fix you ask for in plain words ("go through the feedback") is still marked ready to test. `/feedback` also catches up comments that were fixed without being marked.
 
 ### Testers without Groundwork
 

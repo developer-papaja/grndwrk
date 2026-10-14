@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util'
 import { init } from './init.js'
 import { findProjectRoot, GW_DIR, PACKAGE_ROOT } from './root.js'
 import { startServer } from './server/index.js'
-import { clientCount } from './server/events.js'
+import { clientCount, tabAround } from './server/events.js'
 
 const HELP = `Usage:
   groundwork init        create .groundwork/ and copy the Claude Code commands, or update them
@@ -147,12 +147,25 @@ async function main() {
       console.log('  Only comments can be sent from there. The map stays on this Mac.')
     }
     console.log('Press Ctrl+C to stop.')
+    // Whether a map tab is open, kept for the next start: a tab in the
+    // background reconnects only when it is looked at again, so it would not
+    // be seen in time, and a new tab would open every time.
+    const { rememberedTab, rememberTab } = await import('./store/local.js')
+    const hadTab = (await rememberedTab(join(root, GW_DIR))) === actual
+    const stop = () => {
+      setTimeout(() => process.exit(0), 1000).unref()
+      void rememberTab(join(root, GW_DIR), tabAround() ? actual : null).finally(() => process.exit(0))
+    }
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
     if (values.open) {
-      // A Groundwork tab that is already open reconnects by itself. Give it a
-      // moment, and only open a new tab when none came back.
+      // A Groundwork tab in view reconnects within a second. Give it a moment,
+      // and only open a new tab when none came back and none was open before.
       await new Promise((r) => setTimeout(r, 2500))
       if (clientCount() > 0) {
         console.log('Your open Groundwork tab reconnected.')
+      } else if (hadTab) {
+        console.log(`Your Groundwork tab picks this up when you switch to it. Closed it? Open ${url}`)
       } else {
         const { default: open } = await import('open')
         await open(url).catch(() => {})

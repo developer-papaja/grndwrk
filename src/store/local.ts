@@ -61,3 +61,16 @@ export async function rememberApp(gwDir: string, app: string): Promise<void> {
   await writeFile(file(gwDir), JSON.stringify({ ...data, app }, null, 2) + '\n')
   await keepOutOfGit(gwDir, 'local.json')
 }
+
+/** The port a map tab was open on when Groundwork last stopped, so the next start on that port can leave it to that tab. */
+export async function rememberedTab(gwDir: string): Promise<number | undefined> {
+  const tab = (await read(gwDir)).tab
+  return typeof tab === 'number' ? tab : undefined
+}
+
+export async function rememberTab(gwDir: string, port: number | null): Promise<void> {
+  const data = await read(gwDir)
+  if ((data.tab ?? null) === port) return
+  await writeFile(file(gwDir), JSON.stringify({ ...data, tab: port }, null, 2) + '\n')
+  await keepOutOfGit(gwDir, 'local.json')
+}
