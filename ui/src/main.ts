@@ -12,6 +12,20 @@ bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
 })
 Alpine.start()
 
+// The tab says when a phone or a site waits to be allowed, like a count of
+// unread messages, so it is seen from another tab: "(1) Allow to send comments · Clinic".
+// Its name is the project's, so several maps open at once can be told apart.
+const plainIcon = document.querySelector<HTMLLinkElement>('link[rel=icon]')?.href ?? ''
+const waitingIcon = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="#0d99ff"/><circle cx="12.5" cy="3.5" r="3.5" fill="#f24822"/></svg>')}`
+Alpine.effect(() => {
+  const waiting = state.pairRequests.length + state.siteRequests.length
+  const name = typeof state.project.name === 'string' && state.project.name ? state.project.name : ''
+  const base = name ? `${name} · Groundwork` : 'Groundwork'
+  document.title = waiting ? `(${waiting}) Allow to send comments · ${name || 'Groundwork'}` : base
+  const icon = document.querySelector<HTMLLinkElement>('link[rel=icon]')
+  if (icon) icon.href = waiting ? waitingIcon : plainIcon
+})
+
 /** A comment to open once nodes are loaded: from a node:open event, or #write=<id> when Groundwork opened this tab. */
 let writeWhenLoaded = /^#write=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1] ?? ''
 if (writeWhenLoaded) history.replaceState(null, '', location.pathname + location.search)
@@ -57,7 +71,10 @@ const handlers = {
     else if (event.type === 'pair:request') state.addPairRequest(event.request)
     else if (event.type === 'pair:done') state.dropPairRequest(event.id)
     else if (event.type === 'site:request') state.addSiteRequest(event.origin)
-    else if (event.type === 'site:done') state.dropSiteRequest(event.origin)
+    else if (event.type === 'site:done') {
+      state.dropSiteRequest(event.origin)
+      void state.loadSiteRequests()
+    }
     else if (event.type === 'file:change' && event.path.startsWith('shots/')) void state.loadShots()
     else if (event.type === 'file:change' && event.path === 'project.md') {
       void fetchProject().then((p) => (state.project = p))
@@ -87,5 +104,11 @@ function disconnect() {
   source = null
 }
 document.addEventListener('visibilitychange', () => (document.hidden ? disconnect() : connect()))
+// In the background, say now and then that this tab is still open, without a
+// connection: Groundwork then leaves it to this tab after a restart instead of
+// opening another one. (Browsers slow down background timers; often enough.)
+setInterval(() => {
+  if (document.hidden) fetch('/api/tab', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
+}, 30_000)
 window.addEventListener('pagehide', disconnect)
 if (!document.hidden) connect()

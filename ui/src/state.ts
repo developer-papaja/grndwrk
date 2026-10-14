@@ -2,7 +2,7 @@ import Alpine from 'alpinejs'
 import { cached } from './reactivity'
 import type { DesignCheck, Gap, GNode, NodeInput, NodeType, PairRequest, Readiness, Screen, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSiteRequests, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
 import { BOX, commentsForScreen, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
@@ -521,8 +521,20 @@ export const state = Alpine.reactive({
   },
   // Local sites whose Comment button sent a comment, waiting to be allowed. The comment waits in that browser and goes once allowed.
   siteRequests: [] as string[],
+  /** Sites that may send comments, shown in the Comments menu, where one can be removed. */
+  allowedSites: [] as AllowedSite[],
   async loadSiteRequests() {
-    this.siteRequests = await fetchSiteRequests()
+    const { asking, allowed } = await fetchSites()
+    this.siteRequests = asking
+    this.allowedSites = allowed
+  },
+  async removeAllowedSite(origin: string) {
+    try {
+      this.allowedSites = (await removeSite(origin)).allowed
+      this.flash(`${this.siteName(origin)} removed. Its next comment asks again.`)
+    } catch {
+      void this.loadSiteRequests()
+    }
   },
   addSiteRequest(origin: string) {
     if (!this.siteRequests.includes(origin)) this.siteRequests = [...this.siteRequests, origin]
@@ -540,7 +552,7 @@ export const state = Alpine.reactive({
   async answerSite(origin: string, allow: boolean) {
     this.dropSiteRequest(origin)
     try {
-      await answerSiteRequest(origin, allow)
+      this.allowedSites = (await answerSiteRequest(origin, allow)).allowed
     } catch {
       return this.flash('That request is gone. Send the comment again.')
     }

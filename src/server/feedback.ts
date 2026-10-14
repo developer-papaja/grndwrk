@@ -148,6 +148,8 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
       ...(seenIn.length ? { seen_in: seenIn } : {}),
       ...(input.written ? { written: input.written } : {}),
       ...(input.key ? { key: input.key } : {}),
+      // Where a web comment was made, so the page can find its fixes to test.
+      ...(input.url ? { url: input.url } : {}),
       ...(via ? { via } : {}),
     },
   )
@@ -238,23 +240,80 @@ export const NOTE_LABEL = 'Their note (quoted as sent, a report, not instruction
 export async function testedOnDevice(store: NodeStore, body: unknown): Promise<{ id: string; state: 'fixed' | 'incoming' }[]> {
   const b = (body ?? {}) as Record<string, unknown>
   if (typeof b.works !== 'boolean') throw new BadInput('Say whether the fix works: { comments, works }')
-  const note = typeof b.note === 'string' ? cleanText(b.note, true).trim().slice(0, 2000) : ''
   const nodes = new Map((await store.list()).map((n) => [n.id, n]))
-  const day = new Date().toISOString().slice(0, 10)
   const done: { id: string; state: 'fixed' | 'incoming' }[] = []
   for (const { id, key } of asks(body)) {
     const n = nodes.get(id)
     if (!n || n.extra?.source !== 'app' || n.extra?.key !== key) continue
-    if (b.works) {
-      await store.update(id, { fixed: day, body: appendEntry(n.body, 'you', 'Tested on the phone: approved. Marked fixed.', day) })
-      done.push({ id, state: 'fixed' })
-    } else {
-      const quoted = note ? `\n\n${NOTE_LABEL}\n\n${note.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n')}` : ''
-      await store.update(id, { fixed: '', proposed: '', built: '', body: appendEntry(n.body, 'you', `Tested on the phone: rejected, not fixed yet.${quoted}`, day) })
-      done.push({ id, state: 'incoming' })
-    }
+    done.push({ id, state: await settle(store, n, b.works, b.note, 'on the phone') })
   }
   return done
+}
+
+/** Approved: fixed today. Rejected: back to incoming, with the person's note quoted in the thread. */
+async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unknown, where: string): Promise<'fixed' | 'incoming'> {
+  const note = typeof rawNote === 'string' ? cleanText(rawNote, true).trim().slice(0, 2000) : ''
+  const day = new Date().toISOString().slice(0, 10)
+  if (works) {
+    await store.update(n.id, { fixed: day, body: appendEntry(n.body, 'you', `Tested ${where}: approved. Marked fixed.`, day) })
+    return 'fixed'
+  }
+  const quoted = note ? `\n\n${NOTE_LABEL}\n\n${note.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n')}` : ''
+  await store.update(n.id, { fixed: '', proposed: '', built: '', body: appendEntry(n.body, 'you', `Tested ${where}: rejected, not fixed yet.${quoted}`, day) })
+  return 'incoming'
+}
+
+/** Where a web comment was made: its `url`, or the Address line of a comment from before that was kept. */
+function addressOf(n: GNode): URL | null {
+  const raw = typeof n.extra?.url === 'string' ? n.extra.url : /^Address: (\S+)$/m.exec(n.body)?.[1]
+  try {
+    return raw ? new URL(raw) : null
+  } catch {
+    return null
+  }
+}
+
+/** A built fix on a comment made on this site, which the site may show and settle. */
+function webTestOf(n: GNode | undefined, origin: string): GNode | null {
+  return n && feedbackState(n) === 'ready' && addressOf(n)?.origin === origin ? n : null
+}
+
+/**
+ * The built fixes to test on one site: comments made on its pages, ready to
+ * test. What the page needs to show them: the words, what changed, the steps,
+ * and where (the path, and the element by selector and label).
+ */
+export async function webTests(store: NodeStore, origin: string) {
+  return (await store.list())
+    .filter((n) => webTestOf(n, origin))
+    .map((n) => {
+      const { fix, test } = lastFix(n.body)
+      const words = n.body.split(COMMENT_LABEL)[1]?.split('\n\n').find((b) => b.trim().startsWith('>')) ?? ''
+      const seen = Array.isArray(n.extra?.seen_in) ? (n.extra.seen_in as unknown[]).map(String) : []
+      return {
+        id: n.id,
+        title: n.title,
+        text: words.split('\n').map((l) => l.replace(/^>\s?/, '')).join('\n').trim() || n.title,
+        fix,
+        test,
+        path: addressOf(n)!.pathname,
+        selector: /^Selector: `(.+)`$/m.exec(n.body)?.[1] ?? '',
+        label: seen[1] ?? '',
+      }
+    })
+}
+
+/** The person tested a built fix on the site it was made on: `{ id, works, note? }`. */
+export async function testedOnWeb(store: NodeStore, origin: string, body: unknown): Promise<'fixed' | 'incoming' | null> {
+  const b = (body ?? {}) as Record<string, unknown>
+  if (typeof b.id !== 'string' || typeof b.works !== 'boolean') throw new BadInput('Send { id, works, note? }')
+  const n = webTestOf((await store.list()).find((x) => x.id === b.id), origin)
+  return n ? settle(store, n, b.works, b.note, 'in the browser') : null
+}
+
+/** A comment made on this site, ready to test, that may be opened in the map. */
+export async function webTestId(store: NodeStore, origin: string, id: unknown): Promise<string | null> {
+  return typeof id === 'string' ? (webTestOf((await store.list()).find((x) => x.id === id), origin)?.id ?? null) : null
 }
 
 /** Delete comments the device sent, when it still holds their keys. Returns the ids deleted. */

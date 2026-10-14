@@ -9,7 +9,7 @@ import { listShots, readShot } from '../store/shots.js'
 import { rememberedApp } from '../store/local.js'
 import { LinkRefused } from '../store/fs.js'
 import type { NodeInput } from '../shared/types.js'
-import { subscribe, type NodeSync } from './events.js'
+import { noteTab, subscribe, type NodeSync } from './events.js'
 import type { Pairings } from './pairing.js'
 import type { Sites } from './sites.js'
 
@@ -50,6 +50,12 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
 
     if ((method === 'POST' || method === 'PATCH') && !isJson(req)) return send(res, 415, { error: 'Send JSON' })
 
+    // A map tab in the background, saying it is still open.
+    if (url.pathname === '/api/tab' && method === 'POST') {
+      noteTab()
+      res.writeHead(204).end()
+      return true
+    }
     if (url.pathname === '/api/events' && method === 'GET') {
       subscribe(res)
       return true
@@ -66,13 +72,15 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     // Local sites asking to send comments, answered in the map. Only from the map's own page.
     if (url.pathname === '/api/sites' && method === 'GET') {
-      return send(res, 200, ctx.sites?.list() ?? [])
+      return send(res, 200, { asking: ctx.sites?.list() ?? [], allowed: (await ctx.sites?.allowedList()) ?? [] })
     }
     if (url.pathname === '/api/sites' && method === 'POST') {
       if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
-      const body = (await readBody(req)) as { origin?: unknown; allow?: unknown }
-      if (typeof body.origin !== 'string' || !(await ctx.sites?.answer(body.origin, body.allow === true))) throw new NotFound(String(body.origin))
-      return send(res, 200, { ok: true })
+      const body = (await readBody(req)) as { origin?: unknown; allow?: unknown; remove?: unknown }
+      const origin = typeof body.origin === 'string' ? body.origin : ''
+      const done = body.remove === true ? await ctx.sites?.remove(origin) : await ctx.sites?.answer(origin, body.allow === true)
+      if (!done) throw new NotFound(origin)
+      return send(res, 200, { allowed: (await ctx.sites?.allowedList()) ?? [] })
     }
     // Where to open a screen: the proxy with the Comment button, or the address --app was given last time.
     if (url.pathname === '/api/runtime' && method === 'GET') {

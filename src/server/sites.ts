@@ -25,6 +25,7 @@ export function sitesFile(): string {
 
 export class Sites {
   private allowed = new Set<string>()
+  private trusted: Set<string>
   private pending = new Map<string, string>()
   private denied = new Set<string>()
   private loaded: Promise<void>
@@ -36,6 +37,7 @@ export class Sites {
     trusted: string[] = [],
     private file = sitesFile(),
   ) {
+    this.trusted = new Set(trusted)
     for (const t of trusted) this.allowed.add(t)
     this.loaded = this.read().then((all) => {
       for (const o of all[resolve(gwDir)] ?? []) this.allowed.add(o)
@@ -63,8 +65,40 @@ export class Sites {
     return 'asked'
   }
 
+  /** Whether the site was allowed, without asking. */
+  async isAllowed(origin: string): Promise<boolean> {
+    await this.loaded
+    return this.allowed.has(origin)
+  }
+
   list(): string[] {
     return [...this.pending.keys()]
+  }
+
+  /** Sites that may send, for the map's list: kept ones, and --app's address for this run. */
+  async allowedList(): Promise<{ origin: string; kept: boolean }[]> {
+    await this.loaded
+    return [...this.allowed].sort().map((origin) => ({ origin, kept: !this.trusted.has(origin) }))
+  }
+
+  /** Take a site off the list: its next comment asks again. --app's address stays while it runs. */
+  async remove(origin: string): Promise<boolean> {
+    await this.loaded
+    if (!this.allowed.has(origin) || this.trusted.has(origin)) return false
+    this.allowed.delete(origin)
+    await this.save((list) => list.filter((o) => o !== origin))
+    this.onChange({ type: 'site:done', origin })
+    return true
+  }
+
+  private async save(change: (list: string[]) => string[]): Promise<void> {
+    const all = await this.read()
+    const key = resolve(this.gwDir)
+    all[key] = change(all[key] ?? [])
+    if (!all[key].length) delete all[key]
+    await mkdir(join(this.file, '..'), { recursive: true, mode: 0o700 })
+    await writeFile(`${this.file}.tmp`, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
+    await rename(`${this.file}.tmp`, this.file)
   }
 
   /** The person answers in the map. Allowed sites are remembered for this project; a no lasts until Groundwork restarts. */
@@ -72,12 +106,7 @@ export class Sites {
     if (!this.pending.delete(origin)) return false
     if (allow) {
       this.allowed.add(origin)
-      const all = await this.read()
-      const key = resolve(this.gwDir)
-      all[key] = [...new Set([...(all[key] ?? []), origin])]
-      await mkdir(join(this.file, '..'), { recursive: true, mode: 0o700 })
-      await writeFile(`${this.file}.tmp`, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
-      await rename(`${this.file}.tmp`, this.file)
+      await this.save((list) => [...new Set([...list, origin])])
     } else {
       this.denied.add(origin)
     }

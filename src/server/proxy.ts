@@ -7,7 +7,8 @@ import { join } from 'node:path'
 import { PACKAGE_ROOT } from '../root.js'
 import { BadInput, type NodeStore } from '../store/nodes.js'
 import type { NodeSync } from './events.js'
-import { createFeedback, parseFeedback } from './feedback.js'
+import { createFeedback, parseFeedback, testedOnWeb, webTestId, webTests } from './feedback.js'
+import { openOnMac } from './comments.js'
 import type { Sites } from './sites.js'
 
 /**
@@ -23,6 +24,8 @@ export interface ProxyOptions {
   gwDir: string
   store: NodeStore
   nodes: NodeSync
+  /** The map's address, to open a comment in it from the page. */
+  uiUrl?: () => string
 }
 
 const PREFIX = '/__groundwork/'
@@ -37,6 +40,8 @@ export interface OverlayCtx {
   nodes: NodeSync
   /** Sites the person allowed. Without it only the page's own server (the proxy) may send. */
   sites?: Sites
+  /** The map's address, to open a comment in it. */
+  uiUrl?: () => string
   /** Kept per server: what came in during the current hour. */
   used?: { hour: number; comments: number; bytes: number }
 }
@@ -81,7 +86,14 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
       res.writeHead(200, script).end(js)
       return true
     }
-    if (name === 'feedback' && req.method === 'OPTIONS') {
+    // Testing built fixes on the page they were made on. Only for the page's
+    // own server (the proxy) or a site the person allowed, never asking, and
+    // only that site's own comments that are ready to test.
+    if (['tests', 'tested', 'show'].includes(name) && req.method !== 'OPTIONS') {
+      await handleTests(req, res, ctx, name, origin, sameOrigin, cors)
+      return true
+    }
+    if (['feedback', 'tested', 'show'].includes(name) && req.method === 'OPTIONS') {
       // The browser asks before a page on another origin sends JSON. Only local development addresses get a yes.
       if (!cors['Access-Control-Allow-Origin']) {
         res.writeHead(403).end()
@@ -132,6 +144,33 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
   return true
 }
 
+/**
+ * Testing built fixes on the page they were made on. Only for the page's own
+ * server (the proxy, same origin) or a site the person allowed, never asking,
+ * and only that site's own comments that are ready to test.
+ */
+async function handleTests(req: IncomingMessage, res: ServerResponse, ctx: OverlayCtx, name: string, origin: string, sameOrigin: boolean, cors: Record<string, string>): Promise<void> {
+  const reply = (status: number, body: unknown) => {
+    res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors }).end(JSON.stringify(body))
+  }
+  // No Origin: a same-origin GET on the proxy (the Host was checked before this).
+  const site = origin || `http://${req.headers.host}`
+  const allowed = sameOrigin || !origin || (!!cors['Access-Control-Allow-Origin'] && !!(await ctx.sites?.isAllowed(origin)))
+  if (!allowed) return reply(403, { error: 'Not allowed' })
+  if (name === 'tests' && req.method === 'GET') return reply(200, { tests: await webTests(ctx.store, site) })
+  if (req.method !== 'POST' || !(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(415, { error: 'Send JSON' })
+  const body = JSON.parse((await readAll(req, 20_000)).toString('utf8'))
+  if (name === 'tested') {
+    const state = await testedOnWeb(ctx.store, site, body)
+    if (!state) return reply(404, { error: 'No fix to test by that id' })
+    await ctx.nodes.sync()
+    return reply(200, { state })
+  }
+  const id = await webTestId(ctx.store, site, body?.id)
+  if (!id || !ctx.uiUrl) return reply(404, { error: 'No fix to test by that id' })
+  reply(200, { opened: await openOnMac(id, ctx.uiUrl()) })
+}
+
 /** A page on this machine, for development: localhost, 127.0.0.1, or a *.test or *.localhost name (Herd, Valet, Laravel). */
 export function isDevOrigin(origin: string): boolean {
   try {
@@ -144,8 +183,8 @@ export function isDevOrigin(origin: string): boolean {
 
 const isLocalName = (host: string) => host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1'
 
-export function createProxy({ target, gwDir, store, nodes, ca }: ProxyOptions): Server {
-  const overlay: OverlayCtx = { gwDir, store, nodes }
+export function createProxy({ target, gwDir, store, nodes, ca, uiUrl }: ProxyOptions): Server {
+  const overlay: OverlayCtx = { gwDir, store, nodes, uiUrl }
   const own = proxyName(target)
   const secure = target.protocol === 'https:'
   // Local https sites (Herd, Valet, mkcert) are signed by a certificate this

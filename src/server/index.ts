@@ -43,8 +43,15 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   const pairings = lanCode ? new Pairings(lanCode, broadcast) : undefined
 
   // Sites that load the Comment button themselves send only once allowed in the map; the --app address given now is allowed.
-  const sites = new Sites(gwDir, broadcast, app ? [app.origin] : [])
-  const overlay: OverlayCtx = { gwDir, store, nodes, sites }
+  const sites = new Sites(
+    gwDir,
+    (event) => {
+      broadcast(event)
+      if (event.type === 'site:request') console.log(`${new URL(event.origin).host} wants to send comments. Allow it in the map: ${comments.uiUrl}`)
+    },
+    app ? [app.origin] : [],
+  )
+  const overlay: OverlayCtx = { gwDir, store, nodes, sites, uiUrl: () => comments.uiUrl }
 
   /** Where the product runs with the Comment button, once the proxy listens. */
   const runtime: { app?: string } = {}
@@ -89,7 +96,7 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   if (app) {
     // Remembered, so the map can open screens and `groundwork screenshots` knows where the product runs.
     await rememberApp(gwDir, app.origin).catch(() => {})
-    const proxy = createProxy({ target: app, gwDir, store, nodes })
+    const proxy = createProxy({ target: app, gwDir, store, nodes, uiUrl: () => comments.uiUrl })
     appUrl = `http://${proxyName(app)}:${await listen(proxy, appPort ?? actualPort + 1)}`
     runtime.app = appUrl
   }

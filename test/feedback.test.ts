@@ -8,6 +8,7 @@ import { NodeStore } from '../src/store/nodes.js'
 import { NodeSync } from '../src/server/events.js'
 import { createFeedback, importFeedback, parseFeedback, storiesFor } from '../src/server/feedback.js'
 import { createProxy, inject } from '../src/server/proxy.js'
+import { appendEntry } from '../src/shared/thread.js'
 import { createLanServer } from '../src/server/lan.js'
 
 let gw: string
@@ -527,6 +528,41 @@ describe('the Comment button loaded by the product itself', () => {
       // A site on the internet cannot even learn that Groundwork runs here.
       expect((await fetch(`http://localhost:${port}/__groundwork/feedback.js`, { headers: { referer: 'https://evil.example/page' } })).status).toBe(403)
       expect((await fetch(`http://localhost:${port}/__groundwork/screenshot.js`, { headers: { referer: 'https://evil.example/page' } })).status).toBe(403)
+    } finally {
+      server.close()
+    }
+  })
+
+  it('lets an allowed site test the fixes built for its own comments', async () => {
+    const { server, port, sites } = await mapServer()
+    const at = (path: string) => `http://localhost:${port}/__groundwork/${path}`
+    const post = (path: string, origin: string, body: unknown) => fetch(at(path), { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    try {
+      await sites.check('https://shop.test')
+      await sites.answer('https://shop.test', true)
+      const sent = await (await post('feedback', 'https://shop.test', { text: 'Cart total is wrong', screen: '/cart', url: 'https://shop.test/cart', element: { selector: 'main > .total', label: 'Total' } })).json()
+      const other = await createFeedback(gw, store, parseFeedback({ text: 'Elsewhere', url: 'https://other.test/x' }))
+      const tests = async (origin: string) => fetch(at('tests'), { headers: { origin } })
+      // Not built yet: nothing to test.
+      expect((await (await tests('https://shop.test')).json()).tests).toEqual([])
+      const n = (await store.list()).find((x) => x.id === sent.id)!
+      for (const id of [sent.id, other.id]) {
+        const node = (await store.list()).find((x) => x.id === id)!
+        await store.update(id, { built: '2026-10-14', body: appendEntry(node.body, 'claude', 'Fixed the sum.\n\nTo test:\n1. Add two items', '2026-10-14') } as never)
+      }
+      const list = (await (await tests('https://shop.test')).json()).tests
+      expect(list).toEqual([{ id: n.id, title: 'Cart total is wrong', text: 'Cart total is wrong', fix: 'Fixed the sum.', test: '1. Add two items', path: '/cart', selector: 'main > .total', label: 'Total' }])
+      // A site not allowed gets nothing; an allowed one cannot touch another site's comment.
+      expect((await tests('https://other.test')).status).toBe(403)
+      expect((await post('tested', 'https://shop.test', { id: other.id, works: true })).status).toBe(404)
+      // Rejected: back to incoming, the note quoted.
+      expect(await (await post('tested', 'https://shop.test', { id: n.id, works: false, note: 'Still off by one' })).json()).toEqual({ state: 'incoming' })
+      const back = (await store.list()).find((x) => x.id === n.id)!
+      expect(back.extra?.built).toBeFalsy()
+      expect(back.body).toContain('Tested in the browser: rejected, not fixed yet.')
+      expect(back.body).toContain('> Still off by one')
+      // Only built fixes can be settled.
+      expect((await post('tested', 'https://shop.test', { id: n.id, works: true })).status).toBe(404)
     } finally {
       server.close()
     }

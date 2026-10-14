@@ -72,6 +72,39 @@
       .steps button:disabled { opacity: .35; cursor: default; }
       .steps svg { width: 14px; height: 14px; }
       .card .on-what { font-size: 12px; color: #e8e6e3; margin-bottom: 8px; line-height: 1.35; }
+      .pill-test { display: none; align-items: center; gap: 5px; margin: -8px -12px -8px 2px; padding: 8px 12px 8px 9px; border-left: 1px solid rgba(255,255,255,.18); border-radius: 0 999px 999px 0; }
+      .pill-test:hover { background: rgba(255,255,255,.08); }
+      .pill.on .pill-test { border-left-color: rgba(255,255,255,.4); }
+      .bar button.bar-test { display: none; }
+      .panel { position: fixed; width: 340px; max-height: min(70vh, 560px); overflow: auto; pointer-events: auto; padding: 12px; border-radius: 10px; background: #2c2c2c;
+        border: 1px solid rgba(255,255,255,.12); box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; }
+      .panel h3, .tcard h3 { margin: 0; font-size: 13px; font-weight: 600; }
+      .panel .head, .tcard .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .panel .head h3, .tcard .head h3 { flex: 1; }
+      .x { font: inherit; border: 0; background: transparent; color: rgba(232,230,227,.5); cursor: pointer; border-radius: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+      .x:hover { background: rgba(255,255,255,.08); color: #e8e6e3; }
+      .x svg { width: 14px; height: 14px; }
+      .item { padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.08); margin-top: 6px; display: flex; gap: 8px; align-items: flex-start; }
+      .item .t { flex: 1; min-width: 0; }
+      .item .t b { display: block; font-weight: 500; }
+      .item .t span { display: block; font-size: 11px; color: rgba(232,230,227,.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .muted { font-size: 12px; color: rgba(232,230,227,.55); }
+      .tcard { position: fixed; right: 16px; top: 16px; width: 340px; max-height: calc(100vh - 32px); overflow: auto; pointer-events: auto; padding: 0 12px 12px; border-radius: 10px;
+        background: #2c2c2c; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; }
+      .tcard .grab { display: flex; justify-content: center; padding: 6px 0 4px; cursor: grab; touch-action: none; }
+      .tcard .grab i { width: 36px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.25); }
+      .tcard .label { font-size: 11px; font-weight: 600; color: rgba(232,230,227,.5); margin: 10px 0 3px; text-transform: uppercase; letter-spacing: .04em; }
+      .tcard .text { white-space: pre-wrap; font-size: 12.5px; }
+      .tcard .quote { border-left: 2px solid rgba(255,255,255,.2); padding-left: 8px; color: rgba(232,230,227,.8); }
+      .tcard .row { justify-content: flex-start; margin-top: 12px; }
+      .tcard .row .grow { flex: 1; }
+      button.ok { background: #14ae5c; color: #fff; }
+      button.ok:hover { background: #1bc06a; }
+      button.no { border: 1px solid rgba(255,255,255,.15); }
+      button.mac { display: flex; align-items: center; gap: 5px; }
+      button.mac svg { width: 14px; height: 14px; }
+      .mark { position: fixed; pointer-events: none; border: 2px solid #14ae5c; background: rgba(20,174,92,.08); border-radius: 4px; display: none; }
+      .tcard textarea { margin-top: 8px; }
       .toast { position: fixed; right: 16px; bottom: 64px; padding: 6px 12px; border-radius: 8px; background: #2c2c2c; border: 1px solid rgba(255,255,255,.12); display: none; }
     </style>
     <div class="box"></div><div class="tip"></div>
@@ -92,6 +125,7 @@
     <div class="bar">
       <span class="name"><span class="dot"></span>Groundwork</span>
       <button class="go" title="Comment on this page (Alt+C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg><span class="bar-label">Comment</span></button>
+      <button class="bar-test" title="Fixes ready to test on this site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg><span class="bar-count"></span></button>
       <button class="bar-save" title="Save the waiting comments as a file to send to whoever runs Groundwork" style="display:none">Save as file</button>
       <span class="grow"></span>
       <button class="float" title="Float the button over the page instead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>Float</button>
@@ -101,7 +135,28 @@
     <button class="pill" title="Comment on this page (Alt+C). Drag to move it; drop it on the bottom edge for a bar.">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg>
       <span>Comment</span>
-    </button>`
+      <span class="pill-test" title="Fixes ready to test on this site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg><span class="pill-count"></span></span>
+    </button>
+    <div class="mark"></div>
+    <div class="panel">
+      <div class="head"><h3>Ready to test</h3><button class="x panel-close" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg></button></div>
+      <div class="muted">Fixes Claude built for comments made on this site. Test one: it opens its page and shows the steps.</div>
+      <div class="items"></div>
+    </div>
+    <div class="tcard" role="dialog" aria-label="Test a fix">
+      <div class="grab" title="Drag to move"><i></i></div>
+      <div class="head"><h3 class="t-title"></h3><button class="x t-close" title="Close, test later"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg></button></div>
+      <div class="label">You wrote</div><div class="text quote t-said"></div>
+      <div class="label">What changed</div><div class="text t-fix"></div>
+      <div class="t-test-wrap"><div class="label">To test</div><div class="text t-test"></div></div>
+      <div class="t-reject" style="display:none"><textarea class="t-note" placeholder="What is still wrong?"></textarea></div>
+      <div class="row">
+        <button class="b mac t-show" title="Show this comment in Groundwork's map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>Map</button>
+        <span class="grow"></span>
+        <button class="b no t-no">Reject</button>
+        <button class="b ok t-ok">Approve</button>
+      </div>
+    </div>`
   const $ = (s) => root.querySelector(s)
   const pill = $('.pill'), box = $('.box'), tip = $('.tip'), hint = $('.hint'), card = $('.card'), field = $('textarea'), toast = $('.toast')
   const sendBtn = $('.send'), saveBtn = $('.save'), pillLabel = $('.pill span')
@@ -598,6 +653,7 @@
     if (result === 'sent') {
       flash('Sent to Groundwork')
       flush()
+      loadTests()
     } else if (result === 'waiting' || result === 'asked') {
       // The browser keeps little: a large picture would lose the whole comment. Keep the words for sure.
       const keep = comment.image && comment.image.length > 400_000 ? { ...comment, image: undefined } : comment
@@ -681,6 +737,7 @@
       e.preventDefault()
       return
     }
+    if (e.composedPath().includes(pillTest)) return openTests()
     closeCard()
     setPicking(!picking)
   })
@@ -707,4 +764,167 @@
       send()
     } else if (e.key === 'Escape') closeCard()
   })
+
+  // Testing built fixes, as on the phone: the fixes Claude built for comments
+  // made on this site, ready to test. Test one: its page opens, the element is
+  // marked, and a card shows what changed and the steps, with Approve and
+  // Reject. Only for a site the person allowed in the map. Text from the map
+  // is only ever set as text, never as markup.
+  const pillTest = $('.pill-test'), pillCount = $('.pill-count'), barTest = $('.bar-test'), barCount = $('.bar-count')
+  const panel = $('.panel'), items = $('.items'), tcard = $('.tcard'), mark = $('.mark'), note = $('.t-note')
+  const TESTING = 'groundwork.testing'
+  let tests = [], current = null, marked = null, siteAllowed = true
+  async function loadTests() {
+    try {
+      const res = await fetch(`${base}/__groundwork/tests`, { cache: 'no-store' })
+      // Not allowed yet: asked again only after a comment goes through.
+      siteAllowed = res.status !== 403
+      tests = res.ok ? (await res.json()).tests || [] : []
+    } catch {
+      tests = []
+    }
+    const n = tests.length
+    pillTest.style.display = n ? 'flex' : 'none'
+    pillCount.textContent = n
+    barTest.style.display = n ? 'flex' : 'none'
+    barCount.textContent = `Test · ${n}`
+    tab.lastChild.textContent = n ? `Groundwork · ${n} to test` : 'Groundwork'
+    if (panel.style.display === 'block') listTests()
+    return tests
+  }
+  function listTests() {
+    items.replaceChildren(...tests.map((t) => {
+      const row = document.createElement('div')
+      row.className = 'item'
+      const words = document.createElement('div')
+      words.className = 't'
+      const b = document.createElement('b')
+      b.textContent = t.title
+      const where = document.createElement('span')
+      where.textContent = t.path
+      words.append(b, where)
+      const go = document.createElement('button')
+      go.className = 'b send'
+      go.textContent = 'Test'
+      go.addEventListener('click', () => startTest(t))
+      row.append(words, go)
+      return row
+    }))
+    if (!tests.length) {
+      const none = document.createElement('div')
+      none.className = 'muted'
+      none.style.marginTop = '8px'
+      none.textContent = 'Nothing to test right now.'
+      items.append(none)
+    }
+  }
+  function openTests() {
+    if (panel.style.display === 'block') return (panel.style.display = 'none')
+    closeCard()
+    setPicking(false)
+    listTests()
+    const r = (seat.mode === 'float' ? pill : bar).getBoundingClientRect()
+    Object.assign(panel.style, { display: 'block', left: `${Math.max(8, Math.min(window.innerWidth - 348, r.right - 340))}px`, top: 'auto', bottom: `${Math.max(8, window.innerHeight - r.top + 8)}px` })
+    loadTests()
+  }
+  function startTest(t) {
+    panel.style.display = 'none'
+    try { sessionStorage.setItem(TESTING, t.id) } catch {}
+    // On its own page: go there first; the card opens again when it has loaded.
+    if (location.pathname !== t.path) return location.assign(t.path)
+    showTest(t)
+  }
+  function showTest(t) {
+    current = t
+    $('.t-title').textContent = t.title
+    $('.t-said').textContent = t.text
+    // The words again only when they say more than the title.
+    $('.t-said').style.display = $('.t-said').previousElementSibling.style.display = t.text !== t.title ? 'block' : 'none'
+    $('.t-fix').textContent = t.fix || 'Claude did not say.'
+    $('.t-test').textContent = t.test
+    $('.t-test-wrap').style.display = t.test ? 'block' : 'none'
+    $('.t-reject').style.display = 'none'
+    $('.t-no').textContent = 'Reject'
+    note.value = ''
+    tcard.style.display = 'block'
+    marked = null
+    try { marked = t.selector ? document.querySelector(t.selector) : null } catch {}
+    if (marked) marked.scrollIntoView({ block: 'center', behavior: 'instant' })
+    // On the side away from what it marks, so the card never covers it.
+    const r = marked && marked.getBoundingClientRect()
+    const left = r && r.left + r.width / 2 > window.innerWidth / 2
+    Object.assign(tcard.style, left ? { left: '16px', right: 'auto', top: '16px' } : { left: 'auto', right: '16px', top: '16px' })
+    placeMark()
+  }
+  function placeMark() {
+    if (!marked || !marked.isConnected || tcard.style.display !== 'block') return (mark.style.display = 'none')
+    const r = marked.getBoundingClientRect()
+    Object.assign(mark.style, { display: 'block', left: `${r.left - 3}px`, top: `${r.top - 3}px`, width: `${r.width + 6}px`, height: `${r.height + 6}px` })
+  }
+  function closeTest() {
+    current = null
+    tcard.style.display = 'none'
+    mark.style.display = 'none'
+    try { sessionStorage.removeItem(TESTING) } catch {}
+  }
+  async function answer(works) {
+    if (!current) return
+    if (!works && $('.t-reject').style.display === 'none') {
+      // First press: ask what is still wrong, then Reject again sends it.
+      $('.t-reject').style.display = 'block'
+      $('.t-no').textContent = 'Send reject'
+      return note.focus()
+    }
+    try {
+      const res = await fetch(`${base}/__groundwork/tested`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id, works, note: works ? '' : note.value }) })
+      if (!res.ok) throw new Error()
+      flash(works ? 'Approved. Marked fixed.' : 'Rejected. It goes back to Claude with your note.')
+      closeTest()
+      loadTests()
+    } catch {
+      flash('Groundwork did not take it. Try again.')
+    }
+  }
+  pillTest.addEventListener('pointerdown', (e) => e.stopPropagation())
+  barTest.addEventListener('click', openTests)
+  $('.panel-close').addEventListener('click', () => (panel.style.display = 'none'))
+  $('.t-close').addEventListener('click', closeTest)
+  $('.t-ok').addEventListener('click', () => answer(true))
+  $('.t-no').addEventListener('click', () => answer(false))
+  $('.t-show').addEventListener('click', async () => {
+    if (!current) return
+    try {
+      const res = await fetch(`${base}/__groundwork/show`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id }) })
+      flash(res.ok ? 'Opened in Groundwork' : 'Groundwork could not open it')
+    } catch {
+      flash('Groundwork is not running')
+    }
+  })
+  note.addEventListener('keydown', (e) => e.stopPropagation())
+  // The card is moved by its grab handle, anywhere on the page.
+  const grab = $('.grab')
+  let lift = null
+  grab.addEventListener('pointerdown', (e) => {
+    const r = tcard.getBoundingClientRect()
+    lift = { dx: e.clientX - r.left, dy: e.clientY - r.top }
+    grab.setPointerCapture(e.pointerId)
+  })
+  grab.addEventListener('pointermove', (e) => {
+    if (!lift) return
+    const x = Math.max(4, Math.min(window.innerWidth - tcard.offsetWidth - 4, e.clientX - lift.dx))
+    const y = Math.max(4, Math.min(window.innerHeight - 60, e.clientY - lift.dy))
+    Object.assign(tcard.style, { left: `${x}px`, top: `${y}px`, right: 'auto' })
+  })
+  grab.addEventListener('pointerup', () => (lift = null))
+  window.addEventListener('scroll', placeMark, true)
+  window.addEventListener('resize', placeMark)
+  // A test started on another page continues here, once its page has loaded.
+  loadTests().then((list) => {
+    let id = null
+    try { id = sessionStorage.getItem(TESTING) } catch {}
+    const t = id && list.find((x) => x.id === id)
+    if (t) setTimeout(() => showTest(t), 300)
+    else if (id) closeTest()
+  })
+  setInterval(() => siteAllowed && loadTests(), 20000)
 })()

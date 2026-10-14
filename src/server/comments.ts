@@ -96,7 +96,7 @@ export function parseScreenshot(body: unknown): { about: ShotAbout; data: Buffer
 let lastTab = 0
 
 /** Open a comment in the map with its title ready to type: in an open tab, or a new one. */
-async function openOnMac(id: string, uiUrl: string): Promise<'browser' | 'new tab'> {
+export async function openOnMac(id: string, uiUrl: string): Promise<'browser' | 'new tab'> {
   if (clientCount() > 0) {
     broadcast({ type: 'node:open', id })
     return 'browser'
