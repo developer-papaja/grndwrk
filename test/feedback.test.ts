@@ -40,7 +40,7 @@ describe('feedback', () => {
     expect(node.extra).toMatchObject({ source: 'app', seen_in: ['BookingView', '#book-button', 'BookingView'] })
     expect(node.body).toContain('Comment on the button "Book" (#book-button) on BookingView (iOS).')
     expect(node.body).toContain('Stories for this screen: s_k3f9 (Book a desk)')
-    expect(node.body).toMatch(/!\[\]\(\.\.\/files\/n_[a-z0-9]{4}\/\d+\.png\)/)
+    expect(node.body).toMatch(/!\[\]\(\.\.\/files\/n_[a-z0-9]{4,8}\/\d+\.png\)/)
     // The picture, and a .gitignore that keeps it out of git: it can show real data.
     expect((await readdir(join(gw, 'files', node.id))).sort()).toEqual(['.gitignore', expect.stringMatching(/\.png$/)])
   })
@@ -390,5 +390,115 @@ describe('pairing by asking', () => {
     } finally {
       server.close()
     }
+  })
+})
+
+describe('proxy in front of an https site (Herd, Valet)', () => {
+  it('keeps full links on the proxy, but not other ports or lookalike hosts', async () => {
+    const { toProxy } = await import('../src/server/proxy.js')
+    const t = new URL('https://shop.test')
+    const here = 'http://localhost:7778'
+    expect(toProxy('<a href="https://shop.test/cart">', t, here)).toBe('<a href="http://localhost:7778/cart">')
+    expect(toProxy('"url":"https:\\/\\/shop.test"', t, here)).toBe('"url":"http:\\/\\/localhost:7778"')
+    expect(toProxy('https://shop.test:5173/@vite/client', t, here)).toBe('https://shop.test:5173/@vite/client')
+    expect(toProxy('https://shop.test.evil.com/', t, here)).toBe('https://shop.test.evil.com/')
+  })
+
+  it('keeps the login cookie working on localhost', async () => {
+    const { cookieForProxy } = await import('../src/server/proxy.js')
+    expect(cookieForProxy('s=1; Path=/; Domain=shop.test; Secure; HttpOnly; SameSite=None')).toBe('s=1; Path=/; HttpOnly; SameSite=Lax')
+    expect(cookieForProxy('s=1; Path=/; SameSite=Lax')).toBe('s=1; Path=/; SameSite=Lax')
+  })
+
+  it('reaches the site over https with a certificate it trusts, and adds the overlay', async () => {
+    const { execFileSync } = await import('node:child_process')
+    const { readFile } = await import('node:fs/promises')
+    const { createServer: createHttps } = await import('node:https')
+    // A site with its own certificate, as Herd makes one.
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost', '-keyout', join(gw, 'key.pem'), '-out', join(gw, 'cert.pem')], { stdio: 'ignore' })
+    const [key, cert] = [await readFile(join(gw, 'key.pem'), 'utf8'), await readFile(join(gw, 'cert.pem'), 'utf8')]
+    const site = createHttps({ key, cert }, (req, res) => {
+      if (req.url === '/') return res.writeHead(302, { location: `https://localhost:${sitePort}/login`, 'set-cookie': 's=1; Path=/; Secure; SameSite=None' }).end()
+      res.writeHead(200, { 'content-type': 'text/html' }).end(`<html><body><a href="https://localhost:${sitePort}/cart">Cart</a></body></html>`)
+    })
+    const sitePort = await new Promise<number>((r) => site.listen(0, '127.0.0.1', () => r((site.address() as AddressInfo).port)))
+    const target = new URL(`https://localhost:${sitePort}`)
+    const strict = createProxy({ target, gwDir: gw, store, nodes: new NodeSync(() => store.list()), ca: [] })
+    const proxy = createProxy({ target, gwDir: gw, store, nodes: new NodeSync(() => store.list()), ca: [cert] })
+    const listen = (s: Server) => new Promise<number>((r) => s.listen(0, '127.0.0.1', () => r((s.address() as AddressInfo).port)))
+    const [strictPort, port] = [await listen(strict), await listen(proxy)]
+    try {
+      // A certificate nobody trusts is refused, never waved through.
+      expect((await fetch(`http://localhost:${strictPort}/login`)).status).toBe(502)
+      const first = await fetch(`http://localhost:${port}/`, { redirect: 'manual' })
+      expect(first.headers.get('location')).toBe(`http://localhost:${port}/login`)
+      expect(first.headers.get('set-cookie')).toBe('s=1; Path=/; SameSite=Lax')
+      const page = await (await fetch(`http://localhost:${port}/login`)).text()
+      expect(page).toContain(`href="http://localhost:${port}/cart"`)
+      expect(page).toContain('/__groundwork/feedback.js')
+    } finally {
+      for (const s of [site, strict, proxy]) s.close()
+    }
+  })
+})
+
+describe('ports', () => {
+  it('skips a port another program answers on, even on another address', async () => {
+    const { listen } = await import('../src/server/index.js')
+    const taken = createServer()
+    const port = await new Promise<number>((r) => taken.listen(0, '0.0.0.0', () => r((taken.address() as AddressInfo).port)))
+    const mine = createServer()
+    try {
+      const got = await listen(mine, port, 5)
+      expect(got).not.toBe(port)
+    } finally {
+      taken.close()
+      mine.close()
+    }
+  })
+})
+
+describe('the Comment button loaded by the product itself', () => {
+  const mapServer = async () => {
+    const { handleOverlay } = await import('../src/server/proxy.js')
+    const nodes = new NodeSync(() => store.list())
+    const server = createServer(async (req, res) => {
+      if (!(await handleOverlay(req, res, { gwDir: gw, store, nodes }))) res.writeHead(404).end()
+    })
+    const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
+    return { server, port }
+  }
+
+  it('lets a local development page send comments, and refuses a site on the internet', async () => {
+    const { server, port } = await mapServer()
+    const url = `http://localhost:${port}/__groundwork/feedback`
+    try {
+      const ask = (origin: string) => fetch(url, { method: 'OPTIONS', headers: { origin, 'access-control-request-method': 'POST' } })
+      const ok = await ask('https://shop.test')
+      expect(ok.status).toBe(204)
+      expect(ok.headers.get('access-control-allow-origin')).toBe('https://shop.test')
+      expect((await ask('https://evil.example')).status).toBe(403)
+      expect((await ask('https://shop.test.evil.example')).status).toBe(403)
+
+      const send = (origin: string) => fetch(url, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ text: 'Too small', screen: '/cart' }) })
+      expect((await send('https://shop.test')).status).toBe(201)
+      expect((await send('https://evil.example')).status).toBe(403)
+      expect((await store.list()).filter((n) => n.extra?.source === 'app')).toHaveLength(1)
+
+      const script = await fetch(`http://localhost:${port}/__groundwork/feedback.js`, { headers: { origin: 'https://shop.test' } })
+      expect(script.status).toBe(200)
+      expect(await script.text()).toContain('__groundworkFeedback')
+    } finally {
+      server.close()
+    }
+  })
+
+  it('keeps the project on the same port from one start to the next, out of git', async () => {
+    const { rememberedPort, rememberPort } = await import('../src/store/local.js')
+    const { readFile } = await import('node:fs/promises')
+    expect(await rememberedPort(gw)).toBeUndefined()
+    await rememberPort(gw, 7778)
+    expect(await rememberedPort(gw)).toBe(7778)
+    expect(await readFile(join(gw, '.gitignore'), 'utf8')).toContain('local.json')
   })
 })

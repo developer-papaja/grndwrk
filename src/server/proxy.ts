@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
-import { createServer, request, type IncomingMessage, type RequestOptions, type Server, type ServerResponse } from 'node:http'
+import { createServer, request as httpRequest, type IncomingMessage, type RequestOptions, type Server, type ServerResponse } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { connect } from 'node:net'
+import { connect as tlsConnect, getCACertificates, rootCertificates } from 'node:tls'
 import { join } from 'node:path'
 import { PACKAGE_ROOT } from '../root.js'
 import { BadInput, type NodeStore } from '../store/nodes.js'
@@ -13,8 +15,10 @@ import { createFeedback, parseFeedback } from './feedback.js'
  * Nothing is written into the product's code: the overlay exists only here.
  */
 export interface ProxyOptions {
-  /** The product's dev server, for example http://localhost:5173. */
+  /** The product's dev server, for example http://localhost:5173, or https://shop.test under Herd or Valet. */
   target: URL
+  /** Certificates to trust for an https target, instead of this Mac's. For tests. */
+  ca?: string[]
   gwDir: string
   store: NodeStore
   nodes: NodeSync
@@ -23,47 +27,116 @@ export interface ProxyOptions {
 const PREFIX = '/__groundwork/'
 const TAG = `<script src="${PREFIX}feedback.js" defer></script>`
 
-export function createProxy({ target, gwDir, store, nodes }: ProxyOptions): Server {
+/**
+ * The overlay's own routes: the script, and the comments it sends. Served by
+ * the proxy, and by the map's server for a page that loads the script itself
+ * (a line in the product's layout, on its own address like https://shop.test).
+ * Such a page is on another origin: only local development addresses may send
+ * (CORS), never a site on the internet. Returns false for anything else.
+ */
+export async function handleOverlay(req: IncomingMessage, res: ServerResponse, ctx: { gwDir: string; store: NodeStore; nodes: NodeSync }): Promise<boolean> {
+  const path = new URL(req.url ?? '/', 'http://x').pathname
+  if (!path.startsWith(PREFIX)) return false
+  const name = path.slice(PREFIX.length)
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin : ''
+  const cors: Record<string, string> = origin && isDevOrigin(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}
+  try {
+    if (name === 'feedback.js' && req.method === 'GET') {
+      const js = await readFile(join(PACKAGE_ROOT, 'overlay', 'feedback.js'), 'utf8')
+      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', ...cors }).end(js)
+      return true
+    }
+    if (name === 'screenshot.js' && req.method === 'GET') {
+      // Draws part of the page into a picture for a comment. Wrapped so it
+      // neither sees the page's module loader nor leaves a global behind but one.
+      const lib = await readFile(join(PACKAGE_ROOT, 'dist', 'vendor', 'modern-screenshot.js'), 'utf8')
+      const js = `;(function () { var exports, module, define; var globalThis = {};\n${lib}\n;window.__groundworkShot = globalThis.modernScreenshot })()\n`
+      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', ...cors }).end(js)
+      return true
+    }
+    if (name === 'feedback' && req.method === 'OPTIONS') {
+      // The browser asks before a page on another origin sends JSON. Only local development addresses get a yes.
+      if (!cors['Access-Control-Allow-Origin']) {
+        res.writeHead(403).end()
+        return true
+      }
+      res.writeHead(204, { ...cors, 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600' }).end()
+      return true
+    }
+    if (name === 'feedback' && req.method === 'POST') {
+      if (origin && !cors['Access-Control-Allow-Origin'] && !isLocalOrigin(origin)) {
+        res.writeHead(403).end()
+        return true
+      }
+      if (!(req.headers['content-type'] ?? '').startsWith('application/json')) {
+        res.writeHead(415, cors).end()
+        return true
+      }
+      const input = parseFeedback(JSON.parse((await readAll(req, 14_000_000)).toString('utf8')))
+      const node = await createFeedback(ctx.gwDir, ctx.store, { ...input, platform: input.platform ?? 'Web' })
+      await ctx.nodes.sync()
+      res.writeHead(201, { 'Content-Type': 'application/json', ...cors }).end(JSON.stringify({ id: node.id, title: node.title }))
+      return true
+    }
+    res.writeHead(404, cors).end()
+  } catch (err) {
+    const status = err instanceof BadInput || err instanceof SyntaxError ? 400 : 500
+    if (status === 500) console.error(err)
+    res.writeHead(status, { 'Content-Type': 'application/json', ...cors }).end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }))
+  }
+  return true
+}
+
+/** A page on this machine, for development: localhost, 127.0.0.1, or a *.test or *.localhost name (Herd, Valet, Laravel). */
+export function isDevOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname
+    return isLocalName(host) || /\.(test|localhost)$/.test(host)
+  } catch {
+    return false
+  }
+}
+
+function isLocalOrigin(origin: string): boolean {
+  try {
+    return isLocalName(new URL(origin).hostname)
+  } catch {
+    return false
+  }
+}
+
+const isLocalName = (host: string) => host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1'
+
+export function createProxy({ target, gwDir, store, nodes, ca }: ProxyOptions): Server {
+  const secure = target.protocol === 'https:'
+  // Local https sites (Herd, Valet, mkcert) are signed by a certificate this
+  // Mac trusts, which Node does not know by default. Trust what the Mac trusts;
+  // certificates are still checked.
+  const trusted = secure ? (ca ?? systemCertificates()) : undefined
   const server = createServer(async (req, res) => {
     if (!isLocal(req.headers.host)) return res.writeHead(403).end('Forbidden')
     const path = req.url ?? '/'
-    if (path.startsWith(PREFIX)) return own(req, res, path.slice(PREFIX.length))
+    if (await handleOverlay(req, res, { gwDir, store, nodes })) return
     forward(req, res)
   })
 
-  async function own(req: IncomingMessage, res: ServerResponse, name: string) {
-    try {
-      if (name === 'feedback.js' && req.method === 'GET') {
-        const js = await readFile(join(PACKAGE_ROOT, 'overlay', 'feedback.js'), 'utf8')
-        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' }).end(js)
-        return
-      }
-      if (name === 'feedback' && req.method === 'POST') {
-        // Same origin as the page, so only the page itself can send this.
-        if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return void res.writeHead(415).end()
-        const input = parseFeedback(JSON.parse((await readAll(req, 14_000_000)).toString('utf8')))
-        const node = await createFeedback(gwDir, store, { ...input, platform: input.platform ?? 'Web' })
-        await nodes.sync()
-        res.writeHead(201, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: node.id, title: node.title }))
-        return
-      }
-      res.writeHead(404).end()
-    } catch (err) {
-      const status = err instanceof BadInput || err instanceof SyntaxError ? 400 : 500
-      if (status === 500) console.error(err)
-      res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }))
-    }
-  }
-
   function forward(req: IncomingMessage, res: ServerResponse) {
+    const here = `http://${req.headers.host}`
     const headers = { ...req.headers, host: target.host, 'accept-encoding': 'identity' }
+    // The product sees requests from itself, as when visited directly.
+    for (const k of ['origin', 'referer'] as const) {
+      if (typeof headers[k] === 'string') headers[k] = (headers[k] as string).replace(here, target.origin)
+    }
+    const request = secure ? httpsRequest : httpRequest
     const upstream = request(
       // autoSelectFamily: localhost may be IPv6 or IPv4 depending on the dev server. Try both, like a browser.
-      { protocol: target.protocol, hostname: target.hostname, port: target.port, method: req.method, path: req.url, headers, autoSelectFamily: true } as RequestOptions,
+      { protocol: target.protocol, hostname: target.hostname, port: target.port, method: req.method, path: req.url, headers, autoSelectFamily: true, ...(secure ? { ca: trusted, servername: target.hostname } : {}) } as RequestOptions,
       (up) => {
         const out = { ...up.headers }
         // Redirects to the dev server stay on the proxy.
-        if (typeof out.location === 'string') out.location = out.location.replace(target.origin, `http://${req.headers.host}`)
+        if (typeof out.location === 'string') out.location = toProxy(out.location, target, here)
+        if (out['set-cookie']) out['set-cookie'] = out['set-cookie'].map((c) => cookieForProxy(c))
+        delete out['strict-transport-security']
         const html = (up.headers['content-type'] ?? '').includes('text/html')
         if (!html) {
           res.writeHead(up.statusCode ?? 502, out)
@@ -72,7 +145,8 @@ export function createProxy({ target, gwDir, store, nodes }: ProxyOptions): Serv
         }
         readAll(up, 50_000_000).then(
           (body) => {
-            const page = inject(body.toString('utf8'))
+            // Links the product writes in full (Laravel's url() and route(), APP_URL) stay on the proxy too.
+            const page = inject(toProxy(body.toString('utf8'), target, here))
             delete out['content-length']
             delete out['transfer-encoding']
             res.writeHead(up.statusCode ?? 200, { ...out, 'content-length': Buffer.byteLength(page) }).end(page)
@@ -91,7 +165,12 @@ export function createProxy({ target, gwDir, store, nodes }: ProxyOptions): Serv
   // Live reload and other websockets go straight through.
   server.on('upgrade', (req, socket, head) => {
     if (!isLocal(req.headers.host)) return socket.destroy()
-    const up = connect({ port: Number(target.port) || 80, host: target.hostname, autoSelectFamily: true }, () => {
+    const port = Number(target.port) || (secure ? 443 : 80)
+    const open = (ready: () => void) =>
+      secure
+        ? tlsConnect({ port, host: target.hostname, servername: target.hostname, ca: trusted }, ready)
+        : connect({ port, host: target.hostname, autoSelectFamily: true }, ready)
+    const up = open(() => {
       const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`]
       for (let i = 0; i < req.rawHeaders.length; i += 2) {
         const [k, v] = [req.rawHeaders[i], req.rawHeaders[i + 1]]
@@ -107,6 +186,44 @@ export function createProxy({ target, gwDir, store, nodes }: ProxyOptions): Serv
   })
 
   return server
+}
+
+/** What this Mac trusts and Node's own list, for local https sites. Node's list alone where the Mac's cannot be read. */
+function systemCertificates(): string[] {
+  try {
+    return [...getCACertificates('system'), ...getCACertificates('default')]
+  } catch {
+    return [...rootCertificates]
+  }
+}
+
+/**
+ * The product's own address in a page or a header, written in full
+ * (https://shop.test/cart, or https:\/\/shop.test in JSON), becomes the
+ * proxy's, so following a link keeps the Comment button. Another port on the
+ * same host (a Vite dev server) is left alone.
+ */
+export function toProxy(text: string, target: URL, here: string): string {
+  const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const host = escape(target.host)
+  const scheme = escape(target.protocol.replace(/:$/, ''))
+  const plain = new RegExp(`${scheme}://${host}(?![\\w.:-])`, 'g')
+  const json = new RegExp(`${scheme}:\\\\/\\\\/${host}(?![\\w.:-])`, 'g')
+  return text.replace(plain, here).replace(json, here.replace(/\//g, '\\/'))
+}
+
+/**
+ * A cookie from the product, kept by the browser on the proxy's address: no
+ * Domain (it is the product's, not localhost), and without Secure, since the
+ * proxy is plain http on this Mac (SameSite=None needs Secure, so it becomes Lax).
+ */
+export function cookieForProxy(cookie: string): string {
+  return cookie
+    .split(';')
+    .map((p) => p.trim())
+    .filter((p) => !/^(domain|secure)(=|$)/i.test(p))
+    .map((p) => (/^samesite=none$/i.test(p) ? 'SameSite=Lax' : p))
+    .join('; ')
 }
 
 /** Put the overlay script on the page, once. */

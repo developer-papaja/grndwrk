@@ -24,7 +24,7 @@
     "node": ">=20.16"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json && vite build && node scripts/vendor.mjs",
     "dev": "mkdir -p playground && cd playground && tsx ../src/cli.ts init >/dev/null && tsx watch --clear-screen=false --exclude \"../node_modules/**\" --exclude \"../ui/**\" ../src/cli.ts start --dev --no-open",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit",
@@ -45,6 +45,7 @@
     "alpinejs": "^3.17.4",
     "dompurify": "^3.4.17",
     "marked": "^18.1.1",
+    "modern-screenshot": "4.7.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
