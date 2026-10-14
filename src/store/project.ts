@@ -1,4 +1,4 @@
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile, rename, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
 import { scalar } from './frontmatter.js'

@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { NODE_TYPES, STATUSES, type GNode, type NodeInput } from '../shared/types.js'
 import { DEFAULTS, isValidId, oneOf, parseNode, serializeNode, toAltitude, today } from './frontmatter.js'

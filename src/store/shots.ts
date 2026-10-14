@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { keepOutOfGit } from './gitignore.js'
 

@@ -1,4 +1,4 @@
-import { appendFile, readFile } from 'node:fs/promises'
+import { appendFile, readFile } from './fs.js'
 import { join } from 'node:path'
 
 /** Keep a path inside `.groundwork/` out of git, through `.groundwork/.gitignore`. */

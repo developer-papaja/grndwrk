@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
 import { replaceNotes, splitBody, type Entry, type Who } from '../shared/thread.js'
@@ -73,8 +73,11 @@ export async function saveBody(gwDir: string, owner: string, fileBody: string, n
   const files = await readEntryFiles(gwDir, owner)
   const before = splitBody(withEntries(fileBody, files)).entries
   const { notes, entries } = splitBody(next)
-  const kept = before.every((e, i) => entries[i] && same(e, entries[i]))
-  if (!kept || entries.length < before.length) {
+  // A map tab that has not seen the newest entries yet sends fewer: those it
+  // sent still match, so its notes are saved and the entries it missed stay.
+  const shared = Math.min(before.length, entries.length)
+  const kept = before.slice(0, shared).every((e, i) => same(e, entries[i]))
+  if (!kept) {
     await rm(folder(gwDir, owner), { recursive: true, force: true })
     return next
   }

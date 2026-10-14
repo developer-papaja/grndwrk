@@ -2,7 +2,7 @@ import Alpine from 'alpinejs'
 import { cached } from './reactivity'
 import type { DesignCheck, Gap, GNode, NodeInput, NodeType, PairRequest, Readiness, Screen, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSiteRequests, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
 import { BOX, commentsForScreen, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
@@ -518,6 +518,33 @@ export const state = Alpine.reactive({
       return this.flash('That request ran out. Ask again from the phone.')
     }
     this.flash(allow ? `${request?.device ?? 'The phone'} can send comments now` : 'Not allowed')
+  },
+  // Local sites whose Comment button sent a comment, waiting to be allowed. The comment waits in that browser and goes once allowed.
+  siteRequests: [] as string[],
+  async loadSiteRequests() {
+    this.siteRequests = await fetchSiteRequests()
+  },
+  addSiteRequest(origin: string) {
+    if (!this.siteRequests.includes(origin)) this.siteRequests = [...this.siteRequests, origin]
+  },
+  dropSiteRequest(origin: string) {
+    this.siteRequests = this.siteRequests.filter((o) => o !== origin)
+  },
+  siteName(origin: string) {
+    try {
+      return new URL(origin).host
+    } catch {
+      return origin
+    }
+  },
+  async answerSite(origin: string, allow: boolean) {
+    this.dropSiteRequest(origin)
+    try {
+      await answerSiteRequest(origin, allow)
+    } catch {
+      return this.flash('That request is gone. Send the comment again.')
+    }
+    this.flash(allow ? `${this.siteName(origin)} can send comments now. Its waiting comment arrives shortly.` : 'Not allowed')
   },
   /** Mark the open comment fixed, or take that back. Only ever done by the person. */
   async markFixed(fixed: boolean) {

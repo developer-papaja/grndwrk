@@ -8,6 +8,7 @@ import { PACKAGE_ROOT } from '../root.js'
 import { BadInput, type NodeStore } from '../store/nodes.js'
 import type { NodeSync } from './events.js'
 import { createFeedback, parseFeedback } from './feedback.js'
+import type { Sites } from './sites.js'
 
 /**
  * Sits in front of the product's dev server and adds the comment overlay to
@@ -27,23 +28,49 @@ export interface ProxyOptions {
 const PREFIX = '/__groundwork/'
 const TAG = `<script src="${PREFIX}feedback.js" defer></script>`
 
+/** What the overlay routes may take in an hour, from all pages together, like the LAN listener. */
+const HOURLY = { comments: 120, bytes: 200_000_000 }
+
+export interface OverlayCtx {
+  gwDir: string
+  store: NodeStore
+  nodes: NodeSync
+  /** Sites the person allowed. Without it only the page's own server (the proxy) may send. */
+  sites?: Sites
+  /** Kept per server: what came in during the current hour. */
+  used?: { hour: number; comments: number; bytes: number }
+}
+
 /**
  * The overlay's own routes: the script, and the comments it sends. Served by
  * the proxy, and by the map's server for a page that loads the script itself
  * (a line in the product's layout, on its own address like https://shop.test).
  * Such a page is on another origin: only local development addresses may send
- * (CORS), never a site on the internet. Returns false for anything else.
+ * (CORS), never a site on the internet, and each site only once the person
+ * allowed it in the map. Returns false for anything else.
  */
-export async function handleOverlay(req: IncomingMessage, res: ServerResponse, ctx: { gwDir: string; store: NodeStore; nodes: NodeSync }): Promise<boolean> {
+export async function handleOverlay(req: IncomingMessage, res: ServerResponse, ctx: OverlayCtx): Promise<boolean> {
   const path = new URL(req.url ?? '/', 'http://x').pathname
   if (!path.startsWith(PREFIX)) return false
   const name = path.slice(PREFIX.length)
   const origin = typeof req.headers.origin === 'string' ? req.headers.origin : ''
+  // The page this server itself serves (the proxy): the same origin, nothing to ask.
+  const sameOrigin = !!origin && origin === `http://${req.headers.host}`
   const cors: Record<string, string> = origin && isDevOrigin(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}
+  const script = { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' }
   try {
+    if ((name === 'feedback.js' || name === 'screenshot.js') && req.method === 'GET') {
+      // Only for local development pages: a site on the internet that tries to
+      // load them (to learn whether Groundwork runs here) gets nothing.
+      const referer = typeof req.headers.referer === 'string' ? req.headers.referer : ''
+      if (referer && !isDevOrigin(referer)) {
+        res.writeHead(403).end()
+        return true
+      }
+    }
     if (name === 'feedback.js' && req.method === 'GET') {
       const js = await readFile(join(PACKAGE_ROOT, 'overlay', 'feedback.js'), 'utf8')
-      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', ...cors }).end(js)
+      res.writeHead(200, script).end(js)
       return true
     }
     if (name === 'screenshot.js' && req.method === 'GET') {
@@ -51,7 +78,7 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
       // neither sees the page's module loader nor leaves a global behind but one.
       const lib = await readFile(join(PACKAGE_ROOT, 'dist', 'vendor', 'modern-screenshot.js'), 'utf8')
       const js = `;(function () { var exports, module, define; var globalThis = {};\n${lib}\n;window.__groundworkShot = globalThis.modernScreenshot })()\n`
-      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', ...cors }).end(js)
+      res.writeHead(200, script).end(js)
       return true
     }
     if (name === 'feedback' && req.method === 'OPTIONS') {
@@ -64,15 +91,33 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
       return true
     }
     if (name === 'feedback' && req.method === 'POST') {
-      if (origin && !cors['Access-Control-Allow-Origin'] && !isLocalOrigin(origin)) {
-        res.writeHead(403).end()
-        return true
+      if (origin && !sameOrigin) {
+        if (!cors['Access-Control-Allow-Origin'] || !ctx.sites) {
+          res.writeHead(403).end()
+          return true
+        }
+        const site = await ctx.sites.check(origin)
+        if (site !== 'allowed') {
+          // Asked in the map: the button keeps the comment and sends it once allowed.
+          res.writeHead(403, { 'Content-Type': 'application/json', ...cors }).end(JSON.stringify({ error: site === 'asked' ? 'Allow this site in Groundwork first' : 'Not allowed', ask: site === 'asked' }))
+          return true
+        }
       }
       if (!(req.headers['content-type'] ?? '').startsWith('application/json')) {
         res.writeHead(415, cors).end()
         return true
       }
-      const input = parseFeedback(JSON.parse((await readAll(req, 14_000_000)).toString('utf8')))
+      const hour = Math.floor(Date.now() / 3_600_000)
+      const used = ctx.used ?? (ctx.used = { hour, comments: 0, bytes: 0 })
+      if (used.hour !== hour) Object.assign(used, { hour, comments: 0, bytes: 0 })
+      if (used.comments >= HOURLY.comments || used.bytes >= HOURLY.bytes) {
+        res.writeHead(429, { 'Content-Type': 'application/json', ...cors }).end(JSON.stringify({ error: 'Too many comments this hour' }))
+        return true
+      }
+      const body = await readAll(req, 14_000_000)
+      used.comments++
+      used.bytes += body.length
+      const input = parseFeedback(JSON.parse(body.toString('utf8')))
       const node = await createFeedback(ctx.gwDir, ctx.store, { ...input, platform: input.platform ?? 'Web' })
       await ctx.nodes.sync()
       res.writeHead(201, { 'Content-Type': 'application/json', ...cors }).end(JSON.stringify({ id: node.id, title: node.title }))
@@ -97,26 +142,20 @@ export function isDevOrigin(origin: string): boolean {
   }
 }
 
-function isLocalOrigin(origin: string): boolean {
-  try {
-    return isLocalName(new URL(origin).hostname)
-  } catch {
-    return false
-  }
-}
-
 const isLocalName = (host: string) => host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1'
 
 export function createProxy({ target, gwDir, store, nodes, ca }: ProxyOptions): Server {
+  const overlay: OverlayCtx = { gwDir, store, nodes }
+  const own = proxyName(target)
   const secure = target.protocol === 'https:'
   // Local https sites (Herd, Valet, mkcert) are signed by a certificate this
   // Mac trusts, which Node does not know by default. Trust what the Mac trusts;
   // certificates are still checked.
   const trusted = secure ? (ca ?? systemCertificates()) : undefined
   const server = createServer(async (req, res) => {
-    if (!isLocal(req.headers.host)) return res.writeHead(403).end('Forbidden')
+    if (!isLocal(req.headers.host, own)) return res.writeHead(403).end('Forbidden')
     const path = req.url ?? '/'
-    if (await handleOverlay(req, res, { gwDir, store, nodes })) return
+    if (await handleOverlay(req, res, overlay)) return
     forward(req, res)
   })
 
@@ -164,7 +203,7 @@ export function createProxy({ target, gwDir, store, nodes, ca }: ProxyOptions): 
 
   // Live reload and other websockets go straight through.
   server.on('upgrade', (req, socket, head) => {
-    if (!isLocal(req.headers.host)) return socket.destroy()
+    if (!isLocal(req.headers.host, own)) return socket.destroy()
     const port = Number(target.port) || (secure ? 443 : 80)
     const open = (ready: () => void) =>
       secure
@@ -233,9 +272,20 @@ export function inject(html: string): string {
   return at < 0 ? html + TAG : html.slice(0, at) + TAG + html.slice(at)
 }
 
-function isLocal(host: string | undefined): boolean {
-  const name = (host ?? '').replace(/:\d+$/, '')
-  return name === 'localhost' || name === '127.0.0.1' || name === '[::1]'
+function isLocal(host: string | undefined, own?: string): boolean {
+  const name = (host ?? '').replace(/:\d+$/, '').toLowerCase()
+  return name === 'localhost' || name === '127.0.0.1' || name === '[::1]' || name === own
+}
+
+/**
+ * The name the proxy is opened on: the product's own, under `.localhost`
+ * (https://shop.test becomes http://shop-test.localhost). Every `*.localhost`
+ * name is this Mac, in browsers and in macOS. Cookies belong to a name, not a
+ * port, so the product's login (which the proxy hands to the browser without
+ * Secure) stays with this name and never reaches other servers on localhost.
+ */
+export function proxyName(target: URL): string {
+  return `${target.host.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'app'}.localhost`
 }
 
 async function readAll(stream: IncomingMessage, limit: number): Promise<Buffer> {

@@ -1,5 +1,5 @@
 import { readRun } from './runs.js'
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile } from './fs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
 import { STORY_STATUSES, type Story, type StoryStatus } from '../shared/types.js'

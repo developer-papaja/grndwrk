@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { keepOutOfGit } from './gitignore.js'
 
@@ -36,8 +36,23 @@ export async function rememberPort(gwDir: string, port: number): Promise<void> {
  */
 export async function rememberedApp(gwDir: string, fallback?: unknown): Promise<string | undefined> {
   const app = (await read(gwDir)).app
-  if (typeof app === 'string' && /^https?:\/\//.test(app)) return app
-  return typeof fallback === 'string' && /^https?:\/\//.test(fallback) ? fallback : undefined
+  if (isLocalApp(app)) return app
+  return isLocalApp(fallback) ? fallback : undefined
+}
+
+/**
+ * Only an address on this machine is remembered: the files could come from
+ * someone else's commit, and the map's Open button must not lead to a site on
+ * the internet. An address elsewhere works when given with --app each time.
+ */
+function isLocalApp(v: unknown): v is string {
+  if (typeof v !== 'string') return false
+  try {
+    const u = new URL(v)
+    return /^https?:$/.test(u.protocol) && /^(localhost|127\.0\.0\.1|\[::1\]|.+\.(test|localhost))$/.test(u.hostname)
+  } catch {
+    return false
+  }
 }
 
 export async function rememberApp(gwDir: string, app: string): Promise<void> {

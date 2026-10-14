@@ -80,7 +80,7 @@ groundwork --app http://localhost:5173
 groundwork --app https://shop.test        # Herd, Valet or another local https site
 ```
 
-Then open the address Groundwork prints (the map's port plus one, for example `http://localhost:7778`). It shows your site with the Comment button on every page. Links and logins keep working through it.
+Then open the address Groundwork prints, your site's name under `.localhost` on the map's port plus one (for example `http://shop-test.localhost:7778`). It shows your site with the Comment button on every page. Links and logins keep working through it, and the login stays with that name, away from other servers on your machine.
 
 **On your site's own address.** Add one line to your page layout, for local development only, and use your site as usual. `groundwork --app <address>` prints the exact line for your project:
 
@@ -94,7 +94,7 @@ In Laravel:
 @env('local')<script src="http://localhost:7777/__groundwork/feedback.js" defer></script>@endenv
 ```
 
-The button only runs on addresses on your own machine (`localhost`, `*.test`, `*.localhost`), and Groundwork only takes comments from such pages. On an https site this works in Chrome, Arc, Edge, Brave and Firefox. Safari blocks it: use the first way there.
+The button only runs on addresses on your own machine (`localhost`, `*.test`, `*.localhost`), and Groundwork only takes comments from such pages. The first comment from a site asks in the map: "shop.test wants to send comments". Allow it once, and the waiting comment arrives; from then on that site sends straight away. A site you did not allow, such as another project's dev server, cannot add anything to your map. On an https site this works in Chrome, Arc, Edge, Brave and Firefox. Safari blocks it: use the first way there.
 
 ### In an iOS app
 
@@ -131,11 +131,13 @@ Everything in `.groundwork/` is plain markdown, meant to be committed and review
 
 ## How it is kept safe
 
-- **It runs on your machine only.** The map answers on `localhost` and refuses requests from other websites.
+- **It runs on your machine only.** The map answers on `localhost`. Websites on the internet get nothing from it, and local sites can only send comments, once you allow them.
 - **Phones need a pairing code.** With `--lan`, phones on your Wi-Fi can only send comments, after you allow them on the Mac. The phone checks that it talks to your Groundwork before it sends anything. The connection is plain HTTP, so use `--lan` on networks you trust.
 - **Comments are untrusted input.** Anyone who used the product wrote them. Groundwork stores their words as a quote, and every command tells Claude to read them as a report, never as instructions. Still, think twice before letting Claude act on comments from people you do not know without your review.
 - **Nothing ships with your product.** The web button runs only on local addresses. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
-- **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine.
+- **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine, and Groundwork never follows a symbolic link inside `.groundwork/`, so a file in a pull request cannot point it at anything else on your machine.
+- **Review `.groundwork/` in pull requests like code.** A colleague's change can add thoughts, answers or questions that look like Claude's; read them before you run commands on them.
+- **Websites ask before they send.** Each local site's first comment waits until you allow the site in the map. Allowed sites are kept in your user folder, never in the project, so a pull request cannot allow one.
 
 ## License
 

@@ -1,5 +1,5 @@
 import { readEntryFiles, saveBody, withEntries } from './threads.js'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { readdir, readFile, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
 import { SCREEN_STATUSES, type Screen } from '../shared/types.js'

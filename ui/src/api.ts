@@ -66,6 +66,8 @@ export const placeShot = (file: string, screen: string) => request<Screen[]>('PO
 export const fetchRuntime = () => request<{ app: string | null; proxied: boolean }>('GET', '/api/runtime').catch(() => ({ app: null, proxied: false }))
 export const fetchPairRequests = () => request<PairRequest[]>('GET', '/api/pair').catch(() => [] as PairRequest[])
 export const answerPairRequest = (id: string, allow: boolean) => request<{ ok: true }>('POST', `/api/pair/${encodeURIComponent(id)}`, { allow })
+export const fetchSiteRequests = () => request<string[]>('GET', '/api/sites').catch(() => [] as string[])
+export const answerSiteRequest = (origin: string, allow: boolean) => request<{ ok: true }>('POST', '/api/sites', { origin, allow })
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
 
 /** Subscribe to server events. EventSource reconnects on its own after a drop. */

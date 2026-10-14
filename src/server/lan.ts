@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from '../store/fs.js'
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import { networkInterfaces } from 'node:os'
 import { join } from 'node:path'

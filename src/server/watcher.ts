@@ -18,6 +18,8 @@ export function watchGroundwork(gwDir: string, nodes: NodeSync) {
     // Skip dotfiles, which includes our own temp files.
     ignored: (path) => path !== gwDir && basename(path).startsWith('.'),
     awaitWriteFinish: { stabilityThreshold: 60, pollInterval: 20 },
+    // A link inside .groundwork is never followed (src/store/fs.ts), so not watched through either.
+    followSymlinks: false,
   })
 
   watcher.on('all', (event, path) => {

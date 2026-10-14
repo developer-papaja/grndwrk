@@ -5,7 +5,8 @@ import sirv from 'sirv'
 import { PACKAGE_ROOT } from '../root.js'
 import { NodeStore } from '../store/nodes.js'
 import { handleApi, handleFiles } from './api.js'
-import { createProxy, handleOverlay } from './proxy.js'
+import { createProxy, handleOverlay, proxyName, type OverlayCtx } from './proxy.js'
+import { Sites } from './sites.js'
 import { rememberApp } from '../store/local.js'
 import { advertise, createLanServer, lanAddresses, pairingCode } from './lan.js'
 import { readProject, writeFields } from '../store/project.js'
@@ -41,6 +42,10 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   const lanCode = lan ? await pairingCode(gwDir) : undefined
   const pairings = lanCode ? new Pairings(lanCode, broadcast) : undefined
 
+  // Sites that load the Comment button themselves send only once allowed in the map; the --app address given now is allowed.
+  const sites = new Sites(gwDir, broadcast, app ? [app.origin] : [])
+  const overlay: OverlayCtx = { gwDir, store, nodes, sites }
+
   /** Where the product runs with the Comment button, once the proxy listens. */
   const runtime: { app?: string } = {}
 
@@ -51,8 +56,8 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
     if (!isLocalHost(req.headers.host)) return res.writeHead(403).end('Forbidden')
     if (await handleComments(req, res, comments)) return
     // The Comment button for a product page that loads it itself, on the product's own address.
-    if (await handleOverlay(req, res, { gwDir, store, nodes })) return
-    if (await handleApi(req, res, { gwDir, store, nodes, pairings, runtime })) return
+    if (await handleOverlay(req, res, overlay)) return
+    if (await handleApi(req, res, { gwDir, store, nodes, pairings, runtime, sites })) return
     if (await handleFiles(req, res, gwDir)) return
     ui(req, res, () => res.writeHead(404).end())
   })
@@ -85,7 +90,7 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
     // Remembered, so the map can open screens and `groundwork screenshots` knows where the product runs.
     await rememberApp(gwDir, app.origin).catch(() => {})
     const proxy = createProxy({ target: app, gwDir, store, nodes })
-    appUrl = `http://localhost:${await listen(proxy, appPort ?? actualPort + 1)}`
+    appUrl = `http://${proxyName(app)}:${await listen(proxy, appPort ?? actualPort + 1)}`
     runtime.app = appUrl
   }
   let lanUrls: string[] | undefined

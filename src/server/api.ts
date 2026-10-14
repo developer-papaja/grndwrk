@@ -7,9 +7,11 @@ import { listStories, readDraft, readOutput } from '../store/stories.js'
 import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
 import { listShots, readShot } from '../store/shots.js'
 import { rememberedApp } from '../store/local.js'
+import { LinkRefused } from '../store/fs.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
 import type { Pairings } from './pairing.js'
+import type { Sites } from './sites.js'
 
 interface Ctx {
   gwDir: string
@@ -19,6 +21,8 @@ interface Ctx {
   pairings?: Pairings
   /** Where the product runs behind the comment proxy, when `--app` is on. */
   runtime?: { app?: string }
+  /** Local sites asking to send comments from the Comment button they load. */
+  sites?: Sites
 }
 
 /** Handles /api/*. Returns false when the request is not an API route. */
@@ -58,6 +62,16 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (pairMatch && method === 'POST') {
       const body = (await readBody(req)) as { allow?: unknown }
       if (!ctx.pairings?.answer(pairMatch[1], body.allow === true)) throw new NotFound(pairMatch[1])
+      return send(res, 200, { ok: true })
+    }
+    // Local sites asking to send comments, answered in the map. Only from the map's own page.
+    if (url.pathname === '/api/sites' && method === 'GET') {
+      return send(res, 200, ctx.sites?.list() ?? [])
+    }
+    if (url.pathname === '/api/sites' && method === 'POST') {
+      if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
+      const body = (await readBody(req)) as { origin?: unknown; allow?: unknown }
+      if (typeof body.origin !== 'string' || !(await ctx.sites?.answer(body.origin, body.allow === true))) throw new NotFound(String(body.origin))
       return send(res, 200, { ok: true })
     }
     // Where to open a screen: the proxy with the Comment button, or the address --app was given last time.
@@ -172,6 +186,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (err instanceof BadInput) return send(res, 400, { error: err.message })
     if (err instanceof NotFound) return send(res, 404, { error: `No node ${err.message}` })
     if (err instanceof ReadOnly) return send(res, 409, { error: err.message })
+    if (err instanceof LinkRefused) return send(res, 409, { error: err.message })
     console.error(err)
     return send(res, 500, { error: 'Something went wrong' })
   }
@@ -222,7 +237,7 @@ export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwD
   if (shot && req.method === 'GET') {
     const found = await readShot(gwDir, shot[1], decodeURIComponent(shot[2]))
     if (!found) res.writeHead(404).end()
-    else res.writeHead(200, { 'Content-Type': found.type, 'Cache-Control': 'private, max-age=31536000, immutable' }).end(found.data)
+    else res.writeHead(200, { 'Content-Type': found.type, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' }).end(found.data)
     return true
   }
   const m = url.pathname.match(/^\/files\/([^/]+)\/([^/]+)$/)
@@ -232,7 +247,7 @@ export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwD
     res.writeHead(404).end()
     return true
   }
-  res.writeHead(200, { 'Content-Type': image.type, 'Cache-Control': 'private, max-age=31536000, immutable' }).end(image.data)
+  res.writeHead(200, { 'Content-Type': image.type, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' }).end(image.data)
   return true
 }
 

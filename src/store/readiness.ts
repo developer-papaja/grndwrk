@@ -1,4 +1,4 @@
-import { readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { readdir, readFile, rename, writeFile } from './fs.js'
 import { readRun } from './runs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'

@@ -39,6 +39,7 @@ const handlers = {
     void state.loadDeliverables()
     void state.loadScreens()
     void state.loadPairRequests()
+    void state.loadSiteRequests()
     void state.loadShots()
     void state.loadRuntime()
   },
@@ -55,6 +56,8 @@ const handlers = {
     }
     else if (event.type === 'pair:request') state.addPairRequest(event.request)
     else if (event.type === 'pair:done') state.dropPairRequest(event.id)
+    else if (event.type === 'site:request') state.addSiteRequest(event.origin)
+    else if (event.type === 'site:done') state.dropSiteRequest(event.origin)
     else if (event.type === 'file:change' && event.path.startsWith('shots/')) void state.loadShots()
     else if (event.type === 'file:change' && event.path === 'project.md') {
       void fetchProject().then((p) => (state.project = p))

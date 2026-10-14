@@ -60,6 +60,10 @@ export type ServerEvent =
   | { type: 'pair:request'; request: PairRequest }
   /** That request was answered, or ran out. */
   | { type: 'pair:done'; id: string }
+  /** A local site's Comment button sent a comment; the map asks the person to allow the site. */
+  | { type: 'site:request'; origin: string }
+  /** That site was answered. */
+  | { type: 'site:done'; origin: string }
 
 /** A phone asking to send comments, as the map shows it. */
 export interface PairRequest {

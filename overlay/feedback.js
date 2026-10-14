@@ -172,12 +172,19 @@
       }
     },
   }
-  /** 'sent', 'rejected' (do not retry), or 'waiting' (try again later). */
+  // Whether the map is asking the person to allow this site.
+  let asked = false, tick = 0
+  // Pictures too large for the browser's storage, kept while this page is open, by when the comment was written.
+  const held = new Map()
+  /** 'sent', 'rejected' (do not retry), 'asked' (wait for the person to allow this site), or 'waiting' (try again later). */
   async function post(comment) {
+    if (!comment.image && held.has(comment.written)) comment = { ...comment, image: held.get(comment.written) }
     try {
       const res = await fetch(`${base}/__groundwork/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(comment) })
       if (res.status === 201) return 'sent'
-      return res.status === 404 || res.status >= 500 ? 'waiting' : 'rejected'
+      // The map asks the person to allow this site first; the comment waits here until then.
+      if (res.status === 403 && (await res.json().catch(() => ({}))).ask) return 'asked'
+      return res.status === 404 || res.status === 429 || res.status >= 500 ? 'waiting' : 'rejected'
     } catch {
       return 'waiting'
     }
@@ -186,14 +193,16 @@
     let list = outbox.read()
     while (list.length) {
       const result = await post(list[0])
-      if (result === 'waiting') break
+      asked = result === 'asked'
+      if (result === 'waiting' || result === 'asked') break
       list = list.slice(1)
       outbox.write(list)
     }
   }
   outbox.write(outbox.read())
   flush()
-  setInterval(() => outbox.read().length && flush(), 20000)
+  // Every 20 seconds; every 5 while the map is asked to allow this site, so the comment arrives soon after.
+  setInterval(() => outbox.read().length && (asked || ++tick % 4 === 0) && flush(), 5000)
 
   let picking = false
   /** What is picked: the element, and the chain from the clicked element out to the page, to step through. */
@@ -220,8 +229,12 @@
   function labelOf(el) {
     const by = el.getAttribute('aria-labelledby')
     const labelled = by && document.getElementById(by)?.textContent
-    const text = el.getAttribute('aria-label') || labelled || el.getAttribute('alt') || el.getAttribute('title') || el.getAttribute('placeholder') || el.innerText || el.value || ''
+    const text = el.getAttribute('aria-label') || labelled || el.getAttribute('alt') || el.getAttribute('title') || el.getAttribute('placeholder') || el.innerText || buttonValue(el) || ''
     return String(text).replace(/\s+/g, ' ').trim().slice(0, 80)
+  }
+  /** What a field holds is never sent, only what a button input says on it (a typed card number or password stays in the page). */
+  function buttonValue(el) {
+    return el.tagName === 'INPUT' && /^(button|submit|reset)$/i.test(el.type) ? el.value : ''
   }
   function idOf(el) {
     return el.getAttribute('data-testid') || el.getAttribute('data-test') || el.id || ''
@@ -585,12 +598,16 @@
     if (result === 'sent') {
       flash('Sent to Groundwork')
       flush()
-    } else if (result === 'waiting') {
+    } else if (result === 'waiting' || result === 'asked') {
       // The browser keeps little: a large picture would lose the whole comment. Keep the words for sure.
       const keep = comment.image && comment.image.length > 400_000 ? { ...comment, image: undefined } : comment
+      if (keep !== comment) held.set(comment.written, comment.image)
       const list = [...outbox.read(), keep]
       outbox.write(list)
-      flash(`Saved. It goes to Groundwork when it is running (${list.length} waiting)`)
+      flash(result === 'asked'
+        ? `Allow ${location.host} in Groundwork's map once. The comment goes then.`
+        : `Saved. It goes to Groundwork when it is running (${list.length} waiting)`)
+      asked = result === 'asked'
     } else {
       flash('Groundwork did not take it')
     }

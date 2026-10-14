@@ -208,6 +208,26 @@ describe('comments a device can follow up on', () => {
     expect((await store.list()).map((n) => n.title)).toEqual(['Mine'])
   })
 
+  it('keeps a picture only when its bytes are a PNG or a JPEG', async () => {
+    const fake = await createFeedback(gw, store, parseFeedback({ text: 'Not a picture', image: `data:image/png;base64,${Buffer.from('<svg onload=alert(1)>').toString('base64')}` }))
+    expect(fake.body).not.toContain('![')
+    const real = await createFeedback(gw, store, parseFeedback({ text: 'A picture', image: PNG }))
+    expect(real.body).toContain('![')
+  })
+
+  it('remembers only a product address on this machine', async () => {
+    const { rememberedApp } = await import('../src/store/local.js')
+    await writeFile(join(gw, 'local.json'), JSON.stringify({ app: 'https://evil.example' }))
+    expect(await rememberedApp(gw)).toBeUndefined()
+    expect(await rememberedApp(gw, 'https://shop.test')).toBe('https://shop.test')
+  })
+
+  it('opens the proxy on a name of its own, so its cookies stay there', async () => {
+    const { proxyName } = await import('../src/server/proxy.js')
+    expect(proxyName(new URL('https://clinic-api.test'))).toBe('clinic-api-test.localhost')
+    expect(proxyName(new URL('http://localhost:5173'))).toBe('localhost-5173.localhost')
+  })
+
   it('takes a comment without text when it is to be written on the Mac', async () => {
     expect(() => parseFeedback({ text: '' })).toThrow()
     const node = await createFeedback(gw, store, parseFeedback({ text: '', on_mac: true, screen: 'Home', element: { role: 'button', label: 'Start session' } }))
@@ -461,16 +481,20 @@ describe('ports', () => {
 describe('the Comment button loaded by the product itself', () => {
   const mapServer = async () => {
     const { handleOverlay } = await import('../src/server/proxy.js')
+    const { Sites } = await import('../src/server/sites.js')
     const nodes = new NodeSync(() => store.list())
+    const events: unknown[] = []
+    const sites = new Sites(gw, (e) => events.push(e), [], join(gw, '..', `sites-${Math.random()}.json`))
+    const ctx = { gwDir: gw, store, nodes, sites }
     const server = createServer(async (req, res) => {
-      if (!(await handleOverlay(req, res, { gwDir: gw, store, nodes }))) res.writeHead(404).end()
+      if (!(await handleOverlay(req, res, ctx))) res.writeHead(404).end()
     })
     const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
-    return { server, port }
+    return { server, port, sites, events }
   }
 
   it('lets a local development page send comments, and refuses a site on the internet', async () => {
-    const { server, port } = await mapServer()
+    const { server, port, sites, events } = await mapServer()
     const url = `http://localhost:${port}/__groundwork/feedback`
     try {
       const ask = (origin: string) => fetch(url, { method: 'OPTIONS', headers: { origin, 'access-control-request-method': 'POST' } })
@@ -481,13 +505,28 @@ describe('the Comment button loaded by the product itself', () => {
       expect((await ask('https://shop.test.evil.example')).status).toBe(403)
 
       const send = (origin: string) => fetch(url, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ text: 'Too small', screen: '/cart' }) })
+      // The first comment from a site asks in the map, and waits.
+      const first = await send('https://shop.test')
+      expect(first.status).toBe(403)
+      expect(await first.json()).toMatchObject({ ask: true })
+      expect(events).toEqual([{ type: 'site:request', origin: 'https://shop.test' }])
+      expect(sites.list()).toEqual(['https://shop.test'])
+      expect(await sites.answer('https://shop.test', true)).toBe(true)
       expect((await send('https://shop.test')).status).toBe(201)
+      // Another local site is not allowed by that; one the person said no to stays refused.
+      expect((await send('http://localhost:5173')).status).toBe(403)
+      await sites.answer('http://localhost:5173', false)
+      expect(await (await send('http://localhost:5173')).json()).toMatchObject({ ask: false })
       expect((await send('https://evil.example')).status).toBe(403)
       expect((await store.list()).filter((n) => n.extra?.source === 'app')).toHaveLength(1)
 
       const script = await fetch(`http://localhost:${port}/__groundwork/feedback.js`, { headers: { origin: 'https://shop.test' } })
       expect(script.status).toBe(200)
       expect(await script.text()).toContain('__groundworkFeedback')
+      expect(script.headers.get('x-content-type-options')).toBe('nosniff')
+      // A site on the internet cannot even learn that Groundwork runs here.
+      expect((await fetch(`http://localhost:${port}/__groundwork/feedback.js`, { headers: { referer: 'https://evil.example/page' } })).status).toBe(403)
+      expect((await fetch(`http://localhost:${port}/__groundwork/screenshot.js`, { headers: { referer: 'https://evil.example/page' } })).status).toBe(403)
     } finally {
       server.close()
     }

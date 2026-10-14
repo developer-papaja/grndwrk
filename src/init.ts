@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from './store/fs.js'
+import { keepOutOfGit } from './store/gitignore.js'
 import { basename, join, relative } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { GW_DIR, PACKAGE_ROOT } from './root.js'
@@ -22,6 +23,8 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   for (const dir of ['nodes', 'stories', 'screens', 'readiness', 'outputs']) {
     await mkdir(join(gw, dir), { recursive: true })
   }
+  // What belongs to this machine stays out of git from the start, before anything writes it.
+  for (const entry of ['local.json', 'lan-code', 'shots/']) await keepOutOfGit(gw, entry)
 
   // New or existing decides the steps Groundwork guides through. Ask once; keep the answer.
   const known = (await readProject(gw)).data.start

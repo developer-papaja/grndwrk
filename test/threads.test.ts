@@ -63,4 +63,15 @@ describe('thread entries in files of their own', () => {
     expect(splitBody(after!.body).entries.map((e) => e.who)).toEqual(['claude-asks', 'you'])
     expect(splitBody((await listScreens(gw))[0].body).entries).toHaveLength(2)
   })
+
+  it('keeps entries a map tab had not seen yet when it saves its notes', async () => {
+    const n = (await store.create({ title: 'Booking', body: 'Notes.\n\n## Thread\n\n**Claude asks** · 2026-10-13\nWhich day?\n' })).upserted[0]
+    const stale = n.body
+    await store.update(n.id, { body: appendEntry(n.body, 'you', 'Today', '2026-10-14') })
+    // The tab still has the body from before the answer, and changes the notes.
+    const saved = (await store.update(n.id, { body: stale.replace('Notes.', 'New notes.') })).upserted[0]
+    expect(await entryFiles(n.id)).toHaveLength(1)
+    expect(splitBody(saved.body).entries.map((e) => e.text)).toEqual(['Which day?', 'Today'])
+    expect(saved.body).toContain('New notes.')
+  })
 })
