@@ -20,35 +20,41 @@ describe('NodeStore', () => {
   it('creates a node from a title alone', async () => {
     const { upserted } = await store.create({ title: 'Booking should feel like texting' })
     const n = upserted[0]
-    expect(n.id).toMatch(/^n_[a-z0-9]{4}$/)
-    expect(await file(n.id)).toMatch(/^---\nid: n_\w{4}\ntype: idea\ntitle: Booking should feel like texting\naltitude: 3\nlinks: \[\]\nstatus: open\ncreated: \d{4}-\d{2}-\d{2}\n---\n$/)
+    expect(n.id).toMatch(/^n_[a-z0-9]{6}$/)
+    expect(await file(n.id)).toMatch(/^---\nid: n_\w{6}\ntype: idea\ntitle: Booking should feel like texting\naltitude: 3\nlinks: \[\]\nstatus: open\ncreated: \d{4}-\d{2}-\d{2}\n---\n$/)
   })
 
   it('rejects an empty title', async () => {
     await expect(store.create({ title: '  ' })).rejects.toThrow()
   })
 
-  it('writes links on both nodes and removes them on both', async () => {
+  it('writes a link only on the card that made it, and reads it both ways', async () => {
     const a = (await store.create({ title: 'A' })).upserted[0]
     const b = (await store.create({ title: 'B' })).upserted[0]
     const change = await store.update(a.id, { links: [b.id] })
+    // Both cards change in memory, so the map updates both.
     expect(change.upserted.map((n) => n.id).sort()).toEqual([a.id, b.id].sort())
+    expect(change.upserted.find((n) => n.id === b.id)?.links).toEqual([a.id])
+    // Only A's file changes: linking to a card never touches that card's file, so two people doing it never conflict.
     expect(await file(a.id)).toContain(`links: [${b.id}]`)
-    expect(await file(b.id)).toContain(`links: [${a.id}]`)
+    expect(await file(b.id)).toContain('links: []')
+    expect((await store.get(b.id)).links).toEqual([a.id])
 
+    // Taken away from B's side: it comes off A, the card that holds it.
     await store.update(b.id, { links: [] })
     expect(await file(a.id)).toContain('links: []')
-    expect(await file(b.id)).toContain('links: []')
+    expect((await store.get(a.id)).links).toEqual([])
   })
 
-  it('treats a one sided link as two sided and repairs it on write', async () => {
+  it('keeps links two sided files as they are, and does not copy links back on write', async () => {
     const a = (await store.create({ title: 'A' })).upserted[0]
     const b = (await store.create({ title: 'B' })).upserted[0]
     // Hand edit: only B lists A.
     await writeFile(join(root, 'nodes', `${b.id}.md`), (await file(b.id)).replace('links: []', `links: [${a.id}]`))
     expect((await store.get(a.id)).links).toEqual([b.id])
     await store.update(a.id, { title: 'A2' })
-    expect(await file(a.id)).toContain(`links: [${b.id}]`)
+    expect(await file(a.id)).toContain('links: []')
+    expect((await store.get(a.id)).links).toEqual([b.id])
   })
 
   it('removes a deleted node from the nodes that linked to it', async () => {

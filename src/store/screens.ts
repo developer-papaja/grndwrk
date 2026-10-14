@@ -1,3 +1,4 @@
+import { readEntryFiles, saveBody, withEntries } from './threads.js'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
@@ -25,7 +26,7 @@ export async function listScreens(gwDir: string): Promise<Screen[]> {
       continue
     }
     try {
-      screens.push(parseScreen(id, await readFile(join(dir, file), 'utf8')))
+      screens.push(await withThread(gwDir, parseScreen(id, await readFile(join(dir, file), 'utf8'))))
     } catch {
       // Deleted while reading.
     }
@@ -86,6 +87,12 @@ export function shotRef(ref: string): string {
   }
 }
 
+/** The screen with the thread entries kept in files of their own added to its body. */
+async function withThread(gwDir: string, screen: Screen): Promise<Screen> {
+  if (screen.error) return screen
+  return { ...screen, body: withEntries(screen.body, await readEntryFiles(gwDir, screen.id)) }
+}
+
 function empty(id: string): Screen {
   return { id, title: id, parent: '', in: [], replaced_by: '', purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], stories: [], status: 'built', source: '', created: '', body: '' }
 }
@@ -126,8 +133,13 @@ export async function updateScreen(gwDir: string, id: string, edit: ScreenEdit):
   if (screen.error) throw new Error(`screens/${id}.md cannot be read: ${screen.error}`)
   const next = { ...screen, ...defined(edit) }
   const extra = Object.fromEntries(Object.entries(data).filter(([k]) => !KNOWN.includes(k)))
-  await writeFile(path, serializeScreen(next, extra, edit.body ?? content))
-  return parseScreen(id, await readFile(path, 'utf8'))
+  // New thread entries go to files of their own; the screen's file keeps its own body.
+  const body = edit.body !== undefined ? await saveBody(gwDir, id, content, edit.body) : content
+  // Only a thread entry added: the screen's own file stays exactly as it is, so
+  // nothing in it can clash with someone else's change in git.
+  const onlyBody = Object.keys(defined(edit)).every((k) => k === 'body')
+  if (!(onlyBody && body === content)) await writeFile(path, serializeScreen(next, extra, body))
+  return withThread(gwDir, parseScreen(id, await readFile(path, 'utf8')))
 }
 
 /**

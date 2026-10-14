@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { readProject } from './store/project.js'
+import { rememberedApp } from './store/local.js'
 import { listScreens } from './store/screens.js'
 import { saveShot, shotsDir } from './store/shots.js'
 import { keepOutOfGit } from './store/gitignore.js'
@@ -25,7 +26,7 @@ export interface ScreenshotOptions {
  * Uses Chrome as installed on this machine, through playwright-core.
  */
 export async function takeScreenshots(gwDir: string, options: ScreenshotOptions): Promise<void> {
-  const remembered = (await readProject(gwDir)).data.app
+  const remembered = await rememberedApp(gwDir, (await readProject(gwDir)).data.app)
   const app = (options.app ?? (typeof remembered === 'string' ? remembered : '')).replace(/\/+$/, '')
   if (!/^https?:\/\//.test(app)) {
     throw new Error('Say where the product runs: groundwork screenshots --app http://localhost:5173')

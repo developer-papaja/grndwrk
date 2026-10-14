@@ -21,7 +21,7 @@ const HELP = `Usage:
                          the path for DYLD_INSERT_LIBRARIES
 
 Options for start:
-  --port <n>   port to use (default 7777, or the next free one)
+  --port <n>   port to use (default: the one this project had last time, else 7777, or the next free one)
   --no-open    do not open the browser
   --app <url>  your product's dev server, for example http://localhost:5173.
                Open the address Groundwork prints for it, and every page gets
@@ -37,7 +37,7 @@ async function main() {
     allowPositionals: true,
     allowNegative: true,
     options: {
-      port: { type: 'string', default: '7777' },
+      port: { type: 'string' },
       app: { type: 'string' },
       'app-port': { type: 'string' },
       lan: { type: 'boolean', default: false },
@@ -108,7 +108,11 @@ async function main() {
       console.error(`No ${GW_DIR}/ folder found here or in any parent folder. Run \`groundwork init\` first.`)
       process.exit(1)
     }
-    const port = Number(values.port)
+    // The port this project had last time, so a line in the product's layout
+    // that loads the Comment button keeps pointing at the right Groundwork.
+    const { rememberedPort, rememberPort } = await import('./store/local.js')
+    const remembered = values.port ? undefined : await rememberedPort(join(root, GW_DIR))
+    const port = Number(values.port ?? remembered ?? 7777)
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
       console.error(`Not a valid port: ${values.port}`)
       process.exit(1)
@@ -125,8 +129,18 @@ async function main() {
     const appPort = values['app-port'] ? Number(values['app-port']) : undefined
     const lanPort = values['lan-port'] ? Number(values['lan-port']) : undefined
     const { url, appUrl, lanUrls, lanCode } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort, lan: values.lan, lanPort })
+    const actual = Number(new URL(url).port)
     console.log(`Groundwork is running at ${url}\nWatching ${join(root, GW_DIR)}`)
-    if (appUrl) console.log(`Your product with the Comment button: ${appUrl} (passes through to ${app!.origin})`)
+    if (!values.port && remembered === undefined) await rememberPort(join(root, GW_DIR), actual)
+    if (remembered !== undefined && actual !== remembered) {
+      console.log(`  Port ${remembered}, this project's usual one, is taken (another Groundwork?), so this one runs on ${actual}. A Comment button loaded from localhost:${remembered} will not reach it until that one stops.`)
+    }
+    if (appUrl) {
+      console.log(`Your product with the Comment button: ${appUrl} (passes through to ${app!.origin})`)
+      console.log(`  Or on ${app!.origin} itself: add this to its page layout, for local development only, and reload:`)
+      console.log(`    <script src="${url}/__groundwork/feedback.js" defer></script>`)
+      console.log(`  In Laravel: @env('local') <script src="${url}/__groundwork/feedback.js" defer></script> @endenv`)
+    }
     if (lanUrls) {
       console.log(`Phones on this network can send comments: ${lanUrls.join(', ') || 'no network found'}`)
       console.log(`  Pairing code: ${lanCode}. Enter it once on each phone. Delete .groundwork/lan-code for a new one.`)

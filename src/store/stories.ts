@@ -1,3 +1,4 @@
+import { readRun } from './runs.js'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
@@ -55,13 +56,14 @@ export function parseStory(id: string, raw: string): Story {
 /** The outputs /brief and /survey write. Nothing else in outputs/ is served. */
 export const OUTPUTS = ['brief.md', 'CLAUDE.starter.md', 'survey.md'] as const
 
+/** Where each output's runs are kept, one file per run. */
+const RUNS: Record<(typeof OUTPUTS)[number], string> = { 'brief.md': 'brief', 'CLAUDE.starter.md': 'claude-starter', 'survey.md': 'survey' }
+
+/** The newest run of an output, or the single file of an older map. */
 export async function readOutput(gwDir: string, name: string): Promise<string | null> {
   if (!(OUTPUTS as readonly string[]).includes(name)) return null
-  try {
-    return await readFile(join(gwDir, 'outputs', name), 'utf8')
-  } catch {
-    return null
-  }
+  const folder = RUNS[name as (typeof OUTPUTS)[number]]
+  return readRun(join(gwDir, 'outputs', folder), join(gwDir, 'outputs', name))
 }
 
 /** A draft /readiness wrote for something the project lacks, from outputs/drafts/. Only plain .md names. */

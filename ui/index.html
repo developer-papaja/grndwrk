@@ -945,29 +945,56 @@
                           <span class="font-medium" :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Claude asks you' : 'Claude asked') : 'Claude'"></span>
                           <span class="text-fog/35" x-text="e.date"></span>
                         </div>
-                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords($store.gw.options(e.text).question)"></p>
-                        <div x-show="$store.gw.entryShots(e.text).length" class="mt-2 flex gap-2">
-                          <template x-for="shot in $store.gw.entryShots(e.text)" :key="shot.url">
-                            <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryShots(e.text))">
-                              <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-white/30" />
-                            </button>
-                          </template>
-                        </div>
-                        <div x-show="e.open && $store.gw.options(e.text).options.length" class="mt-2 flex flex-col gap-1">
-                          <template x-for="(o, j) in $store.gw.options(e.text).options" :key="j">
-                            <button class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Start your answer from this" @click="$store.gw.screenReply = o; $nextTick(() => document.getElementById('screen-reply')?.focus())" x-text="o"></button>
-                          </template>
-                        </div>
+                        <!-- Claude's questions, each on its own: Claude may ask several at once -->
+                        <template x-if="e.who === 'claude-asks'">
+                          <div class="space-y-3">
+                            <template x-for="q in $store.gw.entryQuestions($store.gw.screen.body, i)" :key="q.index">
+                              <div :class="q.index > 0 && 'border-t border-white/10 pt-2.5'">
+                                <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
+                                <div x-show="$store.gw.entryShots(q.question).length" class="mt-2 flex gap-2">
+                                  <template x-for="shot in $store.gw.entryShots(q.question)" :key="shot.url">
+                                    <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryShots(q.question))">
+                                      <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-white/30" />
+                                    </button>
+                                  </template>
+                                </div>
+                                <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
+                                  <template x-for="(o, j) in q.options" :key="j">
+                                    <button
+                                      x-show="q.open"
+                                      class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
+                                      title="Answer this question with it"
+                                      @click="$store.gw.answerScreenQuestion(q, o)"
+                                      x-text="o"
+                                    ></button>
+                                  </template>
+                                </div>
+                                <button x-show="q.open" class="mt-1.5 text-[11px] text-fog/55 hover:text-fog" @click="$store.gw.replyToQuestion(q, 'screen-reply')">Answer in words</button>
+                                <p x-show="!q.open && q.answer" class="mt-1 text-xs text-fog/50" x-text="'Answered: ' + (q.answer ?? '')"></p>
+                              </div>
+                            </template>
+                          </div>
+                        </template>
+                        <template x-if="e.who !== 'claude-asks'">
+                          <div>
+                            <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-white/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
+                            <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text"></p>
+                          </div>
+                        </template>
                       </li>
                     </template>
                   </ol>
                   <form class="mt-2" @submit.prevent="$store.gw.sendScreenReply()">
+                    <div x-show="$store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo)" class="mb-1.5 flex items-center gap-2 rounded-md bg-question/10 px-2 py-1 text-[11px] text-question">
+                      <span class="min-w-0 flex-1 truncate" x-text="'Answering: ' + ($store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo)?.question.split('\n').find((l) => l.trim()) ?? '')"></span>
+                      <button class="shrink-0 hover:text-fog" title="Answer all of them instead" @click.prevent="$store.gw.screenReplyTo = null">×</button>
+                    </div>
                     <textarea
                       id="screen-reply"
                       rows="2"
                       x-model="$store.gw.screenReply"
                       @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendScreenReply() }"
-                      :placeholder="$store.gw.screenThread.some((e) => e.open) ? 'Answer Claude' : 'Add a comment for the next /sitemap run'"
+                      :placeholder="$store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo) ? 'Your answer to this question' : $store.gw.screenThread.some((e) => e.open) ? 'Answer Claude' : 'Add a comment for the next /sitemap run'"
                       class="field w-full resize-none"
                     ></textarea>
                     <div class="mt-1.5 flex items-center justify-between gap-2">
@@ -1425,6 +1452,7 @@
                   <span x-show="item.kind !== 'guess'" class="text-fog/85" x-text="'\u201C' + item.about + '\u201D'"></span>
                   <span x-show="item.where" class="text-fog/40" x-text="' in ' + $store.gw.label(item.where)"></span>
                 </span>
+                <span x-show="item.of > 1" class="shrink-0 rounded bg-white/8 px-1.5 py-0.5 text-fog/60" x-text="'Question ' + item.position + ' of ' + item.of"></span>
                 <span class="shrink-0 text-fog/35" x-text="item.date"></span>
               </div>
               <h2 class="mt-2 text-[15px] font-medium leading-snug text-fog" x-text="item.kind === 'guess' ? item.about : item.question || item.about"></h2>
@@ -1816,31 +1844,49 @@
                       ></span>
                       <span class="text-fog/35" x-text="e.date"></span>
                     </div>
-                    <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.options(e.text).question"></p>
-                    <div x-show="$store.gw.options(e.text).options.length" class="mt-2 flex flex-col gap-1">
-                      <template x-for="(o, j) in $store.gw.options(e.text).options" :key="j">
-                        <button
-                          x-show="e.open"
-                          class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
-                          title="Start your answer from this"
-                          @click="$store.gw.reply = o; $nextTick(() => document.getElementById('reply')?.focus())"
-                          x-text="o"
-                        ></button>
-                      </template>
-                      <template x-for="(o, j) in $store.gw.options(e.text).options" :key="'c' + j">
-                        <span x-show="!e.open" class="text-xs text-fog/50" x-text="'· ' + o"></span>
-                      </template>
-                    </div>
+                    <!-- Claude's questions, each on its own: Claude may ask several at once -->
+                    <template x-if="e.who === 'claude-asks'">
+                      <div class="space-y-3">
+                        <template x-for="q in $store.gw.entryQuestions($store.gw.draft.body, i)" :key="q.index">
+                          <div :class="q.index > 0 && 'border-t border-white/10 pt-2.5'">
+                            <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
+                            <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
+                              <template x-for="(o, j) in q.options" :key="j">
+                                <button
+                                  x-show="q.open"
+                                  class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
+                                  title="Answer this question with it"
+                                  @click="$store.gw.answerQuestion(q, o)"
+                                  x-text="o"
+                                ></button>
+                              </template>
+                            </div>
+                            <button x-show="q.open" class="mt-1.5 text-[11px] text-fog/55 hover:text-fog" @click="$store.gw.replyToQuestion(q, 'reply')">Answer in words</button>
+                            <p x-show="!q.open && q.answer" class="mt-1 text-xs text-fog/50" x-text="'Answered: ' + (q.answer ?? '')"></p>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                    <template x-if="e.who !== 'claude-asks'">
+                      <div>
+                        <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-white/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
+                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text"></p>
+                      </div>
+                    </template>
                   </li>
                 </template>
               </ol>
               <form class="mt-2" @submit.prevent="$store.gw.sendReply()">
+                <div x-show="$store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo)" class="mb-1.5 flex items-center gap-2 rounded-md bg-question/10 px-2 py-1 text-[11px] text-question">
+                  <span class="min-w-0 flex-1 truncate" x-text="'Answering: ' + ($store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo)?.question.split('\n').find((l) => l.trim()) ?? '')"></span>
+                  <button class="shrink-0 hover:text-fog" title="Answer all of them instead" @click.prevent="$store.gw.replyTo = null">×</button>
+                </div>
                 <textarea
                   id="reply"
                   rows="2"
                   x-model="$store.gw.reply"
                   @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendReply() }"
-                  :placeholder="$store.gw.thread.some((e) => e.open) ? 'Answer Claude' : 'Add a comment'"
+                  :placeholder="$store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo) ? 'Your answer to this question' : $store.gw.openCount($store.gw.draft.body) > 1 ? 'Answer all of them at once, or pick one above' : $store.gw.openCount($store.gw.draft.body) ? 'Answer Claude' : 'Add a comment'"
                   class="field w-full resize-none"
                 ></textarea>
                 <div class="mt-1.5 flex items-center justify-between gap-2">

@@ -1,4 +1,5 @@
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { readRun } from './runs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
 import { DESIGN_ITEMS, FOUNDATION_STATUSES, FOUNDATIONS, SEVERITIES, type DesignCheck, type DesignStatus, type Foundation, type FoundationStatus, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
@@ -11,7 +12,9 @@ const dir = (gwDir: string) => join(gwDir, 'readiness')
 export async function readReadiness(gwDir: string): Promise<Readiness> {
   const out: Readiness = { report: null, gaps: [], design: [], foundations: [] }
   try {
-    const { data, content } = readMatter(await readFile(join(dir(gwDir), 'report.md'), 'utf8'))
+    const raw = await readRun(join(dir(gwDir), 'report'), join(dir(gwDir), 'report.md'))
+    if (raw === null) throw new Error('No report yet')
+    const { data, content } = readMatter(raw)
     const v = String(data.verdict ?? '').trim().toLowerCase()
     const checked = data.checked instanceof Date ? data.checked.toISOString().slice(0, 10) : String(data.checked ?? '')
     const titles = (x: unknown) => (Array.isArray(x) ? x.filter((t) => typeof t === 'string' && t.trim()).map((t: string) => t.trim()) : [])
@@ -30,13 +33,27 @@ export async function readReadiness(gwDir: string): Promise<Readiness> {
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') out.error = `gaps.json could not be read: ${(err as Error).message}`
   }
+  // One file per gap, `readiness/gaps/<id>.json`: answering or closing one gap
+  // touches only its own file. These win over an older gaps.json with the same id.
+  for (const file of (await readdir(join(dir(gwDir), 'gaps')).catch(() => [] as string[])).sort()) {
+    if (!/^[A-Za-z0-9_-]{1,64}\.json$/.test(file)) continue
+    try {
+      const [gap] = parseGaps(`[${await readFile(join(dir(gwDir), 'gaps', file), 'utf8')}]`)
+      if (!gap) continue
+      out.gaps = [...out.gaps.filter((g) => g.id !== gap.id), gap]
+    } catch (err) {
+      out.error = `readiness/gaps/${file} could not be read: ${(err as Error).message}`
+    }
+  }
   try {
-    out.design = parseDesign(await readFile(join(dir(gwDir), 'design.json'), 'utf8'))
+    const raw = await readRun(join(dir(gwDir), 'design'), join(dir(gwDir), 'design.json'))
+    if (raw !== null) out.design = parseDesign(raw)
   } catch {
     // No scorecard yet, or a broken one: show none rather than a wrong one.
   }
   try {
-    out.foundations = parseFoundations(await readFile(join(dir(gwDir), 'foundations.json'), 'utf8'))
+    const raw = await readRun(join(dir(gwDir), 'foundations'), join(dir(gwDir), 'foundations.json'))
+    if (raw !== null) out.foundations = parseFoundations(raw)
   } catch {
     // Not checked yet, or broken: the Status page says to run /readiness.
   }
@@ -149,6 +166,20 @@ export function parseGaps(raw: string): Gap[] {
  * written. With enough, the person accepted the gap as it is, for good.
  */
 export async function markAnswered(gwDir: string, gapId: string, nodeId: string, enough = false): Promise<boolean> {
+  // A gap in its own file: only that file changes.
+  if (/^[A-Za-z0-9_-]{1,64}$/.test(gapId)) {
+    const own = join(dir(gwDir), 'gaps', `${gapId}.json`)
+    const gap = await readFile(own, 'utf8').then((t) => JSON.parse(t), () => null)
+    if (gap && typeof gap === 'object' && gap.id === gapId) {
+      gap.answered_by = nodeId
+      if (enough) gap.enough = true
+      else delete gap.enough
+      const tmp = join(dir(gwDir), 'gaps', `.${gapId}.json.tmp`)
+      await writeFile(tmp, JSON.stringify(gap, null, 2) + '\n', 'utf8')
+      await rename(tmp, own)
+      return true
+    }
+  }
   const path = join(dir(gwDir), 'gaps.json')
   const data = JSON.parse(await readFile(path, 'utf8'))
   if (!Array.isArray(data)) return false

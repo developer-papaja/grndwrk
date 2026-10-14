@@ -6,7 +6,7 @@ import { answerPairRequest, createNode, deleteNode, fetchPairRequests, fetchRunt
 import { BOX, commentsForScreen, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
-import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
+import { appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
 import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, type FeedbackState } from '../../src/shared/feedback'
 import { parseCapture, sameTitle } from './capture'
@@ -32,6 +32,12 @@ export interface InboxItem {
   options: string[]
   /** The whole entry, for the pictures it shows. */
   text: string
+  /** Which question of the thread it is, so several on one thought are answered one by one. -1 for a guess without a question. */
+  entry: number
+  index: number
+  /** How many questions wait on the same thought, and which of them this is. */
+  of: number
+  position?: number
   /** What it is about: the thought's or the screen's title. */
   about: string
   /** Where that sits: the topic, or the screen's place in the tree. */
@@ -115,6 +121,8 @@ export const state = Alpine.reactive({
   /** The list shows only topics that are thin or have missing pieces. */
   onlyAttention: false,
   reply: '',
+  /** The question the reply box answers, when Claude asked several: entry and index. */
+  replyTo: null as { entry: number; index: number } | null,
   sending: false,
   readiness: null as Readiness | null,
   /** Which view the rail shows: focus, the map, readiness, or deliverables. */
@@ -140,6 +148,7 @@ export const state = Alpine.reactive({
   /** The screen open in the Sitemap view. */
   screenId: readStored<string | null>('groundwork.screen', null),
   screenReply: '',
+  screenReplyTo: null as { entry: number; index: number } | null,
   screenStatus: '',
   /** The sitemap drawn as boxes and lines, or as a list. */
   sitemapLayout: readStored<'drawn' | 'list'>('groundwork.sitemapLayout', 'drawn'),
@@ -626,6 +635,46 @@ export const state = Alpine.reactive({
   get thread(): Entry[] {
     return splitBody(this.draft.body).entries
   },
+  /** The questions in one entry of a thread, each with its options and whether it is answered. */
+  entryQuestions(body: string, entry: number): Question[] {
+    return questions(body).filter((q) => q.entry === entry)
+  },
+  /** How many questions wait in a body. Several mean each is answered on its own. */
+  openCount(body: string): number {
+    return openQuestions(body)
+  },
+  /** A **You** entry that answers one question quotes it first: the quote, and the answer. */
+  youParts(text: string): { quote: string; rest: string } {
+    const lines = text.split('\n')
+    let n = 0
+    while (n < lines.length && /^\s*>/.test(lines[n])) n++
+    return { quote: lines.slice(0, n).map((l) => l.replace(/^\s*>\s?/, '')).join(' ').trim(), rest: lines.slice(n).join('\n').trim() }
+  },
+  /** Answer one of Claude's questions on the open screen straight away, with an option it gave. */
+  async answerScreenQuestion(q: Question, text: string) {
+    this.screenReply = text
+    this.screenReplyTo = { entry: q.entry, index: q.index }
+    await this.sendScreenReply()
+  },
+  /** Answer one of Claude's questions on the open card straight away, with an option it gave. */
+  async answerQuestion(q: Question, text: string) {
+    const id = this.selectedId
+    if (!id || this.sending) return
+    this.reply = text
+    this.replyTo = { entry: q.entry, index: q.index }
+    await this.sendReply()
+  },
+  /** Point the reply box at one question, to answer it in words. */
+  replyToQuestion(q: Question, field = 'reply') {
+    if (field === 'screen-reply') this.screenReplyTo = { entry: q.entry, index: q.index }
+    else this.replyTo = { entry: q.entry, index: q.index }
+    focusWhenVisible(field)
+  },
+  /** The question the reply box answers now, or null for all of them. */
+  replyQuestion(body: string, to: { entry: number; index: number } | null): Question | null {
+    if (!to) return null
+    return questions(body).find((q) => q.entry === to.entry && q.index === to.index && q.open) ?? null
+  },
   /** Cards where Claude is waiting for an answer, in list order. */
   get questionIds(): string[] {
     return cached('questionIds', () => {
@@ -900,7 +949,9 @@ export const state = Alpine.reactive({
     this.sending = true
     this.screenStatus = 'Saving...'
     try {
-      this.putScreen(await updateScreen(s.id, { body: appendEntry(s.body, 'you', text, today()) }))
+      const target = this.replyQuestion(s.body, this.screenReplyTo)
+      this.screenReplyTo = null
+      this.putScreen(await updateScreen(s.id, { body: target ? appendAnswer(s.body, target, text, today()) : appendEntry(s.body, 'you', text, today()) }))
       this.screenReply = ''
       this.screenStatus = ''
     } catch (err) {
@@ -1277,16 +1328,25 @@ export const state = Alpine.reactive({
     return cached('inbox', () => {
       const nodes = groupForList(Object.values(this.nodes).filter((n) => this.inScope(n) && !isFixed(n)), '').flatMap((g) => g.nodes)
       const guess = (n: GNode) => n.extra?.source === 'inferred' && n.status === 'open' && !splitBody(n.body).entries.some((e) => e.who === 'you')
-      const asked = (body: string) => splitBody(body).entries.find((e) => e.open)
-      const item = (kind: InboxItem['kind'], id: string, about: string, where: string, entry: Entry | undefined): InboxItem => {
-        const q = entry ? questionOptions(entry.text) : { question: '', options: [] }
-        return { key: `${kind === 'screen' ? 'screen' : 'node'}:${id}`, kind, id, question: this.entryWords(q.question), options: q.options, text: entry?.text ?? '', about, where, date: entry?.date ?? '' }
+      // Every open question is its own item: Claude may ask several things about one thought.
+      const asked = (body: string) => questions(body).filter((q) => q.open)
+      const entries = (body: string) => splitBody(body).entries
+      const items = (kind: InboxItem['kind'], id: string, about: string, where: string, body: string): InboxItem[] => {
+        const open = asked(body)
+        // A guess without a question is still one thing to confirm.
+        if (!open.length) return kind === 'guess' ? [{ key: `node:${id}`, kind, id, question: '', options: [], text: '', about, where, date: '', entry: -1, index: 0, of: 1 }] : []
+        return open.map((q, n) => ({
+          key: `${kind === 'screen' ? 'screen' : 'node'}:${id}:${q.entry}:${q.index}`,
+          kind, id, about, where,
+          question: this.entryWords(q.question), options: q.options, text: entries(body)[q.entry]?.text ?? '', date: q.date,
+          entry: q.entry, index: q.index, of: open.length, position: n + 1,
+        }))
       }
-      const screens = screenTree(this.screens).filter(({ screen }) => !screen.error && (!this.scope || screen.id === this.scope) && asked(screen.body))
+      const screens = screenTree(this.screens).filter(({ screen }) => !screen.error && (!this.scope || screen.id === this.scope))
       return [
-        ...nodes.filter((n) => !guess(n) && asked(n.body)).map((n) => item('question', n.id, n.title, n.topic, asked(n.body))),
-        ...screens.map(({ screen }) => item('screen', screen.id, screen.title, this.screenPath(screen), asked(screen.body))),
-        ...nodes.filter(guess).map((n) => item('guess', n.id, n.title, n.topic, asked(n.body))),
+        ...nodes.filter((n) => !guess(n)).flatMap((n) => items('question', n.id, n.title, n.topic, n.body)),
+        ...screens.flatMap(({ screen }) => items('screen', screen.id, screen.title, this.screenPath(screen), screen.body)),
+        ...nodes.filter(guess).flatMap((n) => items('guess', n.id, n.title, n.topic, n.body)),
       ]
     })
   },
@@ -1363,14 +1423,19 @@ export const state = Alpine.reactive({
     if (!text || this.inboxSending) return
     this.inboxSending = item.key
     try {
+      // The answer to this question only, quoting it when others wait on the same thought.
+      const answer = (body: string) => {
+        const q = questions(body).find((x) => x.entry === item.entry && x.index === item.index && x.open)
+        return q ? appendAnswer(body, q, text, today()) : appendEntry(body, 'you', text, today())
+      }
       if (item.kind === 'screen') {
         const screen = this.screens.find((s) => s.id === item.id)
         if (!screen) return
-        this.putScreen(await updateScreen(screen.id, { body: appendEntry(screen.body, 'you', text, today()) }))
+        this.putScreen(await updateScreen(screen.id, { body: answer(screen.body) }))
       } else {
         const n = this.nodes[item.id]
         if (!n) return
-        this.upsert(await updateNode(n.id, { body: appendEntry(n.body, 'you', text, today()) }))
+        this.upsert(await updateNode(n.id, { body: answer(n.body) }))
       }
       delete this.inboxDrafts[item.key]
       this.flash(`Answered. Claude reads it on the next ${item.kind === 'screen' ? '/sitemap' : 'command'} run.`)
@@ -1832,7 +1897,9 @@ export const state = Alpine.reactive({
     const text = this.reply.trim()
     const id = this.selectedId
     if (!text || !id || this.sending) return
-    const body = appendEntry(this.draft.body, 'you', text, today())
+    const target = this.replyQuestion(this.draft.body, this.replyTo)
+    const body = target ? appendAnswer(this.draft.body, target, text, today()) : appendEntry(this.draft.body, 'you', text, today())
+    this.replyTo = null
     this.sending = true
     this.replyStatus = 'Saving...'
     try {
@@ -2020,7 +2087,7 @@ function today(): string {
 
 /** Node ids in rendered text, like (n_bz8p), become links to the thought. Text only, never inside tags. */
 function linkIds(html: string): string {
-  return html.replace(/(<[^>]*>)|\b(n_[a-z0-9]{4})\b/g, (m, tag, id) => (tag ? tag : `<a href="#" class="node-link" data-node="${id}">${id}</a>`))
+  return html.replace(/(<[^>]*>)|\b(n_[a-z0-9]{4,8})\b/g, (m, tag, id) => (tag ? tag : `<a href="#" class="node-link" data-node="${id}">${id}</a>`))
 }
 
 function stripFrontmatter(text: string): string {

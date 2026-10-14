@@ -24,6 +24,9 @@ export function watchGroundwork(gwDir: string, nodes: NodeSync) {
     if (event === 'addDir' || event === 'unlinkDir') return
     const rel = relative(gwDir, path).split(sep).join('/')
     if (rel.startsWith('nodes/') && rel.endsWith('.md')) scheduleSync()
+    // A thread entry in a file of its own: its card, or its screen, changed.
+    else if (rel.startsWith('threads/n_')) scheduleSync()
+    else if (rel.startsWith('threads/p_')) broadcast({ type: 'file:change', path: `screens/${rel.split('/')[1]}.md` })
     else broadcast({ type: 'file:change', path: rel })
   })
 

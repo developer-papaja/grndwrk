@@ -6,6 +6,7 @@ import { markAnswered, readReadiness } from '../store/readiness.js'
 import { listStories, readDraft, readOutput } from '../store/stories.js'
 import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
 import { listShots, readShot } from '../store/shots.js'
+import { rememberedApp } from '../store/local.js'
 import type { NodeInput } from '../shared/types.js'
 import { subscribe, type NodeSync } from './events.js'
 import type { Pairings } from './pairing.js'
@@ -61,7 +62,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     // Where to open a screen: the proxy with the Comment button, or the address --app was given last time.
     if (url.pathname === '/api/runtime' && method === 'GET') {
-      const remembered = (await readProject(ctx.gwDir)).data.app
+      const remembered = await rememberedApp(ctx.gwDir, (await readProject(ctx.gwDir)).data.app)
       return send(res, 200, { app: ctx.runtime?.app ?? (typeof remembered === 'string' ? remembered : null), proxied: !!ctx.runtime?.app })
     }
     if (url.pathname === '/api/shots' && method === 'GET') {
