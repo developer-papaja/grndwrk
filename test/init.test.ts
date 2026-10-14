@@ -47,6 +47,14 @@ describe('init', () => {
     expect(await readFile(rules, 'utf8')).toBe('my own rules\n')
   })
 
+  it('keeps a .groundwork/CLAUDE.md written by hand before Groundwork shipped one', async () => {
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(join(root, '.groundwork'), { recursive: true })
+    await writeFile(join(root, '.groundwork', 'CLAUDE.md'), '# My own rules\n')
+    await init(root)
+    expect(await readFile(join(root, '.groundwork', 'CLAUDE.md'), 'utf8')).toBe('# My own rules\n')
+  })
+
   it('backs up a command installed before init kept track, then updates it', async () => {
     await init(root)
     await rm(join(root, '.groundwork', 'commands.json'))

@@ -153,6 +153,7 @@
       <div class="row">
         <button class="b mac t-show" title="Show this comment in Groundwork's map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>Map</button>
         <span class="grow"></span>
+        <button class="b t-back" style="display:none" title="Back, without rejecting">Back</button>
         <button class="b no t-no">Reject</button>
         <button class="b ok t-ok">Approve</button>
       </div>
@@ -872,7 +873,11 @@
     panel.style.display = 'none'
     try { sessionStorage.setItem(TESTING, t.id) } catch {}
     // On its own page: go there first; the card opens again when it has loaded.
-    if (location.pathname !== t.path) return location.assign(t.path)
+    // Only ever a page on this site: anything else is not followed.
+    let to = null
+    try { to = new URL(t.path, location.origin) } catch {}
+    if (!to || to.origin !== location.origin || !/^\/(?![\/\\])/.test(t.path)) return flash('That fix points outside this site')
+    if (location.pathname !== to.pathname) return location.assign(to.pathname)
     showTest(t)
   }
   function showTest(t) {
@@ -884,8 +889,7 @@
     $('.t-fix').textContent = t.fix || 'Claude did not say.'
     $('.t-test').textContent = t.test
     $('.t-test-wrap').style.display = t.test ? 'block' : 'none'
-    $('.t-reject').style.display = 'none'
-    $('.t-no').textContent = 'Reject'
+    rejecting(false)
     note.value = ''
     tcard.style.display = 'block'
     marked = null
@@ -912,8 +916,7 @@
     if (!current) return
     if (!works && $('.t-reject').style.display === 'none') {
       // First press: ask what is still wrong, then Reject again sends it.
-      $('.t-reject').style.display = 'block'
-      $('.t-no').textContent = 'Send reject'
+      rejecting(true)
       return note.focus()
     }
     try {
@@ -930,6 +933,19 @@
   barTest.addEventListener('click', openTests)
   $('.panel-close').addEventListener('click', () => (panel.style.display = 'none'))
   $('.t-close').addEventListener('click', closeTest)
+  /**
+   * Writing what is still wrong: Approve is out of reach until Back, so a
+   * slip cannot approve what was being rejected, and the note is kept.
+   */
+  function rejecting(on) {
+    $('.t-reject').style.display = on ? 'block' : 'none'
+    $('.t-ok').style.display = on ? 'none' : ''
+    $('.t-back').style.display = on ? '' : 'none'
+    $('.t-no').textContent = on ? 'Send reject' : 'Reject'
+    $('.t-no').classList.toggle('send', on)
+    $('.t-no').classList.toggle('no', !on)
+  }
+  $('.t-back').addEventListener('click', () => rejecting(false))
   $('.t-ok').addEventListener('click', () => answer(true))
   $('.t-no').addEventListener('click', () => answer(false))
   $('.t-show').addEventListener('click', async () => {

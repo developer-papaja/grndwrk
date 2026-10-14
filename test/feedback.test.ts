@@ -543,6 +543,10 @@ describe('the Comment button loaded by the product itself', () => {
       const sent = await (await post('feedback', 'https://shop.test', { text: 'Cart total is wrong', screen: '/cart', url: 'https://shop.test/cart', element: { selector: 'main > .total', label: 'Total' } })).json()
       const other = await createFeedback(gw, store, parseFeedback({ text: 'Elsewhere', url: 'https://other.test/x' }))
       const tests = async (origin: string) => fetch(at('tests'), { headers: { origin } })
+      // An address that would lead off the site is kept as the site's own front page, and the site is always the sender.
+      const sneaky = await (await post('feedback', 'https://shop.test', { text: 'Sneaky', url: 'https://other.test//evil.example/phish' })).json()
+      expect((await store.list()).find((x) => x.id === sneaky.id)?.extra?.url).toBe('https://shop.test/')
+      await store.delete(sneaky.id)
       // Not built yet: nothing to test.
       expect((await (await tests('https://shop.test')).json()).tests).toEqual([])
       const n = (await store.list()).find((x) => x.id === sent.id)!
@@ -566,6 +570,18 @@ describe('the Comment button loaded by the product itself', () => {
     } finally {
       server.close()
     }
+  })
+
+  it('reads only local development addresses from the allowed sites file, and survives a broken one', async () => {
+    const { Sites } = await import('../src/server/sites.js')
+    const file = join(gw, '..', `sites-odd-${Math.random()}.json`)
+    const { resolve } = await import('node:path')
+    await writeFile(file, JSON.stringify({ [resolve(gw)]: ['https://evil.example', 'https://shop.test', 5] }))
+    const sites = new Sites(gw, () => {}, [], file)
+    expect(await sites.isAllowed('https://shop.test')).toBe(true)
+    expect(await sites.isAllowed('https://evil.example')).toBe(false)
+    await writeFile(file, JSON.stringify({ [resolve(gw)]: 5 }))
+    expect(await new Sites(gw, () => {}, [], file).isAllowed('https://shop.test')).toBe(false)
   })
 
   it('keeps the project on the same port from one start to the next, out of git', async () => {

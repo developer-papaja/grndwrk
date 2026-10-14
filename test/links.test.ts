@@ -59,4 +59,28 @@ describe('links inside .groundwork', () => {
     await symlink(outside, linked)
     expect((await new NodeStore(linked).list()).map((n) => n.title)).not.toContain('From outside')
   })
+
+  it('shows a linked card as unreadable, with why, instead of hiding it', async () => {
+    await mkdir(join(gw, 'nodes'))
+    await symlink(join(outside, 'secret.txt'), join(gw, 'nodes', 'n_bbbbbb.md'))
+    const listed = await new NodeStore(gw).list()
+    expect(listed.find((n) => n.id === 'n_bbbbbb')?.error).toMatch(/symbolic link/)
+    expect(JSON.stringify(listed)).not.toContain('SECRET')
+  })
+
+  it('never lets init write through a linked command file in .claude', async () => {
+    const { init } = await import('../src/init.js')
+    const project = join(root, 'project')
+    await mkdir(join(project, '.claude', 'commands'), { recursive: true })
+    await symlink(join(outside, 'secret.txt'), join(project, '.claude', 'commands', 'brief.md'))
+    const log = console.log
+    console.log = () => {}
+    try {
+      await expect(init(project, { ask: async () => 'n' })).rejects.toThrow(/symbolic link/)
+    } finally {
+      console.log = log
+    }
+    expect(await readFile(join(outside, 'secret.txt'), 'utf8')).toBe('SECRET\n')
+    await expect(readFile(join(project, '.groundwork', 'backup', 'commands', 'brief.md'), 'utf8')).rejects.toThrow()
+  })
 })

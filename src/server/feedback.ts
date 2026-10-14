@@ -275,7 +275,9 @@ function addressOf(n: GNode): URL | null {
 
 /** A built fix on a comment made on this site, which the site may show and settle. */
 function webTestOf(n: GNode | undefined, origin: string): GNode | null {
-  return n && feedbackState(n) === 'ready' && addressOf(n)?.origin === origin ? n : null
+  const at = n && addressOf(n)
+  // A path that would lead off the site (`//evil.example`) is never offered, whoever wrote the file.
+  return n && at && feedbackState(n) === 'ready' && at.origin === origin && /^\/(?![\/\\])/.test(at.pathname) ? n : null
 }
 
 /**

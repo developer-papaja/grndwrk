@@ -38,7 +38,17 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   await mkdir(commandsDest, { recursive: true })
   // What init installed, by hash, so a later run can tell an untouched command from an edited one.
   const manifestPath = join(gw, 'commands.json')
-  const installed: Record<string, string> = await readFile(manifestPath, 'utf8').then((t) => JSON.parse(t), () => ({}))
+  const installed: Record<string, string> = await readFile(manifestPath, 'utf8').then(
+    (t) => {
+      try {
+        const data = JSON.parse(t)
+        return data && typeof data === 'object' && !Array.isArray(data) ? data : {}
+      } catch {
+        return {}
+      }
+    },
+    () => ({}),
+  )
   for (const file of (await readdir(commandsSrc)).filter((f) => f.endsWith('.md')).sort()) {
     const shipped = await readFile(join(commandsSrc, file), 'utf8')
     const dest = join(commandsDest, file)
@@ -75,9 +85,13 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
     say('created', rulesPath)
   } else if (currentRules === rules) {
     say('ok', rulesPath)
-  } else if (installed['.groundwork/CLAUDE.md'] && installed['.groundwork/CLAUDE.md'] !== hash(currentRules)) {
+  } else if (installed['.groundwork/CLAUDE.md'] !== hash(currentRules)) {
+    // Written by hand before, or changed since: kept. Claude Code follows this
+    // file whenever it opens the map, so a change to it, also one that came
+    // in a pull request, is worth a look.
     say('kept', rulesPath)
-    console.log('           you changed it, so it was not updated')
+    console.log('           it differs from what Groundwork ships, so it was not updated.')
+    console.log('           Claude follows it whenever it opens the map: check what it says (git log -p .groundwork/CLAUDE.md).')
   } else {
     await writeFile(rulesPath, rules)
     say('updated', rulesPath)

@@ -52,6 +52,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
 
     // A map tab in the background, saying it is still open.
     if (url.pathname === '/api/tab' && method === 'POST') {
+      if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
       noteTab()
       res.writeHead(204).end()
       return true

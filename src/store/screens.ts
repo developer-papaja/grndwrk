@@ -1,5 +1,5 @@
 import { readEntryFiles, saveBody, withEntries } from './threads.js'
-import { readdir, readFile, writeFile } from './fs.js'
+import { LinkRefused, readdir, readFile, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
 import { SCREEN_STATUSES, type Screen } from '../shared/types.js'
@@ -27,8 +27,10 @@ export async function listScreens(gwDir: string): Promise<Screen[]> {
     }
     try {
       screens.push(await withThread(gwDir, parseScreen(id, await readFile(join(dir, file), 'utf8'))))
-    } catch {
-      // Deleted while reading.
+    } catch (err) {
+      // A link (from a pull request) shows in red with why, never followed and never hidden.
+      if (err instanceof LinkRefused) screens.push({ ...empty(id), error: err.message })
+      // Otherwise deleted while reading.
     }
   }
   return screens

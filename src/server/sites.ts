@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ServerEvent } from '../shared/types.js'
+import { isDevOrigin } from './proxy.js'
 
 /**
  * Which local sites may send comments to this project's map. Any page on
@@ -15,6 +16,7 @@ import type { ServerEvent } from '../shared/types.js'
  * allow a site.
  */
 const MAX_PENDING = 10
+const PENDING_FOR = 10 * 60_000
 
 export function sitesFile(): string {
   // For tests, so they never touch the person's own list.
@@ -26,7 +28,8 @@ export function sitesFile(): string {
 export class Sites {
   private allowed = new Set<string>()
   private trusted: Set<string>
-  private pending = new Map<string, string>()
+  private pending = new Map<string, number>()
+  private full = false
   private denied = new Set<string>()
   private loaded: Promise<void>
 
@@ -44,10 +47,16 @@ export class Sites {
     })
   }
 
+  /** The file, keeping only lists of local development addresses: a broken or odd file allows nothing. */
   private async read(): Promise<Record<string, string[]>> {
     try {
       const data = JSON.parse(await readFile(this.file, 'utf8'))
-      return data && typeof data === 'object' ? data : {}
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return {}
+      const out: Record<string, string[]> = {}
+      for (const [key, list] of Object.entries(data)) {
+        if (Array.isArray(list)) out[key] = list.filter((o): o is string => typeof o === 'string' && isDevOrigin(o))
+      }
+      return out
     } catch {
       return {}
     }
@@ -58,8 +67,16 @@ export class Sites {
     await this.loaded
     if (this.allowed.has(origin)) return 'allowed'
     if (this.denied.has(origin)) return 'denied'
-    if (!this.pending.has(origin) && this.pending.size < MAX_PENDING) {
-      this.pending.set(origin, new Date().toISOString())
+    // A question nobody answered in ten minutes is dropped: a page cannot fill the list for good.
+    for (const [o, at] of this.pending) if (Date.now() - at > PENDING_FOR) this.pending.delete(o)
+    if (!this.pending.has(origin)) {
+      if (this.pending.size >= MAX_PENDING) {
+        if (!this.full) console.log(`More sites want to send comments than the map shows (${MAX_PENDING}). Answer those first; the rest ask again.`)
+        this.full = true
+        return 'asked'
+      }
+      this.full = false
+      this.pending.set(origin, Date.now())
       this.onChange({ type: 'site:request', origin })
     }
     return 'asked'
@@ -97,8 +114,10 @@ export class Sites {
     all[key] = change(all[key] ?? [])
     if (!all[key].length) delete all[key]
     await mkdir(join(this.file, '..'), { recursive: true, mode: 0o700 })
-    await writeFile(`${this.file}.tmp`, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
-    await rename(`${this.file}.tmp`, this.file)
+    // Each Groundwork its own temporary file, so two maps saving at once never mix.
+    const tmp = `${this.file}.${process.pid}.tmp`
+    await writeFile(tmp, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
+    await rename(tmp, this.file)
   }
 
   /** The person answers in the map. Allowed sites are remembered for this project; a no lasts until Groundwork restarts. */

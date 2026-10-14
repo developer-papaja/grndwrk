@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type RequestOptions, type Server, type ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { connect } from 'node:net'
-import { connect as tlsConnect, getCACertificates, rootCertificates } from 'node:tls'
+import * as tls from 'node:tls'
+import { connect as tlsConnect, rootCertificates } from 'node:tls'
 import { join } from 'node:path'
 import { PACKAGE_ROOT } from '../root.js'
 import { BadInput, type NodeStore } from '../store/nodes.js'
@@ -130,7 +131,11 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
       used.comments++
       used.bytes += body.length
       const input = parseFeedback(JSON.parse(body.toString('utf8')))
-      const node = await createFeedback(ctx.gwDir, ctx.store, { ...input, platform: input.platform ?? 'Web' })
+      // The page's address is the site that sent it (by Origin, or this server
+      // for its own pages) and only the path from what was sent: a comment can
+      // never claim another site, nor a path that leads off the site.
+      const url = siteAddress(origin && !sameOrigin ? origin : `http://${req.headers.host}`, input.url)
+      const node = await createFeedback(ctx.gwDir, ctx.store, { ...input, url, platform: input.platform ?? 'Web' })
       await ctx.nodes.sync()
       res.writeHead(201, { 'Content-Type': 'application/json', ...cors }).end(JSON.stringify({ id: node.id, title: node.title }))
       return true
@@ -156,7 +161,11 @@ async function handleTests(req: IncomingMessage, res: ServerResponse, ctx: Overl
   // No Origin: a same-origin GET on the proxy (the Host was checked before this).
   const site = origin || `http://${req.headers.host}`
   const allowed = sameOrigin || !origin || (!!cors['Access-Control-Allow-Origin'] && !!(await ctx.sites?.isAllowed(origin)))
-  if (!allowed) return reply(403, { error: 'Not allowed' })
+  // Not allowed: an answer the page cannot read, so it learns nothing, not even that Groundwork runs.
+  if (!allowed) {
+    res.writeHead(403).end()
+    return
+  }
   if (name === 'tests' && req.method === 'GET') return reply(200, { tests: await webTests(ctx.store, site) })
   if (req.method !== 'POST' || !(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(415, { error: 'Send JSON' })
   const body = JSON.parse((await readAll(req, 20_000)).toString('utf8'))
@@ -166,9 +175,23 @@ async function handleTests(req: IncomingMessage, res: ServerResponse, ctx: Overl
     await ctx.nodes.sync()
     return reply(200, { state })
   }
+  if (name !== 'show') return reply(405, { error: 'Not here' })
   const id = await webTestId(ctx.store, site, body?.id)
   if (!id || !ctx.uiUrl) return reply(404, { error: 'No fix to test by that id' })
   reply(200, { opened: await openOnMac(id, ctx.uiUrl()) })
+}
+
+/** A path on the site: one leading slash, never `//` or `/\\` (which a browser reads as another site). */
+export const isSitePath = (path: string) => /^\/(?![\/\\])/.test(path)
+
+function siteAddress(site: string, sent: string | undefined): string | undefined {
+  let path = ''
+  try {
+    path = sent ? new URL(sent).pathname : ''
+  } catch {
+    // Not an address: keep the site only.
+  }
+  return `${site}${isSitePath(path) ? path : '/'}`
 }
 
 /** A page on this machine, for development: localhost, 127.0.0.1, or a *.test or *.localhost name (Herd, Valet, Laravel). */
@@ -269,7 +292,10 @@ export function createProxy({ target, gwDir, store, nodes, ca, uiUrl }: ProxyOpt
 /** What this Mac trusts and Node's own list, for local https sites. Node's list alone where the Mac's cannot be read. */
 function systemCertificates(): string[] {
   try {
-    return [...getCACertificates('system'), ...getCACertificates('default')]
+    // getCACertificates came in Node 22.15; on older Node, only Node's own roots.
+    const get = (tls as { getCACertificates?: (kind: string) => string[] }).getCACertificates
+    if (!get) return [...rootCertificates]
+    return [...get('system'), ...get('default')]
   } catch {
     return [...rootCertificates]
   }

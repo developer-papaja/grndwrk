@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from './fs.js'
+import { LinkRefused, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { NODE_TYPES, STATUSES, type GNode, type NodeInput } from '../shared/types.js'
 import { DEFAULTS, isValidId, oneOf, parseNode, serializeNode, toAltitude, today } from './frontmatter.js'
@@ -66,8 +66,10 @@ export class NodeStore {
           node.body = withEntries(node.body, await readEntryFiles(this.gwDir, id))
         }
         nodes.push(node)
-      } catch {
-        // Deleted between readdir and readFile.
+      } catch (err) {
+        // A link (from a pull request) shows as unreadable, with why, never followed and never hidden.
+        if (err instanceof LinkRefused) nodes.push({ ...parseNode(id, ''), error: err.message })
+        // Otherwise deleted between readdir and readFile.
       }
     }
     const own = new Map(nodes.map((n) => [n.id, [...n.links]]))
