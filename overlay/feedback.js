@@ -268,9 +268,45 @@
   let area = null
   const handles = [...root.querySelectorAll('.h')]
 
-  const mount = () => (document.body || document.documentElement).appendChild(host)
+  // Where the button lives: at the end of the page, or inside a modal dialog
+  // while one is open (a sheet or slide-over opened with showModal). Such a
+  // dialog sits above everything, whatever its z-index, and makes the rest of
+  // the page unclickable: the button would be under it, and a click on it
+  // would land on the dialog's backdrop and close it. Inside it, the button
+  // stays on top and the dialog stays open. It moves back when it closes.
+  const container = () => {
+    const modal = [...document.querySelectorAll('dialog[open]')].filter((d) => {
+      try { return d.matches(':modal') } catch { return false }
+    })
+    return modal[modal.length - 1] || document.body || document.documentElement
+  }
+  const mount = () => {
+    const where = container()
+    if (host.parentNode !== where) where.appendChild(host)
+    // Inside a dialog the button is also a popover, on the browser's top layer
+    // above the dialog: a dialog that clips or scrolls its content (most
+    // sheets) would otherwise cut the comment card off and scroll away from
+    // what is being commented on. Being inside it, it stays clickable.
+    const onTop = where.tagName === 'DIALOG' && typeof host.showPopover === 'function'
+    try {
+      if (onTop) {
+        if (!host.hasAttribute('popover')) host.setAttribute('popover', 'manual')
+        if (!host.matches(':popover-open')) host.showPopover()
+      } else if (host.hasAttribute('popover')) {
+        if (host.matches(':popover-open')) host.hidePopover()
+        host.removeAttribute('popover')
+      }
+    } catch {}
+  }
   if (document.body) mount()
   else document.addEventListener('DOMContentLoaded', mount)
+  // A dialog opening or closing, or the page (Livewire, a framework) taking the button out again.
+  new MutationObserver(() => mount()).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] })
+  // What happens on the button and its cards stays there: a menu or panel that
+  // closes on a click or focus outside it stays open while you comment on it.
+  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'touchstart', 'touchend', 'focusin', 'focusout', 'keydown', 'keyup', 'keypress']) {
+    host.addEventListener(type, (e) => e.stopPropagation())
+  }
 
   // What a person would call an element, and what kind it is.
   const ROLES = { a: 'link', button: 'button', img: 'image', select: 'menu', textarea: 'text field', h1: 'heading', h2: 'heading', h3: 'heading', nav: 'navigation', li: 'list item', ul: 'list', ol: 'list', form: 'form', label: 'label', p: 'text', span: 'text', div: 'box', section: 'section', article: 'card', main: 'page', header: 'header', footer: 'footer', aside: 'side panel', table: 'table', tr: 'row', td: 'cell', svg: 'icon' }
@@ -494,6 +530,7 @@
     e.preventDefault()
     drag = { corner: -1, start: selectionRect(), x: e.clientX, y: e.clientY }
   })
+  // Capture: the button's own events stop at it (above), and a drag goes on over the box and handles.
   window.addEventListener('pointermove', (e) => {
     if (!drag) return
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y
@@ -509,7 +546,7 @@
     }
     area = { x: left + scrollX, y: top + scrollY, w: right - left, h: bottom - top, texts: area?.texts ?? '' }
     showSelection()
-  })
+  }, true)
   window.addEventListener('pointerup', () => {
     if (!drag) return
     drag = null
@@ -518,7 +555,7 @@
     describe()
     placeCard()
     field.focus()
-  })
+  }, true)
 
   /** The drawing library, loaded from Groundwork the first time a picture is taken. */
   let shotLib = null
@@ -550,7 +587,9 @@
       const want = { left: rect.left - margin, top: rect.top - margin, right: rect.left + rect.width + margin, bottom: rect.top + rect.height + margin }
       // The smallest element around the spot and its margin, so the whole page is not drawn.
       let around = area ? anchorOf(rect) : picked
-      while (around && around !== document.body) {
+      // Inside an open dialog the drawing stops at the dialog: the page under it is another layer, drawn without it.
+      const layer = around && around.closest && around.closest('dialog[open]')
+      while (around && around !== document.body && around !== layer) {
         const r = around.getBoundingClientRect()
         if (r.left <= want.left && r.top <= want.top && r.right >= want.right && r.bottom >= want.bottom) break
         around = around.parentElement
@@ -572,6 +611,8 @@
         timeout: 4000,
         filter: (n) => n !== host && !outside(n.parentElement),
         onCloneEachNode: cleanAttributes,
+        // A dialog drawn on its own: where the browser placed it on the screen does not carry over, so it is drawn in place.
+        ...(around === layer ? { style: { position: 'static', margin: '0', inset: 'auto', transform: 'none', translate: 'none', maxHeight: 'none' } } : {}),
         // A scrolled list is drawn as scrolled, not from its top.
         features: { restoreScrollPosition: true },
       })
