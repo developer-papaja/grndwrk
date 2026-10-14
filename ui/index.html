@@ -218,6 +218,11 @@
     <!-- Which part of the product, and how the map draws its cards -->
     <div x-cloak x-show="$store.gw.view === 'map'" class="pointer-events-none fixed top-0 z-[5] flex flex-col items-center gap-2" :style="$store.gw.mapArea">
       <div id="map-toolbar" class="pointer-events-auto flex h-12 w-full items-center gap-2 whitespace-nowrap [&>*]:shrink-0 border-b border-line bg-panel/95 px-3 text-[12.5px] backdrop-blur">
+      <!-- The panel folded away: open it again from the start of the toolbar -->
+      <button id="list-show" x-show="!$store.gw.listOpen" class="icon-btn relative" title="Show panel" aria-label="Show panel" @click="$store.gw.setListOpen(true)">
+        <svg class="size-5"><use href="#i-panel" /></svg>
+        <span x-show="!$store.gw.live" class="absolute right-0.5 top-0.5 size-1.5 animate-pulse rounded-full bg-amber-400" title="Offline, start groundwork in your terminal"></span>
+      </button>
       <!-- The part picker: search the screens, or walk the tree -->
       <div x-show="$store.gw.screens.length" class="pointer-events-auto relative" @keydown.escape.stop="$store.gw.scopeOpen = false" @click.outside="$store.gw.scopeOpen = false">
         <button
@@ -293,25 +298,20 @@
                 <svg x-show="o.on" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
               </button>
             </template>
-            <!-- Which local sites may send comments from the Comment button they load -->
-            <template x-if="m.key === 'menu-comments'">
-              <div id="allowed-sites" class="mt-1 border-t border-white/8 px-2.5 pb-1.5 pt-2">
-                <div class="text-[11px] font-medium text-fog/55">Sites that can send comments</div>
-                <template x-for="s in $store.gw.allowedSites" :key="s.origin">
-                  <div class="group flex items-center gap-2 py-1 text-[12px]">
-                    <span class="min-w-0 flex-1 truncate font-mono text-fog/80" :title="s.origin" x-text="$store.gw.siteName(s.origin)"></span>
-                    <span x-show="!s.kept" class="shrink-0 text-[11px] text-fog/40">--app, while it runs</span>
-                    <button x-show="s.kept" class="shrink-0 rounded p-0.5 text-fog/40 hover:bg-white/8 hover:text-fog" :title="'Remove ' + $store.gw.siteName(s.origin) + ': its next comment asks again'" @click.stop="$store.gw.removeAllowedSite(s.origin)">
-                      <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-                </template>
-                <div x-show="!$store.gw.allowedSites.length" class="py-1 text-[11px] text-fog/45">None yet. A site's first comment asks you here.</div>
-              </div>
-            </template>
           </div>
         </div>
       </template>
+      <!-- The details panel minimized: open it again from the end of the toolbar -->
+      <button
+        id="details-tab-bar"
+        x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.selectedStory || $store.gw.reportOpen) && $store.gw.detailsMinimized"
+        class="menu-btn max-w-[260px]"
+        title="Show details"
+        @click="$store.gw.setDetailsMinimized(false)"
+      >
+        <span class="truncate" x-text="$store.gw.reportOpen ? 'Readiness report' : $store.gw.selectedGap ? 'Missing: ' + $store.gw.selectedGap.title : $store.gw.selectedStory ? 'Story: ' + $store.gw.selectedStory.title : $store.gw.selected?.title"></span>
+        <svg class="size-4 shrink-0 text-fog/55"><use href="#i-panel-right" /></svg>
+      </button>
       </div>
     </div>
 
@@ -395,9 +395,42 @@
           ></span>
         </button>
       </template>
+      <!-- Sites: which local sites may send comments from the Comment button they load. A site asks the first time; here it can be taken off. -->
+      <div class="relative mb-3 mt-auto" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false">
+        <button
+          id="rail-sites"
+          class="relative grid size-10 place-items-center rounded-lg"
+          :class="open ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
+          title="Sites: which sites can send comments"
+          aria-label="Sites: which sites can send comments"
+          :aria-expanded="open"
+          @click="open = !open; open && $store.gw.loadSiteRequests()"
+        >
+          <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" /></svg>
+          <span
+            x-show="$store.gw.siteRequests.length"
+            class="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-accent text-[10px] font-semibold text-white"
+            x-text="$store.gw.siteRequests.length"
+          ></span>
+        </button>
+        <div id="sites" x-cloak x-show="open" x-transition.opacity.duration.100ms class="menu-pop bottom-0 left-12 top-auto w-72 px-3 py-2.5">
+          <div class="text-[13px] font-medium text-fog">Sites that can send comments</div>
+          <template x-for="s in $store.gw.allowedSites" :key="s.origin">
+            <div class="group mt-1.5 flex items-center gap-2 text-[12px]">
+              <span class="min-w-0 flex-1 truncate font-mono text-fog/80" :title="s.origin" x-text="$store.gw.siteName(s.origin)"></span>
+              <span x-show="!s.kept" class="shrink-0 text-[11px] text-fog/40">--app, while it runs</span>
+              <button x-show="s.kept" class="shrink-0 rounded p-0.5 text-fog/40 hover:bg-white/8 hover:text-fog" :title="'Remove ' + $store.gw.siteName(s.origin) + ': its next comment asks again'" :aria-label="'Remove ' + $store.gw.siteName(s.origin)" @click.stop="$store.gw.removeAllowedSite(s.origin)">
+                <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          </template>
+          <div x-show="!$store.gw.allowedSites.length" class="mt-1.5 text-[11px] text-fog/45">None yet.</div>
+          <p class="mt-2.5 border-t border-white/8 pt-2 text-[11px] leading-snug text-fog/45">A site asks in the map the first time its Comment button sends something. Removed, its next comment asks again. Kept on this Mac, not in the project.</p>
+        </div>
+      </div>
     </nav>
 
-    <!-- List: docked on the left, or a small pill when collapsed -->
+    <!-- List: docked on the left; folded away, Show panel is at the start of the toolbar -->
     <aside
       x-cloak
       x-show="$store.gw.view === 'map' && $store.gw.listOpen"
@@ -570,18 +603,6 @@
         </template>
       </div>
     </aside>
-
-    <div
-      x-cloak
-      x-show="$store.gw.view === 'map' && !$store.gw.listOpen"
-      class="fixed left-[76px] top-3 flex items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-black/20"
-    >
-      <span class="size-1.5 rounded-full" :class="$store.gw.live ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'"></span>
-      <span class="font-semibold text-fog" x-text="$store.gw.project.name || 'Groundwork'"></span>
-      <button id="list-show" class="icon-btn" title="Show panel" @click="$store.gw.setListOpen(true)">
-        <svg class="size-5"><use href="#i-panel" /></svg>
-      </button>
-    </div>
 
     <!-- Link mode banner -->
     <div x-cloak x-show="$store.gw.view === 'map' && $store.gw.mode === 'link'" class="pointer-events-none fixed top-16 z-[5] flex justify-center px-4" :style="$store.gw.mapArea">
@@ -1550,10 +1571,10 @@
       </div>
     </main>
 
-    <!-- Details: docked on the right, or a small pill when minimized -->
+    <!-- Details: docked on the right, or a small pill when minimized (on the map, at the end of its toolbar) -->
     <button
       x-cloak
-      x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.selectedStory || $store.gw.reportOpen) && $store.gw.detailsMinimized && $store.gw.view !== 'focus'"
+      x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.selectedStory || $store.gw.reportOpen) && $store.gw.detailsMinimized && $store.gw.view !== 'focus' && $store.gw.view !== 'map'"
       id="details-tab"
       class="fixed right-3 top-3 flex max-w-[280px] items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-black/20"
       title="Show details"
