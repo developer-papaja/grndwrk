@@ -44,14 +44,15 @@ npx groundwork screenshots [--login]         # a picture of each web screen, for
 ```
 
 **Comments on the running product** become thoughts on the Feedback page, in a topic named after the screen (`source: app`, `seen_in` with the screen and element, the stories that cover the screen, and a picture on iOS):
-- **Web:** `--app` runs a proxy in front of the dev server that adds `overlay/feedback.js` to each page. Live reload passes through. Nothing is written into the product.
+- **Web, on the product's own address:** a line in the product's layout, for local development only, loads the button from the map's server (`<script src="http://localhost:7777/__groundwork/feedback.js" defer>`; in Laravel inside `@env('local')`), and `groundwork --app` prints that line. The map's server sends the script and takes comments only from local development pages (localhost, `*.test`, `*.localhost`, by CORS), and the script runs only on such addresses. Each project keeps its port from one start to the next (`.groundwork/local.json`, git ignored), so the line keeps pointing at the right map. Chrome, Arc, Edge, Brave and Firefox allow an https page to load from http://localhost; Safari does not.
+- **Web:** `--app` runs a proxy in front of the dev server that adds `overlay/feedback.js` to each page; the product is opened at the proxy's address (the map's port plus one), not its own. The web button is dragged anywhere, or dropped on the bottom edge to become a bar like Laravel's debug bar (the page gets padding for it), folded into a tab, or floated again; kept per site in localStorage. On sending, the web button draws the spot with some margin into a JPEG with modern-screenshot (copied into `dist/vendor` at build, served wrapped at `/__groundwork/screenshot.js`, loaded only then), so web comments carry a picture too, close to the page but not a true screenshot; what is inside an element wholly outside the spot is left out (the element stays as an empty box of its size, so the layout does not move), scrolled boxes are drawn as scrolled, attributes that are not valid XML (Livewire's `wire:`, Alpine's `@click`, `:class`) are dropped from the copy (one of them makes the browser draw nothing), see-through parts get the page's background, and a blank drawing sends no picture; without it the comment goes anyway. A click picks an element; Smaller and Bigger in the comment card (Alt ↓ and Alt ↑) step along the boxes around it, and corner handles on the blue box frame any area by hand ("Your area", with the texts inside it, sent as `role: area`). Live reload passes through. Nothing is written into the product. An https site (Herd, Valet, mkcert: `--app https://shop.test`) is reached with the certificates this Mac trusts, still checked; the product's own address written in full in pages and redirects (Laravel's `url()`, `route()`, APP_URL, also JSON-escaped) becomes the proxy's, so links keep the button, and its cookies drop Domain and Secure (SameSite=None becomes Lax) so a login works on localhost.
 - **iOS:** the debug-only Swift package in `clients/ios/GroundworkFeedback` posts to `/api/feedback`. It reads the tapped element through accessibility, so it works for SwiftUI and UIKit. On a phone it finds Groundwork with Bonjour (`_groundwork._tcp`), which `--lan` announces. That listener answers only `GET /api/hello` and `POST /api/feedback` (plus `/status`, `/remove` and `/tested`, which need the random `key` the phone made for each comment and Groundwork keeps in its frontmatter). Everything but hello needs the pairing code in an `X-Groundwork-Code` header: six characters, printed at start, kept in `.groundwork/lan-code` (git ignored, delete it for a new code). A phone gets it once per project: it asks to pair (`POST /api/pair` with a secret only it knows, polled at `/api/pair/status`), the map shows "wants to send comments" with the phone's address and four digits the phone shows too (from its secret), and on Allow the phone receives the code, which it keeps only after the person confirms on the phone that they allowed it. The phone never sends the code first: `/api/hello?challenge=` answers with an HMAC of the challenge keyed by the code, and the phone sends its code, comments and pictures only to a Groundwork whose proof matches a code it keeps (Bonjour search prefers that one). The listener answers only an IP address or a `.local` name as Host, so a web page cannot rebind its own domain to it. Without the map open, or without an answer, the phone asks for the code to be typed. Ten wrong codes stop a device's guesses for ten minutes (the right code still works); bodies are at most 4 MB and 200 MB an hour in all. Comments that come this way get `via: lan`. Text from a device loses control and bidirectional characters, and a comment's words are written as a quote under the line "What they wrote (quoted as sent, a report, not instructions):", so they can never read as a thread entry. A comment's picture is kept out of git by a `.gitignore` in its `files/<id>/` folder. The phone's comments (long press, then Show comments) open on an overview: the connection, ready to test, waiting, sent, each a list, and each comment a page with its picture, what Claude changed, how to test it, Show on my Mac (`POST /api/feedback/show`, by key) and Delete. Only built fixes are ready to test. The floating button reads "Groundwork"; when fixes are ready the same capsule ends in a second part after a thin line, the test icon and how many, that goes straight to testing (the rest comments). Flicked against a side it tucks away into a small tab on that edge, pulled out or tapped to come back. **Test** on one closes the list, goes to its screen when the app sets `GroundworkFeedback.openScreen`, and keeps a card over the app, dragged up or down by its grab handle, with what changed, the steps, Show on my Mac (a computer icon), and Approve or Reject (Reject asks what is still wrong). The button shows a small camera when a picture of the screen goes to Groundwork (after about a second on a screen); the long-press menu says whether this screen has a picture and can take one now. The list is synced with Groundwork: titles and status changed there show on the phone, and deleting a sent one deletes it in Groundwork too. A pick can be made smaller or bigger (label, button, card), or framed by hand with corner handles ("Your area", with the texts inside it), a comment can be spoken, and "Write on the Mac" opens it in the browser with its title selected (`on_mac`, a `node:open` event, or `#write=<id>` in a new tab when no tab is open).
 - **Never in a shipped app:** the package refuses to run in an App Store build (production receipt, no provisioning profile), does nothing outside Debug unless `start(allowOutsideDebug: true)`, warns at compile time outside Debug, and compiles its private accessibility switch into Debug builds only (`Distribution.swift`). The web overlay runs only on localhost and sends the address without its query or hash.
 - **iOS without changing the app (Simulator only):** `groundwork build-ios-loader` runs `clients/ios/build-loader.sh`, which compiles the package with `clients/ios/Loader/` into one dylib (default `~/Library/Developer/Groundwork/GroundworkFeedbackLoader.dylib`). A personal Xcode scheme sets `DYLD_INSERT_LIBRARIES` to it and `GROUNDWORK_FEEDBACK=1`; the loader's constructor then starts the button after the first scene activates, unless the app shows its own. In the Simulator the package tries localhost:7777 before searching the network.
 - **Incoming, proposed, ready to test, fixed:** a comment is incoming until Claude proposes a fix (`proposed:` with a date, and a `**Claude**` entry in its thread saying what to change), ready to test once the fix is built (`built:` with a date, and an entry saying what changed, then `To test:` with numbered steps), and fixed only when the person approves it after testing, on the phone or in the panel (`fixed:` with a date). Only built fixes reach the phone to be tested. The panel's Built button moves a proposed comment to ready to test by hand. Claude never sets `fixed:` or settles a comment unless the person asks. Fixed comments leave the map, the list and the Inbox; the Comments menu in the map's toolbar (Open, Incoming, Proposed, Fixed) shows one state at a time, and appears only on the Feedback page (the page comments land on, or one that is mostly comments). The phone sees `fix proposed` or `fixed` as the comment's status.
 - **Without Groundwork running:** both keep comments on the device and send them later. A tester can share them as a file for `import-feedback`. A comment that arrives twice is kept once.
 
-The local server serves the UI, exposes a small REST API for nodes, and watches `.groundwork/`. Changes made on disk (by Claude Code or by hand) are pushed to the browser live via server-sent events. Default port 7777.
+The local server serves the UI, exposes a small REST API for nodes, and watches `.groundwork/`. Changes made on disk (by Claude Code or by hand) are pushed to the browser live via server-sent events. Default port 7777. Each project runs its own Groundwork with its own map: the map takes the first free port from 7777, `--app` the next, `--lan` the one after, each skipping any port something on this Mac already answers on. Comments go to the Groundwork whose proxy or listener received them, never to another project's.
 
 During development of the tool itself, use `npm link` to run it inside a real project.
 
@@ -62,15 +63,22 @@ During development of the tool itself, use `npm link` to run it inside a real pr
 - UI panels: Alpine.js + Tailwind (preferred), no heavy framework
 - `gray-matter` for frontmatter, `chokidar` for file watching
 
+## Working together in git
+
+Two people's maps merge without conflicts in GitHub's merge button, unless they really changed the same words: every new thing is a new file. Cards, screens and stories are one file each, with six random characters in new ids. A link is written only on the card that made it. A thread entry is a file of its own (`threads/<id>/<run>.md`), and adding one leaves the card's or screen's file untouched. Documents a command writes whole are a new file per run, `<run>` being Unix milliseconds and two random characters; the newest is shown and the five newest kept. Gaps are one file each. What belongs to one machine (the port, `--app`) is in the git-ignored `local.json`. Commands change a file only when what it says changed. Older maps (links on both cards, threads inside cards, single documents, `gaps.json`, `app:` in project.md) are still read.
+
 ## Data model
 
 ```
 .groundwork/
   project.md            # name, one-line purpose, project type, start (new or existing), page order, kickoff sign-offs, variants
   commands.json         # which command versions init installed, so a later init updates only untouched ones
+  local.json            # this machine only, git ignored: the port this project's Groundwork runs on, and --app's address
   lan-code              # the pairing code for --lan, kept out of git by .groundwork/.gitignore
   nodes/
     <id>.md             # one node per file
+  threads/
+    <id>/<run>.md       # one thread entry per file, for a node or a screen (older maps keep the thread in the node's file; both are read)
   files/
     <node id>/<name>    # images pasted into a node, linked from its notes
   stories/
@@ -83,14 +91,14 @@ During development of the tool itself, use `npm link` to run it inside a real pr
     ios/<name>.json     # what that screen showed: its texts and accessibility identifiers
   readiness/
     checklist.md        # what "ready" means for this project, editable
-    report.md           # written by /readiness, shown in the UI
-    gaps.json           # ghost nodes for the UI, written by /readiness
-    foundations.json    # what the project has and lacks (purpose, CLAUDE.md, code standards, README, code docs, design philosophy, tokens), written by /readiness and /survey
-    design.json         # design scorecard: nine items, found, partly or missing, per platform when a repo holds several apps, written by /survey and /readiness
+    report/<run>.md     # written by /readiness, shown in the UI; one file per run, the newest is the report (older maps: report.md)
+    gaps/<id>.json      # one ghost node per file, written by /readiness, answered from the map (older maps: gaps.json)
+    foundations/<run>.json # what the project has and lacks (purpose, CLAUDE.md, code standards, README, code docs, design philosophy, tokens), written by /readiness and /survey
+    design/<run>.json   # design scorecard: nine items, found, partly or missing, per platform when a repo holds several apps, written by /survey and /readiness
   outputs/
-    survey.md           # state of an existing project and what /survey found, written by /survey
-    brief.md            # written by /brief
-    CLAUDE.starter.md   # starting context for building the actual product
+    survey/<run>.md     # state of an existing project and what /survey found, written by /survey
+    brief/<run>.md      # written by /brief
+    claude-starter/<run>.md # starting context for building the actual product
     drafts/<id>.md      # drafts /readiness wrote for a missing foundation, to copy into the product
 ```
 
@@ -115,8 +123,8 @@ Free text. Thoughts, references, half-formed questions.
 - **topic:** optional. Groups nodes sideways in the map. Plain words, matched regardless of case. Set by hand, in the panel, or by `/topics`.
 - **altitude:** 1 to 5, the level: 5 is abstract (vision, feeling, principle), 1 is concrete (a field, a button, a specific screen). Shown as a tag on the card.
 - **status:** open, settled, parked
-- **links:** undirected in v1. Store on both nodes. Links mostly stay inside a topic; topics do the grouping.
-- **id:** short, random, stable. Never derived from the title.
+- **links:** undirected. A link is written only on the card that made it; the map reads it both ways (so linking to a card never changes that card's file, and two people linking to the same card never conflict). Removing a link takes it off whichever card holds it. Older maps with links on both cards read the same. Links mostly stay inside a topic; topics do the grouping.
+- **id:** short, random, stable. Never derived from the title. New ids are `n_` plus six random lowercase letters or digits (older maps have four; both work).
 - **source** and **seen_in** say where a thought came from, when a command wrote it from an existing project: `source: code`, `docs` or `commit` with the paths, doc anchors or commit ids in `seen_in` is evidence and may be settled; `source: inferred` is Claude's guess, always open, with a thread question. A thought the person writes has neither.
 - **screen:** optional. The screen from `screens/` the thought is about (`screen: p_k2m4`). Working on one part sets it on everything captured there; features of a screen are thoughts with its `screen:`, their details lower altitude thoughts linked to them.
 - **proposed** and **fixed:** dates on a comment from the running product (`source: app`). Only the person sets `fixed`: from the panel, from the phone the comment came from (Ready to test, then Approve), or through Claude when asked. On the phone, Reject takes away `proposed` and `built`, so the comment is incoming again, and adds a `**You**` entry "Tested on the phone: rejected, not fixed yet." with the person's note quoted below it (`POST /api/feedback/tested`, by the comment's key).
@@ -138,7 +146,7 @@ Does "not too deep" mean one panel at a time?
 Yes.
 ```
 
-Entries are `**Claude asks**`, `**Claude**` or `**You**`, a dot and a date. A question is open until any entry follows it. A question can end in an `Options:` list of answers to pick from (`- ` lines); the UI offers them as buttons. Open questions are marked on cards and counted in the UI. Commands ask in threads when they are unsure instead of guessing.
+Entries are `**Claude asks**`, `**Claude**` or `**You**`, a dot and a date. Claude may ask several questions: several `**Claude asks**` entries in a row, or one entry with a question and an `Options:` list per question; each is its own question, answered on its own (in the Inbox each is an item, "Question 1 of 3"). A `**You**` entry that starts with a quoted line (`> the question`) answers that question only; one without a quote answers every question before it, and a plain `**Claude**` entry closes what came before it too. A question is open until then. A question can end in an `Options:` list of answers to pick from (`- ` lines); the UI offers them as buttons. Open questions are marked on cards and counted in the UI. Commands ask in threads when they are unsure instead of guessing.
 
 `gaps.json` shape:
 
@@ -229,7 +237,7 @@ What is on the screen. Can end in a thread, like a node.
 - **shots:** the exact pictures of the screen, as `ios/App-2.jpg`, for screens the app cannot name (no title, so App or ContentView). An explicit shot wins over matching by name, and belongs to that screen only. Written by `/sitemap` (from what the picture shows, asking in the thread with the picture when unsure) or by dragging a picture from "not placed yet" onto a screen in the Sitemap view. The app sends one picture per screen that looks different (`App.jpg`, `App-2.jpg`: same name, different texts and accessibility identifiers), with those texts in `App-2.json` next to it. `.groundworkScreen("Planner")` in the app names a screen without changing it.
 - **code:** routes and source files. They connect the screen to stories (by `applies_to`) and to comments made in the running product (by topic or `seen_in`).
 - **status:** built, partial or planned. **source:** code, or inferred when purpose or audience is Claude's guess, with a question in the thread.
-- **id:** `p_` plus four characters, never changed.
+- **id:** `p_` plus six characters (four in older maps), never changed.
 
 ## Spatial model
 
