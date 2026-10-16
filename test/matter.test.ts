@@ -73,5 +73,11 @@ describe('reading like gray-matter did', () => {
   it('still refuses what is broken in other ways', () => {
     expect(() => readMatter('---\npurpose: [unclosed\n---\n')).toThrow()
   })
+  it('reads a file checked out with Windows line ends, or with a byte order mark', () => {
+    const raw = '\uFEFF---\r\nname: Desks\r\nstart: new\r\npages: [Product, Feedback]\r\n---\r\nNotes.\r\n'
+    const { data, content } = readMatter(raw)
+    expect(data).toEqual({ name: 'Desks', start: 'new', pages: ['Product', 'Feedback'] })
+    expect(content).toBe('Notes.\n')
+  })
 })
 

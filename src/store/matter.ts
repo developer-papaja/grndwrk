@@ -14,6 +14,10 @@ export interface Matter {
 }
 
 export function readMatter(raw: string): Matter {
+  // Git on Windows often checks files out with CRLF line ends, and some
+  // editors there start a file with a byte order mark. The YAML parser would
+  // keep the \r in values (`start: new\r`) or refuse `[a, b]\r`; read both as plain lines.
+  raw = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
   if (!raw.startsWith('---') || raw.charAt(3) === '-') return { data: {}, content: raw }
   let rest = raw.slice(3)
   const language = /^[^\n]*/.exec(rest)?.[0] ?? ''
@@ -24,7 +28,6 @@ export function readMatter(raw: string): Matter {
   const close = rest.indexOf('\n---')
   const block = close === -1 ? rest : rest.slice(0, close)
   let content = close === -1 ? '' : rest.slice(close + 4)
-  if (content.startsWith('\r')) content = content.slice(1)
   if (content.startsWith('\n')) content = content.slice(1)
   // Only comments and blank lines: no fields.
   if (!block.replace(/^\s*#[^\n]+/gm, '').trim()) return { data: {}, content }
