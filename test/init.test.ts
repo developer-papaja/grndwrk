@@ -30,6 +30,17 @@ describe('init', () => {
     expect(noMapMessage(join(root, 'sub'))).toContain('No .grndwrk/ folder')
   })
 
+  it('updates the map rules an init from before the rename installed', async () => {
+    await mkdir(join(root, '.groundwork'), { recursive: true })
+    const old = 'Rules for the Groundwork map in .groundwork/\n'
+    await writeFile(join(root, '.groundwork', 'CLAUDE.md'), old)
+    const sum = (await import('node:crypto')).createHash('sha256').update(old).digest('hex').slice(0, 16)
+    await writeFile(join(root, '.groundwork', 'commands.json'), JSON.stringify({ '.groundwork/CLAUDE.md': sum }))
+    await init(root)
+    expect(await readFile(join(root, '.grndwrk', 'CLAUDE.md'), 'utf8')).toBe(await readFile(join(PACKAGE_ROOT, 'templates', 'CLAUDE.md'), 'utf8'))
+    expect(Object.keys(JSON.parse(await readFile(join(root, '.grndwrk', 'commands.json'), 'utf8')))).not.toContain('.groundwork/CLAUDE.md')
+  })
+
   it('never moves .groundwork/ when it is a link, or over a .grndwrk/ that is there', async () => {
     const elsewhere = await mkdtemp(join(tmpdir(), 'gw-elsewhere-'))
     try {

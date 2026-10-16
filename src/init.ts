@@ -83,6 +83,12 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   const rules = await readFile(join(templates, 'CLAUDE.md'), 'utf8')
   const rulesPath = join(gw, 'CLAUDE.md')
   const currentRules = await readFile(rulesPath, 'utf8').catch(() => null)
+  // Recorded under the folder's name before the rename to grndwrk.
+  const OLD_KEY = `${OLD_GW_DIR}/CLAUDE.md`
+  if (installed[OLD_KEY]) {
+    installed['.grndwrk/CLAUDE.md'] ??= installed[OLD_KEY]
+    delete installed[OLD_KEY]
+  }
   if (currentRules === null) {
     await writeFile(rulesPath, rules)
     say('created', rulesPath)
