@@ -65,7 +65,6 @@ describe('screen files that cannot be read', () => {
   it('say why instead of showing as an empty box', async () => {
     const bad = (await listScreens(GW)).find((s) => s.id === 'p_bad')!
     expect(bad.error).toMatch(/not valid YAML/)
-    expect(bad.error).toMatch(/colon in it needs quotes/)
     expect(parseScreen('p_a', '').error).toBe('The file is empty.')
     expect(parseScreen('p_a', '\n---\ntitle: A\n---\n').error).toMatch(/first line/)
     expect(parseScreen('p_a', 'title: A\n').error).toMatch(/No frontmatter/)

@@ -119,3 +119,7 @@ select.field option {
 .report .node-link {
   @apply rounded bg-white/8 px-1 font-mono text-[11.5px] text-accent hover:bg-accent/15;
 }
+
+/* Documents: a heading a check found something about, and what it found, set as text under it. */
+.doc-flag { border-left: 3px solid rgb(250 204 21 / 0.7); padding-left: 0.6rem; }
+.doc-flag-note { margin: -0.25rem 0 0.75rem; padding-left: 0.75rem; border-left: 3px solid rgb(250 204 21 / 0.35); font-size: 12px; color: rgb(250 204 21 / 0.85); }

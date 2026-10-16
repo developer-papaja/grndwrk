@@ -19,6 +19,8 @@ The question, and an Options: list when there is one.
 
 `who` is `claude-asks` for a question and `claude` for anything else. Leave the card's or screen's own file untouched when all you add is an entry: two people adding to the same thread then never collide in git. A card or screen you create in this run may hold its first entries in its own file.
 
+**Frontmatter is YAML.** Put a value in double quotes when it contains a colon followed by a space, or a ` #`, or starts with a character YAML reads specially (`[ { & * ! | > ' " % @` or a backtick): `purpose: "Explain our work: why it matters and how"`, and the same in lists (`- "read Why: the reasons"`). Without the quotes the file is not valid YAML and every other tool that reads it fails. A file whose frontmatter does not read as YAML is the one exception to leaving files as they are: fix it (quote the values that need it, change nothing else) whenever this command touches that folder.
+
 **Documents and gaps.** Documents a command writes whole are a new file per run, so two people's runs never collide in git. Where this text names one of these files, read the newest file in its folder instead (the highest number; an older map may still have the single file, read that when the folder is empty), and write a new file there named `<Unix time in milliseconds>-<two random lowercase letters or digits>` with the same extension, never overwriting an older one. Keep the five newest files in each folder and delete the rest.
 
 | Named in this text | Lives in |
@@ -67,6 +69,7 @@ Each run should leave the person closer to done, never further away:
 - Keep the gap ids of the previous run for the same things, so answers stay attached.
 - Add a new **blocking** gap only when something changed since the last `checked` date (in the map, the checklist or the project) that causes it. Anything else you notice now is `important` or `nice`.
 - Never raise a gap the person accepted with "Enough for now".
+- Judge only the areas in the project's checklist. A gap whose area is not in it (the person took the area out, like Scope) is dropped, and no new gap is raised for it. Do not ask what is in or out of a release unless the checklist has an area for it.
 
 ## Judge
 
@@ -135,14 +138,16 @@ Always these eight, with these ids:
     "seen_in": [],
     "missing": ["No document says what the app should feel like", "Choices like the dark theme are made, but nowhere explained"],
     "suggestion": "Add DESIGN.md at the root: three to five principles for how the app should feel (for example calm, quick to scan), each with one example from the existing screens, and point to Theme.swift for the values. Link it from CLAUDE.md.",
-    "draft": "design_philosophy.md"
+    "draft": "design_philosophy.md",
+    "file": "DESIGN.md"
   }
 ]
 ```
 
 - `missing`: concrete lines about what is lacking inside the files, not only "the file is missing". For a CLAUDE.md that exists, say which parts are thin ("Nothing on how screens are structured", "No rule on tokens versus raw colors").
 - `suggestion`: an instruction for Claude Code in the product's repo, ready to paste, grounded in what the project has (file names, values, existing patterns). Empty when done.
-- `draft`: when it saves the person real work (a DESIGN.md, a section for CLAUDE.md), write a draft of the file itself to `.groundwork/outputs/drafts/<id>.md` and name it here. Base it only on what the project and the map say; mark guesses as questions in the draft.
+- `draft`: when it saves the person real work (a DESIGN.md, a section for CLAUDE.md), write a draft of the file itself to `.groundwork/outputs/drafts/<id>.md` and name it here. Base it only on what the project and the map say; mark guesses as questions in the draft. **Whenever a missing item belongs in a document of its own that the project does not have, write a draft**: the person sees it in the map's Documents view as a suggested file, and can edit and create it there.
+- `file`: with a draft for a new document, where it should go in the product, as a path from the project's root (`DESIGN.md`, `docs/tone.md`, `CONTENT.md`). Markdown only. Leave it out when the draft is a section for an existing file; then name that file in `seen_in` with the section (`CLAUDE.md#design`).
 - More items are allowed (for example `tests`), with a `title` and a `group`, when the project type calls for them.
 
 ## Write `.groundwork/readiness/gaps.json`

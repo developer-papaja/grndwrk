@@ -55,6 +55,20 @@ describe('init', () => {
     expect(await readFile(join(root, '.groundwork', 'CLAUDE.md'), 'utf8')).toBe('# My own rules\n')
   })
 
+  it('takes Scope out of a checklist that still has it as shipped, and keeps a reworded one', async () => {
+    await init(root)
+    const path = join(root, '.groundwork', 'readiness', 'checklist.md')
+    const scope = '**Scope.** What is in the first version and what is explicitly out.\nEnough when: there is at least one thing you decided not to build.\n\n'
+    const before = await readFile(path, 'utf8')
+    expect(before).not.toContain('**Scope.**')
+    await writeFile(path, before.replace('**Content and tone.**', scope + '**Content and tone.**'))
+    await init(root)
+    expect(await readFile(path, 'utf8')).toBe(before)
+    await writeFile(path, before + '\n**Scope.** Only what the client signed.\n')
+    await init(root)
+    expect(await readFile(path, 'utf8')).toContain('Only what the client signed')
+  })
+
   it('backs up a command installed before init kept track, then updates it', async () => {
     await init(root)
     await rm(join(root, '.groundwork', 'commands.json'))

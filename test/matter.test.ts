@@ -52,11 +52,26 @@ describe('reading like gray-matter did', () => {
     expect(readMatter('---\n# only a comment\n---\nText')).toEqual({ data: {}, content: 'Text' })
     expect(readMatter('---\ncreated: 2026-10-12\nlinks: [n_a, n_b]\n---\r\nBody\n')).toEqual({ data: { created: '2026-10-12', links: ['n_a', 'n_b'] }, content: 'Body\n' })
     expect(readMatter('---\ntitle: Open\n').data).toEqual({ title: 'Open' })
-    expect(() => readMatter('---\npurpose: Check in: scan the code\n---\n')).toThrow()
+    // A sentence with a colon, unquoted, is read as the sentence (the file is left as it is).
+    expect(readMatter('---\npurpose: Check in: scan the code\n---\n').data.purpose).toBe('Check in: scan the code')
   })
 
   it('reads no tags that make objects or run code', () => {
     expect(() => readMatter('---\nx: !!js/function "function () { return 1 }"\n---\n')).not.toThrow()
     expect(typeof readMatter('---\nx: !!js/function "function () { return 1 }"\n---\n').data.x).not.toBe('function')
   })
+
+  it('reads a sentence with a colon in it as one value, as it was meant', () => {
+    const raw = '---\nid: p_13jx3x\npurpose: Explain how we approach web applications: why it matters, what we do and how.\ndoes:\n  - read Why: the reasons\n  - go back to Home\nfor: [a possible client]\n---\nBody.\n'
+    const { data, content } = readMatter(raw)
+    expect(data.purpose).toBe('Explain how we approach web applications: why it matters, what we do and how.')
+    expect(data.does).toEqual(['read Why: the reasons', 'go back to Home'])
+    expect(data.for).toEqual(['a possible client'])
+    expect(content).toBe('Body.\n')
+  })
+
+  it('still refuses what is broken in other ways', () => {
+    expect(() => readMatter('---\npurpose: [unclosed\n---\n')).toThrow()
+  })
 })
+

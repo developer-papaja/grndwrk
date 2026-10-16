@@ -48,6 +48,10 @@ export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'page' 
   proposed?: string
   /** A comment from the running product: the date its fix was built, ready to test, or empty when a test rejected it. */
   built?: string
+  /** On create: the document in the product this thought comments on (`CLAUDE.md`), from the Documents view. Kept as `doc:`. */
+  doc?: string
+  /** On create, with doc: the heading it is about. Kept as `doc_section:`. */
+  doc_section?: string
 }
 
 export type ServerEvent =
@@ -168,6 +172,8 @@ export interface Foundation {
   suggestion: string
   /** A fuller draft in .groundwork/outputs/drafts/, by file name, when one was written. */
   draft?: string
+  /** Where that draft should go in the product, for a document it does not have yet (`DESIGN.md`, `docs/tone.md`). */
+  file?: string
 }
 
 export interface Readiness {
@@ -252,6 +258,8 @@ export interface Story {
   applies_to: string[]
   created: string
   body: string
+  /** Set aside on purpose ("Not now", with the date): partially done, but not something left to do. */
+  later?: string
   /** Set when the file is broken or misses something required. */
   error?: string
 }

@@ -56,6 +56,7 @@ const handlers = {
     void state.loadSiteRequests()
     void state.loadShots()
     void state.loadRuntime()
+    if (state.view === 'docs') void state.loadDocs()
   },
   onError: () => {
     state.live = false
@@ -81,6 +82,7 @@ const handlers = {
       void state.loadRuntime()
     } else if (event.type === 'file:change' && event.path.startsWith('readiness/')) {
       void state.loadReadiness()
+      if (state.view === 'docs') void state.loadDocs()
     } else if (event.type === 'file:change' && event.path.startsWith('screens/')) {
       void state.loadScreens()
     } else if (event.type === 'file:change' && (event.path.startsWith('stories/') || event.path.startsWith('outputs/'))) {

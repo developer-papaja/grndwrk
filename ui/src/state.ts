@@ -1,14 +1,16 @@
 import Alpine from 'alpinejs'
 import { cached } from './reactivity'
-import type { DesignCheck, Gap, GNode, NodeInput, NodeType, PairRequest, Readiness, Screen, Status, Story } from '../../src/shared/types'
+import type { DesignCheck, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Readiness, Screen, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
 import { BOX, commentsForScreen, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
 import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, type FeedbackState } from '../../src/shared/feedback'
+import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
+import { PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -18,7 +20,7 @@ import { flatten, groupForList, type ListGroup } from './list'
 import { buildBoard, buildOutline, firstLine, MAP_LAYOUTS, screenOf, type Board, type GroupBy, type MapLayout, type OutlineSection } from './board'
 import { counterpart, inVariant, projectVariants, unknownVariants, variantView } from '../../src/shared/variants'
 
-export type View = 'focus' | 'map' | 'sitemap' | 'readiness' | 'deliverables'
+export type View = 'focus' | 'map' | 'sitemap' | 'readiness' | 'docs' | 'deliverables'
 
 /** A question from Claude waiting on the person, in the Inbox. */
 export interface InboxItem {
@@ -103,6 +105,13 @@ const unsaved = new Set<string>()
 const freshTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let deleteTimer: ReturnType<typeof setTimeout> | undefined
 let noteTimer: ReturnType<typeof setTimeout> | undefined
+
+/** The Show filter kept in this browser; a choice from the older Comments menu carries over. */
+function readProgressFilter(): ProgressFilter {
+  const kept = readStored<string>('groundwork.progressFilter', '')
+  if (kept === '' || kept === 'all' || (PROGRESS as string[]).includes(kept)) return kept as ProgressFilter
+  return ''
+}
 
 export const state = Alpine.reactive({
   live: false,
@@ -214,12 +223,12 @@ export const state = Alpine.reactive({
       return all.filter((n) => samePage(pageOf(n, names), this.currentPage))
     })
   },
-  /** The nodes in view. Fixed comments stay out unless asked for; a chosen state shows only those comments. */
+  /** The nodes in view: what the Show filter asks for (by default everything not finished), on the screens of the variant in view. */
   get visibleNodes(): GNode[] {
     return cached('visibleNodes', () => {
-      const f = this.activeFeedbackFilter
+      const f = this.progressFilter
       const hidden = this.hiddenScreens
-      return this.pageNodes.filter((n) => (f ? feedbackState(n) === f : !isFixed(n)) && !(hidden.size && hidden.has(screenOf(n, this.screens))))
+      return this.pageNodes.filter((n) => showsProgress(f, progressOfNode(n)) && !(hidden.size && hidden.has(screenOf(n, this.screens))))
     })
   },
   // Variants: the product in several versions at once, like a redesign next to the previous UI.
@@ -277,7 +286,9 @@ export const state = Alpine.reactive({
   },
   // Comments from the running product: incoming, with a proposed fix, or fixed by the person.
   /** Empty shows incoming and proposed with the rest of the map; a state shows only those comments. */
-  feedbackFilter: readStored<FeedbackState | ''>('groundwork.feedbackFilter', ''),
+  /** What the map shows, for comments, stories and thoughts alike: everything not finished (''), one status, or all. */
+  progressFilter: readProgressFilter(),
+  progressWords: PROGRESS_WORDS,
   feedbackStates: FEEDBACK_STATES,
   /** The toolbar menu that is open, by key. */
   openMenu: '',
@@ -314,22 +325,25 @@ export const state = Alpine.reactive({
         ],
       })
     }
-    if (this.onFeedbackPage) {
-      const counts = this.feedbackCounts
-      const f = this.feedbackFilter
+    {
+      // What to show, for comments, stories and thoughts alike. Finished ones stay out until asked for.
+      const counts = this.progressCounts
+      const f = this.progressFilter
+      const notDone = counts.open + counts['in-progress'] + counts.ready
       menus.push({
-        key: 'menu-comments',
-        name: 'Comments',
-        value: f ? this.feedbackWords[f] : 'Open',
-        title: 'Comments from the running product. Fixed ones are hidden until you ask for them.',
-        icon: 'i-chat',
-        active: !!f,
+        key: 'menu-show',
+        name: 'Show',
+        value: f === '' ? 'Open' : f === 'all' ? 'Everything' : PROGRESS_WORDS[f],
+        title: 'Show: what to see on the map. Done and Not now are hidden until you pick them.',
+        icon: 'i-filter',
+        active: f !== '',
         options: [
-          { key: '', label: 'Open', hint: 'Everything not fixed yet', count: counts.incoming + counts.proposed + counts.ready, on: !f },
-          { key: 'incoming', label: 'Incoming', hint: 'Nobody has proposed a fix yet', count: counts.incoming, on: f === 'incoming' },
-          { key: 'proposed', label: 'Proposed', hint: 'A fix is proposed, not built yet', count: counts.proposed, on: f === 'proposed' },
-          { key: 'ready', label: 'Ready to test', hint: 'Built. Test it in the app, then approve or reject it.', count: counts.ready, on: f === 'ready' },
-          { key: 'fixed', label: 'Fixed', hint: 'The ones you marked fixed', count: counts.fixed, on: f === 'fixed' },
+          { key: '', label: 'Open', hint: 'Everything not done yet', count: notDone, on: f === '' },
+          { key: 'in-progress', label: 'In progress', hint: 'A fix proposed, a story partly met', count: counts['in-progress'], on: f === 'in-progress' },
+          { key: 'ready', label: 'Ready to test', hint: 'Built. Test it, then approve or reject it.', count: counts.ready, on: f === 'ready' },
+          { key: 'done', label: 'Done', hint: 'Fixed comments, done stories, settled thoughts', count: counts.done, on: f === 'done' },
+          { key: 'later', label: 'Not now', hint: 'Parked thoughts, stories set aside', count: counts.later, on: f === 'later' },
+          { key: 'all', label: 'Everything', hint: 'Done and not done', count: notDone + counts.done + counts.later, on: f === 'all' },
         ],
       })
     }
@@ -355,22 +369,22 @@ export const state = Alpine.reactive({
     if (menu === 'sitemap-variant') menu = 'menu-variant'
     if (menu === 'menu-columns') this.setGroupBy(option as 'page' | 'topic')
     else if (menu === 'menu-variant') this.setVariant(option)
-    else if (menu === 'menu-comments') {
-      this.feedbackFilter = option as FeedbackState | ''
-      store('groundwork.feedbackFilter', this.feedbackFilter)
-      if (this.selected && !this.visibleNodes.includes(this.selected)) this.select(null)
-    }
+    else if (menu === 'menu-show') this.setProgressFilter(option as ProgressFilter)
     else if (menu === 'menu-layout') this.setMapLayout(option as never)
   },
   feedbackWords: { incoming: 'Incoming', proposed: 'Proposed', ready: 'Ready to test', fixed: 'Fixed' } as Record<FeedbackState, string>,
-  /** Comments on the page in view, per state. */
-  get feedbackCounts(): Record<FeedbackState, number> {
-    const counts = { incoming: 0, proposed: 0, ready: 0, fixed: 0 }
-    for (const n of this.pageNodes) {
-      const st = feedbackState(n)
-      if (st) counts[st]++
-    }
-    return counts
+  /** Thoughts, comments and stories on the page in view, per status. */
+  get progressCounts(): Record<Progress, number> {
+    return cached('progressCounts', () => {
+      const counts = Object.fromEntries(PROGRESS.map((p) => [p, 0])) as Record<Progress, number>
+      for (const n of this.pageNodes) counts[progressOfNode(n)]++
+      const names = this.pageNames
+      for (const st of this.stories) {
+        const first = this.nodes[st.from[0]]
+        if (this.onAll || (first && samePage(pageOf(first, names), this.currentPage))) counts[progressOfStory(st)]++
+      }
+      return counts
+    })
   },
   get hasFeedback(): boolean {
     return this.pageNodes.some(isFeedback)
@@ -388,14 +402,16 @@ export const state = Alpine.reactive({
       return nodes.length > 0 && nodes.filter(isFeedback).length * 2 > nodes.length
     })
   },
-  /** The chosen comment state, while its buttons are in view. Elsewhere none: fixed ones just stay hidden. */
-  get activeFeedbackFilter(): FeedbackState | '' {
-    return this.onFeedbackPage ? this.feedbackFilter : ''
-  },
-  setFeedbackFilter(state: FeedbackState | '') {
-    this.feedbackFilter = this.feedbackFilter === state ? '' : state
-    store('groundwork.feedbackFilter', this.feedbackFilter)
+  setProgressFilter(f: ProgressFilter) {
+    this.progressFilter = f
+    store('groundwork.progressFilter', f)
     if (this.selected && !this.visibleNodes.includes(this.selected)) this.select(null)
+  },
+  progressOf(n: GNode): Progress {
+    return progressOfNode(n)
+  },
+  storyProgress(s: Story): Progress {
+    return progressOfStory(s)
   },
   feedbackState(n: GNode | null): FeedbackState | null {
     return n ? feedbackState(n) : null
@@ -567,12 +583,12 @@ export const state = Alpine.reactive({
     } catch (err) {
       return this.flash(errorText(err))
     }
-    if (fixed && this.feedbackFilter !== 'fixed') {
+    if (fixed && !showsProgress(this.progressFilter, 'done')) {
       this.select(null)
-      this.flash('Marked fixed. Fixed comments are behind the Fixed button.')
-    } else if (!fixed && this.feedbackFilter === 'fixed') {
+      this.flash('Marked fixed. Show: Done in the toolbar lists what is finished.')
+    } else if (!fixed && this.progressFilter === 'done') {
       this.select(null)
-      this.flash('Back with the open comments')
+      this.flash('Back with the open ones')
     }
   },
   /** A proposed fix was built: it is ready to test, in the app or here. */
@@ -770,8 +786,9 @@ export const state = Alpine.reactive({
   /** Stories whose first source thought is on the page in view. */
   get visibleStories(): Story[] {
     return cached('visibleStories', () => {
-      if (this.activeFeedbackFilter) return []
-      if (this.scopeScreen) return storiesForScreen(this.scopeScreen, this.stories)
+      const f = this.progressFilter
+      const wanted = (list: Story[]) => list.filter((st) => showsProgress(f, progressOfStory(st)))
+      if (this.scopeScreen) return wanted(storiesForScreen(this.scopeScreen, this.stories))
       // A story only screens outside the variant in view cover belongs to the other variant.
       const hidden = this.hiddenScreens
       let shown = this.stories
@@ -784,9 +801,9 @@ export const state = Alpine.reactive({
           return !by.length || by.some((id) => !hidden.has(id))
         })
       }
-      if (this.onAll) return shown
+      if (this.onAll) return wanted(shown)
       const names = this.pageNames
-      return shown.filter((st) => {
+      return wanted(shown).filter((st) => {
         const first = this.nodes[st.from[0]]
         return first && samePage(pageOf(first, names), this.currentPage)
       })
@@ -795,7 +812,96 @@ export const state = Alpine.reactive({
   selectStory(id: string) {
     this.select(null)
     this.selectedStoryId = id
+    this.storyEditing = false
     this.setDetailsMinimized(false)
+  },
+  // Stories, written and changed in the map as well as by Claude.
+  /** Whether the open story's text is being edited. */
+  storyEditing: false,
+  storyText: '',
+  storyLabel(st: Story): string {
+    return storyStatusLabel(st)
+  },
+  criteria(st: Story | null): Criterion[] {
+    return st ? criteriaOf(st.body) : []
+  },
+  putStory(st: Story) {
+    this.stories = this.stories.some((x) => x.id === st.id) ? this.stories.map((x) => (x.id === st.id ? st : x)) : [...this.stories, st]
+  },
+  async changeStory(edit: { title?: string; status?: string; body?: string; later?: string | null }) {
+    const st = this.selectedStory
+    if (!st) return
+    try {
+      this.putStory(await saveStory(st.id, edit))
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Tick a criterion; the status follows: all met is done, some is partly, none is not started. */
+  async tickStory(c: Criterion, met: boolean) {
+    const st = this.selectedStory
+    if (!st) return
+    const body = tickCriterion(st.body, c.line, met)
+    const all = criteriaOf(body)
+    const n = all.filter((x) => x.met).length
+    const status = n === all.length ? 'done' : n ? 'partial' : 'not-started'
+    await this.changeStory({ body, status })
+  },
+  editStoryText() {
+    this.storyText = this.selectedStory?.body ?? ''
+    this.storyEditing = true
+    focusWhenVisible('story-text')
+  },
+  async saveStoryText() {
+    this.storyEditing = false
+    if (this.selectedStory && this.storyText !== this.selectedStory.body) await this.changeStory({ body: this.storyText })
+  },
+  /** Partly met: copy an instruction for Claude to build exactly what is not met yet. */
+  storyBuildRest() {
+    const st = this.selectedStory
+    if (!st) return
+    const open = criteriaOf(st.body).filter((c) => !c.met)
+    this.showPrompt(
+      `Build the rest of "${st.title}"`,
+      [
+        `Build the rest of story ${st.id} (${st.title}), in .groundwork/stories/${st.id}.md. These acceptance criteria are not met yet:`,
+        ...open.map((c) => `- ${c.text}`),
+        '',
+        'When one is met in the code, tick it in the story (- [x]); when all are, set status: done. Fill applies_to with the routes or files.',
+      ].join('\n'),
+    )
+  },
+  /** Partly met is enough: done now, and each criterion not met becomes a parked thought, so it is not lost. */
+  async storyEnough() {
+    const st = this.selectedStory
+    if (!st) return
+    const open = criteriaOf(st.body).filter((c) => !c.met)
+    for (const c of open) {
+      try {
+        this.upsert(await createNode({ title: c.text, type: 'feature', status: 'parked', links: st.from.filter((id) => this.nodes[id]).slice(0, 1), body: `Not done when story ${st.id} (${st.title}) was called enough on ${today()}.\n` }))
+      } catch (err) {
+        return this.flash(errorText(err))
+      }
+    }
+    await this.changeStory({ status: 'done', later: null })
+    this.flash(open.length ? `Done. ${open.length === 1 ? 'What was not met is' : 'What was not met are'} parked thoughts now.` : 'Done.')
+  },
+  /** Set aside: still partly done, but chosen not to do now, so it leaves what is left. */
+  async storyNotNow(back = false) {
+    await this.changeStory({ later: back ? null : today() })
+    this.flash(back ? 'Back with what is left' : 'Set aside. Show: Not now lists it.')
+  },
+  /** A story from a thought: its title to start from, the thought as where it came from. */
+  async storyFrom(node: GNode | null) {
+    if (!node) return
+    try {
+      const st = await createStory({ title: node.title, from: [node.id] })
+      this.putStory(st)
+      this.selectStory(st.id)
+      this.editStoryText()
+    } catch (err) {
+      this.flash(errorText(err))
+    }
   },
   get selectedGap(): Gap | null {
     return this.readiness?.gaps.find((g) => g.id === this.selectedGapId) ?? null
@@ -805,7 +911,8 @@ export const state = Alpine.reactive({
     return cached('visibleGaps', () => {
       const hidden = this.hiddenScreens
       const gaps = (this.readiness?.gaps ?? []).filter((g) => !(g.screen && hidden.has(g.screen)))
-      if (this.activeFeedbackFilter) return []
+      // Gaps are what is open by nature: shown with everything not finished, or with all.
+      if (this.progressFilter !== '' && this.progressFilter !== 'all') return []
       if (this.scopeScreen) return gaps.filter((g) => this.gapInScope(g))
       if (this.onAll) return gaps
       const first = this.pageNames[0]
@@ -830,8 +937,16 @@ export const state = Alpine.reactive({
   get starterHtml(): string {
     return md(stripFrontmatter(this.starter ?? ''))
   },
+  /** The story's text; its acceptance criteria are shown as checkboxes above it, so not again here. */
   storyHtml(story: Story): string {
-    return md(story.body)
+    const lines = story.body.split('\n')
+    const out: string[] = []
+    let skipping = false
+    for (const l of lines) {
+      if (/^#{1,6}\s/.test(l)) skipping = /^#{1,6}\s+acceptance\b/i.test(l) && criteriaOf(story.body).length > 0
+      if (!skipping) out.push(l)
+    }
+    return md(out.join('\n'))
   },
   async loadDeliverables() {
     try {
@@ -1018,6 +1133,33 @@ export const state = Alpine.reactive({
   },
   /** The status row whose details are open. */
   statusRow: null as string | null,
+  /** The kind of work left whose items are shown (decide, build, setup). */
+  statusKind: null as string | null,
+  /** Whether the full list, done or not, is shown under What's left. */
+  statusAll: false,
+  /** What each kind of work left asks of the person, in words. */
+  statusKinds: {
+    decide: { name: 'Decide', what: 'Questions Claude asked and gaps /readiness found. You answer them, in a line or by picking an option. No code.', action: 'Answer them' },
+    build: { name: 'Build or confirm', what: 'Screens whose stories are not marked done. Many are probably built already and just not checked against the code; the rest need building. Let Claude check them first, then build what is missing.', action: 'Copy for Claude' },
+    setup: { name: 'Set up the project', what: 'What a well-run project has: a README, code standards, design tokens, tools for Claude. Claude can add each one: copy its instruction into Claude Code in the product.', action: '' },
+  } as Record<string, { name: string; what: string; action: string }>,
+  /** The kind's main action: answer in the Inbox, or copy the check-the-stories instruction. */
+  statusKindAction(kind: { key: string; rows: StatusRow[] }) {
+    if (kind.key === 'decide') return this.inbox.length ? this.enterFocus() : this.showGaps()
+    if (kind.key === 'build') {
+      const lines = kind.rows.map((r) => `- ${r.title} (${r.open?.id ?? ''})${r.openStories?.length ? `: ${r.openStories.join(', ')}` : ''}`)
+      return this.showPrompt(
+        'Check these screens against the code',
+        [
+          'Check these screens and their stories in .groundwork/stories/ against the code.',
+          'For each story, go through its acceptance criteria: tick each one the code meets (- [x]) and leave the rest open (- [ ]); turn a plain - criterion into a checkbox. Set status: done when all are met, partial when some are, and fill applies_to with the routes or files.',
+          'Do not build anything yet. End with a short list of what is left to build, screen by screen, so I can pick what to do first.',
+          '',
+          ...lines,
+        ].join('\n'),
+      )
+    }
+  },
   /** The row's own action: answer in Focus, open the screen, or write the purpose. */
   openStatusRow(row: StatusRow) {
     if (row.open?.kind === 'focus') return this.inbox.length ? this.enterFocus() : this.showGaps()
@@ -1105,6 +1247,18 @@ export const state = Alpine.reactive({
   /** Guesses from /survey that nobody has confirmed yet. */
   get guessCount(): number {
     return Object.values(this.nodes).filter((n) => n.extra?.source === 'inferred' && n.status !== 'settled').length
+  },
+  /** A prompt for Claude, shown in full before it is copied; it can be changed there first. */
+  prompt: null as { title: string; text: string } | null,
+  showPrompt(title: string, text: string) {
+    if (!text) return
+    this.prompt = { title, text }
+    focusWhenVisible('prompt-text')
+  },
+  async copyPrompt() {
+    if (!this.prompt) return
+    await this.copyText(this.prompt.text)
+    this.prompt = null
   },
   async copyText(text: string) {
     try {
@@ -1551,6 +1705,136 @@ export const state = Alpine.reactive({
     this.view = view
     store('groundwork.view', view)
     if (view === 'map') revealSelection()
+    if (view === 'docs') void this.loadDocs()
+  },
+  // Documents: what steers Claude in the product, with what the last check found in each, readable and editable here.
+  docs: [] as Doc[],
+  docPath: readStored<string>('groundwork.docPath', ''),
+  doc: null as { path: string; text: string; exists: boolean; draft?: string } | null,
+  async loadDocs() {
+    this.docs = await fetchDocs()
+    const keep = this.docs.find((d) => d.path === this.docPath) ?? this.docs[0]
+    if (keep && (!this.doc || this.doc.path !== keep.path)) await this.openDoc(keep.path)
+  },
+  get openDocInfo(): Doc | null {
+    return this.docs.find((d) => d.path === this.docPath) ?? null
+  },
+  /** The worst a check said about a document: missing, partly, or nothing to add. */
+  docStatus(d: Doc): 'missing' | 'partly' | 'ok' | '' {
+    if (!d.exists) return 'missing'
+    const live = d.findings.filter((f) => f.status !== 'done')
+    if (live.some((f) => f.status === 'missing')) return 'missing'
+    if (live.length) return 'partly'
+    return d.findings.length ? 'ok' : ''
+  },
+  /** What the checks found that is not in any document: things to write that have no file yet. */
+  get docsUnplaced(): Foundation[] {
+    const placed = new Set(this.docs.flatMap((d) => d.findings.map((f) => f.id)))
+    return (this.readiness?.foundations ?? []).filter((f: Foundation) => f.status !== 'done' && !placed.has(f.id))
+  },
+  async openDoc(path: string) {
+    this.docPath = path
+    store('groundwork.docPath', path)
+    try {
+      this.doc = await fetchDoc(path)
+    } catch (err) {
+      this.doc = null
+      this.flash(errorText(err))
+    }
+  },
+  async openDocEditor() {
+    if (!this.doc?.exists) return
+    try {
+      await openDocInEditor(this.doc.path)
+      this.flash(`Opened ${this.doc.path} in your editor`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** The open document's headings, to comment on one. */
+  get docHeadings(): string[] {
+    const t = this.doc ? (this.doc.exists ? this.doc.text : (this.doc.draft ?? '')) : ''
+    return t.split('\n').filter((l) => /^#{1,4}\s+\S/.test(l)).map((l) => l.replace(/^#+\s+/, '').trim()).slice(0, 80)
+  },
+  /** Comments on documents: thoughts about one document, or one of its sections, for Claude to act on. */
+  docSection: '',
+  docComment: '',
+  get docComments(): GNode[] {
+    const path = this.docPath
+    return Object.values(this.nodes).filter((n) => n.extra?.doc === path && n.status !== 'settled')
+  },
+  async commentOnDoc() {
+    const text = this.docComment.trim()
+    const d = this.openDocInfo
+    if (!text || !d) return
+    const first = text.split('\n')[0]
+    try {
+      const node = await createNode({
+        title: first.length > 140 ? first.slice(0, 137) + '...' : first,
+        type: 'idea',
+        topic: 'documents',
+        body: `About ${d.path}${this.docSection ? `, the section "${this.docSection}"` : ''}.${text !== first ? `\n\n${text}` : ''}\n`,
+        doc: d.path,
+        ...(this.docSection ? { doc_section: this.docSection } : {}),
+      } as never)
+      this.upsert(node)
+      this.docComment = ''
+      this.docSection = ''
+      this.flash('Comment added. Copy for Claude includes it.')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async resolveDocComment(id: string) {
+    try {
+      this.upsert(await updateNode(id, { status: 'settled' }))
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** What to give Claude Code in the product for this document: what the check suggests, your comments, or to write it from the draft. */
+  docPrompt(): string {
+    const d = this.openDocInfo
+    if (!d) return ''
+    const comments = this.docComments.map((n) => `- ${n.extra?.doc_section ? `In the "${n.extra.doc_section}" section: ` : ''}${n.title}${n.body.split('\n').slice(2).join(' ').trim() ? `. ${n.body.split('\n').slice(2).join(' ').trim()}` : ''}`)
+    const withComments = (lines: string[]) => (comments.length ? [...lines, '', 'My comments on it:', ...comments, '', 'When a comment is done, settle its thought in .groundwork/nodes/ (status: settled).'] : lines)
+    const live = d.findings.filter((f) => f.status !== 'done')
+    if (!d.exists) {
+      return withComments([
+        `Create ${d.path} in this project${d.draft ? `, starting from the draft in .groundwork/outputs/drafts/${d.draft}` : ''}.`,
+        ...live.flatMap((f) => [f.suggestion, ...f.missing.map((m) => `- ${m}`)]).filter(Boolean),
+        d.draft ? 'Answer the questions the draft leaves open with me first; do not guess them.' : '',
+        'Link it from CLAUDE.md if Claude should read it.',
+      ].filter(Boolean)).join('\n')
+    }
+    return withComments([
+      `Update ${d.path}:`,
+      ...live.map((f) => `- ${f.section ? `In the "${f.section.replace(/-/g, ' ')}" section: ` : ''}${f.missing.join('; ')}${f.suggestion ? `. ${f.suggestion}` : ''}`),
+      'Change only what these points ask for, and keep the rest as it is.',
+    ]).join('\n')
+  },
+  /** The rendered document, with the sections a check found something about marked. */
+  docHtml(): string {
+    const d = this.doc
+    if (!d) return ''
+    return md(d.exists ? d.text : (d.draft ?? ''))
+  },
+  /** Mark the headings a finding is about, after the document is drawn. Only text is set, never markup. */
+  markDocSections(el: HTMLElement) {
+    const info = this.openDocInfo
+    const live = (info?.findings ?? []).filter((f) => f.section && f.status !== 'done')
+    const slug = (t: string) => t.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-')
+    el.querySelectorAll('.doc-flag-note').forEach((n) => n.remove())
+    el.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => {
+      h.classList.remove('doc-flag')
+      const hits = live.filter((f) => f.section === slug(h.textContent ?? ''))
+      if (!hits.length) return
+      h.classList.add('doc-flag')
+      const note = document.createElement('div')
+      note.className = 'doc-flag-note'
+      note.textContent = hits.map((f) => `${f.title}: ${f.missing.join('; ') || f.status}`).join(' · ')
+      h.after(note)
+    })
   },
   /**
    * A comment pointed out on the phone, to be written here: open it with the
@@ -1571,8 +1855,8 @@ export const state = Alpine.reactive({
     if (this.view !== 'map') this.setView('map')
     // A fixed comment, or a thought the feedback filter hides: show what it belongs with.
     if (!this.visibleNodes.includes(node)) {
-      this.feedbackFilter = isFixed(node) ? 'fixed' : ''
-      store('groundwork.feedbackFilter', this.feedbackFilter)
+      const p = progressOfNode(node)
+      this.setProgressFilter(p === 'done' || p === 'later' ? p : '')
     }
     this.select(id)
   },
@@ -1806,12 +2090,39 @@ export const state = Alpine.reactive({
   },
 
   // Capture bar
+  /** What the Add bar adds: a thought, or a story. */
+  captureKind: readStored<'thought' | 'story'>('groundwork.captureKind', 'thought'),
+  setCaptureKind(kind: 'thought' | 'story') {
+    this.captureKind = kind
+    store('groundwork.captureKind', kind)
+  },
   async submitCapture() {
     const parsed = parseCapture(this.capture)
     if (!parsed) return
     const raw = this.capture
     const linkTo = this.selected && !this.selected.error && this.captureLinked ? this.selected : null
     this.capture = ''
+
+    // A story comes from a thought: the open one, or a new thought with the same words.
+    if (this.captureKind === 'story') {
+      try {
+        let from = linkTo
+        if (!from) {
+          const page = this.onAll ? '' : this.currentPage
+          from = await createNode({ title: parsed.title, type: 'feature', page, ...(this.scopeScreen ? { screen: this.scopeScreen.id } : {}) })
+          this.upsert(from)
+        }
+        const st = await createStory({ title: parsed.title, from: [from.id] })
+        this.putStory(st)
+        this.selectStory(st.id)
+        this.editStoryText()
+        this.flash(linkTo ? `Story from "${linkTo.title}"` : 'Story added, with a thought it comes from')
+      } catch (err) {
+        if (!this.capture) this.capture = raw
+        this.flash(errorText(err))
+      }
+      return
+    }
 
     // The same thought twice is almost always a second Enter. Point at the first one instead.
     const same = Object.values(this.nodes).find((n) => sameTitle(n.title, parsed.title))

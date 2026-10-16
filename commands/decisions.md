@@ -19,6 +19,8 @@ The question, and an Options: list when there is one.
 
 `who` is `claude-asks` for a question and `claude` for anything else. Leave the card's or screen's own file untouched when all you add is an entry: two people adding to the same thread then never collide in git. A card or screen you create in this run may hold its first entries in its own file.
 
+**Frontmatter is YAML.** Put a value in double quotes when it contains a colon followed by a space, or a ` #`, or starts with a character YAML reads specially (`[ { & * ! | > ' " % @` or a backtick): `purpose: "Explain our work: why it matters and how"`, and the same in lists (`- "read Why: the reasons"`). Without the quotes the file is not valid YAML and every other tool that reads it fails. A file whose frontmatter does not read as YAML is the one exception to leaving files as they are: fix it (quote the values that need it, change nothing else) whenever this command touches that folder.
+
 ## What counts as a decision
 
 Something the person and you settled during this session: a choice between options, a rule to follow, something built that answers an open thought, or something explicitly ruled out. Ideas that were only floated are not decisions. Skip routine steps such as fixing a typo or running tests.

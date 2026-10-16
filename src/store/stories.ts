@@ -1,5 +1,6 @@
 import { readRun } from './runs.js'
-import { readdir, readFile } from './fs.js'
+import { mkdir, readdir, readFile, rename, writeFile } from './fs.js'
+import { newId } from './nodes.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
 import { STORY_STATUSES, type Story, type StoryStatus } from '../shared/types.js'
@@ -48,9 +49,77 @@ export function parseStory(id: string, raw: string): Story {
     applies_to: list(data.applies_to),
     created: data.created instanceof Date ? data.created.toISOString().slice(0, 10) : String(data.created ?? ''),
     body,
+    ...(typeof data.later === 'string' && data.later.trim() ? { later: data.later.trim() } : {}),
   }
   if (!story.from.length) story.error = 'This story names no thought it came from (from: is empty).'
   return story
+}
+
+export interface StoryEdit {
+  title?: string
+  status?: string
+  body?: string
+  /** A date sets it aside ("Not now"); null takes that back. */
+  later?: string | null
+}
+
+/** Frontmatter values written by the map: plain, or quoted when YAML would read them otherwise. */
+const yamlText = (v: string) => (/^[\w][\w ,.()/'-]*$/.test(v) && !/: /.test(v) ? v : JSON.stringify(v))
+
+/** A frontmatter field set, changed or removed in place, leaving every other line as it was. */
+function setField(front: string, key: string, value: string | null): string {
+  const re = new RegExp(`^${key}:.*$`, 'm')
+  if (value === null) return front.replace(new RegExp(`^${key}:.*\\n?`, 'm'), '')
+  return re.test(front) ? front.replace(re, `${key}: ${value}`) : `${front.replace(/\n?$/, '\n')}${key}: ${value}\n`
+}
+
+/**
+ * Change a story from the map: its title, status, text, or set it aside.
+ * Only the lines that change are touched, so a story edited by two people on
+ * their own branches still merges in git.
+ */
+export async function updateStory(gwDir: string, id: string, edit: StoryEdit): Promise<Story | null> {
+  if (!ID.test(id)) return null
+  const path = join(gwDir, 'stories', `${id}.md`)
+  let raw: string
+  try {
+    raw = await readFile(path, 'utf8')
+  } catch {
+    return null
+  }
+  const story = parseStory(id, raw)
+  if (story.error && !story.error.startsWith('This story names no thought')) throw new Error(`stories/${id}.md cannot be read: ${story.error}`)
+  const m = /^---[^\n]*\n([\s\S]*?)\n---[^\n]*\n?/.exec(raw)
+  if (!m) throw new Error(`stories/${id}.md has no frontmatter`)
+  let front = m[1] + '\n'
+  if (edit.title !== undefined && edit.title.trim() && edit.title.trim() !== story.title) front = setField(front, 'title', yamlText(edit.title.trim().slice(0, 200)))
+  if (edit.status !== undefined && edit.status !== story.status) {
+    if (!(STORY_STATUSES as readonly string[]).includes(edit.status)) throw new Error(`A story is not-started, partial or done, not ${edit.status}`)
+    front = setField(front, 'status', edit.status)
+  }
+  if (edit.later !== undefined && (edit.later ?? undefined) !== story.later) front = setField(front, 'later', edit.later && /^\d{4}-\d{2}-\d{2}$/.test(edit.later) ? edit.later : null)
+  const body = edit.body !== undefined ? edit.body : raw.slice(m[0].length)
+  const next = `---\n${front.replace(/\n$/, '')}\n---\n${body}`
+  if (next !== raw) await writeFile(path, next)
+  return parseStory(id, await readFile(path, 'utf8'))
+}
+
+/** A new story from the map, written from a thought: the thought is where it came from. */
+export async function createStory(gwDir: string, input: { title: string; from: string[]; body?: string }): Promise<Story> {
+  const title = input.title.trim().slice(0, 200)
+  if (!title) throw new Error('A story needs a title')
+  const from = input.from.filter((x) => /^n_[A-Za-z0-9_-]{1,60}$/.test(x))
+  if (!from.length) throw new Error('A story comes from at least one thought')
+  const dir = join(gwDir, 'stories')
+  await mkdir(dir, { recursive: true })
+  const id = newId('s_')
+  const day = new Date().toISOString().slice(0, 10)
+  const body = input.body ?? 'As someone using the product, I want ..., so that ....\n\n## Acceptance\n- [ ] \n'
+  const text = `---\nid: ${id}\ntitle: ${yamlText(title)}\nstatus: not-started\nfrom: [${from.join(', ')}]\napplies_to: []\ncreated: ${day}\n---\n${body}`
+  const tmp = join(dir, `.${id}.md.tmp`)
+  await writeFile(tmp, text, { flag: 'wx' })
+  await rename(tmp, join(dir, `${id}.md`))
+  return parseStory(id, text)
 }
 
 /** The outputs /brief and /survey write. Nothing else in outputs/ is served. */

@@ -32,6 +32,7 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   const project = (await readFile(join(templates, 'project.md'), 'utf8')).replace('{{name}}', scalar(basename(projectRoot))).replace('{{start}}', start)
   if (!(await writeOnce(join(gw, 'project.md'), project, say)) && known !== start) await writeFields(gw, { start })
   await writeOnce(join(gw, 'readiness', 'checklist.md'), await readFile(join(templates, 'checklist.md'), 'utf8'), say)
+  await dropRetiredAreas(join(gw, 'readiness', 'checklist.md'), say)
 
   const commandsSrc = join(PACKAGE_ROOT, 'commands')
   const commandsDest = join(projectRoot, '.claude', 'commands')
@@ -100,6 +101,26 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   await writeFile(manifestPath, JSON.stringify(installed, null, 2) + '\n')
 
   console.log(`\n${nextSteps(start)}\n\nAfter updating Groundwork, run \`groundwork init\` again to update the commands.`)
+}
+
+/**
+ * Checklist areas Groundwork no longer asks about, taken out of a project's
+ * checklist when they still read exactly as shipped. A reworded one is the
+ * person's own and stays.
+ */
+const RETIRED_AREAS = [
+  // Scope: deciding what is in or out of a release is not this tool's job yet.
+  '**Scope.** What is in the first version and what is explicitly out.\nEnough when: there is at least one thing you decided not to build.\n\n',
+]
+
+async function dropRetiredAreas(path: string, say: (verb: string, path: string) => void): Promise<void> {
+  const text = await readFile(path, 'utf8').catch(() => null)
+  if (text === null) return
+  const next = RETIRED_AREAS.reduce((t, area) => t.replace(area, ''), text)
+  if (next === text) return
+  await writeFile(path, next)
+  say('updated', path)
+  console.log('           took out Scope, which Groundwork no longer asks about')
 }
 
 /** What to do next, for a new idea or for a project that already has code. */

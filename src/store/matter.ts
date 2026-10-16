@@ -29,6 +29,36 @@ export function readMatter(raw: string): Matter {
   // Only comments and blank lines: no fields.
   if (!block.replace(/^\s*#[^\n]+/gm, '').trim()) return { data: {}, content }
   // YAML 1.2, no custom tags: dates stay text, nothing becomes code.
-  const data: unknown = parse(block, { prettyErrors: false, logLevel: 'error' })
+  const read = (text: string): unknown => parse(text, { prettyErrors: false, logLevel: 'error' })
+  let data: unknown
+  try {
+    data = read(block)
+  } catch (err) {
+    // The most common slip, by people and by Claude alike: a sentence with a
+    // colon in it, unquoted (`purpose: Explain our work: why and how`). Read
+    // it as the sentence it is meant to be; the file itself is left as it is.
+    const quoted = quoteSentences(block)
+    if (quoted === block) throw err
+    try {
+      data = read(quoted)
+    } catch {
+      throw err
+    }
+  }
   return { data: data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : {}, content }
+}
+
+/** Plain values and list items holding ": " put in double quotes, so they read as one text. */
+function quoteSentences(block: string): string {
+  return block
+    .split('\n')
+    .map((line) => {
+      const m = /^(\s*[A-Za-z_][\w.-]*:[ \t]+|\s*-[ \t]+)(.*?)\s*$/.exec(line)
+      if (!m) return line
+      const value = m[2]
+      // Already quoted, a list or mapping in brackets, a block, an anchor or a tag: not a plain sentence.
+      if (!value.includes(': ') || /^["'[{|>&*!%@`]/.test(value)) return line
+      return `${m[1]}${JSON.stringify(value)}`
+    })
+    .join('\n')
 }

@@ -19,6 +19,8 @@ The question, and an Options: list when there is one.
 
 `who` is `claude-asks` for a question and `claude` for anything else. Leave the card's or screen's own file untouched when all you add is an entry: two people adding to the same thread then never collide in git. A card or screen you create in this run may hold its first entries in its own file.
 
+**Frontmatter is YAML.** Put a value in double quotes when it contains a colon followed by a space, or a ` #`, or starts with a character YAML reads specially (`[ { & * ! | > ' " % @` or a backtick): `purpose: "Explain our work: why it matters and how"`, and the same in lists (`- "read Why: the reasons"`). Without the quotes the file is not valid YAML and every other tool that reads it fails. A file whose frontmatter does not read as YAML is the one exception to leaving files as they are: fix it (quote the values that need it, change nothing else) whenever this command touches that folder.
+
 **Documents and gaps.** Documents a command writes whole are a new file per run, so two people's runs never collide in git. Where this text names one of these files, read the newest file in its folder instead (the highest number; an older map may still have the single file, read that when the folder is empty), and write a new file there named `<Unix time in milliseconds>-<two random lowercase letters or digits>` with the same extension, never overwriting an older one. Keep the five newest files in each folder and delete the rest.
 
 | Named in this text | Lives in |

@@ -67,11 +67,11 @@ describe('NodeStore', () => {
   })
 
   it('refuses to overwrite a file it cannot parse', async () => {
-    await writeFile(join(root, 'nodes', 'n_bad1.md'), '---\ntitle: a: b\n---\nkeep me\n')
+    await writeFile(join(root, 'nodes', 'n_bad1.md'), '---\ntitle: [a, b\n---\nkeep me\n')
     const n = await store.get('n_bad1')
     expect(n.error).toBeTruthy()
     await expect(store.update('n_bad1', { title: 'x' })).rejects.toBeInstanceOf(ReadOnly)
-    expect(await file('n_bad1')).toBe('---\ntitle: a: b\n---\nkeep me\n')
+    expect(await file('n_bad1')).toBe('---\ntitle: [a, b\n---\nkeep me\n')
   })
 
   it('reports when each file last changed', async () => {

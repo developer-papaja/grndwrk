@@ -3,11 +3,12 @@ import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, KICKOFF_STEPS, writeFields, writeKickoff, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import { markAnswered, readReadiness } from '../store/readiness.js'
-import { listStories, readDraft, readOutput } from '../store/stories.js'
+import { createStory, listStories, readDraft, readOutput, updateStory } from '../store/stories.js'
 import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
 import { listShots, readShot } from '../store/shots.js'
 import { rememberedApp } from '../store/local.js'
 import { LinkRefused } from '../store/fs.js'
+import { docOnDisk, listDocs, readDoc } from './docs.js'
 import type { NodeInput } from '../shared/types.js'
 import { noteTab, subscribe, type NodeSync } from './events.js'
 import type { Pairings } from './pairing.js'
@@ -99,8 +100,58 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       if (!(await placeShot(ctx.gwDir, input.file, input.screen))) throw new NotFound(input.screen)
       return send(res, 200, await listScreens(ctx.gwDir))
     }
+    // The documents that steer Claude in the product, with what the last check found in each; readable and editable from the map.
+    if (url.pathname === '/api/docs' && method === 'GET') {
+      return send(res, 200, await listDocs(ctx.gwDir, (await readReadiness(ctx.gwDir)).foundations))
+    }
+    if (url.pathname === '/api/docs/file' && method === 'GET') {
+      return send(res, 200, await readDoc(ctx.gwDir, (await readReadiness(ctx.gwDir)).foundations, url.searchParams.get('path') ?? ''))
+    }
+    // Open a document in the person's own editor: Groundwork shows them, it does not write them.
+    if (url.pathname === '/api/docs/open' && method === 'POST') {
+      if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
+      const b = (await readBody(req)) as { path?: unknown }
+      const full = await docOnDisk(ctx.gwDir, (await readReadiness(ctx.gwDir)).foundations, typeof b.path === 'string' ? b.path : '')
+      const { default: open } = await import('open')
+      await open(full)
+      return send(res, 200, { opened: true })
+    }
     if (url.pathname === '/api/stories' && method === 'GET') {
       return send(res, 200, await listStories(ctx.gwDir))
+    }
+    // A story written or changed in the map: from a thought, or its title, status, text or "Not now".
+    if (url.pathname === '/api/stories' && method === 'POST') {
+      const b = (await readBody(req)) as { title?: unknown; from?: unknown; body?: unknown }
+      try {
+        const story = await createStory(ctx.gwDir, {
+          title: typeof b.title === 'string' ? b.title : '',
+          from: Array.isArray(b.from) ? b.from.filter((x): x is string => typeof x === 'string') : [],
+          ...(typeof b.body === 'string' ? { body: b.body.slice(0, 20_000) } : {}),
+        })
+        return send(res, 201, story)
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+    }
+    const storyMatch = url.pathname.match(/^\/api\/stories\/(s_[A-Za-z0-9_-]{1,60})$/)
+    if (storyMatch && method === 'PATCH') {
+      const b = (await readBody(req)) as Record<string, unknown>
+      const text = (v: unknown) => (typeof v === 'string' ? v : undefined)
+      let story
+      try {
+        story = await updateStory(ctx.gwDir, storyMatch[1], {
+          title: text(b.title),
+          status: text(b.status),
+          body: typeof b.body === 'string' ? b.body.slice(0, 20_000) : undefined,
+          later: b.later === null ? null : text(b.later),
+        })
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+      if (!story) throw new NotFound(storyMatch[1])
+      return send(res, 200, story)
     }
     if (url.pathname === '/api/screens' && method === 'GET') {
       return send(res, 200, await listScreens(ctx.gwDir))

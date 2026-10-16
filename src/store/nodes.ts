@@ -110,6 +110,11 @@ export class NodeStore {
       // A thought written as the answer to a gap remembers which gap, even after the gap closes.
       if (typeof input.answers === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(input.answers)) node.extra = { answers: input.answers }
       if (typeof input.screen === 'string' && SCREEN_ID.test(input.screen)) node.extra = { ...node.extra, screen: input.screen }
+      // A comment on a document in the product: a Markdown path inside the project, and the heading.
+      if (typeof input.doc === 'string' && /^(?!\/)(?!.*(^|\/)\.\.(\/|$))[A-Za-z0-9_./ -]{1,160}\.(md|markdown)$/i.test(input.doc)) {
+        node.extra = { ...node.extra, doc: input.doc }
+        if (typeof input.doc_section === 'string' && input.doc_section.trim()) node.extra = { ...node.extra, doc_section: input.doc_section.replace(/\s+/g, ' ').trim().slice(0, 120) }
+      }
       node.extra = { ...node.extra, ...extra }
       node.links = [...new Set(input.links ?? [])].filter((l) => byId.has(l))
       own.set(id, node.links)

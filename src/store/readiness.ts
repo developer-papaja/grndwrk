@@ -85,6 +85,8 @@ export function parseFoundations(raw: string): Foundation[] {
       suggestion: typeof f.suggestion === 'string' ? f.suggestion.trim() : '',
     }
     if (typeof f.draft === 'string' && /^[A-Za-z0-9_.-]{1,80}\.md$/.test(f.draft)) item.draft = f.draft
+    // A path in the product, Markdown, without going up or starting at the root of the disk.
+    if (typeof f.file === 'string' && /^(?!\/)(?!.*(^|\/)\.\.(\/|$))[A-Za-z0-9_./ -]{1,160}\.(md|markdown)$/i.test(f.file.trim())) item.file = f.file.trim()
     out.push(item)
   }
   const rank = (id: string) => {

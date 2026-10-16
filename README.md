@@ -55,10 +55,12 @@ Run these in Claude Code, in your project:
 | `/topics` | Groups the thoughts into a few topics |
 | `/readiness` | Checks whether you have enough to start building, and what to add |
 | `/challenge` | Asks a few sharp questions where the thinking is thin |
-| `/brief` | Writes the brief, the first user stories, and a starter `CLAUDE.md` |
+| `/brief` | Writes the brief, the first user stories (with acceptance criteria to tick), and a starter `CLAUDE.md` |
 | `/decisions` | Looks back over a session and its commits, and settles what was decided |
 | `/feedback` | Proposes, and when you ask, builds fixes for comments made in the running product |
 | `/import <file>` | Turns a document into cards |
+
+The **Documents** view shows the files that steer Claude in your product (CLAUDE.md, the README, design and content docs, skills), what the last `/readiness` found in each, and the files it suggests writing, with a draft. Comment on a document or a section, and copy an instruction for Claude with the findings and your comments; every such instruction is shown in full before you copy it. Groundwork reads these files but never changes them.
 
 Claude asks you questions in the map. They collect in the **Inbox**, one per question, with suggested answers to pick from.
 
@@ -102,7 +104,7 @@ Add the Swift package in `clients/ios/GroundworkFeedback` to the app's debug bui
 
 ### Testing fixes
 
-When Claude builds a fix for a comment, it writes what changed and how to test it. The comment is then **ready to test**. On the iPhone, the Groundwork button shows how many are waiting. Tap one: the app goes to the screen, and a card shows the steps with **Approve** and **Reject**. On a website, the Comment button shows a test icon and a count after a thin line: press it for the list, and **Test** opens the page the comment was made on, marks the element, and shows the same card, which you can drag anywhere. Approved comments are fixed. Rejected ones go back to Claude with your note. In the map, the Comments menu on the Feedback page shows each state. Sites, the globe at the bottom left of the map, lists which sites may send comments (remove one, and its next comment asks again).
+When Claude builds a fix for a comment, it writes what changed and how to test it. The comment is then **ready to test**. On the iPhone, the Groundwork button shows how many are waiting. Tap one: the app goes to the screen, and a card shows the steps with **Approve** and **Reject**. On a website, the Comment button shows a test icon and a count after a thin line: press it for the list, and **Test** opens the page the comment was made on, marks the element, and shows the same card, which you can drag anywhere. Approved comments are fixed. Rejected ones go back to Claude with your note. In the map, the Show menu in the toolbar picks what to see: what is open, in progress, ready to test, done or set aside, for comments, stories and thoughts alike. Sites, the globe at the bottom left of the map, lists which sites may send comments (remove one, and its next comment asks again).
 
 `groundwork init` puts a short `CLAUDE.md` in `.groundwork/` with these rules. Claude Code reads it whenever it opens the map's files, so a fix you ask for in plain words ("go through the feedback") is still marked ready to test. `/feedback` also catches up comments that were fixed without being marked.
 

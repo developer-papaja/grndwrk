@@ -24,6 +24,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const fetchNodes = () => request<GNode[]>('GET', '/api/nodes')
 export const fetchProject = () => request<Record<string, unknown>>('GET', '/api/project').catch(() => ({}))
 export const fetchStories = () => request<Story[]>('GET', '/api/stories')
+export interface DocFinding { id: string; title: string; status: string; missing: string[]; suggestion: string; section?: string }
+export interface Doc { path: string; exists: boolean; findings: DocFinding[]; draft?: string }
+export const fetchDocs = () => request<Doc[]>('GET', '/api/docs').catch(() => [] as Doc[])
+export const fetchDoc = (path: string) => request<{ path: string; text: string; exists: boolean; draft?: string }>('GET', `/api/docs/file?path=${encodeURIComponent(path)}`)
+export const openDocInEditor = (path: string) => request<{ opened: boolean }>('POST', '/api/docs/open', { path })
+export const createStory = (input: { title: string; from: string[]; body?: string }) => request<Story>('POST', '/api/stories', input)
+export const updateStory = (id: string, edit: { title?: string; status?: string; body?: string; later?: string | null }) => request<Story>('PATCH', `/api/stories/${encodeURIComponent(id)}`, edit)
 export const fetchScreens = () => request<Screen[]>('GET', '/api/screens')
 export const updateScreen = (id: string, input: { purpose?: string; audience?: string[]; tasks?: string[]; body?: string }) =>
   request<Screen>('PATCH', `/api/screens/${encodeURIComponent(id)}`, input)
