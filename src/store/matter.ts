@@ -18,7 +18,7 @@ export function readMatter(raw: string): Matter {
   let rest = raw.slice(3)
   const language = /^[^\n]*/.exec(rest)?.[0] ?? ''
   if (language.trim() && !/^\s*ya?ml\s*$/i.test(language)) {
-    throw new Error(`The frontmatter says it is ${language.trim()}. Groundwork only reads YAML: start the file with a plain ---`)
+    throw new Error(`The frontmatter says it is ${language.trim()}. grndwrk only reads YAML: start the file with a plain ---`)
   }
   rest = rest.slice(language.length)
   const close = rest.indexOf('\n---')

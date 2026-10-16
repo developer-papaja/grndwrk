@@ -9,7 +9,7 @@ import type { Foundation } from '../shared/types.js'
  * Markdown in the project's root and docs/, skills, and every Markdown file a
  * check named, plus the ones a check suggests writing (from a draft). Shown in
  * the map, read only, with what the last check found in each and an
- * instruction to copy for Claude. Groundwork does not write them: only
+ * instruction to copy for Claude. grndwrk does not write them: only
  * Markdown files in this list, inside the project's own folder, never
  * through a symbolic link, are read or opened in the person's editor.
  */
@@ -31,7 +31,7 @@ export interface Doc {
   draft?: string
 }
 
-const SKIP = new Set(['node_modules', '.git', 'vendor', '.groundwork', 'dist', 'build', '.next', '.nuxt', 'storage', 'public'])
+const SKIP = new Set(['node_modules', '.git', 'vendor', '.grndwrk', '.groundwork', 'dist', 'build', '.next', '.nuxt', 'storage', 'public'])
 
 const isMarkdown = (p: string) => /\.(md|markdown)$/i.test(p)
 
@@ -93,7 +93,7 @@ function clean(root: string, p: string): string | null {
   if (full !== root && !full.startsWith(root + sep)) return null
   const rel = relative(root, full).split(sep).join('/')
   if (!rel || rel.startsWith('..') || rel.split('/').some((s) => SKIP.has(s))) return null
-  if (rel.startsWith('.claude/commands/')) return null // Groundwork's own commands, updated by init.
+  if (rel.startsWith('.claude/commands/')) return null // grndwrk's own commands, updated by init.
   return isMarkdown(rel) ? rel : null
 }
 
@@ -130,7 +130,7 @@ export async function listDocs(gwDir: string, foundations: Foundation[]): Promis
 /** One document's text and version, only when it is in the list. */
 export async function readDoc(gwDir: string, foundations: Foundation[], path: string): Promise<{ path: string; text: string; exists: boolean; draft?: string }> {
   const doc = (await listDocs(gwDir, foundations)).find((d) => d.path === path)
-  if (!doc) throw new BadInput('Not a document Groundwork shows')
+  if (!doc) throw new BadInput('Not a document grndwrk shows')
   const root = resolve(dirname(gwDir))
   if (!doc.exists) {
     const draft = doc.draft ? await readDraft(gwDir, doc.draft) : null
@@ -144,7 +144,7 @@ export async function readDoc(gwDir: string, foundations: Foundation[], path: st
 /** The file on disk for a document in the list that exists, to open in the person's editor. */
 export async function docOnDisk(gwDir: string, foundations: Foundation[], path: string): Promise<string> {
   const doc = (await listDocs(gwDir, foundations)).find((d) => d.path === path)
-  if (!doc || !doc.exists) throw new BadInput('Not a document Groundwork shows')
+  if (!doc || !doc.exists) throw new BadInput('Not a document grndwrk shows')
   const root = resolve(dirname(gwDir))
   if (!(await isPlainFile(root, path))) throw new BadInput(`${path} is a symbolic link or not a file`)
   return join(root, path)

@@ -1,13 +1,13 @@
-# Groundwork
+# grndwrk
 
 A dev tool that lives in a project repo. You explore a product idea as a 3D map of thoughts, and it tells you whether you have enough to start building. It is for a designer or developer who wants to ideate, move forward to building, and keep decisions documented visually across Claude Code sessions. Internal tool for now. Success: you feel you build a better product faster because of it.
 
-Read `.groundwork/outputs/brief.md` for the full picture and `.groundwork/stories/` for what to build.
+Read `.grndwrk/outputs/brief.md` for the full picture and `.grndwrk/stories/` for what to build.
 
 ## Core flows
 - **Capture:** type a line in the bottom bar, Enter. The card lights up; a duplicate title adds nothing.
 - **Develop:** click a card or list row, edit in the docked right panel, link, move altitude, paste images.
-- **Work with Claude:** commands write files in `.groundwork/`, the map updates live, Claude asks in threads.
+- **Work with Claude:** commands write files in `.grndwrk/`, the map updates live, Claude asks in threads.
 - **Kick off:** not decided yet. Ends in a brief and site map that can be judged. Ask before shaping it.
 
 ## Site map
@@ -16,7 +16,7 @@ Read `.groundwork/outputs/brief.md` for the full picture and `.groundwork/storie
 - Deliverables: a direction only. Do not build it without a story.
 
 ## Rules
-- All data is plain files in `.groundwork/`, committed to git. No database, no accounts.
+- All data is plain files in `.grndwrk/`, committed to git. No database, no accounts.
 - Height is altitude, sideways is topic, depth is when a node last changed.
 - Links stay inside a topic. Links across topics are faint and pull weakly.
 - Nodes are word cards, never orbs. Altitude guides show words, not numbers.
@@ -39,9 +39,9 @@ Read `.groundwork/outputs/brief.md` for the full picture and `.groundwork/storie
 - First run copy: this is meant for you to start ideating, create a new thought to get started, and commands sync what you have.
 
 ## Working with stories
-Stories live in `.groundwork/stories/`, one file each. Each links back to the map nodes it came from.
+Stories live in `.grndwrk/stories/`, one file each. Each links back to the map nodes it came from.
 
 1. Cite the story id in every commit message that implements or changes a story, for example "Capture a thought in one line (s_q7m2)".
 2. Where a story shapes behavior, add the id in a short code comment, for example `// s_q7m2: same title adds nothing`.
-3. When you build against a story, update its `applies_to` with the routes or component paths, and its `status` to `partial` or `done`, in `.groundwork/stories/`.
+3. When you build against a story, update its `applies_to` with the routes or component paths, and its `status` to `partial` or `done`, in `.grndwrk/stories/`.
 4. Before building something no story covers, stop and ask.

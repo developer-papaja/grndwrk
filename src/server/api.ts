@@ -107,7 +107,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (url.pathname === '/api/docs/file' && method === 'GET') {
       return send(res, 200, await readDoc(ctx.gwDir, (await readReadiness(ctx.gwDir)).foundations, url.searchParams.get('path') ?? ''))
     }
-    // Open a document in the person's own editor: Groundwork shows them, it does not write them.
+    // Open a document in the person's own editor: grndwrk shows them, it does not write them.
     if (url.pathname === '/api/docs/open' && method === 'POST') {
       if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
       const b = (await readBody(req)) as { path?: unknown }

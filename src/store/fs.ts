@@ -3,23 +3,23 @@ import { lstat } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 
 /**
- * The file calls Groundwork makes, refusing to follow a symbolic link inside
- * `.groundwork/`. Git stores links, so a pull request could add
- * `.groundwork/threads/n_abc123 -> ../../.claude/commands` or a brief that
+ * The file calls grndwrk makes, refusing to follow a symbolic link inside
+ * `.grndwrk/`. Git stores links, so a pull request could add
+ * `.grndwrk/threads/n_abc123 -> ../../.claude/commands` or a brief that
  * points at `~/.ssh/id_rsa`; following it would write outside the folder or
  * show any file on this Mac in the map. Every path under a folder named
- * `.groundwork` or `.claude` (where init writes the commands) is checked from
+ * `.grndwrk` or `.claude` (where init writes the commands) is checked from
  * that folder down (the folder itself included); paths elsewhere pass through
  * unchanged.
  */
 export class LinkRefused extends Error {}
 
-const GUARDED = ['.groundwork', '.claude']
+const GUARDED = ['.grndwrk', '.claude']
 
 async function check(path: string): Promise<void> {
   const full = resolve(path)
   const parts = full.split(sep)
-  // From the outermost guarded folder down: .groundwork, and .claude where
+  // From the outermost guarded folder down: .grndwrk, and .claude where
   // init writes the commands. macOS and Windows ignore letter case.
   const fold = process.platform === 'darwin' || process.platform === 'win32'
   const at = parts.findIndex((p) => GUARDED.includes(fold ? p.toLowerCase() : p))
@@ -32,7 +32,7 @@ async function check(path: string): Promise<void> {
     } catch {
       return // Not there yet: nothing below it exists to follow.
     }
-    if (link) throw new LinkRefused(`${parts.slice(at, i + 1).join('/')} is a symbolic link. Groundwork does not follow links inside .groundwork or .claude; replace it with a real file or folder.`)
+    if (link) throw new LinkRefused(`${parts.slice(at, i + 1).join('/')} is a symbolic link. grndwrk does not follow links inside .grndwrk or .claude; replace it with a real file or folder.`)
   }
 }
 

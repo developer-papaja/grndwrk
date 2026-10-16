@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 
-/// Lets touches through to the app except on the Groundwork button, or everywhere while picking.
+/// Lets touches through to the app except on the grndwrk button, or everywhere while picking.
 final class OverlayWindow: UIWindow {
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     guard let hit = super.hitTest(point, with: event) else { return nil }
@@ -16,9 +16,9 @@ final class OverlayController: UIViewController {
   private let dark = UIColor(white: 0.17, alpha: 1)
   private let button = UIButton(type: .system)
   private var snapshotTimer: Timer?
-  /// Green when Groundwork answers, orange when comments wait on the phone.
+  /// Green when grndwrk answers, orange when comments wait on the phone.
   private let dot = UIView()
-  /// Above the Groundwork button when fixes are ready: "2 to test". Opens the list.
+  /// Above the grndwrk button when fixes are ready: "2 to test". Opens the list.
   private let testPill = UIButton()
   /// While testing a fix: what changed, how to test it, Approve and Reject, over the app.
   private let testCard = UIView()
@@ -28,7 +28,7 @@ final class OverlayController: UIViewController {
   private var cardTop: NSLayoutConstraint?
   private var cardOffset: CGFloat = 8
   private let grabber = UIView()
-  /// Shown on the Groundwork button for a moment when a picture of the screen was taken.
+  /// Shown on the grndwrk button for a moment when a picture of the screen was taken.
   private let camera = UIImageView(image: UIImage(systemName: "camera.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 9, weight: .bold)))
   private let hint = PaddedLabel()
   private let highlight = UIView()
@@ -56,7 +56,7 @@ final class OverlayController: UIViewController {
 
     var config = UIButton.Configuration.filled()
     config.image = UIImage(systemName: "text.bubble")
-    config.title = "Groundwork"
+    config.title = "grndwrk"
     config.imagePadding = 6
     config.cornerStyle = .capsule
     // At least 44 points high, the size iOS asks for anything tapped.
@@ -69,7 +69,7 @@ final class OverlayController: UIViewController {
     button.layer.shadowOffset = CGSize(width: 0, height: 4)
     button.addTarget(self, action: #selector(togglePicking), for: .touchUpInside)
     button.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(drag(_:))))
-    button.accessibilityIdentifier = "groundwork-comment"
+    button.accessibilityIdentifier = "grndwrk-comment"
     button.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(menu(_:))))
     view.addSubview(button)
 
@@ -227,8 +227,8 @@ final class OverlayController: UIViewController {
     edgeTab.layer.shadowRadius = 6
     edgeTab.isHidden = true
     edgeTab.isAccessibilityElement = true
-    edgeTab.accessibilityLabel = "Groundwork"
-    edgeTab.accessibilityHint = "Brings the Groundwork button back"
+    edgeTab.accessibilityLabel = "grndwrk"
+    edgeTab.accessibilityHint = "Brings the grndwrk button back"
     let line = UIView(frame: CGRect(x: 0, y: 0, width: 4, height: 28))
     line.backgroundColor = UIColor(white: 1, alpha: 0.6)
     line.layer.cornerRadius = 2
@@ -295,10 +295,10 @@ final class OverlayController: UIViewController {
     switch Connection.state {
     case .connected(let project, _):
       if case .connected = before { return }
-      flash(project.isEmpty ? "Connected to Groundwork" : "Connected to Groundwork \u{201C}\(project)\u{201D}")
+      flash(project.isEmpty ? "Connected to grndwrk" : "Connected to grndwrk \u{201C}\(project)\u{201D}")
     case .offline:
       // Only say it when it was there a moment ago. The dot says the rest.
-      if case .connected = before { flash("Lost Groundwork. Comments wait on the phone.") }
+      if case .connected = before { flash("Lost grndwrk. Comments wait on the phone.") }
     case .needsCode:
       // Ask once when it starts wanting the code, not every time it checks.
       if case .needsCode = before { return }
@@ -315,7 +315,7 @@ final class OverlayController: UIViewController {
   func pair() {
     guard case .needsCode(let project, _) = Connection.state, !pairing else { return }
     pairing = true
-    flash("Asking Groundwork on your Mac")
+    flash("Asking grndwrk on your Mac")
     Task {
       let asked = await Pairing.ask(project: project) { [weak self] digits in
         self?.flash("Click Allow on your Mac, next to \(digits)")
@@ -323,25 +323,25 @@ final class OverlayController: UIViewController {
       pairing = false
       switch asked {
       case .allowed(let code, let digits): confirmPairing(project: project, code: code, digits: digits)
-      case .denied: flash("Not allowed on the Mac. Long press the Groundwork button to ask again.")
-      case .noBrowser: askForCode(message: "Open Groundwork in the browser on the Mac to allow this phone, or enter the code it shows in the terminal.")
-      case .unanswered: askForCode(message: "Nobody answered on the Mac. Enter the code Groundwork shows in the terminal, or ask again.")
+      case .denied: flash("Not allowed on the Mac. Long press the grndwrk button to ask again.")
+      case .noBrowser: askForCode(message: "Open grndwrk in the browser on the Mac to allow this phone, or enter the code it shows in the terminal.")
+      case .unanswered: askForCode(message: "Nobody answered on the Mac. Enter the code grndwrk shows in the terminal, or ask again.")
       }
     }
   }
 
-  /// Something on the Wi-Fi could answer as Groundwork and allow at once.
+  /// Something on the Wi-Fi could answer as grndwrk and allow at once.
   /// Only the person knows whether they clicked Allow on their own Mac.
   private func confirmPairing(project: String, code: String, digits: String) {
     var host: UIViewController = self
     while let next = host.presentedViewController { host = next }
     let alert = UIAlertController(
       title: "Did you allow it on your Mac?",
-      message: "Groundwork on your Mac showed this phone with the digits \(digits). Pair only if you clicked Allow there yourself.",
+      message: "grndwrk on your Mac showed this phone with the digits \(digits). Pair only if you clicked Allow there yourself.",
       preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "No", style: .cancel) { [weak self] _ in
       gwLog.error("Pairing answered without the person allowing it on their Mac; the code was dropped")
-      self?.flash("Not paired. Something else on this Wi-Fi may be posing as Groundwork.")
+      self?.flash("Not paired. Something else on this Wi-Fi may be posing as grndwrk.")
     })
     alert.addAction(UIAlertAction(title: "Yes, I allowed \(digits)", style: .default) { _ in
       Pairing.save(code, for: project)
@@ -350,7 +350,7 @@ final class OverlayController: UIViewController {
     host.present(alert, animated: true)
   }
 
-  /// Ask for the pairing code `groundwork --lan` prints in the terminal.
+  /// Ask for the pairing code `grndwrk --lan` prints in the terminal.
   func askForCode(from presenter: UIViewController? = nil, message: String? = nil) {
     guard case .needsCode(let project, _) = Connection.state else { return }
     // On top of whatever is open, like the list of comments.
@@ -359,7 +359,7 @@ final class OverlayController: UIViewController {
     if host is UIAlertController { return }
     let alert = UIAlertController(
       title: "Pairing code",
-      message: message ?? "Enter the code Groundwork\(project.isEmpty ? "" : " \u{201C}\(project)\u{201D}") shows in the terminal on the Mac. You only need it once.",
+      message: message ?? "Enter the code grndwrk\(project.isEmpty ? "" : " \u{201C}\(project)\u{201D}") shows in the terminal on the Mac. You only need it once.",
       preferredStyle: .alert)
     alert.addTextField { field in
       field.placeholder = "ABC234"
@@ -373,7 +373,7 @@ final class OverlayController: UIViewController {
       Pairing.save(alert.textFields?.first?.text ?? "", for: project)
       Task {
         await Connection.check()
-        if case .needsCode = Connection.state { self?.flash("That code did not work. Long press the Groundwork button to try again.") }
+        if case .needsCode = Connection.state { self?.flash("That code did not work. Long press the grndwrk button to try again.") }
       }
     })
     host.present(alert, animated: true)
@@ -381,13 +381,13 @@ final class OverlayController: UIViewController {
 
   // MARK: Menu
 
-  /// Long press: the list of comments, sharing waiting ones as a file (for testers without Groundwork), or hiding the button.
+  /// Long press: the list of comments, sharing waiting ones as a file (for testers without grndwrk), or hiding the button.
   @objc private func menu(_ press: UILongPressGestureRecognizer) {
     guard press.state == .began else { return }
     let count = Outbox.count
     var lines = [status(), Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
     if count > 0 { lines.append("\(count) \(count == 1 ? "comment waits" : "comments wait") to be sent.") }
-    let sheet = UIAlertController(title: "Groundwork", message: lines.joined(separator: "\n"), preferredStyle: .actionSheet)
+    let sheet = UIAlertController(title: "grndwrk", message: lines.joined(separator: "\n"), preferredStyle: .actionSheet)
     if case .needsCode = Connection.state {
       sheet.addAction(UIAlertAction(title: "Pair with the Mac", style: .default) { [weak self] _ in self?.pair() })
       sheet.addAction(UIAlertAction(title: "Enter pairing code", style: .default) { [weak self] _ in self?.askForCode() })
@@ -405,7 +405,7 @@ final class OverlayController: UIViewController {
     if count > 0 {
       sheet.addAction(UIAlertAction(title: "Share \(count) \(count == 1 ? "comment" : "comments") as a file", style: .default) { [weak self] _ in self?.share() })
     }
-    sheet.addAction(UIAlertAction(title: "Hide the Groundwork button", style: .destructive) { [weak self] _ in self?.confirmHide() })
+    sheet.addAction(UIAlertAction(title: "Hide the grndwrk button", style: .destructive) { [weak self] _ in self?.confirmHide() })
     sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     sheet.popoverPresentationController?.sourceView = button
     present(sheet, animated: true)
@@ -414,10 +414,10 @@ final class OverlayController: UIViewController {
   /// The connection in words.
   func status() -> String {
     switch Connection.state {
-    case .connected(let project, let host): return "Connected to \(project.isEmpty ? "Groundwork" : "\u{201C}\(project)\u{201D}") at \(host)."
-    case .needsCode(let project, let host): return "\(project.isEmpty ? "Groundwork" : "\u{201C}\(project)\u{201D}") at \(host) needs the pairing code. Comments wait on the phone."
+    case .connected(let project, let host): return "Connected to \(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)."
+    case .needsCode(let project, let host): return "\(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host) needs the pairing code. Comments wait on the phone."
     case .offline(let why): return "Not connected. \(why) Comments wait on the phone."
-    case .unknown: return "Looking for Groundwork..."
+    case .unknown: return "Looking for grndwrk..."
     }
   }
 
@@ -526,7 +526,7 @@ final class OverlayController: UIViewController {
     testing = item
     dismiss(animated: true)
     var opened = false
-    if let name = item.screen, let open = GroundworkFeedback.openScreen { opened = open(name) }
+    if let name = item.screen, let open = GrndwrkFeedback.openScreen { opened = open(name) }
     buildCard(item, opened: opened)
     updateTestPill()
   }
@@ -568,12 +568,12 @@ final class OverlayController: UIViewController {
       self.buildCard(item, opened: opened)
     }
     let close = small("xmark", "Stop testing") { [weak self] in self?.stopTesting() }
-    // The comment in Groundwork on the Mac, with its whole thread and what changed.
+    // The comment in grndwrk on the Mac, with its whole thread and what changed.
     let mac = small("desktopcomputer", "Show on my Mac") { [weak self] in
       guard let node = item.node else { return }
       Task {
         let ok = await Outbox.showOnMac(node: node)
-        self?.flash(ok ? "Open on your Mac" : "Groundwork is not reachable. Try again when connected.")
+        self?.flash(ok ? "Open on your Mac" : "grndwrk is not reachable. Try again when connected.")
       }
     }
     let top = UIStackView(arrangedSubviews: [title, mac, fold, close])
@@ -629,7 +629,7 @@ final class OverlayController: UIViewController {
   }
 
   private func rejectTested(_ item: Outbox.Item) {
-    let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to Groundwork with the comment, for the next /feedback.", preferredStyle: .alert)
+    let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to grndwrk with the comment, for the next /feedback.", preferredStyle: .alert)
     alert.addTextField { $0.placeholder = "Optional" }
     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     alert.addAction(UIAlertAction(title: "Reject", style: .destructive) { [weak self] _ in
@@ -642,24 +642,24 @@ final class OverlayController: UIViewController {
     guard let node = item.node else { return }
     Task {
       let ok = await Outbox.tested(node: node, works: works, note: note)
-      guard ok else { return flash("Groundwork is not reachable. Try again when connected.") }
+      guard ok else { return flash("grndwrk is not reachable. Try again when connected.") }
       stopTesting()
-      flash(works ? "Approved. It is fixed in Groundwork." : "Rejected. It is back in Groundwork with your note.")
+      flash(works ? "Approved. It is fixed in grndwrk." : "Rejected. It is back in grndwrk with your note.")
     }
   }
 
   /// Hiding is until the app is opened again: say so before it is gone.
   private func confirmHide() {
     let alert = UIAlertController(
-      title: "Hide the Groundwork button?",
+      title: "Hide the grndwrk button?",
       message: "It stays hidden until the app is opened again: swipe it away in the app switcher and open it, and the button is back. Comments that wait stay on the phone, and no pictures are taken while it is hidden.",
       preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-    alert.addAction(UIAlertAction(title: "Hide", style: .destructive) { _ in GroundworkFeedback.stop() })
+    alert.addAction(UIAlertAction(title: "Hide", style: .destructive) { _ in GrndwrkFeedback.stop() })
     present(alert, animated: true)
   }
 
-  /// A picture of the screen went to Groundwork: the camera on the button shows for a moment.
+  /// A picture of the screen went to grndwrk: the camera on the button shows for a moment.
   private func blinkCamera() {
     view.bringSubviewToFront(button)
     UIView.animate(withDuration: 0.15) { self.camera.alpha = 1 } completion: { _ in
@@ -668,7 +668,7 @@ final class OverlayController: UIViewController {
   }
 
   /// One file with every waiting comment, pictures included. The person who
-  /// runs Groundwork adds it with `groundwork import-feedback <file>`.
+  /// runs grndwrk adds it with `grndwrk import-feedback <file>`.
   func share(from presenter: UIViewController? = nil) {
     guard let (file, sent) = Outbox.export() else { return }
     let activity = UIActivityViewController(activityItems: [file], applicationActivities: nil)
@@ -677,7 +677,7 @@ final class OverlayController: UIViewController {
       guard completed else { return }
       // Shared: they are on their way, so they do not wait here any more.
       Outbox.remove(sent)
-      self?.flash("Shared. They will show up in Groundwork once imported.")
+      self?.flash("Shared. They will show up in grndwrk once imported.")
     }
     (presenter ?? self).present(activity, animated: true)
   }
@@ -905,10 +905,10 @@ final class OverlayController: UIViewController {
         Outbox.remember(data, id: id, project: project)
         self?.flash("Opened on your Mac. Write it there.")
         return nil
-      case .rejected(let status): return "Groundwork did not take it (\(status))."
-      case .blockedByATS: return "Blocked by App Transport Security. See the GroundworkFeedback README."
-      case .unreachable: return "Groundwork is not reachable. Write it here instead, and it goes once it is."
-      case .needsCode: return "Groundwork needs the pairing code first. Write it here instead, and it goes once paired."
+      case .rejected(let status): return "grndwrk did not take it (\(status))."
+      case .blockedByATS: return "Blocked by App Transport Security. See the GrndwrkFeedback README."
+      case .unreachable: return "grndwrk is not reachable. Write it here instead, and it goes once it is."
+      case .needsCode: return "grndwrk needs the pairing code first. Write it here instead, and it goes once paired."
       }
     }
     sheet.onClose = { [weak self] in self?.highlight.isHidden = true }
@@ -933,15 +933,15 @@ final class OverlayController: UIViewController {
     switch await Outbox.post(data) {
     case .sent(let id, let project):
       Outbox.remember(data, id: id, project: project)
-      flash("Sent to Groundwork")
+      flash("Sent to grndwrk")
       await Outbox.flush()
     case .rejected(let status):
-      flash("Groundwork did not take it (\(status))")
+      flash("grndwrk did not take it (\(status))")
     case .blockedByATS:
-      flash("Blocked by App Transport Security. See the GroundworkFeedback README.")
+      flash("Blocked by App Transport Security. See the GrndwrkFeedback README.")
     case .unreachable:
       Outbox.save(data)
-      flash("Saved on the phone. It goes to Groundwork once connected (\(Outbox.count) waiting)")
+      flash("Saved on the phone. It goes to grndwrk once connected (\(Outbox.count) waiting)")
     case .needsCode:
       Outbox.save(data)
       flash("Saved on the phone. It goes once you enter the pairing code (\(Outbox.count) waiting)")
@@ -951,14 +951,14 @@ final class OverlayController: UIViewController {
 
   // MARK: Badge and messages
 
-  /// "Comment · 2" while comments wait to be sent, "Offline · 2" while Groundwork
+  /// "Comment · 2" while comments wait to be sent, "Offline · 2" while grndwrk
   /// cannot be reached, and the dot: green when connected, orange when not.
   func updateBadge() {
     var config = button.configuration
     // Offline, the button says so in words, so nobody wonders where comments went.
     let offline: Bool
     if case .offline = Connection.state { offline = true } else { offline = false }
-    let name = offline ? "Offline" : "Groundwork"
+    let name = offline ? "Offline" : "grndwrk"
     config?.title = Outbox.count > 0 ? "\(name) · \(Outbox.count)" : name
     config?.image = UIImage(systemName: offline ? "wifi.slash" : "text.bubble")
     config?.titleLineBreakMode = .byClipping

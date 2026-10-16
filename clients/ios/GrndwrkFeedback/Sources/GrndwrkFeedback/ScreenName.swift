@@ -2,10 +2,10 @@
 import UIKit
 
 /// An invisible view that names the screen it sits on, for screens without a
-/// navigation title. Put there by `.groundworkScreen("Connect")` in SwiftUI,
+/// navigation title. Put there by `.grndwrkScreen("Connect")` in SwiftUI,
 /// or added by hand in UIKit. It draws nothing, takes no touches and is not
 /// read by VoiceOver.
-public final class GroundworkScreenName: UIView {
+public final class GrndwrkScreenName: UIView {
   public var name: String
 
   public init(_ name: String) {
@@ -26,20 +26,20 @@ public final class GroundworkScreenName: UIView {
 import SwiftUI
 
 extension View {
-  /// Names this screen for Groundwork when it has no navigation title, so
+  /// Names this screen for grndwrk when it has no navigation title, so
   /// comments and pictures from it land on the right screen in the map. It
   /// changes nothing the person sees, and nothing VoiceOver or UI tests read.
   ///
   ///     ConnectView()
-  ///       .groundworkScreen("Connect")
-  public func groundworkScreen(_ name: String) -> some View {
+  ///       .grndwrkScreen("Connect")
+  public func grndwrkScreen(_ name: String) -> some View {
     background(ScreenNameView(name: name).allowsHitTesting(false).accessibilityHidden(true))
   }
 }
 
 private struct ScreenNameView: UIViewRepresentable {
   let name: String
-  func makeUIView(context: Context) -> GroundworkScreenName { GroundworkScreenName(name) }
-  func updateUIView(_ view: GroundworkScreenName, context: Context) { view.name = name }
+  func makeUIView(context: Context) -> GrndwrkScreenName { GrndwrkScreenName(name) }
+  func updateUIView(_ view: GrndwrkScreenName, context: Context) { view.name = name }
 }
 #endif

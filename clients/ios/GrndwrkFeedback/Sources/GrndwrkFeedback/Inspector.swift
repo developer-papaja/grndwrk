@@ -19,11 +19,11 @@ enum Inspector {
 
   struct Screen {
     /// The navigation title when there is one, the name given with
-    /// `.groundworkScreen`, or the view controller's or SwiftUI view's name.
+    /// `.grndwrkScreen`, or the view controller's or SwiftUI view's name.
     var name: String
     /// The view type, like BookingView, when it can be read.
     var component: String?
-    /// Whether the name is the screen's own: a title, or `.groundworkScreen`.
+    /// Whether the name is the screen's own: a title, or `.grndwrkScreen`.
     /// Without one, screens that look nothing alike can share a name like App.
     var named: Bool
   }
@@ -220,14 +220,14 @@ enum Inspector {
     return Screen(name: title ?? given ?? component ?? "App", component: component, named: title != nil || given != nil)
   }
 
-  /// The name from `.groundworkScreen("Connect")`: the frontmost one on screen.
+  /// The name from `.grndwrkScreen("Connect")`: the frontmost one on screen.
   private static func givenName(in root: UIView) -> String? {
     var found: String?
     var visited = 0
     func visit(_ view: UIView) {
       visited += 1
       guard visited < 6000, !view.isHidden, view.alpha > 0.01 else { return }
-      if let marker = view as? GroundworkScreenName, let window = view.window,
+      if let marker = view as? GrndwrkScreenName, let window = view.window,
         view.convert(view.bounds, to: window).intersects(window.bounds), let name = clean(marker.name) {
         found = name
       }

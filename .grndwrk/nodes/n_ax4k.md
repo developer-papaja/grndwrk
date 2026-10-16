@@ -19,7 +19,7 @@ Done in 37113ff: /decisions writes the decisions of a session into the map, nami
 ## Thread
 
 **Claude asks** · 2026-10-03
-Should .groundwork/ be committed to git? Then the history of the map, and of every decision written into it, is kept with the code.
+Should .grndwrk/ be committed to git? Then the history of the map, and of every decision written into it, is kept with the code.
 
 **You** · 2026-10-03
 Yes it should, but I need to actually create the repo first

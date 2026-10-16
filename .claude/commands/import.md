@@ -1,13 +1,13 @@
 ---
-description: Start or grow the Groundwork map from a document, such as a brief or a list of user stories
+description: Start or grow the grndwrk map from a document, such as a brief or a list of user stories
 argument-hint: <path to a file>
 ---
-Read the file at `$ARGUMENTS` and turn it into thoughts in this project's Groundwork map. If no path was given, ask for one and stop.
+Read the file at `$ARGUMENTS` and turn it into thoughts in this project's grndwrk map. If no path was given, ask for one and stop.
 
 ## Read the map first
 
-1. `.groundwork/project.md`: what the project is, and `pages:` for the page order.
-2. Every file in `.groundwork/nodes/`, so you reuse the topics that exist and do not add a thought twice.
+1. `.grndwrk/project.md`: what the project is, and `pages:` for the page order.
+2. Every file in `.grndwrk/nodes/`, so you reuse the topics that exist and do not add a thought twice.
 
 ## Decide
 
@@ -21,7 +21,7 @@ Read the file at `$ARGUMENTS` and turn it into thoughts in this project's Ground
 
 ## Write
 
-For each thought, create `.groundwork/nodes/<id>.md`. The id is `n_` plus four random lowercase letters or digits, and must not already exist. Frontmatter order: `id, type, title, topic, topic_by, page, altitude, links, status, created`, with `status: open`, today's date as `created`, and `links` on one line. Below the frontmatter, quote the source line so the person can trace it back:
+For each thought, create `.grndwrk/nodes/<id>.md`. The id is `n_` plus four random lowercase letters or digits, and must not already exist. Frontmatter order: `id, type, title, topic, topic_by, page, altitude, links, status, created`, with `status: open`, today's date as `created`, and `links` on one line. Below the frontmatter, quote the source line so the person can trace it back:
 
 ```md
 From brief.md:
@@ -39,7 +39,7 @@ If the document is unclear about something important, add a question to the thre
 The brief says "fast booking". How many steps is fast enough?
 ```
 
-Write only inside `.groundwork/nodes/`. Do not change existing nodes except to add links to new ones. The map in the browser updates live.
+Write only inside `.grndwrk/nodes/`. Do not change existing nodes except to add links to new ones. The map in the browser updates live.
 
 ## Report
 

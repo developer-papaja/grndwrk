@@ -1,11 +1,11 @@
 #if canImport(UIKit)
 import UIKit
 
-/// Pictures of the screens the app shows, for the Sitemap view in Groundwork.
+/// Pictures of the screens the app shows, for the Sitemap view in grndwrk.
 /// While connected, each screen is taken once per launch, after it has stayed
 /// in view for a moment, so walking through the app once collects them all.
-/// The Groundwork button and anything it shows are in their own window and never
-/// in the picture. Turn it off with `GroundworkFeedback.collectsScreenshots = false`.
+/// The grndwrk button and anything it shows are in their own window and never
+/// in the picture. Turn it off with `GrndwrkFeedback.collectsScreenshots = false`.
 @MainActor
 enum Snapshots {
   static var enabled = true
@@ -14,12 +14,12 @@ enum Snapshots {
   private static var last: (key: String, look: Set<String>)?
   private static var sending = false
   private static var woke = false
-  /// An older Groundwork without screenshots: stop asking until the next launch.
+  /// An older grndwrk without screenshots: stop asking until the next launch.
   private static var unsupported = false
-  /// When a picture of each screen went to Groundwork this launch, by name.
+  /// When a picture of each screen went to grndwrk this launch, by name.
   private static var sentAt: [String: Date] = [:]
-  /// A picture went to Groundwork. userInfo["screen"]: the name it was sent under.
-  static let tookPicture = Notification.Name("GroundworkFeedback.tookPicture")
+  /// A picture went to grndwrk. userInfo["screen"]: the name it was sent under.
+  static let tookPicture = Notification.Name("GrndwrkFeedback.tookPicture")
 
   /// Whether this screen has a picture yet, in words, for the long-press menu.
   static func status(window: UIWindow?) -> String {
@@ -104,7 +104,7 @@ enum Snapshots {
         gwLog.info("Sent a picture of \(key, privacy: .public)")
       case 404:
         unsupported = true
-        gwLog.info("This Groundwork does not take pictures of screens yet")
+        gwLog.info("This grndwrk does not take pictures of screens yet")
       default:
         gwLog.error("A picture of \(key, privacy: .public) was not taken (\(status))")
       }

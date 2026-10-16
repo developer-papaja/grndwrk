@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, renameSync } from 'node:fs'
 import { chmod, mkdir } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
+import { OLD_GW_DIR, stateDir } from './root.js'
 import { readProject } from './store/project.js'
 import { rememberedApp } from './store/local.js'
 import { listScreens } from './store/screens.js'
@@ -21,20 +21,20 @@ export interface ScreenshotOptions {
 }
 
 /**
- * Take a picture of every screen in `.groundwork/screens/` that has a path to
- * open, in the running product, and keep it in `.groundwork/shots/web/`.
+ * Take a picture of every screen in `.grndwrk/screens/` that has a path to
+ * open, in the running product, and keep it in `.grndwrk/shots/web/`.
  * Uses Chrome as installed on this machine, through playwright-core.
  */
 export async function takeScreenshots(gwDir: string, options: ScreenshotOptions): Promise<void> {
   const remembered = await rememberedApp(gwDir, (await readProject(gwDir)).data.app)
   const app = (options.app ?? (typeof remembered === 'string' ? remembered : '')).replace(/\/+$/, '')
   if (!/^https?:\/\//.test(app)) {
-    throw new Error('Say where the product runs: groundwork screenshots --app http://localhost:5173')
+    throw new Error('Say where the product runs: grndwrk screenshots --app http://localhost:5173')
   }
   // app: in project.md is committed, so anyone with a pull request could set
   // it. Only this machine is opened from it; anywhere else must be said here.
   if (!options.app && !isLocalUrl(app)) {
-    throw new Error(`project.md says the product runs at ${app}, which is not this machine. To take pictures there, say so: groundwork screenshots --app ${app}`)
+    throw new Error(`project.md says the product runs at ${app}, which is not this machine. To take pictures there, say so: grndwrk screenshots --app ${app}`)
   }
   const screens = (await listScreens(gwDir)).filter((s) => !s.error)
   if (!screens.length) throw new Error('No screens yet. Run /sitemap in Claude Code first.')
@@ -117,7 +117,16 @@ function isLocalUrl(url: string): boolean {
 
 /** Where the login for this project is kept: in the user's own folder, one per project folder. */
 export function sessionPath(gwDir: string): string {
-  const id = createHash('sha256').update(resolve(gwDir)).digest('hex').slice(0, 16)
-  const base = process.platform === 'darwin' ? join(homedir(), 'Library', 'Application Support', 'Groundwork') : join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'groundwork')
-  return join(base, 'sessions', `${id}.json`)
+  const name = (dir: string) => join(stateDir(), 'sessions', `${createHash('sha256').update(resolve(dir)).digest('hex').slice(0, 16)}.json`)
+  const path = name(gwDir)
+  // The login saved while the folder was still .groundwork, before the rename.
+  const old = name(join(gwDir, '..', OLD_GW_DIR))
+  if (!existsSync(path) && existsSync(old)) {
+    try {
+      renameSync(old, path)
+    } catch {
+      // Log in again.
+    }
+  }
+  return path
 }

@@ -1,5 +1,5 @@
 ---
-name: Groundwork
+name: grndwrk
 purpose: Explore a product idea as a 3D map and find out whether you have enough to start building.
 type: developer tool
 pages: [Product, Feedback]

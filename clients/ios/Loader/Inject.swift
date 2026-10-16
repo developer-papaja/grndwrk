@@ -3,13 +3,13 @@ import UIKit
 
 /// The injected start, called by the loader's constructor before the app's
 /// own code runs. Waits for the first scene to be active, then starts the
-/// Comment button, unless the app already runs GroundworkFeedback itself.
-@_cdecl("GroundworkFeedbackInject")
-public func groundworkFeedbackInject() {
+/// Comment button, unless the app already runs GrndwrkFeedback itself.
+@_cdecl("GrndwrkFeedbackInject")
+public func grndwrkFeedbackInject() {
   Injected.observer = NotificationCenter.default.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { _ in
     if let observer = Injected.observer { NotificationCenter.default.removeObserver(observer) }
     Injected.observer = nil
-    // One turn later, so an app that starts GroundworkFeedback itself as its scene appears has done so.
+    // One turn later, so an app that starts GrndwrkFeedback itself as its scene appears has done so.
     DispatchQueue.main.async {
       MainActor.assumeIsolated { Injected.start() }
     }
@@ -22,13 +22,13 @@ enum Injected {
   @MainActor
   static func start() {
     if appRunsItsOwn() {
-      gwLog.info("Injected, but the app runs GroundworkFeedback itself: not starting a second button")
+      gwLog.info("Injected, but the app runs GrndwrkFeedback itself: not starting a second button")
       return
     }
-    // GROUNDWORK_SERVER: Groundwork somewhere else than localhost:7777, like http://localhost:7790.
-    let server = ProcessInfo.processInfo.environment["GROUNDWORK_SERVER"].flatMap(URL.init(string:))
+    // GRNDWRK_SERVER: grndwrk somewhere else than localhost:7777, like http://localhost:7790.
+    let server = ProcessInfo.processInfo.environment["GRNDWRK_SERVER"].flatMap(URL.init(string:))
     gwLog.info("Injected: starting the Comment button\(server.map { " for \($0.absoluteString)" } ?? "", privacy: .public)")
-    GroundworkFeedback.start(server: server)
+    GrndwrkFeedback.start(server: server)
   }
 
   /// The app's own copy of the package shows its button in a window of this
@@ -38,7 +38,7 @@ enum Injected {
     UIApplication.shared.connectedScenes
       .compactMap { $0 as? UIWindowScene }
       .flatMap(\.windows)
-      .contains { NSStringFromClass(type(of: $0)) == "GroundworkFeedback.OverlayWindow" }
+      .contains { NSStringFromClass(type(of: $0)) == "GrndwrkFeedback.OverlayWindow" }
   }
 }
 #endif

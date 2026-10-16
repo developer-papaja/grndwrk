@@ -59,7 +59,7 @@
     "id": "gap_npm_name",
     "area": "constraints",
     "title": "npm name and license, for when it is shared",
-    "why": "\"groundwork\" is taken on npm. It does not matter while this is internal, but it will the day someone else installs it.",
+    "why": "\"grndwrk\" is taken on npm. It does not matter while this is internal, but it will the day someone else installs it.",
     "near": [],
     "severity": "nice",
     "page": "Product",

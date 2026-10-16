@@ -3,10 +3,10 @@ import { join } from 'node:path'
 import { keepOutOfGit } from './gitignore.js'
 
 /**
- * Pictures of the product's screens, in `.groundwork/shots/`, kept out of git
+ * Pictures of the product's screens, in `.grndwrk/shots/`, kept out of git
  * since they can show real data:
- * - web/<screen id>.png, taken by `groundwork screenshots`
- * - ios/<view>.jpg, sent by GroundworkFeedback as the app is used; <view> is
+ * - web/<screen id>.png, taken by `grndwrk screenshots`
+ * - ios/<view>.jpg, sent by GrndwrkFeedback as the app is used; <view> is
  *   the view's type or title, matched to a screen through its code. Screens
  *   without a name of their own (App, ContentView) that look different get a
  *   file each: App.jpg, App-2.jpg. Next to each, <view>.json keeps what the
@@ -80,7 +80,7 @@ export async function saveShot(gwDir: string, platform: ShotPlatform, key: strin
 export interface ShotAbout {
   /** The name the app gave the screen: its title, view or App. */
   screen: string
-  /** Whether that name is the screen's own (a title or .groundworkScreen). */
+  /** Whether that name is the screen's own (a title or .grndwrkScreen). */
   named: boolean
   texts: string[]
   ids: string[]

@@ -1,6 +1,6 @@
 import type { GNode, NodeInput, PairRequest, Readiness, Screen, ServerEvent, Story } from '../../src/shared/types'
 
-export const OFFLINE_MESSAGE = "Can't reach Groundwork. Is `groundwork` still running in your terminal?"
+export const OFFLINE_MESSAGE = "Can't reach grndwrk. Is `grndwrk` still running in your terminal?"
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response

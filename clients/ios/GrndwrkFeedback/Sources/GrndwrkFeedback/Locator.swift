@@ -3,27 +3,27 @@ import Network
 import UIKit
 import os
 
-/// Every step of finding and reaching Groundwork, for Console.app: filter on
-/// subsystem `GroundworkFeedback`.
-let gwLog = Logger(subsystem: "GroundworkFeedback", category: "connection")
+/// Every step of finding and reaching grndwrk, for Console.app: filter on
+/// subsystem `GrndwrkFeedback`.
+let gwLog = Logger(subsystem: "GrndwrkFeedback", category: "connection")
 
-// MARK: - Finding Groundwork
+// MARK: - Finding grndwrk
 
-/// Where Groundwork runs. Found with Bonjour when `groundwork --lan` runs on a
+/// Where grndwrk runs. Found with Bonjour when `grndwrk --lan` runs on a
 /// Mac on the same network; in the Simulator, localhost:7777 also works.
 ///
 /// Every advert found is tried in turn until one answers /api/hello, so a
-/// stale advert, or another project's Groundwork, cannot hold the phone up.
+/// stale advert, or another project's grndwrk, cannot hold the phone up.
 /// The project the phone was connected to last, or holds a code for, goes first.
 @MainActor
 enum Locator {
   static var fixed: URL?
   private static var found: URL?
   static var current: URL? { fixed ?? found }
-  /// Why the last search found no Groundwork, in plain words. Nil when it found one.
+  /// Why the last search found no grndwrk, in plain words. Nil when it found one.
   private(set) static var problem: String?
 
-  private static let lastProjectKey = "GroundworkFeedback.lastProject"
+  private static let lastProjectKey = "GrndwrkFeedback.lastProject"
   static func remember(project: String) {
     if !project.isEmpty { UserDefaults.standard.set(project, forKey: lastProjectKey) }
   }
@@ -31,11 +31,11 @@ enum Locator {
   static func url() async -> URL? {
     if let fixed { return fixed }
     if let found { return found }
-    // In the Simulator, Groundwork on this Mac answers at localhost without a
+    // In the Simulator, grndwrk on this Mac answers at localhost without a
     // search, which also works in an app without NSBonjourServices.
-    #if targetEnvironment(simulator) && !GROUNDWORK_NO_LOCALHOST
+    #if targetEnvironment(simulator) && !GRNDWRK_NO_LOCALHOST
     if let local = URL(string: "http://localhost:7777"), await Connection.probe(local) == nil {
-      gwLog.info("Using Groundwork at localhost:7777")
+      gwLog.info("Using grndwrk at localhost:7777")
       found = local
       problem = nil
       return local
@@ -46,8 +46,8 @@ enum Locator {
       problem = nil
       return url
     }
-    // GROUNDWORK_NO_LOCALHOST: for testing discovery alone, in the Simulator.
-    #if targetEnvironment(simulator) && !GROUNDWORK_NO_LOCALHOST
+    // GRNDWRK_NO_LOCALHOST: for testing discovery alone, in the Simulator.
+    #if targetEnvironment(simulator) && !GRNDWRK_NO_LOCALHOST
     gwLog.info("Nothing on the network; trying localhost:7777 in the Simulator")
     return URL(string: "http://localhost:7777")
     #else
@@ -58,7 +58,7 @@ enum Locator {
   static func forget() { found = nil }
 
   private static func search() async -> URL? {
-    gwLog.info("Searching for _groundwork._tcp")
+    gwLog.info("Searching for _grndwrk._tcp")
     let services: [Browse.Service]
     switch await Browse.run() {
     case .problem(let words):
@@ -69,7 +69,7 @@ enum Locator {
       services = list
     }
     guard !services.isEmpty else {
-      problem = "No Groundwork found on this Wi-Fi. Is it running with --lan on the Mac, on the same network?"
+      problem = "No grndwrk found on this Wi-Fi. Is it running with --lan on the Mac, on the same network?"
       gwLog.error("Search found no adverts")
       return nil
     }
@@ -79,7 +79,7 @@ enum Locator {
     gwLog.info("Found \(ordered.count) adverts: \(ordered.map { "\($0.name) [\($0.project)]" }.joined(separator: ", "), privacy: .public)")
 
     var problems: [String] = []
-    // A Groundwork that proves it knows a code this phone keeps comes first:
+    // A grndwrk that proves it knows a code this phone keeps comes first:
     // another advert under the same project name cannot.
     var answering: [URL] = []
     for service in ordered {
@@ -105,7 +105,7 @@ enum Locator {
       gwLog.info("Using \(url.absoluteString, privacy: .public): none proved a code this phone keeps")
       return url
     }
-    problem = "Found Groundwork on the network, but none answered.\n" + problems.joined(separator: "\n")
+    problem = "Found grndwrk on the network, but none answered.\n" + problems.joined(separator: "\n")
     return nil
   }
 }
@@ -141,7 +141,7 @@ private final class Browse: @unchecked Sendable {
     }
   }
 
-  private let browser = NWBrowser(for: .bonjourWithTXTRecord(type: "_groundwork._tcp", domain: nil), using: .tcp)
+  private let browser = NWBrowser(for: .bonjourWithTXTRecord(type: "_grndwrk._tcp", domain: nil), using: .tcp)
   private var services: [Service] = []
   private var settling = false
   private var finished = false
@@ -272,7 +272,7 @@ private enum Resolve {
   nonisolated private static func words(_ error: NWError) -> String {
     if case .posix(let code) = error {
       switch code {
-      case .ECONNREFUSED: return "nothing is listening there (a Groundwork that has stopped?)"
+      case .ECONNREFUSED: return "nothing is listening there (a grndwrk that has stopped?)"
       case .EHOSTUNREACH, .ENETUNREACH: return "the Mac cannot be reached from this network"
       case .ETIMEDOUT: return "no answer in time"
       default: break

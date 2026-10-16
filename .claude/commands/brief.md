@@ -1,20 +1,20 @@
 ---
-description: Turn the Groundwork map into a brief, a site map, the first user stories and a CLAUDE.md to start building with
+description: Turn the grndwrk map into a brief, a site map, the first user stories and a CLAUDE.md to start building with
 ---
-Turn this project's Groundwork map into what someone needs to start building the product: a brief, a site map, the first user stories, and a starting CLAUDE.md for the product's own repository.
+Turn this project's grndwrk map into what someone needs to start building the product: a brief, a site map, the first user stories, and a starting CLAUDE.md for the product's own repository.
 
 ## Read
 
-1. `.groundwork/project.md`: name, purpose, project type, `pages:`.
-2. Every file in `.groundwork/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and notes, including threads. Settled thoughts and decisions carry the most weight. A thread answer from the person counts as decided.
-3. `.groundwork/readiness/report.md` and `gaps.json`, if they exist.
-4. Existing `.groundwork/stories/*.md` and `.groundwork/outputs/*.md`, if they exist. Update them; never duplicate them.
+1. `.grndwrk/project.md`: name, purpose, project type, `pages:`.
+2. Every file in `.grndwrk/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and notes, including threads. Settled thoughts and decisions carry the most weight. A thread answer from the person counts as decided.
+3. `.grndwrk/readiness/report.md` and `gaps.json`, if they exist.
+4. Existing `.grndwrk/stories/*.md` and `.grndwrk/outputs/*.md`, if they exist. Update them; never duplicate them.
 
 Use only what the map says. Where the map is silent, say so in the brief instead of inventing an answer.
 
 If the project already exists (thoughts with `source: code` and stories with status `done` or `partial`, usually from `/survey`), say in the brief what is built and what is still planned. In the site map, mark the screens that exist. Keep the `status` and `applies_to` of every story that has them.
 
-## Write `.groundwork/outputs/brief.md`
+## Write `.grndwrk/outputs/brief.md`
 
 ```md
 ---
@@ -51,7 +51,7 @@ What the map leaves undecided that the build will run into, each with the node i
 
 Write plainly. Cite node ids in brackets, like (n_bz8p), where a statement rests on a specific thought, so it can be traced.
 
-## Write the stories, one file each, in `.groundwork/stories/`
+## Write the stories, one file each, in `.grndwrk/stories/`
 
 One story per thing a person can do or get from the product, covering every core flow. Aim for five to twelve for a first version. Fewer, larger stories beat many tiny ones.
 
@@ -79,7 +79,7 @@ so that booking never feels like a chore.
 - Acceptance: two to five checks someone can actually test.
 - When a story already exists for the same thing, update its text and acceptance instead of writing a new one.
 
-## Write `.groundwork/outputs/CLAUDE.starter.md`
+## Write `.grndwrk/outputs/CLAUDE.starter.md`
 
 The starting CLAUDE.md for the product's own repository. It is read by Claude Code at the start of every session, so it must be short, concrete and true to the map:
 
@@ -93,10 +93,10 @@ It must end with a section headed exactly `## Working with stories` (the map han
 
 1. Cite the story id in every commit message that implements or changes a story, for example "Book a desk in three steps (s_k3f9)".
 2. Where a story shapes behavior, add the id in a short code comment, for example `// s_k3f9: at most three steps`.
-3. When you build against a story, update its `applies_to` with the routes or component paths, and its `status` to `partial` or `done`, in `.groundwork/stories/`.
+3. When you build against a story, update its `applies_to` with the routes or component paths, and its `status` to `partial` or `done`, in `.grndwrk/stories/`.
 4. Before building something no story covers, stop and ask.
 
-Write only inside `.groundwork/outputs/` and `.groundwork/stories/`. Do not edit nodes. Do not use the dash characters "–" or "—".
+Write only inside `.grndwrk/outputs/` and `.grndwrk/stories/`. Do not edit nodes. Do not use the dash characters "–" or "—".
 
 ## Report back
 

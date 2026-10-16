@@ -26,6 +26,6 @@ Still ready to prototype, but closer. Purpose is now clear and the design and ac
 
 ## The smallest set of things to add
 
-1. Write the kickoff flow as steps, from `groundwork init` to the deliverable n_scwj describes.
+1. Write the kickoff flow as steps, from `grndwrk init` to the deliverable n_scwj describes.
 2. Name at least one thing the first version will not do, in the map.
 3. Decide a type scale and spacing, even a simple one, and write it down where Claude Code reads it.

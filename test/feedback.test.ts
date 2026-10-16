@@ -49,7 +49,7 @@ describe('feedback', () => {
   it('imports a shared file once, even when the same comment was also sent', async () => {
     const comment = { text: 'Bigger tap target', platform: 'iOS', screen: 'Settings', written: '2026-10-07T09:30:00Z', image: PNG }
     await createFeedback(gw, store, parseFeedback(comment))
-    const file = JSON.stringify({ groundwork: 'feedback', comments: [comment, { ...comment, text: 'Second one' }, { text: '' }] })
+    const file = JSON.stringify({ grndwrk: 'feedback', comments: [comment, { ...comment, text: 'Second one' }, { text: '' }] })
     expect(await importFeedback(gw, store, file)).toEqual({ added: 1, skipped: 2 })
     const titles = (await store.list()).map((n) => n.title).sort()
     expect(titles).toEqual(['Bigger tap target', 'Second one'])
@@ -72,7 +72,7 @@ describe('proxy', () => {
 
   it('adds the overlay to pages once', () => {
     const page = inject('<html><body><p>hi</p></body></html>')
-    expect(page).toBe('<html><body><p>hi</p><script src="/__groundwork/feedback.js" defer></script></body></html>')
+    expect(page).toBe('<html><body><p>hi</p><script src="/__grndwrk/feedback.js" defer></script></body></html>')
     expect(inject(page)).toBe(page)
   })
 
@@ -87,11 +87,11 @@ describe('proxy', () => {
     const base = `http://localhost:${await listen(proxy)}`
 
     const page = await (await fetch(`${base}/`)).text()
-    expect(page).toContain('<script src="/__groundwork/feedback.js" defer></script></body>')
+    expect(page).toContain('<script src="/__grndwrk/feedback.js" defer></script></body>')
     expect(await (await fetch(`${base}/app.js`)).text()).toBe('console.log(1)')
-    expect(await (await fetch(`${base}/__groundwork/feedback.js`)).text()).toContain('__groundworkFeedback')
+    expect(await (await fetch(`${base}/__grndwrk/feedback.js`)).text()).toContain('__grndwrkFeedback')
 
-    const res = await fetch(`${base}/__groundwork/feedback`, {
+    const res = await fetch(`${base}/__grndwrk/feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: 'Too much padding here', screen: '/booking', element: { role: 'button', label: 'Book' } }),
@@ -102,7 +102,7 @@ describe('proxy', () => {
     expect(node.body).toContain('(Web)')
 
     // A plain form post from another site cannot write.
-    expect((await fetch(`${base}/__groundwork/feedback`, { method: 'POST', body: 'text=x' })).status).toBe(415)
+    expect((await fetch(`${base}/__grndwrk/feedback`, { method: 'POST', body: 'text=x' })).status).toBe(415)
   })
 })
 
@@ -112,10 +112,10 @@ describe('lan', () => {
     const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
     const base = `http://127.0.0.1:${port}`
     try {
-      expect(await (await fetch(`${base}/api/hello`)).json()).toEqual({ groundwork: true, project: 'Desks', paired: false })
-      expect(await (await fetch(`${base}/api/hello`, { headers: { 'X-Groundwork-Code': 'abc 234' } })).json()).toEqual({ groundwork: true, project: 'Desks', paired: true })
+      expect(await (await fetch(`${base}/api/hello`)).json()).toEqual({ grndwrk: true, project: 'Desks', paired: false })
+      expect(await (await fetch(`${base}/api/hello`, { headers: { 'X-Grndwrk-Code': 'abc 234' } })).json()).toEqual({ grndwrk: true, project: 'Desks', paired: true })
       const post = (path: string, body: unknown, code = 'ABC234') =>
-        fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Groundwork-Code': code }, body: JSON.stringify(body) })
+        fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Grndwrk-Code': code }, body: JSON.stringify(body) })
       // Without the code, or with a wrong one, nothing gets in.
       expect((await post('/api/feedback', { text: 'Hi' }, '')).status).toBe(401)
       expect((await post('/api/feedback', { text: 'Hi' }, 'ZZZ999')).status).toBe(401)
@@ -127,7 +127,7 @@ describe('lan', () => {
       expect(await (await post('/api/feedback/remove', { comments: [{ id, key: 'Q'.repeat(20) }] })).json()).toEqual({ removed: [] })
       expect((await post('/api/nodes', { title: 'Sneaky' })).status).toBe(404)
       expect((await fetch(`${base}/api/nodes`)).status).toBe(401)
-      expect((await fetch(`${base}/`, { headers: { 'X-Groundwork-Code': 'ABC234' } })).status).toBe(404)
+      expect((await fetch(`${base}/`, { headers: { 'X-Grndwrk-Code': 'ABC234' } })).status).toBe(404)
       expect((await store.list()).map((n) => n.title)).toEqual(['From the phone'])
       expect((await store.list())[0].extra.via).toBe('lan')
     } finally {
@@ -286,7 +286,7 @@ describe('pairing', () => {
   it('stops answering guesses from a device that keeps guessing, but never refuses the right code', async () => {
     const server = createLanServer({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks', uiUrl: 'http://localhost:1' }, 'ABC234')
     const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
-    const hello = (code: string) => fetch(`http://127.0.0.1:${port}/api/hello`, { headers: { 'X-Groundwork-Code': code } })
+    const hello = (code: string) => fetch(`http://127.0.0.1:${port}/api/hello`, { headers: { 'X-Grndwrk-Code': code } })
     try {
       for (let i = 0; i < 10; i++) expect((await hello(`WRONG${i}`)).status).toBe(200)
       expect((await hello('WRONG10')).status).toBe(429)
@@ -334,7 +334,7 @@ describe('the network listener', () => {
       const challenge = 'c'.repeat(32)
       const body = (await (await fetch(`http://127.0.0.1:${port}/api/hello?challenge=${challenge}`)).json()) as { proof?: string; paired: boolean }
       expect(body.paired).toBe(false)
-      expect(body.proof).toBe(createHmac('sha256', 'ABC234').update(`groundwork-hello:${challenge}`).digest('hex'))
+      expect(body.proof).toBe(createHmac('sha256', 'ABC234').update(`grndwrk-hello:${challenge}`).digest('hex'))
       expect(body.proof).toBe(helloProof('ABC234', challenge))
       expect(JSON.stringify(body)).not.toContain('ABC234')
     } finally {
@@ -456,7 +456,7 @@ describe('proxy in front of an https site (Herd, Valet)', () => {
       expect(first.headers.get('set-cookie')).toBe('s=1; Path=/; SameSite=Lax')
       const page = await (await fetch(`http://localhost:${port}/login`)).text()
       expect(page).toContain(`href="http://localhost:${port}/cart"`)
-      expect(page).toContain('/__groundwork/feedback.js')
+      expect(page).toContain('/__grndwrk/feedback.js')
     } finally {
       for (const s of [site, strict, proxy]) s.close()
     }
@@ -496,7 +496,7 @@ describe('the Comment button loaded by the product itself', () => {
 
   it('lets a local development page send comments, and refuses a site on the internet', async () => {
     const { server, port, sites, events } = await mapServer()
-    const url = `http://localhost:${port}/__groundwork/feedback`
+    const url = `http://localhost:${port}/__grndwrk/feedback`
     try {
       const ask = (origin: string) => fetch(url, { method: 'OPTIONS', headers: { origin, 'access-control-request-method': 'POST' } })
       const ok = await ask('https://shop.test')
@@ -521,13 +521,13 @@ describe('the Comment button loaded by the product itself', () => {
       expect((await send('https://evil.example')).status).toBe(403)
       expect((await store.list()).filter((n) => n.extra?.source === 'app')).toHaveLength(1)
 
-      const script = await fetch(`http://localhost:${port}/__groundwork/feedback.js`, { headers: { origin: 'https://shop.test' } })
+      const script = await fetch(`http://localhost:${port}/__grndwrk/feedback.js`, { headers: { origin: 'https://shop.test' } })
       expect(script.status).toBe(200)
-      expect(await script.text()).toContain('__groundworkFeedback')
+      expect(await script.text()).toContain('__grndwrkFeedback')
       expect(script.headers.get('x-content-type-options')).toBe('nosniff')
-      // A site on the internet cannot even learn that Groundwork runs here.
-      expect((await fetch(`http://localhost:${port}/__groundwork/feedback.js`, { headers: { referer: 'https://evil.example/page' } })).status).toBe(403)
-      expect((await fetch(`http://localhost:${port}/__groundwork/screenshot.js`, { headers: { referer: 'https://evil.example/page' } })).status).toBe(403)
+      // A site on the internet cannot even learn that grndwrk runs here.
+      expect((await fetch(`http://localhost:${port}/__grndwrk/feedback.js`, { headers: { referer: 'https://evil.example/page' } })).status).toBe(403)
+      expect((await fetch(`http://localhost:${port}/__grndwrk/screenshot.js`, { headers: { referer: 'https://evil.example/page' } })).status).toBe(403)
     } finally {
       server.close()
     }
@@ -535,7 +535,7 @@ describe('the Comment button loaded by the product itself', () => {
 
   it('lets an allowed site test the fixes built for its own comments', async () => {
     const { server, port, sites } = await mapServer()
-    const at = (path: string) => `http://localhost:${port}/__groundwork/${path}`
+    const at = (path: string) => `http://localhost:${port}/__grndwrk/${path}`
     const post = (path: string, origin: string, body: unknown) => fetch(at(path), { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) })
     try {
       await sites.check('https://shop.test')
@@ -582,6 +582,19 @@ describe('the Comment button loaded by the product itself', () => {
     expect(await sites.isAllowed('https://evil.example')).toBe(false)
     await writeFile(file, JSON.stringify({ [resolve(gw)]: 5 }))
     expect(await new Sites(gw, () => {}, [], file).isAllowed('https://shop.test')).toBe(false)
+  })
+
+  it('keeps the sites allowed before the rename, when the folder was .groundwork', async () => {
+    const { Sites } = await import('../src/server/sites.js')
+    const { readFile } = await import('node:fs/promises')
+    const { resolve } = await import('node:path')
+    const file = join(gw, '..', `sites-old-${Math.random()}.json`)
+    const oldKey = join(resolve(gw), '..', '.groundwork')
+    await writeFile(file, JSON.stringify({ [oldKey]: ['https://shop.test', 'http://admin.test'] }))
+    const sites = new Sites(gw, () => {}, [], file)
+    expect(await sites.isAllowed('https://shop.test')).toBe(true)
+    await sites.remove('http://admin.test')
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ [resolve(gw)]: ['https://shop.test'] })
   })
 
   it('keeps the project on the same port from one start to the next, out of git', async () => {

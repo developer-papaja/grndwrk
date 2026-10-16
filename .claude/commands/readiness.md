@@ -1,15 +1,15 @@
 ---
-description: Judge whether the Groundwork map is ready to build, and write the report and the gaps
+description: Judge whether the grndwrk map is ready to build, and write the report and the gaps
 ---
-Judge whether this project's Groundwork map holds enough to start building, and write down exactly what is missing.
+Judge whether this project's grndwrk map holds enough to start building, and write down exactly what is missing.
 
 ## Read
 
-1. `.groundwork/project.md`: name, purpose, project type, and `pages:` for the page order.
-2. `.groundwork/readiness/checklist.md`: what "ready" means for this project. Each area has an "Enough when" line. The person may have edited it; follow their version.
-3. Every file in `.groundwork/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and the notes, including any `## Thread`. A settled thought counts more than an open one. A thread answer from the person counts as settled for what it answers.
-4. The previous `.groundwork/readiness/report.md` and `gaps.json`, if they exist. A gap with `answered_by` was answered from the map: read that node and decide whether the gap is closed now. A gap with `enough: true` was accepted by the person as it is ("Enough for now"): it is closed for good.
-5. For the "Setup for building with Claude" area, also look at the project itself, outside `.groundwork/` (read only): is there a `CLAUDE.md`, design docs or references, code standards or linting config, and skills or commands in `.claude/`?
+1. `.grndwrk/project.md`: name, purpose, project type, and `pages:` for the page order.
+2. `.grndwrk/readiness/checklist.md`: what "ready" means for this project. Each area has an "Enough when" line. The person may have edited it; follow their version.
+3. Every file in `.grndwrk/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and the notes, including any `## Thread`. A settled thought counts more than an open one. A thread answer from the person counts as settled for what it answers.
+4. The previous `.grndwrk/readiness/report.md` and `gaps.json`, if they exist. A gap with `answered_by` was answered from the map: read that node and decide whether the gap is closed now. A gap with `enough: true` was accepted by the person as it is ("Enough for now"): it is closed for good.
+5. For the "Setup for building with Claude" area, also look at the project itself, outside `.grndwrk/` (read only): is there a `CLAUDE.md`, design docs or references, code standards or linting config, and skills or commands in `.claude/`?
 
 **Enough for now.** A settled decision titled "Enough for now: ..." (with `answers: gap_x`) means the person decided that point is good enough for now. Never raise that gap again, under any id or wording, and judge its area with that decision in mind: an area can be enough because the person said so.
 
@@ -33,7 +33,7 @@ Then pick one verdict:
 - **ready to prototype**: the purpose and at least one core flow are clear, but parts that a real build needs are missing.
 - **not ready**: the purpose or every core flow is still unclear.
 
-## Write `.groundwork/readiness/report.md`
+## Write `.grndwrk/readiness/report.md`
 
 ```md
 ---
@@ -56,7 +56,7 @@ Since the last check: 2 closed, 1 new. One or two sentences: the verdict and the
 2. ...
 ```
 
-## Update `.groundwork/readiness/design.json`
+## Update `.grndwrk/readiness/design.json`
 
 The design scorecard: nine fixed items (design docs, colors as tokens, typography, spacing scale, radius and shadows, shared components, icons, references, accessibility), each `found`, `partly` or `missing`, with a one line `note` and `seen_in`. If the file exists, check each item again against the map and, read only, the project (for example a type scale decided in the map, or tokens added to the code), and update what changed. If it does not exist, write it. When the repo holds more than one app (for example iOS and Android), keep one set of nine per app with `"platform": "iOS"`, `"Android"` or `"Web"`, plus one `"shared across platforms"` item with `"platform": "All"` (found when colors, type and icons are defined once or kept in step, partly when the names match but values are copied by hand, missing when each app defines its own). With one app, leave `platform` out. Base the Design foundation area of the report on it, naming the weakest app.
 
@@ -66,7 +66,7 @@ The design scorecard: nine fixed items (design docs, colors as tokens, typograph
 
 `closed` lists, by title, the gaps of the previous run that are gone now (answered, accepted for now, or no longer true). `added` lists the gaps that are new in this run. Both are quoted titles, and empty lists on the first run. The body opens with the "Since the last check" line, except on the first run.
 
-## Write `.groundwork/readiness/gaps.json`
+## Write `.grndwrk/readiness/gaps.json`
 
 One entry per concrete thing that is missing or thin. Not one per area: a thin area can have two gaps, an enough area none.
 
@@ -100,7 +100,7 @@ One entry per concrete thing that is missing or thin. Not one per area: a thin a
 - `suggestions`: two or three concrete answers the person could pick, each `{ "title": ..., "why": ... }`. The title is the answer itself, written so it could be the thought as it stands ("Keep the sizes already in use: 12, 13, 15 and 20 px"), not advice ("Decide a type scale"). Ground them in this project: what the code, docs or map already hold, or the plainest common choice for this kind of project. The `why` is one short line on what picking it means. Make them differ in a way that matters. The person may still write their own.
 - Drop a gap whose `answered_by` node closes it, and every gap with `enough: true`. Keep it, without `answered_by`, if the answer was not enough, and say why in the report.
 
-Write only those three files, inside `.groundwork/readiness/`. Never edit nodes: questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
+Write only those three files, inside `.grndwrk/readiness/`. Never edit nodes: questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
 
 ## Report back
 

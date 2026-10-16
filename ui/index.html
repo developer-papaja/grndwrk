@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Nothing in the map loads from or sends to another server: pictures, requests, frames and forms stay on this one. -->
     <meta http-equiv="Content-Security-Policy" content="img-src 'self' data: blob:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'" />
-    <title>Groundwork</title>
+    <title>grndwrk</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%225%22 fill=%22%230d99ff%22/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
@@ -223,7 +223,7 @@
       <!-- The panel folded away: open it again from the start of the toolbar -->
       <button id="list-show" x-show="!$store.gw.listOpen" class="icon-btn relative" title="Show panel" aria-label="Show panel" @click="$store.gw.setListOpen(true)">
         <svg class="size-5"><use href="#i-panel" /></svg>
-        <span x-show="!$store.gw.live" class="absolute right-0.5 top-0.5 size-1.5 animate-pulse rounded-full bg-amber-400" title="Offline, start groundwork in your terminal"></span>
+        <span x-show="!$store.gw.live" class="absolute right-0.5 top-0.5 size-1.5 animate-pulse rounded-full bg-amber-400" title="Offline, start grndwrk in your terminal"></span>
       </button>
       <!-- The part picker: search the screens, or walk the tree -->
       <div x-show="$store.gw.screens.length" class="pointer-events-auto relative" @keydown.escape.stop="$store.gw.scopeOpen = false" @click.outside="$store.gw.scopeOpen = false">
@@ -440,10 +440,10 @@
     >
       <div class="flex items-start justify-between gap-3 px-4 pb-3 pt-4">
         <div class="min-w-0">
-          <div class="truncate text-[15px] font-semibold text-fog" x-text="$store.gw.project.name || 'Groundwork'"></div>
+          <div class="truncate text-[15px] font-semibold text-fog" x-text="$store.gw.project.name || 'grndwrk'"></div>
           <div class="mt-1 flex items-center gap-1.5 text-xs text-fog/55">
             <span class="size-1.5 rounded-full" :class="$store.gw.live ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'"></span>
-            <span x-text="$store.gw.live ? 'Live' : 'Offline, start groundwork in your terminal'"></span>
+            <span x-text="$store.gw.live ? 'Live' : 'Offline, start grndwrk in your terminal'"></span>
             <span class="text-fog/30">·</span>
             <span id="count" x-text="$store.gw.count + ($store.gw.count === 1 ? ' node' : ' nodes')"></span>
           </div>
@@ -873,7 +873,7 @@
                 <div x-show="$store.gw.screen.error" id="screen-error" class="mt-2 rounded-lg border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">
                   <span class="block font-medium">This file can't be read, so what is shown here is not what it says.</span>
                   <span class="mt-0.5 block" x-text="$store.gw.screen.error"></span>
-                  <span class="mt-1 block font-mono text-rose-200/70" x-text="'.groundwork/screens/' + $store.gw.screen.id + '.md'"></span>
+                  <span class="mt-1 block font-mono text-rose-200/70" x-text="'.grndwrk/screens/' + $store.gw.screen.id + '.md'"></span>
                 </div>
                 <div x-show="$store.gw.variantTag($store.gw.screen) || $store.gw.counterpartOf($store.gw.screen)" id="screen-variant" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
                   <span x-show="$store.gw.variantTag($store.gw.screen)" class="rounded bg-violet-400/15 px-1.5 py-0.5 text-violet-200/90" x-text="$store.gw.variantTag($store.gw.screen)"></span>
@@ -886,9 +886,9 @@
                   <span x-show="$store.gw.unknownVariants($store.gw.screen).length" class="text-question" x-text="'Not a variant in project.md: ' + $store.gw.unknownVariants($store.gw.screen).join(', ')"></span>
                 </div>
                 <p x-show="!$store.gw.openUrl($store.gw.screen) && $store.gw.needsExample($store.gw.screen)" class="mt-1 text-xs text-fog/45">Its route needs a value, like an id, to open. Run /sitemap, or add <code>open: [/booking/42]</code> to the screen file.</p>
-                <p x-show="!$store.gw.runtime.app && $store.gw.screen.code.some((c) => c.startsWith('/'))" class="mt-1 text-xs text-fog/45">Start Groundwork with <code>--app</code> and your dev server's address to open screens from here.</p>
+                <p x-show="!$store.gw.runtime.app && $store.gw.screen.code.some((c) => c.startsWith('/'))" class="mt-1 text-xs text-fog/45">Start grndwrk with <code>--app</code> and your dev server's address to open screens from here.</p>
 
-                <!-- What it looks like: from groundwork screenshots on the web, from the Comment button on iOS -->
+                <!-- What it looks like: from grndwrk screenshots on the web, from the Comment button on iOS -->
                 <div id="screen-shots" class="mt-4">
                   <div x-show="$store.gw.shotsOf($store.gw.screen).length" class="flex gap-3 overflow-x-auto pb-1">
                     <template x-for="shot in $store.gw.shotsOf($store.gw.screen)" :key="shot.url">
@@ -903,7 +903,7 @@
                       </div>
                     </template>
                   </div>
-                  <p x-show="!$store.gw.shotsOf($store.gw.screen).length" class="text-xs text-fog/45">No picture yet. For the web, run <code>groundwork screenshots</code>. For iOS, open this screen in the app with the Comment button on.</p>
+                  <p x-show="!$store.gw.shotsOf($store.gw.screen).length" class="text-xs text-fog/45">No picture yet. For the web, run <code>grndwrk screenshots</code>. For iOS, open this screen in the app with the Comment button on.</p>
                 </div>
 
                 <div class="mt-5 space-y-4">
@@ -1207,7 +1207,7 @@
         <!-- New or existing: asked by init, or here for a project set up before that -->
         <section x-show="!$store.gw.start" id="start-choice" class="mt-6 rounded-lg border border-accent/40 bg-accent/5 p-4">
           <h2 class="text-[15px] font-semibold text-fog">Is this a new project, or one that already has code?</h2>
-          <p class="mt-1 text-fog/65">It decides the steps below and what Groundwork suggests next. You can change it in project.md.</p>
+          <p class="mt-1 text-fog/65">It decides the steps below and what grndwrk suggests next. You can change it in project.md.</p>
           <div class="mt-3 grid gap-2 sm:grid-cols-2">
             <button class="rounded-lg border border-line px-3 py-2.5 text-left hover:border-accent/60 hover:bg-accent/10" @click="$store.gw.setStart('new')">
               <span class="block font-medium text-fog">New</span>

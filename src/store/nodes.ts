@@ -22,9 +22,9 @@ export class NodeStore {
   private readonly gwDir: string
   private queue: Promise<unknown> = Promise.resolve()
 
-  constructor(groundworkDir: string) {
-    this.gwDir = groundworkDir
-    this.dir = join(groundworkDir, 'nodes')
+  constructor(grndwrkDir: string) {
+    this.gwDir = grndwrkDir
+    this.dir = join(grndwrkDir, 'nodes')
   }
 
   pathFor(id: string): string {

@@ -2,8 +2,8 @@ import { watch } from 'chokidar'
 import { basename, relative, sep } from 'node:path'
 import { broadcast, type NodeSync } from './events.js'
 
-/** Watch `.groundwork/` and push changes made by Claude Code or by hand. */
-export function watchGroundwork(gwDir: string, nodes: NodeSync) {
+/** Watch `.grndwrk/` and push changes made by Claude Code or by hand. */
+export function watchgrndwrk(gwDir: string, nodes: NodeSync) {
   let timer: NodeJS.Timeout | undefined
   let running = Promise.resolve()
   const scheduleSync = () => {
@@ -18,7 +18,7 @@ export function watchGroundwork(gwDir: string, nodes: NodeSync) {
     // Skip dotfiles, which includes our own temp files.
     ignored: (path) => path !== gwDir && basename(path).startsWith('.'),
     awaitWriteFinish: { stabilityThreshold: 60, pollInterval: 20 },
-    // A link inside .groundwork is never followed (src/store/fs.ts), so not watched through either.
+    // A link inside .grndwrk is never followed (src/store/fs.ts), so not watched through either.
     followSymlinks: false,
   })
 

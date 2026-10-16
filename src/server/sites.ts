@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { OLD_GW_DIR, stateDir } from '../root.js'
 import type { ServerEvent } from '../shared/types.js'
 import { isDevOrigin } from './proxy.js'
 
@@ -20,10 +20,12 @@ const PENDING_FOR = 10 * 60_000
 
 export function sitesFile(): string {
   // For tests, so they never touch the person's own list.
-  if (process.env.GROUNDWORK_SITES_FILE) return process.env.GROUNDWORK_SITES_FILE
-  const base = process.platform === 'darwin' ? join(homedir(), 'Library', 'Application Support', 'Groundwork') : join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'groundwork')
-  return join(base, 'sites.json')
+  if (process.env.GRNDWRK_SITES_FILE) return process.env.GRNDWRK_SITES_FILE
+  return join(stateDir(), 'sites.json')
 }
+
+/** The project's key in the file, and the key it had before the rename to grndwrk (its folder was .groundwork). */
+const keysOf = (gwDir: string) => [resolve(gwDir), join(resolve(gwDir), '..', OLD_GW_DIR)]
 
 export class Sites {
   private allowed = new Set<string>()
@@ -43,7 +45,7 @@ export class Sites {
     this.trusted = new Set(trusted)
     for (const t of trusted) this.allowed.add(t)
     this.loaded = this.read().then((all) => {
-      for (const o of all[resolve(gwDir)] ?? []) this.allowed.add(o)
+      for (const key of keysOf(gwDir)) for (const o of all[key] ?? []) this.allowed.add(o)
     })
   }
 
@@ -110,17 +112,18 @@ export class Sites {
 
   private async save(change: (list: string[]) => string[]): Promise<void> {
     const all = await this.read()
-    const key = resolve(this.gwDir)
-    all[key] = change(all[key] ?? [])
+    const [key, old] = keysOf(this.gwDir)
+    all[key] = change([...new Set([...(all[key] ?? []), ...(all[old] ?? [])])])
+    delete all[old]
     if (!all[key].length) delete all[key]
     await mkdir(join(this.file, '..'), { recursive: true, mode: 0o700 })
-    // Each Groundwork its own temporary file, so two maps saving at once never mix.
+    // Each grndwrk its own temporary file, so two maps saving at once never mix.
     const tmp = `${this.file}.${process.pid}.tmp`
     await writeFile(tmp, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
     await rename(tmp, this.file)
   }
 
-  /** The person answers in the map. Allowed sites are remembered for this project; a no lasts until Groundwork restarts. */
+  /** The person answers in the map. Allowed sites are remembered for this project; a no lasts until grndwrk restarts. */
   async answer(origin: string, allow: boolean): Promise<boolean> {
     if (!this.pending.delete(origin)) return false
     if (allow) {

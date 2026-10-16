@@ -1,9 +1,10 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { init } from '../src/init.js'
-import { PACKAGE_ROOT } from '../src/root.js'
+import { noMapMessage, PACKAGE_ROOT } from '../src/root.js'
 
 let root: string
 beforeEach(async () => {
@@ -19,15 +20,42 @@ const command = (name: string) => join(root, '.claude', 'commands', name)
 const shipped = (name: string) => readFile(join(PACKAGE_ROOT, 'commands', name), 'utf8')
 
 describe('init', () => {
+  it('moves a map from before the rename, .groundwork/, to .grndwrk/', async () => {
+    await mkdir(join(root, '.groundwork', 'nodes'), { recursive: true })
+    await writeFile(join(root, '.groundwork', 'nodes', 'n_abc123.md'), '---\nid: n_abc123\ntitle: Kept\n---\n')
+    expect(noMapMessage(root)).toContain('Run `grndwrk init` there to move it')
+    await init(root)
+    expect(existsSync(join(root, '.groundwork'))).toBe(false)
+    expect(await readFile(join(root, '.grndwrk', 'nodes', 'n_abc123.md'), 'utf8')).toContain('title: Kept')
+    expect(noMapMessage(join(root, 'sub'))).toContain('No .grndwrk/ folder')
+  })
+
+  it('never moves .groundwork/ when it is a link, or over a .grndwrk/ that is there', async () => {
+    const elsewhere = await mkdtemp(join(tmpdir(), 'gw-elsewhere-'))
+    try {
+      await symlink(elsewhere, join(root, '.groundwork'))
+      await init(root)
+      expect(existsSync(join(root, '.grndwrk', 'project.md'))).toBe(true)
+      expect(existsSync(join(elsewhere, 'project.md'))).toBe(false)
+      // Both there now: nothing moves.
+      await rm(join(root, '.groundwork'))
+      await mkdir(join(root, '.groundwork'))
+      await init(root)
+      expect(existsSync(join(root, '.groundwork'))).toBe(true)
+    } finally {
+      await rm(elsewhere, { recursive: true, force: true })
+    }
+  })
+
   it('updates commands nobody changed and keeps the ones the person changed', async () => {
     await init(root)
     expect(await readFile(command('brief.md'), 'utf8')).toBe(await shipped('brief.md'))
 
-    // An older Groundwork installed these; the person then edited brief.md.
-    const manifest = JSON.parse(await readFile(join(root, '.groundwork', 'commands.json'), 'utf8'))
+    // An older grndwrk installed these; the person then edited brief.md.
+    const manifest = JSON.parse(await readFile(join(root, '.grndwrk', 'commands.json'), 'utf8'))
     await writeFile(command('readiness.md'), 'old readiness\n')
     manifest['readiness.md'] = (await import('node:crypto')).createHash('sha256').update('old readiness\n').digest('hex').slice(0, 16)
-    await writeFile(join(root, '.groundwork', 'commands.json'), JSON.stringify(manifest))
+    await writeFile(join(root, '.grndwrk', 'commands.json'), JSON.stringify(manifest))
     await writeFile(command('brief.md'), 'my own brief\n')
 
     await init(root)
@@ -35,29 +63,29 @@ describe('init', () => {
     expect(await readFile(command('brief.md'), 'utf8')).toBe('my own brief\n')
   })
 
-  it('gives Claude the map rules in .groundwork/CLAUDE.md, and keeps them when the person changed them', async () => {
-    const rules = join(root, '.groundwork', 'CLAUDE.md')
+  it('gives Claude the map rules in .grndwrk/CLAUDE.md, and keeps them when the person changed them', async () => {
+    const rules = join(root, '.grndwrk', 'CLAUDE.md')
     await init(root)
     const shippedRules = await readFile(join(PACKAGE_ROOT, 'templates', 'CLAUDE.md'), 'utf8')
     expect(await readFile(rules, 'utf8')).toBe(shippedRules)
     expect(shippedRules).toContain('built:')
-    expect(await readFile(join(root, '.groundwork', '.gitignore'), 'utf8')).toContain('local.json')
+    expect(await readFile(join(root, '.grndwrk', '.gitignore'), 'utf8')).toContain('local.json')
     await writeFile(rules, 'my own rules\n')
     await init(root)
     expect(await readFile(rules, 'utf8')).toBe('my own rules\n')
   })
 
-  it('keeps a .groundwork/CLAUDE.md written by hand before Groundwork shipped one', async () => {
+  it('keeps a .grndwrk/CLAUDE.md written by hand before grndwrk shipped one', async () => {
     const { mkdir } = await import('node:fs/promises')
-    await mkdir(join(root, '.groundwork'), { recursive: true })
-    await writeFile(join(root, '.groundwork', 'CLAUDE.md'), '# My own rules\n')
+    await mkdir(join(root, '.grndwrk'), { recursive: true })
+    await writeFile(join(root, '.grndwrk', 'CLAUDE.md'), '# My own rules\n')
     await init(root)
-    expect(await readFile(join(root, '.groundwork', 'CLAUDE.md'), 'utf8')).toBe('# My own rules\n')
+    expect(await readFile(join(root, '.grndwrk', 'CLAUDE.md'), 'utf8')).toBe('# My own rules\n')
   })
 
   it('takes Scope out of a checklist that still has it as shipped, and keeps a reworded one', async () => {
     await init(root)
-    const path = join(root, '.groundwork', 'readiness', 'checklist.md')
+    const path = join(root, '.grndwrk', 'readiness', 'checklist.md')
     const scope = '**Scope.** What is in the first version and what is explicitly out.\nEnough when: there is at least one thing you decided not to build.\n\n'
     const before = await readFile(path, 'utf8')
     expect(before).not.toContain('**Scope.**')
@@ -71,30 +99,30 @@ describe('init', () => {
 
   it('backs up a command installed before init kept track, then updates it', async () => {
     await init(root)
-    await rm(join(root, '.groundwork', 'commands.json'))
+    await rm(join(root, '.grndwrk', 'commands.json'))
     await writeFile(command('survey.md'), 'survey from last week\n')
     await init(root)
     expect(await readFile(command('survey.md'), 'utf8')).toBe(await shipped('survey.md'))
-    expect(await readFile(join(root, '.groundwork', 'backup', 'commands', 'survey.md'), 'utf8')).toBe('survey from last week\n')
+    expect(await readFile(join(root, '.grndwrk', 'backup', 'commands', 'survey.md'), 'utf8')).toBe('survey from last week\n')
   })
 
   it('never overwrites the map', async () => {
     await init(root)
-    await writeFile(join(root, '.groundwork', 'project.md'), '---\nname: Mine\nstart: new\n---\n')
+    await writeFile(join(root, '.grndwrk', 'project.md'), '---\nname: Mine\nstart: new\n---\n')
     await init(root)
-    expect(await readFile(join(root, '.groundwork', 'project.md'), 'utf8')).toBe('---\nname: Mine\nstart: new\n---\n')
+    expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toBe('---\nname: Mine\nstart: new\n---\n')
   })
 })
 
 describe('new or existing', () => {
   it('counts an empty folder as new and a folder with code as existing, without asking when there is no terminal', async () => {
     await init(root)
-    expect(await readFile(join(root, '.groundwork', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
+    expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
 
     const other = await mkdtemp(join(tmpdir(), 'gw-init-'))
     await writeFile(join(other, 'package.json'), '{}')
     await init(other)
-    expect(await readFile(join(other, '.groundwork', 'project.md'), 'utf8')).toMatch(/^start: existing$/m)
+    expect(await readFile(join(other, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^start: existing$/m)
     await rm(other, { recursive: true, force: true })
   })
 
@@ -103,14 +131,14 @@ describe('new or existing', () => {
     const asked: string[] = []
     await init(root, { ask: async (q) => (asked.push(q), 'n') })
     expect(asked[0]).toMatch(/has code/)
-    expect(await readFile(join(root, '.groundwork', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
+    expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
     await init(root, { ask: async (q) => (asked.push(q), 'y') })
     expect(asked).toHaveLength(1)
   })
 
   it('adds start to a project.md written before it existed', async () => {
     await init(root)
-    const path = join(root, '.groundwork', 'project.md')
+    const path = join(root, '.grndwrk', 'project.md')
     await writeFile(path, '---\nname: Desks\npurpose: Book desks\n---\nNotes\n')
     await init(root, { ask: async () => 'n' })
     const text = await readFile(path, 'utf8')

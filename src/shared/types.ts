@@ -170,7 +170,7 @@ export interface Foundation {
   missing: string[]
   /** An instruction to give Claude Code in the product's repo to add what is missing. */
   suggestion: string
-  /** A fuller draft in .groundwork/outputs/drafts/, by file name, when one was written. */
+  /** A fuller draft in .grndwrk/outputs/drafts/, by file name, when one was written. */
   draft?: string
   /** Where that draft should go in the product, for a document it does not have yet (`DESIGN.md`, `docs/tone.md`). */
   file?: string
@@ -199,7 +199,7 @@ export type ScreenStatus = (typeof SCREEN_STATUSES)[number]
 
 /**
  * One screen, page or view of the product, written by /sitemap from the code
- * (or by /brief for a product not built yet). Kept in .groundwork/screens/.
+ * (or by /brief for a product not built yet). Kept in .grndwrk/screens/.
  */
 export interface Screen {
   id: string
@@ -247,7 +247,7 @@ export interface Screen {
 export const STORY_STATUSES = ['not-started', 'partial', 'done'] as const
 export type StoryStatus = (typeof STORY_STATUSES)[number]
 
-/** A user story written by /brief. Kept in .groundwork/stories/, one file each. */
+/** A user story written by /brief. Kept in .grndwrk/stories/, one file each. */
 export interface Story {
   id: string
   title: string

@@ -28,7 +28,7 @@ final class CommentsController: UITableViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    title = ["Comments", "Ready to test", "Waiting to be sent", "Sent to Groundwork"][[Mode.overview, .toTest, .waiting, .sent].firstIndex(of: mode)!]
+    title = ["Comments", "Ready to test", "Waiting to be sent", "Sent to grndwrk"][[Mode.overview, .toTest, .waiting, .sent].firstIndex(of: mode)!]
     tableView.register(UITableViewCell.self, forCellReuseIdentifier: "c")
     if mode == .overview {
       navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak self] _ in self?.dismiss(animated: true) })
@@ -60,7 +60,7 @@ final class CommentsController: UITableViewController {
     }
   }
 
-  /// A short message above the title. The Groundwork button's messages would sit behind this sheet.
+  /// A short message above the title. The grndwrk button's messages would sit behind this sheet.
   func say(_ text: String) {
     navigationItem.prompt = text
     DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
@@ -81,7 +81,7 @@ final class CommentsController: UITableViewController {
         Task {
           await Outbox.flush()
           self?.reload()
-          if Outbox.count > 0 { self?.say("Groundwork is not reachable yet") }
+          if Outbox.count > 0 { self?.say("grndwrk is not reachable yet") }
         }
       })
       actions.append(UIAction(title: "Share as a file", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
@@ -99,7 +99,7 @@ final class CommentsController: UITableViewController {
     [
       (.toTest, "Ready to test", Outbox.toTest.count, "checkmark.seal", .systemBlue),
       (.waiting, "Waiting to be sent", Outbox.count, "tray.and.arrow.up", .systemOrange),
-      (.sent, "Sent to Groundwork", Outbox.sent.filter { $0.state != "ready" }.count, "paperplane", .systemGray),
+      (.sent, "Sent to grndwrk", Outbox.sent.filter { $0.state != "ready" }.count, "paperplane", .systemGray),
     ]
   }
 
@@ -113,15 +113,15 @@ final class CommentsController: UITableViewController {
     switch mode {
     case .overview:
       if section == 0, case .needsCode = Connection.state {
-        return "Tap to pair: allow this phone in Groundwork on the Mac, or enter the code it shows in the terminal. Comments are kept on the phone until then."
+        return "Tap to pair: allow this phone in grndwrk on the Mac, or enter the code it shows in the terminal. Comments are kept on the phone until then."
       }
       if section == 0, case .offline(let why) = Connection.state {
-        return "\(why)\n\nComments are kept on the phone until Groundwork answers. Pull down to check again."
+        return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again."
       }
       return section == 1 ? "Ready to test: comments of yours whose fix Claude has built. Tap Test on one: it shows what to do, over the app, with Approve and Reject." : nil
     case .toTest: return items.isEmpty ? "Nothing to test right now. A fix shows up here once it is built." : "Test opens the app where it can be tested, with the steps on top. Tap a row to read more first."
-    case .waiting: return items.isEmpty ? "Nothing waits." : "They go by themselves once Groundwork is reachable. Or share them as a file."
-    case .sent: return items.isEmpty ? "Nothing sent yet." : "In Groundwork they are on the Feedback page, in a topic per screen. Deleting one here deletes it there too."
+    case .waiting: return items.isEmpty ? "Nothing waits." : "They go by themselves once grndwrk is reachable. Or share them as a file."
+    case .sent: return items.isEmpty ? "Nothing sent yet." : "In grndwrk they are on the Feedback page, in a topic per screen. Deleting one here deletes it there too."
     }
   }
 
@@ -137,7 +137,7 @@ final class CommentsController: UITableViewController {
         case .connected: return (.systemGreen, "Connected")
         case .needsCode: return (.systemYellow, "Needs the pairing code")
         case .offline: return (.systemOrange, "Not connected")
-        case .unknown: return (.systemGray, "Looking for Groundwork")
+        case .unknown: return (.systemGray, "Looking for grndwrk")
         }
       }()
       content.image = UIImage(systemName: "circle.fill")
@@ -145,7 +145,7 @@ final class CommentsController: UITableViewController {
       content.imageProperties.maximumSize = CGSize(width: 12, height: 12)
       content.text = text
       switch Connection.state {
-      case .connected(let project, let host), .needsCode(let project, let host): content.secondaryText = "\(project.isEmpty ? "Groundwork" : "\u{201C}\(project)\u{201D}") at \(host)"
+      case .connected(let project, let host), .needsCode(let project, let host): content.secondaryText = "\(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)"
       case .offline: content.secondaryText = "Comments wait on the phone"
       case .unknown: content.secondaryText = nil
       }
@@ -216,7 +216,7 @@ final class CommentsController: UITableViewController {
     let fixed = UIContextualAction(style: .normal, title: "Approve") { [weak self] _, _, done in
       Task {
         let ok = await Outbox.tested(node: node, works: true)
-        self?.say(ok ? "Approved, fixed in Groundwork" : "Groundwork is not reachable. Try again when connected.")
+        self?.say(ok ? "Approved, fixed in grndwrk" : "grndwrk is not reachable. Try again when connected.")
         self?.reload()
         done(ok)
       }
@@ -311,7 +311,7 @@ final class CommentController: UIViewController {
         guard let self, let node = self.item.node else { return }
         Task {
           let ok = await Outbox.showOnMac(node: node)
-          self.say(ok ? "Open on your Mac, with what changed in its thread" : "Groundwork is not reachable. Try again when connected.")
+          self.say(ok ? "Open on your Mac, with what changed in its thread" : "grndwrk is not reachable. Try again when connected.")
         }
       })
     }
@@ -366,7 +366,7 @@ final class CommentController: UIViewController {
   }
 
   private func reject() {
-    let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to Groundwork with the comment, for the next /feedback.", preferredStyle: .alert)
+    let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to grndwrk with the comment, for the next /feedback.", preferredStyle: .alert)
     alert.addTextField { $0.placeholder = "Optional" }
     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     alert.addAction(UIAlertAction(title: "Send", style: .default) { [weak self] _ in
@@ -379,9 +379,9 @@ final class CommentController: UIViewController {
     guard let node = item.node else { return }
     Task {
       let ok = await Outbox.tested(node: node, works: works, note: note)
-      guard ok else { return say("Groundwork is not reachable. Try again when connected.") }
+      guard ok else { return say("grndwrk is not reachable. Try again when connected.") }
       if let updated = Outbox.sent.first(where: { $0.node == node }) { item = updated }
-      say(works ? "Approved, fixed in Groundwork" : "Rejected, back in Groundwork")
+      say(works ? "Approved, fixed in grndwrk" : "Rejected, back in grndwrk")
       build()
     }
   }
@@ -394,9 +394,9 @@ final class CommentController: UIViewController {
     }
     guard let node = item.node, !node.isEmpty else { return nil }
     switch await Outbox.deleteSent(node: node) {
-    case .everywhere: return "Deleted here and in Groundwork"
-    case .later: return "Deleted here. Groundwork deletes it once connected."
-    case .onlyHere: return "Sent before deleting was possible. Delete \(node) in Groundwork."
+    case .everywhere: return "Deleted here and in grndwrk"
+    case .later: return "Deleted here. grndwrk deletes it once connected."
+    case .onlyHere: return "Sent before deleting was possible. Delete \(node) in grndwrk."
     }
   }
 }

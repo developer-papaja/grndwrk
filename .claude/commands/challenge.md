@@ -1,13 +1,13 @@
 ---
-description: Ask a few sharp questions about the thinnest parts of the Groundwork map
+description: Ask a few sharp questions about the thinnest parts of the grndwrk map
 ---
-Find where this project's Groundwork map is thinnest and ask the person a few sharp questions there. You ask; you never answer your own questions.
+Find where this project's grndwrk map is thinnest and ask the person a few sharp questions there. You ask; you never answer your own questions.
 
 ## Read
 
-1. `.groundwork/project.md`: purpose, type, `pages:`.
-2. `.groundwork/readiness/report.md` and `gaps.json` if they exist. They name the thin areas. If there is no report, judge the thin areas yourself against `.groundwork/readiness/checklist.md`.
-3. Every file in `.groundwork/nodes/`, including threads, so you do not ask something already asked or answered.
+1. `.grndwrk/project.md`: purpose, type, `pages:`.
+2. `.grndwrk/readiness/report.md` and `gaps.json` if they exist. They name the thin areas. If there is no report, judge the thin areas yourself against `.grndwrk/readiness/checklist.md`.
+3. Every file in `.grndwrk/nodes/`, including threads, so you do not ask something already asked or answered.
 
 ## Ask
 
@@ -31,7 +31,7 @@ Options:
 
 Write the options as answers the person could send as they stand, not as advice. Leave the list out only when there is truly no sensible option to offer.
 
-**When the area has no thought to attach to,** create a question node `.groundwork/nodes/<id>.md`. The id is `n_` plus four random lowercase letters or digits, and must not exist yet. Frontmatter order: `id, type, title, topic, topic_by, page, altitude, links, status, created`, with `type: question`, `status: open`, the question as the title, a page and topic (with `topic_by: claude` when you chose the topic), an altitude, and today's date. In its notes, one line on why it matters, then the question again as a thread entry, so it shows among the person's open questions and can be answered with a reply:
+**When the area has no thought to attach to,** create a question node `.grndwrk/nodes/<id>.md`. The id is `n_` plus four random lowercase letters or digits, and must not exist yet. Frontmatter order: `id, type, title, topic, topic_by, page, altitude, links, status, created`, with `type: question`, `status: open`, the question as the title, a page and topic (with `topic_by: claude` when you chose the topic), an altitude, and today's date. In its notes, one line on why it matters, then the question again as a thread entry, so it shows among the person's open questions and can be answered with a reply:
 
 ```md
 Why it matters, in one line.
@@ -46,7 +46,7 @@ Options:
 - A second answer
 ```
 
-Do not ask a question that is already open in a thread. Write only inside `.groundwork/nodes/`. Do not change titles or delete anything. The map updates live. The person goes through the questions in Focus, one at a time, and picks an option or writes their own.
+Do not ask a question that is already open in a thread. Write only inside `.grndwrk/nodes/`. Do not change titles or delete anything. The map updates live. The person goes through the questions in Focus, one at a time, and picks an option or writes their own.
 
 ## Report back
 

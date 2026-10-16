@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { listScreens, parseScreen, serializeScreen } from '../src/store/screens.js'
 import { counterpart, inVariant, onlyIn, projectVariants, unknownVariants, variantView } from '../src/shared/variants.js'
 
-const GW = join(import.meta.dirname, 'fixtures', 'variants', '.groundwork')
+const GW = join(import.meta.dirname, 'fixtures', 'variants', '.grndwrk')
 
 describe('variants', () => {
   it('reads the variants from project.md, the first being the default', async () => {

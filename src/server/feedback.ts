@@ -127,7 +127,7 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
   // question from Claude or an answer from the person.
   if (input.text && input.text !== title) lines.push('', COMMENT_LABEL, '', ...input.text.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')))
   if (input.onMac) lines.push('', 'Pointed out on the phone, to be written here.')
-  // Kept on the device while Groundwork was not running: say when it was really written.
+  // Kept on the device while grndwrk was not running: say when it was really written.
   if (input.written && input.written.slice(0, 10) !== new Date().toISOString().slice(0, 10)) {
     lines.push('', `Written ${input.written.slice(0, 16).replace('T', ' ')} UTC, sent later.`)
   }
@@ -333,7 +333,7 @@ export async function removeFeedback(gwDir: string, store: NodeStore, body: unkn
 }
 
 /**
- * Comments a tester shared as a file: { groundwork: "feedback", comments: [...] },
+ * Comments a tester shared as a file: { grndwrk: "feedback", comments: [...] },
  * or a plain list of comments. Returns how many were new.
  */
 export async function importFeedback(gwDir: string, store: NodeStore, raw: string): Promise<{ added: number; skipped: number }> {

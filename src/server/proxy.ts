@@ -29,7 +29,7 @@ export interface ProxyOptions {
   uiUrl?: () => string
 }
 
-const PREFIX = '/__groundwork/'
+const PREFIX = '/__grndwrk/'
 const TAG = `<script src="${PREFIX}feedback.js" defer></script>`
 
 /** What the overlay routes may take in an hour, from all pages together, like the LAN listener. */
@@ -67,7 +67,7 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
   try {
     if ((name === 'feedback.js' || name === 'screenshot.js') && req.method === 'GET') {
       // Only for local development pages: a site on the internet that tries to
-      // load them (to learn whether Groundwork runs here) gets nothing.
+      // load them (to learn whether grndwrk runs here) gets nothing.
       const referer = typeof req.headers.referer === 'string' ? req.headers.referer : ''
       if (referer && !isDevOrigin(referer)) {
         res.writeHead(403).end()
@@ -83,7 +83,7 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
       // Draws part of the page into a picture for a comment. Wrapped so it
       // neither sees the page's module loader nor leaves a global behind but one.
       const lib = await readFile(join(PACKAGE_ROOT, 'dist', 'vendor', 'modern-screenshot.js'), 'utf8')
-      const js = `;(function () { var exports, module, define; var globalThis = {};\n${lib}\n;window.__groundworkShot = globalThis.modernScreenshot })()\n`
+      const js = `;(function () { var exports, module, define; var globalThis = {};\n${lib}\n;window.__grndwrkShot = globalThis.modernScreenshot })()\n`
       res.writeHead(200, script).end(js)
       return true
     }
@@ -112,7 +112,7 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
         const site = await ctx.sites.check(origin)
         if (site !== 'allowed') {
           // Asked in the map: the button keeps the comment and sends it once allowed.
-          res.writeHead(403, { 'Content-Type': 'application/json', ...cors }).end(JSON.stringify({ error: site === 'asked' ? 'Allow this site in Groundwork first' : 'Not allowed', ask: site === 'asked' }))
+          res.writeHead(403, { 'Content-Type': 'application/json', ...cors }).end(JSON.stringify({ error: site === 'asked' ? 'Allow this site in grndwrk first' : 'Not allowed', ask: site === 'asked' }))
           return true
         }
       }
@@ -161,7 +161,7 @@ async function handleTests(req: IncomingMessage, res: ServerResponse, ctx: Overl
   // No Origin: a same-origin GET on the proxy (the Host was checked before this).
   const site = origin || `http://${req.headers.host}`
   const allowed = sameOrigin || !origin || (!!cors['Access-Control-Allow-Origin'] && !!(await ctx.sites?.isAllowed(origin)))
-  // Not allowed: an answer the page cannot read, so it learns nothing, not even that Groundwork runs.
+  // Not allowed: an answer the page cannot read, so it learns nothing, not even that grndwrk runs.
   if (!allowed) {
     res.writeHead(403).end()
     return
@@ -258,7 +258,7 @@ export function createProxy({ target, gwDir, store, nodes, ca, uiUrl }: ProxyOpt
     )
     upstream.on('error', () => {
       if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' })
-      res.end(`Groundwork could not reach ${target.origin}. Is your dev server running?`)
+      res.end(`grndwrk could not reach ${target.origin}. Is your dev server running?`)
     })
     req.pipe(upstream)
   }

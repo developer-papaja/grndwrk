@@ -3,22 +3,22 @@ import CryptoKit
 import UIKit
 import os
 
-/// Whether Groundwork answers right now. Checked when the app comes to the
+/// Whether grndwrk answers right now. Checked when the app comes to the
 /// front, every 15 seconds while it is there, and after every comment sent.
-/// The Groundwork button shows it as a dot, and the list of comments says it in words.
+/// The grndwrk button shows it as a dot, and the list of comments says it in words.
 @MainActor
 enum Connection {
   enum State: Equatable {
     /// Not checked yet.
     case unknown
     case connected(project: String, host: String)
-    /// Groundwork answers on the network, but wants the pairing code it shows in the terminal.
+    /// grndwrk answers on the network, but wants the pairing code it shows in the terminal.
     case needsCode(project: String, host: String)
     /// Not reachable, and why, in plain words.
     case offline(String)
   }
 
-  static let changed = Notification.Name("GroundworkFeedback.connection")
+  static let changed = Notification.Name("GrndwrkFeedback.connection")
   private(set) static var state: State = .unknown
   private static var timer: Timer?
   private static var checking = false
@@ -49,18 +49,18 @@ enum Connection {
     }
   }
 
-  /// Ask Groundwork whether it is there. Once it answers, waiting comments go,
+  /// Ask grndwrk whether it is there. Once it answers, waiting comments go,
   /// and the sent ones learn what became of them.
   static func check() async {
     guard !checking else { return }
     checking = true
     defer { checking = false }
     guard let server = await Locator.url() else {
-      return set(.offline(Locator.problem ?? "No Groundwork found on this Wi-Fi."))
+      return set(.offline(Locator.problem ?? "No grndwrk found on this Wi-Fi."))
     }
     let host = server.host ?? ""
     // Never send the code first: anything on the Wi-Fi can call itself
-    // Groundwork. Groundwork proves it knows the code, and only then does
+    // grndwrk. grndwrk proves it knows the code, and only then does
     // this phone send it, and comments and pictures with it.
     let challenge = Pairing.newChallenge()
     let first: [String: Any]
@@ -69,7 +69,7 @@ enum Connection {
     case .failed(let why):
       gwLog.error("Hello to \(server.absoluteString, privacy: .public) failed: \(why, privacy: .public)")
       Locator.forget()
-      return set(.offline("Groundwork at \(host) did not answer: \(why)."))
+      return set(.offline("grndwrk at \(host) did not answer: \(why)."))
     }
     let project = first["project"] as? String ?? ""
     // This Mac, from the Simulator: nothing travels over the network, no code needed.
@@ -79,7 +79,7 @@ enum Connection {
       Pairing.save(code, for: project)
       return set(.connected(project: project, host: host))
     }
-    if first["proof"] == nil { gwLog.error("\(host, privacy: .public) gave no proof: an older Groundwork, or not Groundwork") }
+    if first["proof"] == nil { gwLog.error("\(host, privacy: .public) gave no proof: an older grndwrk, or not grndwrk") }
     Pairing.current = nil
     set(.needsCode(project: project, host: host))
   }
@@ -93,7 +93,7 @@ enum Connection {
     #endif
   }
 
-  /// Whether the Groundwork at this address proves it knows a code this phone keeps.
+  /// Whether the grndwrk at this address proves it knows a code this phone keeps.
   static func knowsOurCode(_ server: URL) async -> Bool {
     let challenge = Pairing.newChallenge()
     guard case .answer(let answer) = await hello(server, challenge: challenge) else { return false }
@@ -122,11 +122,11 @@ enum Connection {
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
     let answer = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]
     guard status == 200 else { return .failed("it answered \(status) instead of 200") }
-    guard let answer, answer["groundwork"] as? Bool == true else { return .failed("something answered, but not Groundwork") }
+    guard let answer, answer["grndwrk"] as? Bool == true else { return .failed("something answered, but not grndwrk") }
     return .answer(answer)
   }
 
-  /// Whether Groundwork answers at this address: nil when it does, or why not.
+  /// Whether grndwrk answers at this address: nil when it does, or why not.
   static func probe(_ server: URL) async -> String? {
     if case .failed(let why) = await hello(server) { return why }
     return nil
@@ -137,7 +137,7 @@ enum Connection {
     guard let error = error as? URLError else { return error.localizedDescription }
     switch error.code {
     case .timedOut: return "no answer within 4 seconds"
-    case .cannotConnectToHost: return "nothing is listening there (a Groundwork that has stopped?)"
+    case .cannotConnectToHost: return "nothing is listening there (a grndwrk that has stopped?)"
     case .cannotFindHost, .dnsLookupFailed: return "its address could not be found"
     case .notConnectedToInternet, .networkConnectionLost: return "this phone is not on a network"
     case .appTransportSecurityRequiresSecureConnection: return "blocked by App Transport Security (add NSAllowsLocalNetworking to Info.plist)"
@@ -145,20 +145,20 @@ enum Connection {
     }
   }
 
-  /// Groundwork turned a request down for want of the code: ask for it again.
+  /// grndwrk turned a request down for want of the code: ask for it again.
   static func codeRefused() {
     Pairing.current = nil
     Task { await check() }
   }
 
-  /// Sending a comment also tells whether Groundwork is there.
+  /// Sending a comment also tells whether grndwrk is there.
   static func reached(_ yes: Bool, project: String? = nil, why: String? = nil) {
     if yes, let server = Locator.current {
       set(.connected(project: project ?? self.project ?? "", host: server.host ?? ""))
     } else if !yes, case .needsCode = state {
       // Still there, still waiting for the code.
     } else if !yes {
-      set(.offline(why ?? Locator.problem ?? "Groundwork stopped answering."))
+      set(.offline(why ?? Locator.problem ?? "grndwrk stopped answering."))
     }
   }
 
@@ -177,13 +177,13 @@ enum Connection {
     }
   }
 }
-/// The pairing code `groundwork --lan` prints, entered once per project and
+/// The pairing code `grndwrk --lan` prints, entered once per project and
 /// kept on the device. Sent with every request on the network.
 @MainActor
 enum Pairing {
-  static let header = "X-Groundwork-Code"
-  private static let key = "GroundworkFeedback.codes"
-  /// The code Groundwork accepted last, sent with every request.
+  static let header = "X-Grndwrk-Code"
+  private static let key = "GrndwrkFeedback.codes"
+  /// The code grndwrk accepted last, sent with every request.
   static var current: String?
 
   private static var codes: [String: String] {
@@ -206,7 +206,7 @@ enum Pairing {
     (UUID().uuidString + UUID().uuidString).replacingOccurrences(of: "-", with: "")
   }
 
-  /// The code this phone keeps that Groundwork's proof was made with, if any:
+  /// The code this phone keeps that grndwrk's proof was made with, if any:
   /// the one in use, the one kept for this project, then any other.
   static func proven(by proof: String?, challenge: String, project: String) -> String? {
     guard let proof, !proof.isEmpty else { return nil }
@@ -218,13 +218,13 @@ enum Pairing {
   }
 
   private static func proof(_ code: String, _ challenge: String) -> String {
-    let mac = HMAC<SHA256>.authenticationCode(for: Data("groundwork-hello:\(challenge)".utf8), using: SymmetricKey(data: Data(code.utf8)))
+    let mac = HMAC<SHA256>.authenticationCode(for: Data("grndwrk-hello:\(challenge)".utf8), using: SymmetricKey(data: Data(code.utf8)))
     return mac.map { String(format: "%02x", $0) }.joined()
   }
 
-  /// The four digits Groundwork shows next to this request in the map, worked out the same way from the secret.
+  /// The four digits grndwrk shows next to this request in the map, worked out the same way from the secret.
   static func checkDigits(_ secret: String) -> String {
-    let hash = SHA256.hash(data: Data("groundwork-pair:\(secret)".utf8)).map { String(format: "%02x", $0) }.joined()
+    let hash = SHA256.hash(data: Data("grndwrk-pair:\(secret)".utf8)).map { String(format: "%02x", $0) }.joined()
     let n = UInt64(hash.prefix(8), radix: 16) ?? 0
     return String(format: "%04d", n % 10000)
   }
@@ -235,13 +235,13 @@ enum Pairing {
 
   enum Asked { case allowed(code: String, digits: String), denied, noBrowser, unanswered }
 
-  /// Ask the person at the Mac to allow this phone. Groundwork shows the
+  /// Ask the person at the Mac to allow this phone. grndwrk shows the
   /// request in the map with four digits, which `asking` gets too, to show
   /// here. Once allowed, the code comes back; it is kept only after the
   /// person confirms they allowed it next to those digits. Waits up to three minutes.
   static func ask(project: String, asking: (String) -> Void) async -> Asked {
     guard let server = await Locator.url() else { return .unanswered }
-    // Known only to this phone: Groundwork tells the code to whoever holds it.
+    // Known only to this phone: grndwrk tells the code to whoever holds it.
     let secret = UUID().uuidString + "-" + UUID().uuidString.prefix(8)
     let digits = checkDigits(secret)
     let app = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String

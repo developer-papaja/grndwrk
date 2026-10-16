@@ -19,7 +19,7 @@ export interface CommentsCtx {
 
 /**
  * What the iOS package talks to, on localhost and with `--lan`:
- * - GET /api/hello: Groundwork is here, for which project, and whether a browser has the map open
+ * - GET /api/hello: grndwrk is here, for which project, and whether a browser has the map open
  * - POST /api/feedback: a comment, or with on_mac, one to write in the browser
  * - POST /api/feedback/status: what became of comments the device sent, by id and key
  * - POST /api/feedback/remove: delete comments the device sent, by id and key
@@ -32,7 +32,7 @@ export async function handleComments(req: IncomingMessage, res: ServerResponse, 
   const path = new URL(req.url ?? '/', 'http://x').pathname
   const method = req.method ?? 'GET'
   if (path === '/api/hello' && method === 'GET') {
-    return json(res, 200, { groundwork: true, project: ctx.project, browser: clientCount() > 0 })
+    return json(res, 200, { grndwrk: true, project: ctx.project, browser: clientCount() > 0 })
   }
   if (!['/api/feedback', '/api/feedback/status', '/api/feedback/remove', '/api/feedback/tested', '/api/feedback/show', '/api/screenshot'].includes(path) || method !== 'POST') return false
   if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return json(res, 415, { error: 'Send JSON' })

@@ -1,21 +1,21 @@
-// Groundwork comment overlay. Added to each page by `groundwork --app`.
+// grndwrk comment overlay. Added to each page by `grndwrk --app`.
 // Press Comment (or Alt+C), point at anything, click it, and write a line.
-// The comment lands in the Groundwork map, on the Feedback page.
+// The comment lands in the grndwrk map, on the Feedback page.
 ;(() => {
-  if (window.__groundworkFeedback) return
+  if (window.__grndwrkFeedback) return
   // A tool for your own machine: localhost, or a local development name like
   // shop.test (Herd, Valet) or shop.localhost. On any other address it does
   // nothing and says why, so it never reaches the people using the product.
   if (!/^(localhost|127\.0\.0\.1|\[::1\])$|\.(test|localhost)$/.test(location.hostname)) {
-    console.warn('Groundwork comments only run on this machine (localhost, *.test, *.localhost). Remove this script from the page.')
+    console.warn('grndwrk comments only run on this machine (localhost, *.test, *.localhost). Remove this script from the page.')
     return
   }
-  // Comments go back to the Groundwork the script came from: the proxy, or the
+  // Comments go back to the grndwrk the script came from: the proxy, or the
   // map's server when the product's own layout loads it.
   const base = document.currentScript && document.currentScript.src ? new URL(document.currentScript.src).origin : location.origin
-  window.__groundworkFeedback = true
+  window.__grndwrkFeedback = true
 
-  const host = document.createElement('groundwork-feedback')
+  const host = document.createElement('grndwrk-feedback')
   // all: initial keeps the page's styles out; font and color are set again after it.
   host.style.cssText = 'all: initial; position: fixed; inset: 0; pointer-events: none; z-index: 2147483647; font: 13px/1.4 Inter, system-ui, -apple-system, sans-serif; color: #e8e6e3;'
   const root = host.attachShadow({ mode: 'open' })
@@ -117,21 +117,21 @@
         <button class="bigger" title="Bigger: what it sits in ( Alt ↑ )"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>Bigger</button>
       </div>
       <textarea placeholder="What should change? Enter sends"></textarea>
-      <div class="row"><button class="b cancel">Cancel</button><button class="b send">Send to Groundwork</button></div>
+      <div class="row"><button class="b cancel">Cancel</button><button class="b send">Send to grndwrk</button></div>
     </div>
     <div class="toast"></div>
-    <button class="save" title="Save the waiting comments as a file to send to whoever runs Groundwork">Save as file</button>
+    <button class="save" title="Save the waiting comments as a file to send to whoever runs grndwrk">Save as file</button>
     <div class="dock-target"></div>
     <div class="bar">
-      <span class="name"><span class="dot"></span>Groundwork</span>
+      <span class="name"><span class="dot"></span>grndwrk</span>
       <button class="go" title="Comment on this page (Alt+C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg><span class="bar-label">Comment</span></button>
       <button class="bar-test" title="Fixes ready to test on this site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg><span class="bar-count"></span></button>
-      <button class="bar-save" title="Save the waiting comments as a file to send to whoever runs Groundwork" style="display:none">Save as file</button>
+      <button class="bar-save" title="Save the waiting comments as a file to send to whoever runs grndwrk" style="display:none">Save as file</button>
       <span class="grow"></span>
       <button class="float" title="Float the button over the page instead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>Float</button>
       <button class="fold" title="Fold into a small tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg></button>
     </div>
-    <button class="tab" title="Groundwork: open the bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg>Groundwork</button>
+    <button class="tab" title="grndwrk: open the bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg>grndwrk</button>
     <button class="pill" title="Comment on this page (Alt+C). Drag to move it; drop it on the bottom edge for a bar.">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg>
       <span>Comment</span>
@@ -151,7 +151,7 @@
       <div class="t-test-wrap"><div class="label">To test</div><div class="text t-test"></div></div>
       <div class="t-reject" style="display:none"><textarea class="t-note" placeholder="What is still wrong?"></textarea></div>
       <div class="row">
-        <button class="b mac t-show" title="Show this comment in Groundwork's map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>Map</button>
+        <button class="b mac t-show" title="Show this comment in grndwrk's map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>Map</button>
         <span class="grow"></span>
         <button class="b t-back" style="display:none" title="Back, without rejecting">Back</button>
         <button class="b no t-no">Reject</button>
@@ -166,7 +166,15 @@
   // Where the button sits: floating where it was dragged, as a bar along the
   // bottom edge (the page gets room for it, like Laravel's debug bar), or
   // folded into a tab. Kept per site in this browser.
-  const PLACE = 'groundwork.place'
+  const PLACE = 'grndwrk.place'
+  // The place and the unsent comments kept before the rename to grndwrk carry over once.
+  try {
+    for (const k of ['place', 'outbox']) {
+      const before = localStorage.getItem('groundwork.' + k)
+      if (before !== null && localStorage.getItem('grndwrk.' + k) === null) localStorage.setItem('grndwrk.' + k, before)
+      localStorage.removeItem('groundwork.' + k)
+    }
+  } catch {}
   let seat = { mode: 'float', x: null, y: null }
   try { seat = { ...seat, ...JSON.parse(localStorage.getItem(PLACE) || '{}') } } catch {}
   const pagePadding = document.documentElement.style.paddingBottom
@@ -212,8 +220,8 @@
     moved = dragged ? { swallow: true } : null
   })
 
-  // Comments that could not be sent wait in this browser, and go once Groundwork answers.
-  const OUTBOX = 'groundwork.outbox'
+  // Comments that could not be sent wait in this browser, and go once grndwrk answers.
+  const OUTBOX = 'grndwrk.outbox'
   const outbox = {
     read() {
       try { return JSON.parse(localStorage.getItem(OUTBOX) || '[]') } catch { return [] }
@@ -236,7 +244,7 @@
   async function post(comment) {
     if (!comment.image && held.has(comment.written)) comment = { ...comment, image: held.get(comment.written) }
     try {
-      const res = await fetch(`${base}/__groundwork/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(comment) })
+      const res = await fetch(`${base}/__grndwrk/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(comment) })
       if (res.status === 201) return 'sent'
       // The map asks the person to allow this site first; the comment waits here until then.
       if (res.status === 403 && (await res.json().catch(() => ({}))).ask) return 'asked'
@@ -558,15 +566,15 @@
     field.focus()
   }, true)
 
-  /** The drawing library, loaded from Groundwork the first time a picture is taken. */
+  /** The drawing library, loaded from grndwrk the first time a picture is taken. */
   let shotLib = null
   function loadShotLib() {
-    if (window.__groundworkShot) return Promise.resolve(window.__groundworkShot)
+    if (window.__grndwrkShot) return Promise.resolve(window.__grndwrkShot)
     if (!shotLib) {
       shotLib = new Promise((resolve, reject) => {
         const tag = document.createElement('script')
-        tag.src = `${base}/__groundwork/screenshot.js`
-        tag.onload = () => (window.__groundworkShot ? resolve(window.__groundworkShot) : reject(new Error('not loaded')))
+        tag.src = `${base}/__grndwrk/screenshot.js`
+        tag.onload = () => (window.__grndwrkShot ? resolve(window.__grndwrkShot) : reject(new Error('not loaded')))
         tag.onerror = reject
         document.head.appendChild(tag)
       })
@@ -693,7 +701,7 @@
     sendBtn.disabled = false
     closeCard()
     if (result === 'sent') {
-      flash('Sent to Groundwork')
+      flash('Sent to grndwrk')
       flush()
       loadTests()
     } else if (result === 'waiting' || result === 'asked') {
@@ -703,27 +711,27 @@
       const list = [...outbox.read(), keep]
       outbox.write(list)
       flash(result === 'asked'
-        ? `Allow ${location.host} in Groundwork's map once. The comment goes then.`
-        : `Saved. It goes to Groundwork when it is running (${list.length} waiting)`)
+        ? `Allow ${location.host} in grndwrk's map once. The comment goes then.`
+        : `Saved. It goes to grndwrk when it is running (${list.length} waiting)`)
       asked = result === 'asked'
     } else {
-      flash('Groundwork did not take it')
+      flash('grndwrk did not take it')
     }
   }
 
-  /** One file with every waiting comment, for `groundwork import-feedback <file>`. */
+  /** One file with every waiting comment, for `grndwrk import-feedback <file>`. */
   function saveFile() {
     const list = outbox.read()
     if (!list.length) return
-    const blob = new Blob([JSON.stringify({ groundwork: 'feedback', comments: list }, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify({ grndwrk: 'feedback', comments: list }, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `groundwork-feedback-${new Date().toISOString().slice(0, 16).replace(':', '')}.json`
+    a.download = `grndwrk-feedback-${new Date().toISOString().slice(0, 16).replace(':', '')}.json`
     a.click()
     URL.revokeObjectURL(a.href)
     // Saved to a file: it travels that way now, so it no longer waits here.
     outbox.write([])
-    flash('Saved. Send the file to whoever runs Groundwork.')
+    flash('Saved. Send the file to whoever runs grndwrk.')
   }
   function flash(text) {
     toast.textContent = text
@@ -814,11 +822,11 @@
   // is only ever set as text, never as markup.
   const pillTest = $('.pill-test'), pillCount = $('.pill-count'), barTest = $('.bar-test'), barCount = $('.bar-count')
   const panel = $('.panel'), items = $('.items'), tcard = $('.tcard'), mark = $('.mark'), note = $('.t-note')
-  const TESTING = 'groundwork.testing'
+  const TESTING = 'grndwrk.testing'
   let tests = [], current = null, marked = null, siteAllowed = true
   async function loadTests() {
     try {
-      const res = await fetch(`${base}/__groundwork/tests`, { cache: 'no-store' })
+      const res = await fetch(`${base}/__grndwrk/tests`, { cache: 'no-store' })
       // Not allowed yet: asked again only after a comment goes through.
       siteAllowed = res.status !== 403
       tests = res.ok ? (await res.json()).tests || [] : []
@@ -830,7 +838,7 @@
     pillCount.textContent = n
     barTest.style.display = n ? 'flex' : 'none'
     barCount.textContent = `Test · ${n}`
-    tab.lastChild.textContent = n ? `Groundwork · ${n} to test` : 'Groundwork'
+    tab.lastChild.textContent = n ? `grndwrk · ${n} to test` : 'grndwrk'
     if (panel.style.display === 'block') listTests()
     return tests
   }
@@ -920,13 +928,13 @@
       return note.focus()
     }
     try {
-      const res = await fetch(`${base}/__groundwork/tested`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id, works, note: works ? '' : note.value }) })
+      const res = await fetch(`${base}/__grndwrk/tested`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id, works, note: works ? '' : note.value }) })
       if (!res.ok) throw new Error()
       flash(works ? 'Approved. Marked fixed.' : 'Rejected. It goes back to Claude with your note.')
       closeTest()
       loadTests()
     } catch {
-      flash('Groundwork did not take it. Try again.')
+      flash('grndwrk did not take it. Try again.')
     }
   }
   pillTest.addEventListener('pointerdown', (e) => e.stopPropagation())
@@ -951,10 +959,10 @@
   $('.t-show').addEventListener('click', async () => {
     if (!current) return
     try {
-      const res = await fetch(`${base}/__groundwork/show`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id }) })
-      flash(res.ok ? 'Opened in Groundwork' : 'Groundwork could not open it')
+      const res = await fetch(`${base}/__grndwrk/show`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id }) })
+      flash(res.ok ? 'Opened in grndwrk' : 'grndwrk could not open it')
     } catch {
-      flash('Groundwork is not running')
+      flash('grndwrk is not running')
     }
   })
   note.addEventListener('keydown', (e) => e.stopPropagation())

@@ -10,11 +10,11 @@ import { readMatter } from '../src/store/matter.js'
 
 // A file in a pull request could start its frontmatter with ---js; gray-matter,
 // which read these files before, ran it. It must never run, and must show as unreadable.
-const ran = () => (globalThis as Record<string, unknown>).__groundworkRan
-const payload = (lang: string) => `---${lang}\n(() => { globalThis.__groundworkRan = true; return { title: 'Looks normal' } })()\n---\nBody\n`
+const ran = () => (globalThis as Record<string, unknown>).__grndwrkRan
+const payload = (lang: string) => `---${lang}\n(() => { globalThis.__grndwrkRan = true; return { title: 'Looks normal' } })()\n---\nBody\n`
 
 afterEach(() => {
-  delete (globalThis as Record<string, unknown>).__groundworkRan
+  delete (globalThis as Record<string, unknown>).__grndwrkRan
 })
 
 describe('frontmatter is YAML only', () => {

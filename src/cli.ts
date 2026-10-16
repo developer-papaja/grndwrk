@@ -1,22 +1,22 @@
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { init } from './init.js'
-import { findProjectRoot, GW_DIR, PACKAGE_ROOT } from './root.js'
+import { findProjectRoot, GW_DIR, noMapMessage, PACKAGE_ROOT } from './root.js'
 import { startServer } from './server/index.js'
 import { clientCount, tabAround } from './server/events.js'
 
 const HELP = `Usage:
-  groundwork init        create .groundwork/ and copy the Claude Code commands, or update them
-  groundwork [start]     open the map in the browser
-  groundwork import-feedback <file>
+  grndwrk init        create .grndwrk/ and copy the Claude Code commands, or update them
+  grndwrk [start]     open the map in the browser
+  grndwrk import-feedback <file>
                          add comments a tester shared as a file
-  groundwork screenshots [screen...]
+  grndwrk screenshots [screen...]
                          take a picture of each screen in the running product,
                          for the Sitemap view. Uses Chrome.
       --app <url>        where the product runs (default: the last --app)
       --login            log in once in a Chrome window; the session is kept
-  groundwork build-ios-loader [path]
-                         build GroundworkFeedback for injecting into an app in
+  grndwrk build-ios-loader [path]
+                         build GrndwrkFeedback for injecting into an app in
                          the iOS Simulator, without changing the app; prints
                          the path for DYLD_INSERT_LIBRARIES
 
@@ -24,10 +24,10 @@ Options for start:
   --port <n>   port to use (default: the one this project had last time, else 7777, or the next free one)
   --no-open    do not open the browser
   --app <url>  your product's dev server, for example http://localhost:5173.
-               Open the address Groundwork prints for it, and every page gets
+               Open the address grndwrk prints for it, and every page gets
                a Comment button. Comments land in the map, on the Feedback page.
   --app-port <n>  port for that address (default: the map's port plus one)
-  --lan        let phones on the same Wi-Fi send comments (GroundworkFeedback
+  --lan        let phones on the same Wi-Fi send comments (GrndwrkFeedback
                finds this Mac by itself). They can only add comments.
   --lan-port <n>  port for that (default: the map's port plus two)
 `
@@ -60,7 +60,7 @@ async function main() {
   if (command === 'screenshots') {
     const root = findProjectRoot(process.cwd())
     if (!root) {
-      console.error(`No ${GW_DIR}/ folder found here. Run \`groundwork init\` first.`)
+      console.error(noMapMessage(process.cwd()))
       process.exit(1)
     }
     const { takeScreenshots } = await import('./screenshots.js')
@@ -88,7 +88,7 @@ async function main() {
     const root = findProjectRoot(process.cwd())
     const files = positionals.slice(1)
     if (!root || !files.length) {
-      console.error(!root ? `No ${GW_DIR}/ folder found here. Run \`groundwork init\` first.` : 'Usage: groundwork import-feedback <file> [more files]')
+      console.error(!root ? noMapMessage(process.cwd()) : 'Usage: grndwrk import-feedback <file> [more files]')
       process.exit(1)
     }
     const { readFile } = await import('node:fs/promises')
@@ -105,11 +105,11 @@ async function main() {
   if (command === 'start') {
     const root = findProjectRoot(process.cwd())
     if (!root) {
-      console.error(`No ${GW_DIR}/ folder found here or in any parent folder. Run \`groundwork init\` first.`)
+      console.error(noMapMessage(process.cwd()))
       process.exit(1)
     }
     // The port this project had last time, so a line in the product's layout
-    // that loads the Comment button keeps pointing at the right Groundwork.
+    // that loads the Comment button keeps pointing at the right grndwrk.
     const { rememberedPort, rememberPort } = await import('./store/local.js')
     const remembered = values.port ? undefined : await rememberedPort(join(root, GW_DIR))
     const port = Number(values.port ?? remembered ?? 7777)
@@ -130,20 +130,20 @@ async function main() {
     const lanPort = values['lan-port'] ? Number(values['lan-port']) : undefined
     const { url, appUrl, lanUrls, lanCode } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort, lan: values.lan, lanPort })
     const actual = Number(new URL(url).port)
-    console.log(`Groundwork is running at ${url}\nWatching ${join(root, GW_DIR)}`)
+    console.log(`grndwrk is running at ${url}\nWatching ${join(root, GW_DIR)}`)
     if (!values.port && remembered === undefined) await rememberPort(join(root, GW_DIR), actual)
     if (remembered !== undefined && actual !== remembered) {
-      console.log(`  Port ${remembered}, this project's usual one, is taken (another Groundwork?), so this one runs on ${actual}. A Comment button loaded from localhost:${remembered} will not reach it until that one stops.`)
+      console.log(`  Port ${remembered}, this project's usual one, is taken (another grndwrk?), so this one runs on ${actual}. A Comment button loaded from localhost:${remembered} will not reach it until that one stops.`)
     }
     if (appUrl) {
       console.log(`Your product with the Comment button: ${appUrl} (passes through to ${app!.origin})`)
       console.log(`  Or on ${app!.origin} itself: add this to its page layout, for local development only, and reload:`)
-      console.log(`    <script src="${url}/__groundwork/feedback.js" defer></script>`)
-      console.log(`  In Laravel: @env('local') <script src="${url}/__groundwork/feedback.js" defer></script> @endenv`)
+      console.log(`    <script src="${url}/__grndwrk/feedback.js" defer></script>`)
+      console.log(`  In Laravel: @env('local') <script src="${url}/__grndwrk/feedback.js" defer></script> @endenv`)
     }
     if (lanUrls) {
       console.log(`Phones on this network can send comments: ${lanUrls.join(', ') || 'no network found'}`)
-      console.log(`  Pairing code: ${lanCode}. Enter it once on each phone. Delete .groundwork/lan-code for a new one.`)
+      console.log(`  Pairing code: ${lanCode}. Enter it once on each phone. Delete .grndwrk/lan-code for a new one.`)
       console.log('  Only comments can be sent from there. The map stays on this Mac.')
     }
     console.log('Press Ctrl+C to stop.')
@@ -159,13 +159,13 @@ async function main() {
     process.once('SIGINT', stop)
     process.once('SIGTERM', stop)
     if (values.open) {
-      // A Groundwork tab in view reconnects within a second. Give it a moment,
+      // A grndwrk tab in view reconnects within a second. Give it a moment,
       // and only open a new tab when none came back and none was open before.
       await new Promise((r) => setTimeout(r, 2500))
       if (clientCount() > 0) {
-        console.log('Your open Groundwork tab reconnected.')
+        console.log('Your open grndwrk tab reconnected.')
       } else if (hadTab) {
-        console.log(`Your Groundwork tab picks this up when you switch to it. Closed it? Open ${url}`)
+        console.log(`Your grndwrk tab picks this up when you switch to it. Closed it? Open ${url}`)
       } else {
         const { default: open } = await import('open')
         await open(url).catch(() => {})

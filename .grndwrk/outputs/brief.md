@@ -1,12 +1,12 @@
 ---
 written: 2026-10-05
 ---
-# Groundwork
+# grndwrk
 
-> **Not ready to build yet:** the kickoff flow from `groundwork init` to a deliverable is not written down (gap_kickoff_flow). This brief shows what is there. Readiness says ready to prototype; scope and a type scale are also still open.
+> **Not ready to build yet:** the kickoff flow from `grndwrk init` to a deliverable is not written down (gap_kickoff_flow). This brief shows what is there. Readiness says ready to prototype; scope and a type scale are also still open.
 
 ## What it is
-Groundwork is a dev tool that lives in a project repo, where you explore a product idea as a 3D map of thoughts and find out whether you have enough to start building. It answers what project management tools do not: a visual, documented ground for why things were decided, kept across Claude Code sessions instead of lost in them (n_rlee).
+grndwrk is a dev tool that lives in a project repo, where you explore a product idea as a 3D map of thoughts and find out whether you have enough to start building. It answers what project management tools do not: a visual, documented ground for why things were decided, kept across Claude Code sessions instead of lost in them (n_rlee).
 
 ## Who it is for
 For now, the person building it: a designer or developer who wants to ideate, move forward to building, and keep decisions documented in a visual way (n_rlee). It is an internal tool for the time being (n_mcjp). The wider aim is to help people ideate (n_jtdo, n_wncw).
@@ -31,12 +31,12 @@ Hard to measure fully. Success is feeling that you build a better product faster
 
 **Work with Claude**
 1. Run a command in Claude Code: `/import` a document (n_5dqs), `/topics` to group (n_2sqo), `/decisions` at the end of a session (n_ax4k), `/challenge` for questions.
-2. The files in `.groundwork/` change and the map updates live.
+2. The files in `.grndwrk/` change and the map updates live.
 3. Where Claude is unsure it asks in a thought's thread; open questions are marked on cards and counted (n_97bu).
 4. You answer in the thread. A question stays open until anything follows it (n_x0i6).
 
 **Kick off a product** (not written in the map; see Open questions)
-The map says where this should end: a site map or deliverable that explains what the product is and can be judged before moving forward (n_scwj). The steps between `groundwork init` and that deliverable are not written down. The commands suggest init, capture or import, topics, readiness, answer the ghost cards, brief, but the map has not decided this.
+The map says where this should end: a site map or deliverable that explains what the product is and can be judged before moving forward (n_scwj). The steps between `grndwrk init` and that deliverable are not written down. The commands suggest init, capture or import, topics, readiness, answer the ghost cards, brief, but the map has not decided this.
 
 ## Site map
 
@@ -48,7 +48,7 @@ The map says where this should end: a site map or deliverable that explains what
   - *First run*: an empty map tells you this is for starting to ideate, to create a new thought, and that commands sync what you have (n_brcp). Flows: kick off.
 - **Readiness**: the verdict, the areas and the ghost cards for what is missing, with what is answered and what is not (n_0pvl, n_dtmw). Flows: kick off.
 - **Deliverables** (direction, not decided): the brief, site map, decisions and scope shown as something better than a map (n_scwj, n_0so7). Flows: kick off.
-- **Outside the browser**: `npx groundwork init`, `npx groundwork`, and the Claude Code commands. Flows: work with Claude, kick off.
+- **Outside the browser**: `npx grndwrk init`, `npx grndwrk`, and the Claude Code commands. Flows: work with Claude, kick off.
 
 The map does not decide how views are switched; n_scwj suggests a rail to the left of the left panel with tabs such as map, setup, insights and deliverables.
 
@@ -57,7 +57,7 @@ The map does not decide how views are switched; n_scwj suggests a rail to the le
 - The spatial map: altitude, topic columns, time as depth, word cards (n_j35n, n_xlew, n_innn, n_394y).
 - Pages above topics, with an All page (n_6ztc).
 - The list on the left and the docked details panel on the right (n_u6e9, n_71ls, n_low0).
-- Images in notes, saved in `.groundwork/files/` (n_36d4).
+- Images in notes, saved in `.grndwrk/files/` (n_36d4).
 - Threads with Claude and counted open questions (n_97bu, n_x0i6).
 - Commands: `/import`, `/topics`, `/decisions`, `/readiness`, `/challenge`, `/brief` (n_5dqs, n_ax4k, n_2sqo, n_0pvl).
 - Readiness covering setup for building with Claude: CLAUDE.md, design docs, code standards, skills (n_0pvl).
@@ -81,8 +81,8 @@ PLAN.md has a "Not now" list (in-app Claude via API, multiplayer, a flat 2D view
 - Type scale and spacing are not decided (gap_type_scale, n_wv4e).
 
 ## Technical
-- Everything is plain files in `.groundwork/`, and the folder is committed to git with the code (n_ax4k).
-- Images live in `.groundwork/files/<node id>/` and are linked from notes as markdown (n_36d4).
+- Everything is plain files in `.grndwrk/`, and the folder is committed to git with the code (n_ax4k).
+- Images live in `.grndwrk/files/<node id>/` and are linked from notes as markdown (n_36d4).
 - Commands never change a topic you set yourself (n_2sqo).
 - Links stay inside a topic; links across topics are faint and pull weakly (n_xlew, n_uai4).
 - The map says little else about the stack; it is decided in the repo's CLAUDE.md (Node, TypeScript, Vite, 3d-force-graph, Alpine, Tailwind).
@@ -90,7 +90,7 @@ PLAN.md has a "Not now" list (in-app Claude via API, multiplayer, a flat 2D view
 ## Constraints
 - Internal tool for now (n_mcjp).
 - No deadline in the map.
-- "groundwork" is taken on npm (gap_npm_name).
+- "grndwrk" is taken on npm (gap_npm_name).
 
 ## Open questions
 - What are the steps of the kickoff flow, from init to a deliverable that can be judged? (n_scwj, gap_kickoff_flow)

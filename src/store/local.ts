@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { keepOutOfGit } from './gitignore.js'
 
 /**
- * Settings for this project on this machine only, in `.groundwork/local.json`,
- * kept out of git: the port its Groundwork runs on, so it stays the same from
+ * Settings for this project on this machine only, in `.grndwrk/local.json`,
+ * kept out of git: the port its grndwrk runs on, so it stays the same from
  * one start to the next, and where the product runs here (`--app`).
  */
 const file = (gwDir: string) => join(gwDir, 'local.json')
@@ -62,7 +62,7 @@ export async function rememberApp(gwDir: string, app: string): Promise<void> {
   await keepOutOfGit(gwDir, 'local.json')
 }
 
-/** The port a map tab was open on when Groundwork last stopped, so the next start on that port can leave it to that tab. */
+/** The port a map tab was open on when grndwrk last stopped, so the next start on that port can leave it to that tab. */
 export async function rememberedTab(gwDir: string): Promise<number | undefined> {
   const tab = (await read(gwDir)).tab
   return typeof tab === 'number' ? tab : undefined

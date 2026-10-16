@@ -81,7 +81,7 @@ export function parseScreen(id: string, raw: string): Screen {
 
 /** A picture as `shots:` names it, the way `listShots` gives it: ios/App-2.jpg, with %20 read as a space. */
 export function shotRef(ref: string): string {
-  const r = ref.trim().replace(/^\/?(\.groundwork\/)?shots\//, '').replace(/^\//, '')
+  const r = ref.trim().replace(/^\/?(\.grndwrk\/)?shots\//, '').replace(/^\//, '')
   try {
     return decodeURIComponent(r)
   } catch {

@@ -18,7 +18,7 @@ const WRONG_TRIES = 10
 
 /**
  * What devices on the same network can reach, when `--lan` is on: they can
- * see that Groundwork is there, and with the pairing code add a comment, and
+ * see that grndwrk is there, and with the pairing code add a comment, and
  * ask about or delete their own comments by the key they made for each.
  * Nothing else. The map, the API and the files stay on this machine only.
  */
@@ -42,7 +42,7 @@ export function createLanServer(ctx: CommentsCtx, code: string, pairings?: Pairi
 
     // A device that keeps guessing the code gets no more answers to its guesses
     // for a while. The right code still works, so nobody is shut out by a neighbour.
-    const sent = req.headers['x-groundwork-code']
+    const sent = req.headers['x-grndwrk-code']
     const paired = typeof sent === 'string' && sameCode(sent, code)
     if (typeof sent === 'string' && sent && !paired) {
       const misses = (wrong.get(ip) ?? []).filter((t) => now - t < 600_000)
@@ -53,12 +53,12 @@ export function createLanServer(ctx: CommentsCtx, code: string, pairings?: Pairi
     const url = new URL(req.url ?? '/', 'http://x')
     const path = url.pathname
     if (path === '/api/hello' && req.method === 'GET') {
-      // Answers without the code, so the phone can tell Groundwork is there and ask for it.
+      // Answers without the code, so the phone can tell grndwrk is there and ask for it.
       // With ?challenge=, it also proves it knows the code without sending it: a
-      // phone sends its code and comments only to a Groundwork that can.
+      // phone sends its code and comments only to a grndwrk that can.
       const challenge = url.searchParams.get('challenge') ?? ''
       const proof = /^[A-Za-z0-9-]{16,64}$/.test(challenge) ? helloProof(code, challenge) : undefined
-      return json(res, 200, { groundwork: true, project: ctx.project, paired, ...(proof ? { proof } : {}) })
+      return json(res, 200, { grndwrk: true, project: ctx.project, paired, ...(proof ? { proof } : {}) })
     }
     // Asking the person at the Mac to allow this phone, which then gets the code. Needs no code.
     if (pairings && req.method === 'POST' && (path === '/api/pair' || path === '/api/pair/status')) {
@@ -66,13 +66,13 @@ export function createLanServer(ctx: CommentsCtx, code: string, pairings?: Pairi
         const body = JSON.parse((await readAll(req, 10_000)).toString('utf8'))
         if (path === '/api/pair/status') return json(res, 200, pairings.status(body))
         const asked = pairings.ask(body, ip)
-        if (!asked) return json(res, 429, { error: 'Groundwork is not taking this request. Try again in a few minutes.' })
+        if (!asked) return json(res, 429, { error: 'grndwrk is not taking this request. Try again in a few minutes.' })
         return json(res, 202, { waiting: true, browser: clientCount() > 0 })
       } catch {
         return json(res, 400, { error: 'Send { request, device, app }' })
       }
     }
-    if (!paired) return json(res, 401, { error: 'Allow this phone in Groundwork on the Mac, or enter the code it shows in the terminal', code_needed: true })
+    if (!paired) return json(res, 401, { error: 'Allow this phone in grndwrk on the Mac, or enter the code it shows in the terminal', code_needed: true })
 
     if (req.method === 'POST') {
       const length = Number(req.headers['content-length'])
@@ -88,7 +88,7 @@ export function createLanServer(ctx: CommentsCtx, code: string, pairings?: Pairi
 
 /** HMAC-SHA256 of the challenge, keyed by the code, as hex. The phone works out the same with the code it keeps. */
 export function helloProof(code: string, challenge: string): string {
-  return createHmac('sha256', code).update(`groundwork-hello:${challenge}`).digest('hex')
+  return createHmac('sha256', code).update(`grndwrk-hello:${challenge}`).digest('hex')
 }
 
 /** An address, or a .local name: what a phone on the network uses. Never a domain a web page could own. */
@@ -119,7 +119,7 @@ function sameCode(sent: string, code: string): boolean {
 }
 
 /**
- * The project's pairing code, kept in `.groundwork/lan-code` so a phone
+ * The project's pairing code, kept in `.grndwrk/lan-code` so a phone
  * paired once stays paired. The file stays out of git. Delete it for a new code.
  */
 export async function pairingCode(gwDir: string): Promise<string> {
@@ -134,21 +134,21 @@ export async function pairingCode(gwDir: string): Promise<string> {
 
 /**
  * dns-sd runs under a small shell that waits on a pipe from this process.
- * However Groundwork ends (Ctrl+C, kill, kill -9, a crash, the terminal
+ * However grndwrk ends (Ctrl+C, kill, kill -9, a crash, the terminal
  * closing), the pipe closes and the shell stops dns-sd, so no advert is left
  * pointing phones at a port where nothing listens.
  */
 const ADVERT = 'dns-sd -R "$@" >/dev/null 2>&1 & pid=$!; trap \'kill $pid 2>/dev/null\' EXIT HUP INT TERM; read _ignored'
 
 /**
- * Announce Groundwork on the network with Bonjour, so the iOS package finds
+ * Announce grndwrk on the network with Bonjour, so the iOS package finds
  * it without anyone typing an address. Uses macOS's own dns-sd. Returns a
  * function that stops the announcement, or null where dns-sd is missing.
  */
 export function advertise(port: number, project: string): (() => void) | null {
   try {
-    const name = `Groundwork ${project}`.slice(0, 63)
-    const child = spawn('/bin/sh', ['-c', ADVERT, 'groundwork-advert', name, '_groundwork._tcp', 'local', String(port), `project=${project}`], {
+    const name = `grndwrk ${project}`.slice(0, 63)
+    const child = spawn('/bin/sh', ['-c', ADVERT, 'grndwrk-advert', name, '_grndwrk._tcp', 'local', String(port), `project=${project}`], {
       stdio: ['pipe', 'ignore', 'ignore'],
     })
     child.on('error', () => {})

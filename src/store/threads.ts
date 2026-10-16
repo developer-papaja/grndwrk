@@ -5,7 +5,7 @@ import { readMatter } from './matter.js'
 import { replaceNotes, splitBody, type Entry, type Who } from '../shared/thread.js'
 
 /**
- * Thread entries in files of their own: `.groundwork/threads/<card or screen
+ * Thread entries in files of their own: `.grndwrk/threads/<card or screen
  * id>/<Unix ms>-<2 chars>.md`, each with who wrote it and when. A new answer
  * or question is a new file, so two people adding to the same thread on their
  * own branches never conflict in git, and the card's own file stays as it was.

@@ -1,3 +1,4 @@
+import './rename'
 import Alpine from 'alpinejs'
 import { fetchNodes, fetchProject, subscribe } from './api'
 import type { ServerEvent } from '../../src/shared/types'
@@ -5,7 +6,7 @@ import { bindKeys } from './keys'
 import { state } from './state'
 
 // A handle for poking at the map from the browser console.
-Object.assign(window, { groundwork: { state } })
+Object.assign(window, { grndwrk: { state } })
 
 bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
   layout: () => state.cycleLayout(),
@@ -20,13 +21,13 @@ const waitingIcon = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http:/
 Alpine.effect(() => {
   const waiting = state.pairRequests.length + state.siteRequests.length
   const name = typeof state.project.name === 'string' && state.project.name ? state.project.name : ''
-  const base = name ? `${name} · Groundwork` : 'Groundwork'
-  document.title = waiting ? `(${waiting}) Allow to send comments · ${name || 'Groundwork'}` : base
+  const base = name ? `${name} · grndwrk` : 'grndwrk'
+  document.title = waiting ? `(${waiting}) Allow to send comments · ${name || 'grndwrk'}` : base
   const icon = document.querySelector<HTMLLinkElement>('link[rel=icon]')
   if (icon) icon.href = waiting ? waitingIcon : plainIcon
 })
 
-/** A comment to open once nodes are loaded: from a node:open event, or #write=<id> when Groundwork opened this tab. */
+/** A comment to open once nodes are loaded: from a node:open event, or #write=<id> when grndwrk opened this tab. */
 let writeWhenLoaded = /^#write=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1] ?? ''
 if (writeWhenLoaded) history.replaceState(null, '', location.pathname + location.search)
 
@@ -107,7 +108,7 @@ function disconnect() {
 }
 document.addEventListener('visibilitychange', () => (document.hidden ? disconnect() : connect()))
 // In the background, say now and then that this tab is still open, without a
-// connection: Groundwork then leaves it to this tab after a restart instead of
+// connection: grndwrk then leaves it to this tab after a restart instead of
 // opening another one. (Browsers slow down background timers; often enough.)
 setInterval(() => {
   if (document.hidden) fetch('/api/tab', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})

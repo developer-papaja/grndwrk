@@ -108,7 +108,7 @@ let noteTimer: ReturnType<typeof setTimeout> | undefined
 
 /** The Show filter kept in this browser; a choice from the older Comments menu carries over. */
 function readProgressFilter(): ProgressFilter {
-  const kept = readStored<string>('groundwork.progressFilter', '')
+  const kept = readStored<string>('grndwrk.progressFilter', '')
   if (kept === '' || kept === 'all' || (PROGRESS as string[]).includes(kept)) return kept as ProgressFilter
   return ''
 }
@@ -125,7 +125,7 @@ export const state = Alpine.reactive({
   editing: null as DraftField | null,
   draft: { title: '', topic: '', page: '', type: 'idea', altitude: 3, status: 'open', body: '' } as Draft,
   /** The page in view, or ALL for the board with everything. */
-  currentPage: readStored<string>('groundwork.page', ALL),
+  currentPage: readStored<string>('grndwrk.page', ALL),
   addingPage: false,
   /** The list shows only topics that are thin or have missing pieces. */
   onlyAttention: false,
@@ -135,12 +135,12 @@ export const state = Alpine.reactive({
   sending: false,
   readiness: null as Readiness | null,
   /** Which view the rail shows: focus, the map, readiness, or deliverables. */
-  view: readStored<View>('groundwork.view', 'map'),
+  view: readStored<View>('grndwrk.view', 'map'),
   /** How the map draws its cards: as a board, or as an outline. */
-  mapLayout: readStored<MapLayout>('groundwork.mapLayout', 'board') === 'outline' ? ('outline' as MapLayout) : ('board' as MapLayout),
+  mapLayout: readStored<MapLayout>('grndwrk.mapLayout', 'board') === 'outline' ? ('outline' as MapLayout) : ('board' as MapLayout),
   mapLayouts: MAP_LAYOUTS,
   /** What the board's columns are: the product's screens (General first), or topics. */
-  groupBy: readStored<GroupBy>('groundwork.groupBy', 'page'),
+  groupBy: readStored<GroupBy>('grndwrk.groupBy', 'page'),
   /** The card being dragged on the board, and the cell it is over. */
   dragId: null as string | null,
   dropCell: '',
@@ -155,17 +155,17 @@ export const state = Alpine.reactive({
   /** The product's screens, written by /sitemap. */
   screens: [] as Screen[],
   /** The screen open in the Sitemap view. */
-  screenId: readStored<string | null>('groundwork.screen', null),
+  screenId: readStored<string | null>('grndwrk.screen', null),
   screenReply: '',
   screenReplyTo: null as { entry: number; index: number } | null,
   screenStatus: '',
   /** The sitemap drawn as boxes and lines, or as a list. */
-  sitemapLayout: readStored<'drawn' | 'list'>('groundwork.sitemapLayout', 'drawn'),
-  sitemapZoom: readStored('groundwork.sitemapZoom', 1),
+  sitemapLayout: readStored<'drawn' | 'list'>('grndwrk.sitemapLayout', 'drawn'),
+  sitemapZoom: readStored('grndwrk.sitemapZoom', 1),
   box: BOX,
   brief: null as string | null,
   starter: null as string | null,
-  deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'starter'>('groundwork.deliverablesTab', 'brief'),
+  deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'starter'>('grndwrk.deliverablesTab', 'brief'),
   /** The state of the project, written by /survey. */
   survey: null as string | null,
   openStoryId: null as string | null,
@@ -179,9 +179,9 @@ export const state = Alpine.reactive({
   /** Shown under the reply box: what happened to the last reply. */
   replyStatus: '',
   newPage: '',
-  listOpen: readStored('groundwork.listOpen', true),
-  detailsMinimized: readStored('groundwork.detailsMinimized', false),
-  collapsed: readStored<Record<string, boolean>>('groundwork.collapsed', {}),
+  listOpen: readStored('grndwrk.listOpen', true),
+  detailsMinimized: readStored('grndwrk.detailsMinimized', false),
+  collapsed: readStored<Record<string, boolean>>('grndwrk.collapsed', {}),
   editingTitle: false,
   /** Select the whole title when it opens for editing, so typing replaces it. */
   selectTitle: false,
@@ -237,7 +237,7 @@ export const state = Alpine.reactive({
     return projectVariants(this.project)
   },
   /** The variant chosen per project, kept in the browser. '*' is All. */
-  variantChoice: readStored<Record<string, string>>('groundwork.variant', {}),
+  variantChoice: readStored<Record<string, string>>('grndwrk.variant', {}),
   get variantKey(): string {
     const chosen = this.variantChoice[String(this.project.name ?? '')]
     if (chosen === ALL) return ALL
@@ -249,7 +249,7 @@ export const state = Alpine.reactive({
   },
   setVariant(key: string) {
     this.variantChoice = { ...this.variantChoice, [String(this.project.name ?? '')]: key }
-    store('groundwork.variant', this.variantChoice)
+    store('grndwrk.variant', this.variantChoice)
   },
   /** The screens of the variant in view: shared ones and its own, with parents and links inside it. */
   get viewScreens(): Screen[] {
@@ -404,7 +404,7 @@ export const state = Alpine.reactive({
   },
   setProgressFilter(f: ProgressFilter) {
     this.progressFilter = f
-    store('groundwork.progressFilter', f)
+    store('grndwrk.progressFilter', f)
     if (this.selected && !this.visibleNodes.includes(this.selected)) this.select(null)
   },
   progressOf(n: GNode): Progress {
@@ -476,7 +476,7 @@ export const state = Alpine.reactive({
   },
   /** Pictures a thread entry shows, as ![name](/shots/ios/App-2.jpg): the ones that exist. */
   entryShots(text: string): Shot[] {
-    const files = [...text.matchAll(/!\[[^\]]*\]\(\/?(?:\.groundwork\/)?shots\/((?:web|ios)\/[^)\s]+)\)/g)].map((m) => {
+    const files = [...text.matchAll(/!\[[^\]]*\]\(\/?(?:\.grndwrk\/)?shots\/((?:web|ios)\/[^)\s]+)\)/g)].map((m) => {
       try {
         return decodeURIComponent(m[1])
       } catch {
@@ -604,7 +604,7 @@ export const state = Alpine.reactive({
   },
   // Working on one part: the whole map stays one map, a screen is a filter on it.
   /** The screen being worked on, or null for the whole product. */
-  scope: readStored<string | null>('groundwork.scope', null),
+  scope: readStored<string | null>('grndwrk.scope', null),
   get scopeScreen(): Screen | null {
     return this.scope ? (this.screens.find((s) => s.id === this.scope) ?? null) : null
   },
@@ -627,7 +627,7 @@ export const state = Alpine.reactive({
   },
   setScope(id: string | null) {
     this.scope = id
-    store('groundwork.scope', id)
+    store('grndwrk.scope', id)
     this.select(null)
     const s = this.scopeScreen
     this.flash(s ? `Working on ${s.title}. New thoughts belong to it.` : 'The whole product')
@@ -864,7 +864,7 @@ export const state = Alpine.reactive({
     this.showPrompt(
       `Build the rest of "${st.title}"`,
       [
-        `Build the rest of story ${st.id} (${st.title}), in .groundwork/stories/${st.id}.md. These acceptance criteria are not met yet:`,
+        `Build the rest of story ${st.id} (${st.title}), in .grndwrk/stories/${st.id}.md. These acceptance criteria are not met yet:`,
         ...open.map((c) => `- ${c.text}`),
         '',
         'When one is met in the code, tick it in the story (- [x]); when all are, set status: done. Fill applies_to with the routes or files.',
@@ -1061,7 +1061,7 @@ export const state = Alpine.reactive({
   },
   setSitemapLayout(layout: 'drawn' | 'list') {
     this.sitemapLayout = layout
-    store('groundwork.sitemapLayout', layout)
+    store('grndwrk.sitemapLayout', layout)
   },
   zoomSitemap(by: number | 'fit') {
     if (by === 'fit') {
@@ -1070,13 +1070,13 @@ export const state = Alpine.reactive({
       by = pane ? Math.min(1, (pane.clientWidth - 16) / d.width, (pane.clientHeight - 16) / d.height) : 1
     } else by = this.sitemapZoom * by
     this.sitemapZoom = Math.round(Math.min(1.5, Math.max(0.3, by)) * 100) / 100
-    store('groundwork.sitemapZoom', this.sitemapZoom)
+    store('grndwrk.sitemapZoom', this.sitemapZoom)
   },
   selectScreen(id: string) {
     this.screenId = id
     this.screenReply = ''
     this.screenStatus = ''
-    store('groundwork.screen', id)
+    store('grndwrk.screen', id)
   },
   /** Save what the person changed: purpose, who it is for, or what they do there. */
   async saveScreen(field: 'purpose' | 'audience' | 'tasks', value: string) {
@@ -1151,7 +1151,7 @@ export const state = Alpine.reactive({
       return this.showPrompt(
         'Check these screens against the code',
         [
-          'Check these screens and their stories in .groundwork/stories/ against the code.',
+          'Check these screens and their stories in .grndwrk/stories/ against the code.',
           'For each story, go through its acceptance criteria: tick each one the code meets (- [x]) and leave the rest open (- [ ]); turn a plain - criterion into a checkbox. Set status: done when all are met, partial when some are, and fill applies_to with the routes or files.',
           'Do not build anything yet. End with a short list of what is left to build, screen by screen, so I can pick what to do first.',
           '',
@@ -1176,7 +1176,7 @@ export const state = Alpine.reactive({
     try {
       const text = await fetchDraft(name)
       if (text) await this.copyText(text)
-      else this.flash(`No draft ${name} in .groundwork/outputs/drafts/`)
+      else this.flash(`No draft ${name} in .grndwrk/outputs/drafts/`)
     } catch (err) {
       this.flash(errorText(err))
     }
@@ -1209,7 +1209,7 @@ export const state = Alpine.reactive({
   },
   setDeliverablesTab(tab: 'survey' | 'brief' | 'stories' | 'starter') {
     this.deliverablesTab = tab
-    store('groundwork.deliverablesTab', tab)
+    store('grndwrk.deliverablesTab', tab)
   },
   async copyStarter() {
     if (!this.starter) return
@@ -1218,7 +1218,7 @@ export const state = Alpine.reactive({
       this.copied = true
       setTimeout(() => (this.copied = false), 2000)
     } catch {
-      this.flash('The browser did not allow copying. Open .groundwork/outputs/CLAUDE.starter.md instead.')
+      this.flash('The browser did not allow copying. Open .grndwrk/outputs/CLAUDE.starter.md instead.')
     }
   },
   /** The gap a thought answers, if it was written as an answer. The gap may be closed by now. */
@@ -1703,13 +1703,13 @@ export const state = Alpine.reactive({
     // Leaving focus for another page closes the card focus had open. The map keeps it, to see it in place.
     if (this.view === 'focus' && view !== 'focus' && view !== 'map') this.closePanel()
     this.view = view
-    store('groundwork.view', view)
+    store('grndwrk.view', view)
     if (view === 'map') revealSelection()
     if (view === 'docs') void this.loadDocs()
   },
   // Documents: what steers Claude in the product, with what the last check found in each, readable and editable here.
   docs: [] as Doc[],
-  docPath: readStored<string>('groundwork.docPath', ''),
+  docPath: readStored<string>('grndwrk.docPath', ''),
   doc: null as { path: string; text: string; exists: boolean; draft?: string } | null,
   async loadDocs() {
     this.docs = await fetchDocs()
@@ -1734,7 +1734,7 @@ export const state = Alpine.reactive({
   },
   async openDoc(path: string) {
     this.docPath = path
-    store('groundwork.docPath', path)
+    store('grndwrk.docPath', path)
     try {
       this.doc = await fetchDoc(path)
     } catch (err) {
@@ -1797,11 +1797,11 @@ export const state = Alpine.reactive({
     const d = this.openDocInfo
     if (!d) return ''
     const comments = this.docComments.map((n) => `- ${n.extra?.doc_section ? `In the "${n.extra.doc_section}" section: ` : ''}${n.title}${n.body.split('\n').slice(2).join(' ').trim() ? `. ${n.body.split('\n').slice(2).join(' ').trim()}` : ''}`)
-    const withComments = (lines: string[]) => (comments.length ? [...lines, '', 'My comments on it:', ...comments, '', 'When a comment is done, settle its thought in .groundwork/nodes/ (status: settled).'] : lines)
+    const withComments = (lines: string[]) => (comments.length ? [...lines, '', 'My comments on it:', ...comments, '', 'When a comment is done, settle its thought in .grndwrk/nodes/ (status: settled).'] : lines)
     const live = d.findings.filter((f) => f.status !== 'done')
     if (!d.exists) {
       return withComments([
-        `Create ${d.path} in this project${d.draft ? `, starting from the draft in .groundwork/outputs/drafts/${d.draft}` : ''}.`,
+        `Create ${d.path} in this project${d.draft ? `, starting from the draft in .grndwrk/outputs/drafts/${d.draft}` : ''}.`,
         ...live.flatMap((f) => [f.suggestion, ...f.missing.map((m) => `- ${m}`)]).filter(Boolean),
         d.draft ? 'Answer the questions the draft leaves open with me first; do not guess them.' : '',
         'Link it from CLAUDE.md if Claude should read it.',
@@ -1892,13 +1892,13 @@ export const state = Alpine.reactive({
   },
   setGroupBy(groupBy: GroupBy) {
     this.groupBy = groupBy
-    store('groundwork.groupBy', groupBy)
+    store('grndwrk.groupBy', groupBy)
     revealSelection()
   },
   firstLine,
   setMapLayout(layout: MapLayout) {
     this.mapLayout = layout
-    store('groundwork.mapLayout', layout)
+    store('grndwrk.mapLayout', layout)
     revealSelection()
   },
   /** `V`: the next way to draw the map. */
@@ -2011,10 +2011,10 @@ export const state = Alpine.reactive({
     if (!gap) return
     if (gap.page && !this.onAll && !samePage(gap.page, this.currentPage)) {
       this.currentPage = gap.page
-      store('groundwork.page', gap.page)
+      store('grndwrk.page', gap.page)
     }
     this.view = 'map'
-    store('groundwork.view', 'map')
+    store('grndwrk.view', 'map')
     this.selectGap(id)
   },
   selectGap(id: string) {
@@ -2065,7 +2065,7 @@ export const state = Alpine.reactive({
       this.replyStatus = ''
     }
     if (this.selectedId && unsaved.has(this.selectedId) && this.selectedId !== id) {
-      this.flash('Some edits on the last card were not saved. Groundwork is offline.')
+      this.flash('Some edits on the last card were not saved. grndwrk is offline.')
     }
     this.flushAll()
     this.selectedId = id
@@ -2091,10 +2091,10 @@ export const state = Alpine.reactive({
 
   // Capture bar
   /** What the Add bar adds: a thought, or a story. */
-  captureKind: readStored<'thought' | 'story'>('groundwork.captureKind', 'thought'),
+  captureKind: readStored<'thought' | 'story'>('grndwrk.captureKind', 'thought'),
   setCaptureKind(kind: 'thought' | 'story') {
     this.captureKind = kind
-    store('groundwork.captureKind', kind)
+    store('grndwrk.captureKind', kind)
   },
   async submitCapture() {
     const parsed = parseCapture(this.capture)
@@ -2286,10 +2286,10 @@ export const state = Alpine.reactive({
     // Choosing a page goes back to the whole product.
     if (this.scope) {
       this.scope = null
-      store('groundwork.scope', null)
+      store('grndwrk.scope', null)
     }
     this.currentPage = page
-    store('groundwork.page', page)
+    store('grndwrk.page', page)
   },
   async addPage() {
     const name = this.newPage.trim()
@@ -2308,7 +2308,7 @@ export const state = Alpine.reactive({
 
   setDetailsMinimized(min: boolean) {
     this.detailsMinimized = min
-    store('groundwork.detailsMinimized', min)
+    store('grndwrk.detailsMinimized', min)
   },
 
   isCollapsed(key: string): boolean {
@@ -2317,7 +2317,7 @@ export const state = Alpine.reactive({
   },
   toggleGroup(key: string) {
     this.collapsed = { ...this.collapsed, [key]: !this.collapsed[key] }
-    store('groundwork.collapsed', this.collapsed)
+    store('grndwrk.collapsed', this.collapsed)
   },
 
   // List and search
@@ -2331,7 +2331,7 @@ export const state = Alpine.reactive({
   setListOpen(open: boolean) {
     this.listOpen = open
     if (!open) this.query = ''
-    store('groundwork.listOpen', open)
+    store('grndwrk.listOpen', open)
   },
   /** Esc in search clears it and gives the keys back to the map. */
   leaveSearch() {
@@ -2400,7 +2400,7 @@ export const state = Alpine.reactive({
  * sent a comment, quoted by Claude into a report or a brief. Stricter than
  * DOMPurify's defaults: no styles, forms or embedded content (they can restyle
  * or cover the map, say hide a pairing request), no Alpine attributes (x-html
- * starts Alpine on what it inserts), and pictures only from Groundwork itself,
+ * starts Alpine on what it inserts), and pictures only from grndwrk itself,
  * so rendering a file never tells another server that it was opened.
  */
 export function md(text: string): string {

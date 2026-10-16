@@ -10,9 +10,9 @@ const MAX_PENDING = 20
 
 const words = (v: unknown, n: number) => (typeof v === 'string' ? cleanText(v).trim().slice(0, n) : '')
 
-/** The four digits the phone and the map both show for a request: from the phone's secret, which only it and Groundwork know. */
+/** The four digits the phone and the map both show for a request: from the phone's secret, which only it and grndwrk know. */
 export function checkDigits(secret: string): string {
-  return String(parseInt(createHash('sha256').update(`groundwork-pair:${secret}`).digest('hex').slice(0, 8), 16) % 10000).padStart(4, '0')
+  return String(parseInt(createHash('sha256').update(`grndwrk-pair:${secret}`).digest('hex').slice(0, 8), 16) % 10000).padStart(4, '0')
 }
 const validSecret = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9-]{16,64}$/.test(v) ? v : '')
 

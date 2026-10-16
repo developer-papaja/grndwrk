@@ -13,7 +13,7 @@ import { readProject, writeFields } from '../store/project.js'
 import { broadcast, NodeSync } from './events.js'
 import { Pairings } from './pairing.js'
 import { handleComments, type CommentsCtx } from './comments.js'
-import { watchGroundwork } from './watcher.js'
+import { watchgrndwrk } from './watcher.js'
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
@@ -91,10 +91,10 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
 
   const actualPort = await listen(server, port)
   comments.uiUrl = `http://localhost:${actualPort}`
-  watchGroundwork(gwDir, nodes)
+  watchgrndwrk(gwDir, nodes)
   let appUrl: string | undefined
   if (app) {
-    // Remembered, so the map can open screens and `groundwork screenshots` knows where the product runs.
+    // Remembered, so the map can open screens and `grndwrk screenshots` knows where the product runs.
     await rememberApp(gwDir, app.origin).catch(() => {})
     const proxy = createProxy({ target: app, gwDir, store, nodes, uiUrl: () => comments.uiUrl })
     appUrl = `http://${proxyName(app)}:${await listen(proxy, appPort ?? actualPort + 1)}`

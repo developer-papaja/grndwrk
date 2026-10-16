@@ -18,10 +18,10 @@ describe('pages', () => {
   })
 
   it('writes pages into project.md and keeps everything else', async () => {
-    await writeFile(join(root, 'project.md'), '---\nname: Groundwork\npurpose: "Map ideas: fast"\ntype: developer tool\n---\nBody stays.\n')
+    await writeFile(join(root, 'project.md'), '---\nname: grndwrk\npurpose: "Map ideas: fast"\ntype: developer tool\n---\nBody stays.\n')
     await writePages(root, ['Product', 'Feedback', 'product'])
     const raw = await readFile(join(root, 'project.md'), 'utf8')
-    expect(raw).toBe('---\nname: Groundwork\npurpose: "Map ideas: fast"\ntype: developer tool\npages: [Product, Feedback]\n---\nBody stays.\n')
+    expect(raw).toBe('---\nname: grndwrk\npurpose: "Map ideas: fast"\ntype: developer tool\npages: [Product, Feedback]\n---\nBody stays.\n')
     expect((await readProject(root)).pages).toEqual(['Product', 'Feedback'])
   })
 
@@ -32,16 +32,16 @@ describe('pages', () => {
   })
 
   it('signs kickoff steps off and reopens them, keeping everything else', async () => {
-    await writeFile(join(root, 'project.md'), '---\nname: Groundwork\npages: [Product]\n---\nBody stays.\n')
+    await writeFile(join(root, 'project.md'), '---\nname: grndwrk\npages: [Product]\n---\nBody stays.\n')
     await writeKickoff(root, { check: '2026-10-08', map: '2026-10-07' })
     let raw = await readFile(join(root, 'project.md'), 'utf8')
-    expect(raw).toBe('---\nname: Groundwork\npages: [Product]\nkickoff: { map: 2026-10-07, check: 2026-10-08 }\n---\nBody stays.\n')
+    expect(raw).toBe('---\nname: grndwrk\npages: [Product]\nkickoff: { map: 2026-10-07, check: 2026-10-08 }\n---\nBody stays.\n')
     expect((await readProject(root)).data.kickoff).toEqual({ map: '2026-10-07', check: '2026-10-08' })
     // Writing pages keeps the kickoff as it was.
     await writePages(root, ['Product', 'Feedback'])
     expect((await readProject(root)).data.kickoff).toEqual({ map: '2026-10-07', check: '2026-10-08' })
     await writeKickoff(root, { check: null, map: null })
     raw = await readFile(join(root, 'project.md'), 'utf8')
-    expect(raw).toBe('---\nname: Groundwork\npages: [Product, Feedback]\n---\nBody stays.\n')
+    expect(raw).toBe('---\nname: grndwrk\npages: [Product, Feedback]\n---\nBody stays.\n')
   })
 })

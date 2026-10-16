@@ -8,12 +8,12 @@ import { parseFoundations } from '../src/store/readiness.js'
 let root: string, gw: string
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'gw-docs-'))
-  gw = join(root, '.groundwork')
+  gw = join(root, '.grndwrk')
   await mkdir(join(gw, 'outputs', 'drafts'), { recursive: true })
   await writeFile(join(root, 'CLAUDE.md'), '# Site\n\n## Code standards\nUse tabs.\n')
   await writeFile(join(root, 'README.md'), '# Readme\n')
   await mkdir(join(root, '.claude', 'commands'), { recursive: true })
-  await writeFile(join(root, '.claude', 'commands', 'brief.md'), 'Groundwork command')
+  await writeFile(join(root, '.claude', 'commands', 'brief.md'), 'grndwrk command')
   await mkdir(join(root, 'node_modules', 'x'), { recursive: true })
   await writeFile(join(root, 'node_modules', 'x', 'README.md'), 'not ours')
   await writeFile(join(gw, 'outputs', 'drafts', 'design_philosophy.md'), '# Design\nCalm.\n')
@@ -36,11 +36,11 @@ describe('the documents that steer Claude', () => {
     expect((await readDoc(gw, foundations(), 'docs/DESIGN.md')).draft).toBe('# Design\nCalm.\n')
   })
 
-  it('never reads or opens anything outside the list: other paths, links, Groundwork commands', async () => {
+  it('never reads or opens anything outside the list: other paths, links, grndwrk commands', async () => {
     await symlink('/etc/hosts', join(root, 'HOSTS.md'))
     const docs = await listDocs(gw, foundations())
     expect(docs.map((d) => d.path)).not.toContain('HOSTS.md')
-    for (const p of ['../outside.md', '/etc/hosts', '.claude/commands/brief.md', 'node_modules/x/README.md', 'HOSTS.md', '.groundwork/project.md']) {
+    for (const p of ['../outside.md', '/etc/hosts', '.claude/commands/brief.md', 'node_modules/x/README.md', 'HOSTS.md', '.grndwrk/project.md']) {
       await expect(readDoc(gw, foundations(), p)).rejects.toThrow()
       await expect(docOnDisk(gw, foundations(), p)).rejects.toThrow()
     }

@@ -1,12 +1,12 @@
 {
-  "name": "groundwork",
+  "name": "grndwrk",
   "version": "0.0.1",
   "private": true,
   "description": "Explore a product idea as a map of cards and find out if you are ready to build",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "groundwork": "bin/groundwork.js"
+    "grndwrk": "bin/grndwrk.js"
   },
   "files": [
     "bin",
@@ -14,9 +14,9 @@
     "templates",
     "commands",
     "overlay",
-    "clients/ios/GroundworkFeedback/Package.swift",
-    "clients/ios/GroundworkFeedback/Sources",
-    "clients/ios/GroundworkFeedback/README.md",
+    "clients/ios/GrndwrkFeedback/Package.swift",
+    "clients/ios/GrndwrkFeedback/Sources",
+    "clients/ios/GrndwrkFeedback/README.md",
     "clients/ios/Loader",
     "clients/ios/build-loader.sh"
   ],

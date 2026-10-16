@@ -2,11 +2,11 @@
 import UIKit
 
 /// Comments on the device: the ones waiting to be sent, one JSON file each in
-/// Application Support, sent in the order they were written once Groundwork
+/// Application Support, sent in the order they were written once grndwrk
 /// answers; and the ones sent, kept in sent.json so the person can look back,
-/// delete them, and see what became of them in Groundwork.
+/// delete them, and see what became of them in grndwrk.
 ///
-/// Every comment carries a random key. Groundwork keeps it, and only a device
+/// Every comment carries a random key. grndwrk keeps it, and only a device
 /// that holds the key can ask about the comment or delete it.
 @MainActor
 enum Outbox {
@@ -15,12 +15,12 @@ enum Outbox {
   /// A comment as the list shows it.
   struct Item {
     var file: URL?
-    /// The node id in Groundwork, for sent comments.
+    /// The node id in grndwrk, for sent comments.
     var node: String?
     var text: String
     var detail: String
     var written: Date?
-    /// incoming, proposed or fixed, as Groundwork last said.
+    /// incoming, proposed or fixed, as grndwrk last said.
     var state: String?
     /// What Claude wrote about the fix it proposed or made.
     var fix: String?
@@ -30,12 +30,12 @@ enum Outbox {
     var test: String?
   }
 
-  static let changed = Notification.Name("GroundworkFeedback.outbox")
+  static let changed = Notification.Name("GrndwrkFeedback.outbox")
   /// Claude proposed fixes for comments sent from here, since the last look. userInfo["count"]: how many to test now.
-  static let newFixes = Notification.Name("GroundworkFeedback.newFixes")
+  static let newFixes = Notification.Name("GrndwrkFeedback.newFixes")
   private static var flushing = false
   private static var base: URL {
-    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("GroundworkFeedback", isDirectory: true)
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("GrndwrkFeedback", isDirectory: true)
   }
   private static var dir: URL { base.appendingPathComponent("outbox", isDirectory: true) }
   private static var files: [URL] {
@@ -92,18 +92,18 @@ enum Outbox {
         Connection.reached(true, project: answer?["project"] as? String)
         return .sent(id: answer?["id"] as? String ?? "", project: answer?["project"] as? String)
       }
-      // An old Groundwork without comments, or a server error: keep it for later.
+      // An old grndwrk without comments, or a server error: keep it for later.
       if status == 404 || status >= 500 {
         gwLog.error("Sending to \(server.absoluteString, privacy: .public) got \(status)")
         Locator.forget()
-        Connection.reached(false, why: "Groundwork at \(server.host ?? "") answered \(status) to a comment.")
+        Connection.reached(false, why: "grndwrk at \(server.host ?? "") answered \(status) to a comment.")
         return .unreachable
       }
       return .rejected(status)
     } catch let error as URLError where error.code == .appTransportSecurityRequiresSecureConnection {
       return .blockedByATS
     } catch {
-      // Groundwork may have moved, or stopped: look for it again next time.
+      // grndwrk may have moved, or stopped: look for it again next time.
       gwLog.error("Sending to \(server.absoluteString, privacy: .public) failed: \(Connection.words(error), privacy: .public)")
       Locator.forget()
       Connection.reached(false, why: "Sending to \(server.host ?? "") failed: \(Connection.words(error)).")
@@ -177,13 +177,13 @@ enum Outbox {
     let node = c["node"] as? String
     if let node, !node.isEmpty { parts.append(node) }
     let written = (c["written"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
-    // What it is called in Groundwork now, when the person edited it there.
+    // What it is called in grndwrk now, when the person edited it there.
     var text = c["title"] as? String ?? c["text"] as? String ?? ""
     if text.isEmpty, c["on_mac"] as? Bool == true { text = "Written on the Mac" }
     return Item(file: file, node: node, text: text, detail: parts.joined(separator: " · "), written: written, state: c["state"] as? String, fix: c["fix"] as? String, screen: c["screen"] as? String, test: c["test"] as? String)
   }
 
-  /// Ask Groundwork what became of the sent comments: their title and status
+  /// Ask grndwrk what became of the sent comments: their title and status
   /// now. Comments deleted there are dropped here too. Only comments sent to
   /// the project that answers are asked about.
   static func sync() async {
@@ -231,7 +231,7 @@ enum Outbox {
   static var toTest: [Item] { sent.filter { $0.state == "ready" } }
 
   /// The person tested a fix here: it works (fixed), or not yet (back to
-  /// Groundwork with a note). Needs Groundwork to answer; true when it did.
+  /// grndwrk with a note). Needs grndwrk to answer; true when it did.
   static func tested(node: String, works: Bool, note: String = "") async -> Bool {
     guard let entry = read(sentFile).first(where: { $0["node"] as? String == node }), let key = entry["key"] as? String else { return false }
     var body: [String: Any] = ["comments": [["id": node, "key": key]], "works": works]
@@ -242,7 +242,7 @@ enum Outbox {
     return true
   }
 
-  /// Open the comment in Groundwork on the Mac: in the map when it is open, else in a new tab. True when Groundwork took it.
+  /// Open the comment in grndwrk on the Mac: in the map when it is open, else in a new tab. True when grndwrk took it.
   static func showOnMac(node: String) async -> Bool {
     guard let entry = read(sentFile).first(where: { $0["node"] as? String == node }), let key = entry["key"] as? String,
       let data = try? JSONSerialization.data(withJSONObject: ["comments": [["id": node, "key": key]]]) else { return false }
@@ -252,14 +252,14 @@ enum Outbox {
 
   enum Deleted { case everywhere, later, onlyHere }
 
-  /// Delete a sent comment here and in Groundwork. When Groundwork is not
+  /// Delete a sent comment here and in grndwrk. When grndwrk is not
   /// reachable, it is deleted there once it is.
   static func deleteSent(node: String) async -> Deleted {
     let list = read(sentFile)
     guard let entry = list.first(where: { $0["node"] as? String == node }) else { return .onlyHere }
     write(list.filter { $0["node"] as? String != node }, to: sentFile)
     try? FileManager.default.removeItem(at: pictures.appendingPathComponent("\(node).png"))
-    // Sent before comments had keys: Groundwork would not know it is ours.
+    // Sent before comments had keys: grndwrk would not know it is ours.
     guard let key = entry["key"] as? String else { return .onlyHere }
     var deletes = read(deletesFile)
     deletes.append(["id": node, "key": key, "project": entry["project"] as? String ?? ""])
@@ -284,13 +284,13 @@ enum Outbox {
 
   // MARK: Waiting
 
-  /// Every waiting comment in one file: { "groundwork": "feedback", "comments": [...] }.
+  /// Every waiting comment in one file: { "grndwrk": "feedback", "comments": [...] }.
   static func export() -> (URL, [URL])? {
     let list = files
     let comments = list.compactMap { (try? Data(contentsOf: $0)).flatMap { try? JSONSerialization.jsonObject(with: $0) } }
-    guard !comments.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["groundwork": "feedback", "comments": comments]) else { return nil }
+    guard !comments.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["grndwrk": "feedback", "comments": comments]) else { return nil }
     let stamp = ISO8601DateFormatter().string(from: Date()).prefix(16).replacingOccurrences(of: ":", with: "")
-    let url = FileManager.default.temporaryDirectory.appendingPathComponent("groundwork-feedback-\(stamp).json")
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("grndwrk-feedback-\(stamp).json")
     guard (try? data.write(to: url)) != nil else { return nil }
     return (url, list)
   }
@@ -324,7 +324,7 @@ enum Outbox {
     await flushDeletes()
     if sent > 0 {
       NotificationCenter.default.post(name: changed, object: nil)
-      GroundworkFeedback.didFlush(sent)
+      GrndwrkFeedback.didFlush(sent)
     }
   }
 }

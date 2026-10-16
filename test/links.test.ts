@@ -7,11 +7,11 @@ import { readOutput } from '../src/store/stories.js'
 import { readReadiness } from '../src/store/readiness.js'
 import { appendEntry } from '../src/shared/thread.js'
 
-// A pull request can add symbolic links to .groundwork. Groundwork never follows them.
+// A pull request can add symbolic links to .grndwrk. grndwrk never follows them.
 let root: string, gw: string, outside: string
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'gw-links-'))
-  gw = join(root, '.groundwork')
+  gw = join(root, '.grndwrk')
   outside = join(root, 'outside')
   await mkdir(gw)
   await mkdir(outside)
@@ -19,7 +19,7 @@ beforeEach(async () => {
 })
 afterEach(() => rm(root, { recursive: true, force: true }))
 
-describe('links inside .groundwork', () => {
+describe('links inside .grndwrk', () => {
   it('never writes a thread entry through a linked thread folder', async () => {
     const store = new NodeStore(gw)
     const n = (await store.create({ title: 'Booking', body: '## Thread\n\n**Claude asks** · 2026-10-13\nWhich day?\n' })).upserted[0]
@@ -49,12 +49,12 @@ describe('links inside .groundwork', () => {
     expect((await readReadiness(gw)).gaps.map((g) => g.title)).not.toContain('From outside')
   })
 
-  it('does not read cards through a linked nodes folder, or a linked .groundwork', async () => {
+  it('does not read cards through a linked nodes folder, or a linked .grndwrk', async () => {
     await mkdir(join(outside, 'nodes'))
     await writeFile(join(outside, 'nodes', 'n_aaaaaa.md'), '---\nid: n_aaaaaa\ntitle: From outside\n---\n')
     await symlink(join(outside, 'nodes'), join(gw, 'nodes'))
     expect((await new NodeStore(gw).list()).map((n) => n.title)).not.toContain('From outside')
-    const linked = join(root, 'other', '.groundwork')
+    const linked = join(root, 'other', '.grndwrk')
     await mkdir(join(root, 'other'))
     await symlink(outside, linked)
     expect((await new NodeStore(linked).list()).map((n) => n.title)).not.toContain('From outside')
@@ -81,6 +81,6 @@ describe('links inside .groundwork', () => {
       console.log = log
     }
     expect(await readFile(join(outside, 'secret.txt'), 'utf8')).toBe('SECRET\n')
-    await expect(readFile(join(project, '.groundwork', 'backup', 'commands', 'brief.md'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(project, '.grndwrk', 'backup', 'commands', 'brief.md'), 'utf8')).rejects.toThrow()
   })
 })
