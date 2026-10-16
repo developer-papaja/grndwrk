@@ -1,12 +1,12 @@
 ---
-description: Group the Groundwork map into topics by writing topic fields into the node files
+description: Group the grndwrk map into topics by writing topic fields into the node files
 ---
-You are grouping the thoughts in this project's Groundwork map into topics. Topics decide where nodes sit sideways in the 3D map: each topic gets its own column. Links between topics should be rare, so a good topic holds thoughts that belong together.
+You are grouping the thoughts in this project's grndwrk map into topics. Topics decide where nodes sit sideways in the 3D map: each topic gets its own column. Links between topics should be rare, so a good topic holds thoughts that belong together.
 
 ## Read
 
-1. `.groundwork/project.md` for what the project is.
-2. Every file in `.groundwork/nodes/`. Each one has YAML frontmatter (`id`, `type`, `title`, maybe `topic`, `topic_by` and `page`, `altitude`, `links`, `status`, `created`) and free text below it.
+1. `.grndwrk/project.md` for what the project is.
+2. Every file in `.grndwrk/nodes/`. Each one has YAML frontmatter (`id`, `type`, `title`, maybe `topic`, `topic_by` and `page`, `altitude`, `links`, `status`, `created`) and free text below it.
 
 Topics belong to a page. Choose topics per page: nodes without `page` are on the first page listed in `project.md` under `pages:`.
 
@@ -34,7 +34,7 @@ topic_by: claude
 
 Touch nothing else. Never change titles, notes, links, altitude, status or ids, and never create or delete files. The map in the browser updates live as you write. When the person later sets a topic in the map, the `topic_by` line goes away and the topic becomes theirs.
 
-Write nothing outside `.groundwork/nodes/`.
+Write nothing outside `.grndwrk/nodes/`.
 
 ## Report
 

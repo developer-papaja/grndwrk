@@ -9,6 +9,15 @@ export function bindKeys(captureInput: () => HTMLInputElement | null, actions: {
   window.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return
 
+    // A picture open on top of everything takes the keys: Esc closes, arrows step.
+    if (state.viewing) {
+      if (e.key === 'Escape') state.closeShot()
+      else if (e.key === 'ArrowLeft') state.stepShot(-1)
+      else if (e.key === 'ArrowRight') state.stepShot(1)
+      e.preventDefault()
+      return
+    }
+
     if (isTyping(e.target)) {
       // Esc leaves the field. Every other key belongs to the field.
       if (e.key === 'Escape') (e.target as HTMLElement).blur()

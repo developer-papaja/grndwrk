@@ -3,15 +3,27 @@ import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, KICKOFF_STEPS, writeFields, writeKickoff, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
 import { markAnswered, readReadiness } from '../store/readiness.js'
-import { listStories, readDraft, readOutput } from '../store/stories.js'
-import { listScreens, updateScreen, type ScreenEdit } from '../store/screens.js'
+import { createStory, listStories, readDraft, readOutput, updateStory } from '../store/stories.js'
+import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
+import { listShots, readShot } from '../store/shots.js'
+import { rememberedApp } from '../store/local.js'
+import { LinkRefused } from '../store/fs.js'
+import { docOnDisk, listDocs, readDoc } from './docs.js'
 import type { NodeInput } from '../shared/types.js'
-import { subscribe, type NodeSync } from './events.js'
+import { noteTab, subscribe, type NodeSync } from './events.js'
+import type { Pairings } from './pairing.js'
+import type { Sites } from './sites.js'
 
 interface Ctx {
   gwDir: string
   store: NodeStore
   nodes: NodeSync
+  /** Phones asking to send comments, when `--lan` is on. */
+  pairings?: Pairings
+  /** Where the product runs behind the comment proxy, when `--app` is on. */
+  runtime?: { app?: string }
+  /** Local sites asking to send comments from the Comment button they load. */
+  sites?: Sites
 }
 
 /** Handles /api/*. Returns false when the request is not an API route. */
@@ -39,12 +51,107 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
 
     if ((method === 'POST' || method === 'PATCH') && !isJson(req)) return send(res, 415, { error: 'Send JSON' })
 
+    // A map tab in the background, saying it is still open.
+    if (url.pathname === '/api/tab' && method === 'POST') {
+      if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
+      noteTab()
+      res.writeHead(204).end()
+      return true
+    }
     if (url.pathname === '/api/events' && method === 'GET') {
       subscribe(res)
       return true
     }
+    // Phones asking to send comments, answered by the person at the Mac. Only on this machine.
+    if (url.pathname === '/api/pair' && method === 'GET') {
+      return send(res, 200, ctx.pairings?.list() ?? [])
+    }
+    const pairMatch = url.pathname.match(/^\/api\/pair\/(pair_[a-f0-9]{12})$/)
+    if (pairMatch && method === 'POST') {
+      const body = (await readBody(req)) as { allow?: unknown }
+      if (!ctx.pairings?.answer(pairMatch[1], body.allow === true)) throw new NotFound(pairMatch[1])
+      return send(res, 200, { ok: true })
+    }
+    // Local sites asking to send comments, answered in the map. Only from the map's own page.
+    if (url.pathname === '/api/sites' && method === 'GET') {
+      return send(res, 200, { asking: ctx.sites?.list() ?? [], allowed: (await ctx.sites?.allowedList()) ?? [] })
+    }
+    if (url.pathname === '/api/sites' && method === 'POST') {
+      if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
+      const body = (await readBody(req)) as { origin?: unknown; allow?: unknown; remove?: unknown }
+      const origin = typeof body.origin === 'string' ? body.origin : ''
+      const done = body.remove === true ? await ctx.sites?.remove(origin) : await ctx.sites?.answer(origin, body.allow === true)
+      if (!done) throw new NotFound(origin)
+      return send(res, 200, { allowed: (await ctx.sites?.allowedList()) ?? [] })
+    }
+    // Where to open a screen: the proxy with the Comment button, or the address --app was given last time.
+    if (url.pathname === '/api/runtime' && method === 'GET') {
+      const remembered = await rememberedApp(ctx.gwDir, (await readProject(ctx.gwDir)).data.app)
+      return send(res, 200, { app: ctx.runtime?.app ?? (typeof remembered === 'string' ? remembered : null), proxied: !!ctx.runtime?.app })
+    }
+    if (url.pathname === '/api/shots' && method === 'GET') {
+      return send(res, 200, await listShots(ctx.gwDir))
+    }
+    // Put a picture on a screen, from the map: { file: "ios/App-2.jpg", screen: "p_home" }, or screen "" to take it off.
+    if (url.pathname === '/api/shots/place' && method === 'POST') {
+      const input = (await readBody(req)) as { file?: unknown; screen?: unknown }
+      if (typeof input.file !== 'string' || typeof input.screen !== 'string') throw new BadInput('Say which picture and which screen')
+      if (!(await listShots(ctx.gwDir)).some((s) => s.file === input.file)) throw new NotFound(input.file)
+      if (!(await placeShot(ctx.gwDir, input.file, input.screen))) throw new NotFound(input.screen)
+      return send(res, 200, await listScreens(ctx.gwDir))
+    }
+    // The documents that steer Claude in the product, with what the last check found in each; readable and editable from the map.
+    if (url.pathname === '/api/docs' && method === 'GET') {
+      return send(res, 200, await listDocs(ctx.gwDir, (await readReadiness(ctx.gwDir)).foundations))
+    }
+    if (url.pathname === '/api/docs/file' && method === 'GET') {
+      return send(res, 200, await readDoc(ctx.gwDir, (await readReadiness(ctx.gwDir)).foundations, url.searchParams.get('path') ?? ''))
+    }
+    // Open a document in the person's own editor: grndwrk shows them, it does not write them.
+    if (url.pathname === '/api/docs/open' && method === 'POST') {
+      if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
+      const b = (await readBody(req)) as { path?: unknown }
+      const full = await docOnDisk(ctx.gwDir, (await readReadiness(ctx.gwDir)).foundations, typeof b.path === 'string' ? b.path : '')
+      const { default: open } = await import('open')
+      await open(full)
+      return send(res, 200, { opened: true })
+    }
     if (url.pathname === '/api/stories' && method === 'GET') {
       return send(res, 200, await listStories(ctx.gwDir))
+    }
+    // A story written or changed in the map: from a thought, or its title, status, text or "Not now".
+    if (url.pathname === '/api/stories' && method === 'POST') {
+      const b = (await readBody(req)) as { title?: unknown; from?: unknown; body?: unknown }
+      try {
+        const story = await createStory(ctx.gwDir, {
+          title: typeof b.title === 'string' ? b.title : '',
+          from: Array.isArray(b.from) ? b.from.filter((x): x is string => typeof x === 'string') : [],
+          ...(typeof b.body === 'string' ? { body: b.body.slice(0, 20_000) } : {}),
+        })
+        return send(res, 201, story)
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+    }
+    const storyMatch = url.pathname.match(/^\/api\/stories\/(s_[A-Za-z0-9_-]{1,60})$/)
+    if (storyMatch && method === 'PATCH') {
+      const b = (await readBody(req)) as Record<string, unknown>
+      const text = (v: unknown) => (typeof v === 'string' ? v : undefined)
+      let story
+      try {
+        story = await updateStory(ctx.gwDir, storyMatch[1], {
+          title: text(b.title),
+          status: text(b.status),
+          body: typeof b.body === 'string' ? b.body.slice(0, 20_000) : undefined,
+          later: b.later === null ? null : text(b.later),
+        })
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+      if (!story) throw new NotFound(storyMatch[1])
+      return send(res, 200, story)
     }
     if (url.pathname === '/api/screens' && method === 'GET') {
       return send(res, 200, await listScreens(ctx.gwDir))
@@ -139,6 +246,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (err instanceof BadInput) return send(res, 400, { error: err.message })
     if (err instanceof NotFound) return send(res, 404, { error: `No node ${err.message}` })
     if (err instanceof ReadOnly) return send(res, 409, { error: err.message })
+    if (err instanceof LinkRefused) return send(res, 409, { error: err.message })
     console.error(err)
     return send(res, 500, { error: 'Something went wrong' })
   }
@@ -182,9 +290,16 @@ async function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks)
 }
 
-/** Serve /files/<node id>/<name>, and nothing else from disk. */
+/** Serve /files/<node id>/<name> and /shots/<platform>/<name>, and nothing else from disk. */
 export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwDir: string): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost')
+  const shot = url.pathname.match(/^\/shots\/(web|ios)\/([^/]+)$/)
+  if (shot && req.method === 'GET') {
+    const found = await readShot(gwDir, shot[1], decodeURIComponent(shot[2]))
+    if (!found) res.writeHead(404).end()
+    else res.writeHead(200, { 'Content-Type': found.type, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' }).end(found.data)
+    return true
+  }
   const m = url.pathname.match(/^\/files\/([^/]+)\/([^/]+)$/)
   if (!m || req.method !== 'GET') return false
   const image = await readImage(gwDir, decodeURIComponent(m[1]), decodeURIComponent(m[2]))
@@ -192,7 +307,7 @@ export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwD
     res.writeHead(404).end()
     return true
   }
-  res.writeHead(200, { 'Content-Type': image.type, 'Cache-Control': 'private, max-age=31536000, immutable' }).end(image.data)
+  res.writeHead(200, { 'Content-Type': image.type, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' }).end(image.data)
   return true
 }
 

@@ -53,8 +53,45 @@ export function commentsForScreen(screen: Screen, nodes: GNode[]): GNode[] {
     if (n.topic.trim().toLowerCase() === title) return true
     const seen = n.extra.seen_in
     const where = Array.isArray(seen) ? seen.map(String) : typeof seen === 'string' ? [seen] : []
-    return screen.code.length > 0 && overlaps(screen.code, where)
+    return known(screen).length > 0 && overlaps(known(screen), where)
   })
+}
+
+/** Everything a screen is known by in the running product: its code, and the names the app shows. */
+function known(screen: Screen): string[] {
+  return [...screen.code, ...(screen.seen_as ?? [])]
+}
+
+/**
+ * A path that opens the screen in the running product: the first of open:,
+ * or else the first route in code: without parameters (no :id, [id] or *).
+ */
+export function openPath(screen: Screen): string {
+  return screen.open[0] ?? screen.code.find((c) => c.startsWith('/') && !/[:[*]/.test(c)) ?? ''
+}
+
+/** Routes in code: that need a value to open, like /booking/:id, when open: gives none. */
+export function needsExample(screen: Screen): boolean {
+  return !screen.open.length && screen.code.some((c) => c.startsWith('/') && /[:[*]/.test(c))
+}
+
+/**
+ * Pictures of the screen. The ones its `shots:` names, first. Then, of the
+ * pictures no screen names: the web one by its id, iOS ones by a view named
+ * in its code or seen_as, or by its title. Pass every screen so a picture
+ * another screen claims is not matched here by name too.
+ */
+export function shotsForScreen<T extends { platform: string; key: string; file?: string }>(screen: Screen, shots: T[], screens: Screen[] = [screen]): T[] {
+  const claimed = new Set(screens.flatMap((s) => s.shots ?? []))
+  const own = new Set(screen.shots ?? [])
+  const title = screen.title.trim().toLowerCase()
+  const named = shots.filter((s) => s.file && own.has(s.file))
+  const matched = shots.filter(
+    (s) =>
+      !(s.file && claimed.has(s.file)) &&
+      (s.platform === 'web' ? s.key === screen.id : s.key.trim().toLowerCase() === title || (known(screen).length > 0 && overlaps(known(screen), [s.key]))),
+  )
+  return [...named, ...matched]
 }
 
 export interface SitemapBox {

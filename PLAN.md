@@ -4,12 +4,12 @@ One phase per Claude Code session. Start each in plan mode, commit when the done
 
 ## Phase 0: Scaffold
 
-- Package with a `groundwork` bin, `init` and default `start` commands
+- Package with a `grndwrk` bin, `init` and default `start` commands
 - Local server: serves the UI, REST endpoints for nodes (list, create, update, delete), file watcher, server-sent events
 - Vite UI with an empty 3D scene that orbits
-- `init` creates `.groundwork/` with `project.md`, `nodes/`, `readiness/checklist.md` (from the template below) and copies commands
+- `init` creates `.grndwrk/` with `project.md`, `nodes/`, `readiness/checklist.md` (from the template below) and copies commands
 
-**Done when:** `npm link`, then `npx groundwork init` and `npx groundwork` inside another repo opens an empty scene, and the folder exists.
+**Done when:** `npm link`, then `npx grndwrk init` and `npx grndwrk` inside another repo opens an empty scene, and the folder exists.
 
 ## Phase 1: The map
 
@@ -58,7 +58,7 @@ Needs a running product with stories linked to it.
 
 **Progress page.** A view listing every route or component that appears in any story's `applies_to`. For each one: the stories behind it, their status, and the map nodes and decisions those stories came from. Clicking through goes story, then node, then decision. A summary at the top shows done, partial and not started across the project.
 
-**/review.** Reads a route's code (later also screenshots via Playwright) against its stories and the design foundation. Writes `.groundwork/reviews/<route>.md` with arguments of four kinds:
+**/review.** Reads a route's code (later also screenshots via Playwright) against its stories and the design foundation. Writes `.grndwrk/reviews/<route>.md` with arguments of four kinds:
 
 1. **Drift:** the page does not do what a story says
 2. **Orphan:** something exists that no story asks for
@@ -85,7 +85,7 @@ Overlay on the running product, colleague interviews, focus view. Plan these onl
 
 ## Readiness checklist template
 
-Copied to `.groundwork/readiness/checklist.md` on init. Edit per project; a small internal tool needs less than a public product.
+Copied to `.grndwrk/readiness/checklist.md` on init. Edit per project; a small internal tool needs less than a public product.
 
 **Purpose.** Who it is for, what problem it solves, what success looks like.
 Enough when: you can say it in two sentences and someone else agrees.

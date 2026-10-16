@@ -1,15 +1,19 @@
+import { connect } from 'node:net'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import sirv from 'sirv'
 import { PACKAGE_ROOT } from '../root.js'
 import { NodeStore } from '../store/nodes.js'
 import { handleApi, handleFiles } from './api.js'
-import { createProxy } from './proxy.js'
-import { advertise, createLanServer, lanAddresses } from './lan.js'
-import { readProject } from '../store/project.js'
-import { NodeSync } from './events.js'
+import { createProxy, handleOverlay, proxyName, type OverlayCtx } from './proxy.js'
+import { Sites } from './sites.js'
+import { rememberApp } from '../store/local.js'
+import { advertise, createLanServer, lanAddresses, pairingCode } from './lan.js'
+import { readProject, writeFields } from '../store/project.js'
+import { broadcast, NodeSync } from './events.js'
+import { Pairings } from './pairing.js'
 import { handleComments, type CommentsCtx } from './comments.js'
-import { watchGroundwork } from './watcher.js'
+import { watchgrndwrk } from './watcher.js'
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
@@ -25,7 +29,7 @@ export interface StartOptions {
   lanPort?: number
 }
 
-export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort }: StartOptions): Promise<{ server: Server; url: string; appUrl?: string; lanUrls?: string[] }> {
+export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort }: StartOptions): Promise<{ server: Server; url: string; appUrl?: string; lanUrls?: string[]; lanCode?: string }> {
   const store = new NodeStore(gwDir)
   const nodes = new NodeSync(() => store.list())
   await nodes.prime()
@@ -34,13 +38,33 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   // Comments from the iOS package: in the Simulator on this port, from a phone on the LAN port.
   const comments: CommentsCtx = { gwDir, store, nodes, project, uiUrl: `http://localhost:${port}` }
 
+  // With --lan: the pairing code, and phones asking the person here to allow them.
+  const lanCode = lan ? await pairingCode(gwDir) : undefined
+  const pairings = lanCode ? new Pairings(lanCode, broadcast) : undefined
+
+  // Sites that load the Comment button themselves send only once allowed in the map; the --app address given now is allowed.
+  const sites = new Sites(
+    gwDir,
+    (event) => {
+      broadcast(event)
+      if (event.type === 'site:request') console.log(`${new URL(event.origin).host} wants to send comments. Allow it in the map: ${comments.uiUrl}`)
+    },
+    app ? [app.origin] : [],
+  )
+  const overlay: OverlayCtx = { gwDir, store, nodes, sites, uiUrl: () => comments.uiUrl }
+
+  /** Where the product runs with the Comment button, once the proxy listens. */
+  const runtime: { app?: string } = {}
+
   let ui: Middleware = (_req, res) => res.writeHead(404).end()
   const server = createServer(async (req, res) => {
     // Only answer requests addressed to this machine. This blocks DNS rebinding,
     // where another site points its own hostname at 127.0.0.1.
     if (!isLocalHost(req.headers.host)) return res.writeHead(403).end('Forbidden')
     if (await handleComments(req, res, comments)) return
-    if (await handleApi(req, res, { gwDir, store, nodes })) return
+    // The Comment button for a product page that loads it itself, on the product's own address.
+    if (await handleOverlay(req, res, overlay)) return
+    if (await handleApi(req, res, { gwDir, store, nodes, pairings, runtime, sites })) return
     if (await handleFiles(req, res, gwDir)) return
     ui(req, res, () => res.writeHead(404).end())
   })
@@ -67,20 +91,23 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
 
   const actualPort = await listen(server, port)
   comments.uiUrl = `http://localhost:${actualPort}`
-  watchGroundwork(gwDir, nodes)
+  watchgrndwrk(gwDir, nodes)
   let appUrl: string | undefined
   if (app) {
-    const proxy = createProxy({ target: app, gwDir, store, nodes })
-    appUrl = `http://localhost:${await listen(proxy, appPort ?? actualPort + 1)}`
+    // Remembered, so the map can open screens and `grndwrk screenshots` knows where the product runs.
+    await rememberApp(gwDir, app.origin).catch(() => {})
+    const proxy = createProxy({ target: app, gwDir, store, nodes, uiUrl: () => comments.uiUrl })
+    appUrl = `http://${proxyName(app)}:${await listen(proxy, appPort ?? actualPort + 1)}`
+    runtime.app = appUrl
   }
   let lanUrls: string[] | undefined
-  if (lan) {
-    const lanServer = createLanServer(comments)
+  if (lanCode) {
+    const lanServer = createLanServer(comments, lanCode, pairings)
     const p = await listen(lanServer, lanPort ?? actualPort + 2, 20, '0.0.0.0')
     advertise(p, project)
     lanUrls = lanAddresses().map((a) => `http://${a}:${p}`)
   }
-  return { server, url: `http://localhost:${actualPort}`, appUrl, lanUrls }
+  return { server, url: `http://localhost:${actualPort}`, appUrl, lanUrls, lanCode }
 }
 
 function isLocalHost(host: string | undefined): boolean {
@@ -91,6 +118,9 @@ function isLocalHost(host: string | undefined): boolean {
 /** Listen on `port`, or the next free one if it is taken. */
 export async function listen(server: Server, port: number, attempts = 20, host = '127.0.0.1'): Promise<number> {
   for (let p = port; p < port + attempts; p++) {
+    // macOS lets one program take 127.0.0.1:7779 while another holds *:7779.
+    // Something already answering on this Mac means the port is taken, whichever address it chose.
+    if (await answers(p)) continue
     const ok = await new Promise<boolean>((resolve, reject) => {
       const onError = (err: NodeJS.ErrnoException) => {
         server.off('listening', onListening)
@@ -108,4 +138,18 @@ export async function listen(server: Server, port: number, attempts = 20, host =
     if (ok) return p
   }
   throw new Error(`No free port between ${port} and ${port + attempts - 1}`)
+}
+
+/** Whether something on this Mac already answers on the port. */
+function answers(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ port, host: '127.0.0.1' })
+    const done = (yes: boolean) => {
+      socket.destroy()
+      resolve(yes)
+    }
+    socket.setTimeout(300, () => done(false))
+    socket.once('connect', () => done(true))
+    socket.once('error', () => done(false))
+  })
 }

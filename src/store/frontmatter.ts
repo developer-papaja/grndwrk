@@ -1,4 +1,4 @@
-import matter from 'gray-matter'
+import { readMatter } from './matter.js'
 import { NODE_TYPES, STATUSES, type GNode, type NodeType, type Status } from '../shared/types.js'
 
 const KNOWN_KEYS = ['id', 'type', 'title', 'topic', 'page', 'altitude', 'links', 'status', 'created'] as const
@@ -22,8 +22,7 @@ export function parseNode(id: string, raw: string): GNode {
   let data: Record<string, unknown>
   let content: string
   try {
-    // Passing options turns off gray-matter's cache, which returns shared objects.
-    const parsed = matter(raw, {})
+    const parsed = readMatter(raw)
     data = parsed.data ?? {}
     content = parsed.content
   } catch (err) {
@@ -45,7 +44,8 @@ export function parseNode(id: string, raw: string): GNode {
 
   const extra: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(data)) {
-    if (!(KNOWN_KEYS as readonly string[]).includes(k)) extra[k] = v
+    // A bare date like `fixed: 2026-10-13` stays a plain date, not a timestamp.
+    if (!(KNOWN_KEYS as readonly string[]).includes(k)) extra[k] = v instanceof Date && !Number.isNaN(v.getTime()) ? v.toISOString().slice(0, 10) : v
   }
 
   return {
@@ -79,7 +79,9 @@ export function serializeNode(node: GNode): string {
   ]
   for (const [k, v] of Object.entries(node.extra)) {
     if (k === 'topic_by') continue
-    lines.push(`${scalar(k)}: ${typeof v === 'string' ? scalar(v) : JSON.stringify(v instanceof Date ? v.toISOString().slice(0, 10) : v)}`)
+    // A plain date stays unquoted, like created; it reads back as the same text.
+    const value = typeof v === 'string' ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : scalar(v)) : JSON.stringify(v instanceof Date ? v.toISOString().slice(0, 10) : v)
+    lines.push(`${scalar(k)}: ${value}`)
   }
   return `---\n${lines.join('\n')}\n---\n${node.body}`
 }
@@ -121,11 +123,12 @@ export function scalar(s: string): string {
   const needsQuotes =
     s === '' ||
     s !== s.trim() ||
-    /[\n\r\t]/.test(s) ||
+    /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(s) ||
     /^[-?:,\[\]{}#&*!|>'"%@`]/.test(s) ||
     /: |:$| #/.test(s) ||
     /^(true|false|yes|no|on|off|null|~)$/i.test(s) ||
     /^[-+]?(\d[\d_]*(\.\d*)?|\.\d+)([eE][-+]?\d+)?$/.test(s) ||
     /^\d{4}-\d{2}-\d{2}/.test(s)
-  return needsQuotes ? JSON.stringify(s) : s
+  // JSON escapes C0 controls; YAML's double quotes take the same \u escapes for the rest.
+  return needsQuotes ? JSON.stringify(s).replace(/[\u007f-\u009f\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`) : s
 }

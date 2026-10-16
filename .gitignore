@@ -7,3 +7,6 @@ playground/
 # Swift package build output
 .build/
 .swiftpm/
+
+# Private notes: decisions and plans, never published
+/notes/

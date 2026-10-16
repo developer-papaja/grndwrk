@@ -1,7 +1,7 @@
 ---
-description: Start the Groundwork map from a project that already exists, by reading its code, docs and history
+description: Start the grndwrk map from a project that already exists, by reading its code, docs and history
 ---
-This project already exists. Read what is built, what is documented and what the history says, and write it into the Groundwork map, so the map starts from where the project really is. You only read the project; you write only inside `.groundwork/`.
+This project already exists. Read what is built, what is documented and what the history says, and write it into the grndwrk map, so the map starts from where the project really is. You only read the project; you write only inside `.grndwrk/`.
 
 The one rule above all: **code shows what exists, rarely why.** Never make the map look more decided than the project is. Every thought you write says where it came from, and only real evidence counts as settled.
 
@@ -10,11 +10,11 @@ The one rule above all: **code shows what exists, rarely why.** Never make the m
 1. **The shape of the repo:** top level folders, package files, framework and stack config, routes and pages (or screens and navigation: SwiftUI views, view controllers, navigation stacks), components, data models or schemas, environment and deploy config, tests. In an Xcode project, read the folders and Swift files directly; the `.xcodeproj` file itself only lists them.
 2. **Docs:** README, CLAUDE.md, a `docs/` folder, ADRs, design files, CHANGELOG, and code comments that state a decision ("we do X because Y").
 3. **History,** if this is a git repository: `git log --oneline -300`, and the full message of commits whose subject suggests a choice was made.
-4. **`.groundwork/` as it is now:** `project.md`, every node, every story. If this is a re-run, add only what is new. A thought is already there when a node has the same meaning or the same `seen_in`.
+4. **`.grndwrk/` as it is now:** `project.md`, every node, every story. If this is a re-run, add only what is new. A thought is already there when a node has the same meaning or the same `seen_in`.
 
-## Write the thoughts, in `.groundwork/nodes/`
+## Write the thoughts, in `.grndwrk/nodes/`
 
-Each thought is one file, `.groundwork/nodes/<id>.md`. The id is `n_` plus four random lowercase letters or digits that do not exist yet. Frontmatter order:
+Each thought is one file, `.grndwrk/nodes/<id>.md`. The id is `n_` plus four random lowercase letters or digits that do not exist yet. Frontmatter order:
 
 `id, type, title, topic, topic_by, page, altitude, links, status, created, source, seen_in`
 
@@ -78,7 +78,7 @@ For each item, decide **found**, **partly** or **missing**, write one plain line
 8. **references:** design references in the repo or linked: Figma, screenshots, a mood board.
 9. **accessibility:** a stated baseline (for example WCAG AA), or checks such as an accessibility lint rule, focus styles and contrast. On iOS: Dynamic Type support, accessibility labels on controls and images, and enough contrast in both light and dark mode.
 
-Write `.groundwork/readiness/design.json`:
+Write `.grndwrk/readiness/design.json`:
 
 ```json
 [
@@ -105,7 +105,7 @@ Also write one thought per item that is found or partly, in a topic named "desig
 
 Only fields that are empty: `purpose` (one line, from the README or what the code does) and `type` (for example internal tool, public product, client website). Never change a name, purpose or type the person wrote.
 
-## Write stories for what is built, in `.groundwork/stories/`
+## Write stories for what is built, in `.grndwrk/stories/`
 
 One story per thing a person can do with the product today, in the format from `/brief`:
 
@@ -134,9 +134,9 @@ As an employee, I want to pick a desk on the floor plan, so that I sit where I l
 
 Three to five sharp questions, in the threads of the thoughts they concern, where the why is missing and it matters for what comes next. Each forces a choice, can be answered in a sentence, and ends with an `Options:` list of two to four answers the person could pick as they stand. The `source: inferred` questions count toward these.
 
-Write only inside `.groundwork/`. Never change code, docs or config. Do not use the dash characters "–" or "—".
+Write only inside `.grndwrk/`. Never change code, docs or config. Do not use the dash characters "–" or "—".
 
-## Write `.groundwork/outputs/survey.md`
+## Write `.grndwrk/outputs/survey.md`
 
 The payoff of the survey: one page the person reads first, about what they did not already know. The map holds the details; this page holds the conclusions. Keep it under a page.
 

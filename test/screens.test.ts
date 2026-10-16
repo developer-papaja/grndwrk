@@ -34,14 +34,16 @@ On the screen: a calendar and a floor plan.
 `
 
 const screen = (id: string, title: string, parent = '', extra: Partial<Screen> = {}): Screen => ({
-  id, title, parent, purpose: '', audience: [], tasks: [], leads_to: [], code: [], stories: [], status: 'built', source: '', created: '', body: '', ...extra,
+  id, title, parent, purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], in: [], replaced_by: '', stories: [], status: 'built', source: '', created: '', body: '', ...extra,
 })
 
 describe('screens store', () => {
   it('reads a screen, with purpose, who it is for and what they do', async () => {
     await writeFile(join(root, 'screens', 'p_book.md'), booking)
     await writeFile(join(root, 'screens', 'notes.md'), 'not a screen')
-    const [s] = await listScreens(root)
+    const [stray, s] = await listScreens(root)
+    // A file that is not a screen shows, saying why, rather than vanishing.
+    expect(stray.error).toMatch(/must be p_/)
     expect(s).toMatchObject({ id: 'p_book', title: 'Booking', parent: 'p_home', audience: ['someone arriving at the office'], tasks: ['pick a day', 'confirm the booking'], leads_to: ['p_conf'], status: 'built' })
   })
 

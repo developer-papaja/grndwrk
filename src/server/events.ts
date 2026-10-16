@@ -12,12 +12,28 @@ export function subscribe(res: ServerResponse): void {
   // Ask browsers to retry within a second, so an open tab finds a restarted server quickly.
   res.write('retry: 1000\n: connected\n\n')
   clients.add(res)
-  res.on('close', () => clients.delete(res))
+  tabSeen = Date.now()
+  res.on('close', () => {
+    clients.delete(res)
+    tabSeen = Date.now()
+  })
 }
 
 /** How many tabs are connected right now. */
 export function clientCount(): number {
   return clients.size
+}
+
+/**
+ * When a map tab was last there. A tab in the background has no live
+ * connection (see ui/src/main.ts), so it says it is still there now and then.
+ */
+let tabSeen = 0
+export function noteTab(): void {
+  tabSeen = Date.now()
+}
+export function tabAround(withinMs = 120_000): boolean {
+  return clients.size > 0 || Date.now() - tabSeen < withinMs
 }
 
 export function broadcast(event: ServerEvent): void {

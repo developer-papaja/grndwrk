@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { isValidId } from './frontmatter.js'
 

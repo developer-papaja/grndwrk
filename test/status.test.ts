@@ -54,4 +54,19 @@ describe('status', () => {
     expect(s.unchecked).toBe(4)
     expect(s.total).toBe(11)
   })
+
+  it('sorts what is left by the kind of work: decide, build or confirm, set up', () => {
+    const s = buildStatus({
+      foundations: parseFoundations(JSON.stringify([{ id: 'readme', status: 'missing' }, { id: 'design_tokens', status: 'partly' }])),
+      screens: [screen('p_a', 'built', { title: 'About', stories: ['s_1'] })],
+      stories: [{ ...story('s_1', 'not-started'), title: 'Meet the team' } as Story],
+      purpose: 'A site',
+      blocking: 2,
+      questions: 0,
+    })
+    // Set up: the README missing; the tokens partly, and the purpose written but not checked yet.
+    expect(s.kinds.map((k) => [k.key, k.must, k.should])).toEqual([['decide', 1, 0], ['build', 0, 1], ['setup', 1, 2]])
+    expect(s.kinds[1].rows[0].openStories).toEqual(['s_1 (Meet the team)'])
+  })
 })
+

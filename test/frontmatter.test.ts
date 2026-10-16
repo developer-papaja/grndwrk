@@ -67,7 +67,7 @@ describe('parseNode', () => {
   })
 
   it('marks broken YAML as an error node and keeps the raw text', () => {
-    const raw = '---\ntitle: a: b\n---\nmy notes\n'
+    const raw = '---\ntitle: [a, b\n---\nmy notes\n'
     const n = parseNode('n_ffff', raw)
     expect(n.error).toBeTruthy()
     expect(n.body).toBe(raw)

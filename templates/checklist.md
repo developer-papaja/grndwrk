@@ -8,9 +8,6 @@ Enough when: you can say it in two sentences and someone else agrees.
 **Core flows.** The one to three journeys that matter, start to end.
 Enough when: each flow has a start, an end and the steps between.
 
-**Scope.** What is in the first version and what is explicitly out.
-Enough when: there is at least one thing you decided not to build.
-
 **Content and tone.** What real content exists, how the product speaks.
 Enough when: you could write the start page copy without guessing.
 

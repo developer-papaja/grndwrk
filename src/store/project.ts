@@ -1,6 +1,6 @@
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile, rename, writeFile } from './fs.js'
 import { join } from 'node:path'
-import matter from 'gray-matter'
+import { readMatter } from './matter.js'
 import { scalar } from './frontmatter.js'
 export { mergePages } from '../shared/pages.js'
 
@@ -21,7 +21,7 @@ export interface Project {
 
 export async function readProject(gwDir: string): Promise<Project> {
   try {
-    const { data, content } = matter(await readFile(join(gwDir, 'project.md'), 'utf8'), {})
+    const { data, content } = readMatter(await readFile(join(gwDir, 'project.md'), 'utf8'))
     if (data.kickoff !== undefined) data.kickoff = toKickoff(data.kickoff)
     return { data, body: content, pages: toPages(data.pages) }
   } catch {
@@ -62,13 +62,16 @@ async function writeProject(gwDir: string, next: Record<string, unknown>, body: 
   const path = join(gwDir, 'project.md')
   const lines = Object.entries(next).map(([k, v]) => {
     if (k === 'pages') return `pages: [${(v as string[]).map(scalar).join(', ')}]`
+    // Lists of words, like variants: [New UI, Previous UI], stay on one readable line.
+    if (Array.isArray(v) && v.every((x) => typeof x === 'string')) return `${k}: [${v.map(scalar).join(', ')}]`
     if (k === 'kickoff') {
       const steps = KICKOFF_STEPS.filter((s) => (v as Record<string, string>)[s]).map((s) => `${s}: ${(v as Record<string, string>)[s]}`)
       return `kickoff: { ${steps.join(', ')} }`
     }
     if (v instanceof Date) return `${k}: ${v.toISOString().slice(0, 10)}`
     if (v == null) return `${k}:`
-    if (typeof v === 'string') return `${k}: ${scalar(v)}`
+    // A date stays a plain date, as people write it.
+    if (typeof v === 'string') return `${k}: ${/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : scalar(v)}`
     return `${k}: ${JSON.stringify(v)}`
   })
   const tmp = join(gwDir, '.project.md.tmp')

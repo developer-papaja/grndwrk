@@ -35,7 +35,7 @@ describe('stories', () => {
 
   it('flags a story without from, and broken frontmatter, instead of hiding them', () => {
     expect(parseStory('s_a', '---\ntitle: X\n---\n').error).toMatch(/from/)
-    expect(parseStory('s_b', '---\ntitle: a: b\n---\n').error).toBeTruthy()
+    expect(parseStory('s_b', '---\ntitle: [a, b\n---\n').error).toBeTruthy()
   })
 
   it('lists only files with story ids', async () => {

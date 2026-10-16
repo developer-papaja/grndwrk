@@ -1,27 +1,68 @@
 import Alpine from 'alpinejs'
-import type { DesignCheck, Gap, GNode, NodeInput, NodeType, Readiness, Screen, Status, Story } from '../../src/shared/types'
+import { cached } from './reactivity'
+import type { DesignCheck, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Readiness, Screen, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { createNode, deleteNode, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
-import { BOX, commentsForScreen, layoutSitemap, screenTree, storiesForScreen } from '../../src/shared/screens'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
+import { BOX, commentsForScreen, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
-import { appendEntry, openQuestions, questionOptions, replaceNotes, splitBody, type Entry } from '../../src/shared/thread'
+import { appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
+import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, type FeedbackState } from '../../src/shared/feedback'
+import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
+import { PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { ALTITUDE_WORDS, displayName, topicColumns, topicKey } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
-import { buildBoard, buildOutline, firstLine, MAP_LAYOUTS, type Board, type GroupBy, type MapLayout, type OutlineSection } from './board'
+import { buildBoard, buildOutline, firstLine, MAP_LAYOUTS, screenOf, type Board, type GroupBy, type MapLayout, type OutlineSection } from './board'
+import { counterpart, inVariant, projectVariants, unknownVariants, variantView } from '../../src/shared/variants'
 
-export type View = 'focus' | 'map' | 'sitemap' | 'readiness' | 'deliverables'
+export type View = 'focus' | 'map' | 'sitemap' | 'readiness' | 'docs' | 'deliverables'
 
-/** One thing waiting on the person, in focus mode. */
-export interface FocusItem {
-  /** Unique across kinds, for skipping. */
+/** A question from Claude waiting on the person, in the Inbox. */
+export interface InboxItem {
+  /** Unique across kinds: node:<id> or screen:<id>. */
   key: string
-  kind: 'gap' | 'question' | 'guess'
+  /** A question on a thought, a guess from /survey to confirm, or a question on a screen. */
+  kind: 'question' | 'guess' | 'screen'
   id: string
+  /** The question, without its options and pictures. */
+  question: string
+  options: string[]
+  /** The whole entry, for the pictures it shows. */
+  text: string
+  /** Which question of the thread it is, so several on one thought are answered one by one. -1 for a guess without a question. */
+  entry: number
+  index: number
+  /** How many questions wait on the same thought, and which of them this is. */
+  of: number
+  position?: number
+  /** What it is about: the thought's or the screen's title. */
+  about: string
+  /** Where that sits: the topic, or the screen's place in the tree. */
+  where: string
+  date: string
+}
+
+/** A setting in the map's toolbar, shown as a menu. */
+export interface MapMenu {
+  key: string
+  name: string
+  /** The current choice, shown on the button. */
+  value: string
+  title: string
+  /** The icon on the button, by symbol id. It stands for the setting; the words are the current choice. */
+  icon: string
+  /** Only the icon on the button: the choice shows in the icon itself. */
+  iconOnly?: boolean
+  /** Narrows what the map shows, so the button is marked. */
+  active?: boolean
+  /** Sits at the right end of the toolbar. */
+  right?: boolean
+  options: { key: string; label: string; hint?: string; count?: number; on: boolean }[]
 }
 
 /** One step of the kickoff, as the track shows it. */
@@ -65,6 +106,13 @@ const freshTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let deleteTimer: ReturnType<typeof setTimeout> | undefined
 let noteTimer: ReturnType<typeof setTimeout> | undefined
 
+/** The Show filter kept in this browser; a choice from the older Comments menu carries over. */
+function readProgressFilter(): ProgressFilter {
+  const kept = readStored<string>('grndwrk.progressFilter', '')
+  if (kept === '' || kept === 'all' || (PROGRESS as string[]).includes(kept)) return kept as ProgressFilter
+  return ''
+}
+
 export const state = Alpine.reactive({
   live: false,
   project: {} as Record<string, unknown>,
@@ -77,41 +125,47 @@ export const state = Alpine.reactive({
   editing: null as DraftField | null,
   draft: { title: '', topic: '', page: '', type: 'idea', altitude: 3, status: 'open', body: '' } as Draft,
   /** The page in view, or ALL for the board with everything. */
-  currentPage: readStored<string>('groundwork.page', ALL),
+  currentPage: readStored<string>('grndwrk.page', ALL),
   addingPage: false,
   /** The list shows only topics that are thin or have missing pieces. */
   onlyAttention: false,
   reply: '',
+  /** The question the reply box answers, when Claude asked several: entry and index. */
+  replyTo: null as { entry: number; index: number } | null,
   sending: false,
   readiness: null as Readiness | null,
   /** Which view the rail shows: focus, the map, readiness, or deliverables. */
-  view: readStored<View>('groundwork.view', 'map'),
+  view: readStored<View>('grndwrk.view', 'map'),
   /** How the map draws its cards: as a board, or as an outline. */
-  mapLayout: readStored<MapLayout>('groundwork.mapLayout', 'board') === 'outline' ? ('outline' as MapLayout) : ('board' as MapLayout),
+  mapLayout: readStored<MapLayout>('grndwrk.mapLayout', 'board') === 'outline' ? ('outline' as MapLayout) : ('board' as MapLayout),
   mapLayouts: MAP_LAYOUTS,
   /** What the board's columns are: the product's screens (General first), or topics. */
-  groupBy: readStored<GroupBy>('groundwork.groupBy', 'page'),
+  groupBy: readStored<GroupBy>('grndwrk.groupBy', 'page'),
   /** The card being dragged on the board, and the cell it is over. */
   dragId: null as string | null,
   dropCell: '',
   /** The kickoff step open on the track, or null for the current one. */
   kickoffOpen: null as string | null,
-  /** Items skipped in focus mode this visit. They wait at the end of the queue. */
-  focusSkipped: [] as string[],
+  /** Answers being written in the Inbox, per item. */
+  inboxDrafts: {} as Record<string, string>,
+  /** Inbox questions opened to show their whole thought or screen. */
+  inboxOpen: {} as Record<string, boolean>,
+  inboxSending: '',
   stories: [] as Story[],
   /** The product's screens, written by /sitemap. */
   screens: [] as Screen[],
   /** The screen open in the Sitemap view. */
-  screenId: readStored<string | null>('groundwork.screen', null),
+  screenId: readStored<string | null>('grndwrk.screen', null),
   screenReply: '',
+  screenReplyTo: null as { entry: number; index: number } | null,
   screenStatus: '',
   /** The sitemap drawn as boxes and lines, or as a list. */
-  sitemapLayout: readStored<'drawn' | 'list'>('groundwork.sitemapLayout', 'drawn'),
-  sitemapZoom: readStored('groundwork.sitemapZoom', 1),
+  sitemapLayout: readStored<'drawn' | 'list'>('grndwrk.sitemapLayout', 'drawn'),
+  sitemapZoom: readStored('grndwrk.sitemapZoom', 1),
   box: BOX,
   brief: null as string | null,
   starter: null as string | null,
-  deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'starter'>('groundwork.deliverablesTab', 'brief'),
+  deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'starter'>('grndwrk.deliverablesTab', 'brief'),
   /** The state of the project, written by /survey. */
   survey: null as string | null,
   openStoryId: null as string | null,
@@ -125,9 +179,9 @@ export const state = Alpine.reactive({
   /** Shown under the reply box: what happened to the last reply. */
   replyStatus: '',
   newPage: '',
-  listOpen: readStored('groundwork.listOpen', true),
-  detailsMinimized: readStored('groundwork.detailsMinimized', false),
-  collapsed: readStored<Record<string, boolean>>('groundwork.collapsed', {}),
+  listOpen: readStored('grndwrk.listOpen', true),
+  detailsMinimized: readStored('grndwrk.detailsMinimized', false),
+  collapsed: readStored<Record<string, boolean>>('grndwrk.collapsed', {}),
   editingTitle: false,
   /** Select the whole title when it opens for editing, so typing replaces it. */
   selectTitle: false,
@@ -149,23 +203,408 @@ export const state = Alpine.reactive({
   },
   /** Pages in the person's order, plus any that nodes use. */
   get pageNames(): string[] {
-    const saved = Array.isArray(this.project.pages) ? (this.project.pages as string[]) : []
-    return mergePages(saved, Object.values(this.nodes).map((n) => n.page))
+    return cached('pageNames', () => {
+      const saved = Array.isArray(this.project.pages) ? (this.project.pages as string[]) : []
+      return mergePages(saved, Object.values(this.nodes).map((n) => n.page))
+    })
   },
   get onAll(): boolean {
     return this.currentPage === ALL || !this.pageNames.some((p) => samePage(p, this.currentPage))
   },
-  /** The nodes on the page in view. Everything on All. */
+  /** The nodes on the page in view, before the feedback filter. Everything on All. */
+  get pageNodes(): GNode[] {
+    return cached('pageNodes', () => {
+      const all = Object.values(this.nodes)
+      // Working on one part shows its thoughts from every page.
+      if (this.scopeScreen) return all.filter((n) => this.inScope(n))
+      if (this.onAll) return all
+      // Once, not per node: pageNames reads every node itself.
+      const names = this.pageNames
+      return all.filter((n) => samePage(pageOf(n, names), this.currentPage))
+    })
+  },
+  /** The nodes in view: what the Show filter asks for (by default everything not finished), on the screens of the variant in view. */
   get visibleNodes(): GNode[] {
-    const all = Object.values(this.nodes)
-    // Working on one part shows its thoughts from every page.
-    if (this.scopeScreen) return all.filter((n) => this.inScope(n))
-    if (this.onAll) return all
-    return all.filter((n) => samePage(pageOf(n, this.pageNames), this.currentPage))
+    return cached('visibleNodes', () => {
+      const f = this.progressFilter
+      const hidden = this.hiddenScreens
+      return this.pageNodes.filter((n) => showsProgress(f, progressOfNode(n)) && !(hidden.size && hidden.has(screenOf(n, this.screens))))
+    })
+  },
+  // Variants: the product in several versions at once, like a redesign next to the previous UI.
+  /** The variants project.md lists. Empty: no switcher, everything as usual. */
+  get variants(): string[] {
+    return projectVariants(this.project)
+  },
+  /** The variant chosen per project, kept in the browser. '*' is All. */
+  variantChoice: readStored<Record<string, string>>('grndwrk.variant', {}),
+  get variantKey(): string {
+    const chosen = this.variantChoice[String(this.project.name ?? '')]
+    if (chosen === ALL) return ALL
+    return this.variants.find((v) => v === chosen) ?? this.variants[0] ?? ALL
+  },
+  /** The variant in view, or null for all of them (or none declared). */
+  get variant(): string | null {
+    return this.variants.length && this.variantKey !== ALL ? this.variantKey : null
+  },
+  setVariant(key: string) {
+    this.variantChoice = { ...this.variantChoice, [String(this.project.name ?? '')]: key }
+    store('grndwrk.variant', this.variantChoice)
+  },
+  /** The screens of the variant in view: shared ones and its own, with parents and links inside it. */
+  get viewScreens(): Screen[] {
+    return cached('viewScreens', () => {
+      return variantView(this.screens, this.variant)
+    })
+  },
+  /** Screens the variant in view does not have. Their thoughts, gaps and stories are hidden too. */
+  get hiddenScreens(): Set<string> {
+    return cached('hiddenScreens', () => {
+      const variant = this.variant
+      return new Set(variant === null ? [] : this.screens.filter((s) => !inVariant(s, variant)).map((s) => s.id))
+    })
+  },
+  /** "Only in Previous UI" for a screen in some variants only. */
+  variantTag(screen: Screen | null): string {
+    return screen && this.variants.length && screen.in.length ? `Only in ${screen.in.join(', ')}` : ''
+  },
+  unknownVariants(screen: Screen | null): string[] {
+    return screen && this.variants.length ? unknownVariants(screen, this.variants) : []
+  },
+  /** The screen that stands for this one in another variant, and which variant that is. */
+  counterpartOf(screen: Screen | null): { screen: Screen; variant: string } | null {
+    const other = screen ? counterpart(screen, this.screens) : null
+    if (!other) return null
+    return { screen: other, variant: other.in.join(', ') || 'every variant' }
+  },
+  /** Open the counterpart, switching to a variant that has it when the one in view does not. */
+  goToCounterpart(id: string) {
+    const target = this.screens.find((s) => s.id === id)
+    if (!target) return
+    if (!inVariant(target, this.variant)) this.setVariant(target.in.find((v) => this.variants.includes(v)) ?? ALL)
+    this.selectScreen(id)
+  },
+  // Comments from the running product: incoming, with a proposed fix, or fixed by the person.
+  /** Empty shows incoming and proposed with the rest of the map; a state shows only those comments. */
+  /** What the map shows, for comments, stories and thoughts alike: everything not finished (''), one status, or all. */
+  progressFilter: readProgressFilter(),
+  progressWords: PROGRESS_WORDS,
+  feedbackStates: FEEDBACK_STATES,
+  /** The toolbar menu that is open, by key. */
+  openMenu: '',
+  /**
+   * The map's settings, each a menu in the toolbar that shows its current
+   * value: what the columns are, which variant, which comments (on the
+   * Feedback page only) and how the map is drawn.
+   */
+  get mapMenus(): MapMenu[] {
+    const menus: MapMenu[] = []
+    if (this.screens.length && !this.scopeScreen) {
+      menus.push({
+        key: 'menu-columns',
+        name: 'Columns',
+        value: this.groupBy === 'topic' ? 'Topics' : 'Screens',
+        title: 'Columns: a screen each, or a topic each',
+        icon: this.groupBy === 'topic' ? 'i-tag' : 'i-tree',
+        options: [
+          { key: 'page', label: 'Screens', hint: 'General first, then each screen in sitemap order', on: this.groupBy === 'page' },
+          { key: 'topic', label: 'Topics', hint: 'A column per topic', on: this.groupBy === 'topic' },
+        ],
+      })
+    }
+    if (this.variants.length) {
+      menus.push({
+        key: 'menu-variant',
+        name: 'Variant',
+        value: this.variantKey === '*' ? 'All' : this.variantKey,
+        title: 'Variant: which version of the product to show',
+        icon: 'i-stack',
+        options: [
+          ...this.variants.map((v, i) => ({ key: v, label: v, hint: i === 0 ? 'The default' : undefined, on: this.variantKey === v })),
+          { key: '*', label: 'All', hint: 'Every variant, screens one variant has tagged', on: this.variantKey === '*' },
+        ],
+      })
+    }
+    {
+      // What to show, for comments, stories and thoughts alike. Finished ones stay out until asked for.
+      const counts = this.progressCounts
+      const f = this.progressFilter
+      const notDone = counts.open + counts['in-progress'] + counts.ready
+      menus.push({
+        key: 'menu-show',
+        name: 'Show',
+        value: f === '' ? 'Open' : f === 'all' ? 'Everything' : PROGRESS_WORDS[f],
+        title: 'Show: what to see on the map. Done and Not now are hidden until you pick them.',
+        icon: 'i-filter',
+        active: f !== '',
+        options: [
+          { key: '', label: 'Open', hint: 'Everything not done yet', count: notDone, on: f === '' },
+          { key: 'in-progress', label: 'In progress', hint: 'A fix proposed, a story partly met', count: counts['in-progress'], on: f === 'in-progress' },
+          { key: 'ready', label: 'Ready to test', hint: 'Built. Test it, then approve or reject it.', count: counts.ready, on: f === 'ready' },
+          { key: 'done', label: 'Done', hint: 'Fixed comments, done stories, settled thoughts', count: counts.done, on: f === 'done' },
+          { key: 'later', label: 'Not now', hint: 'Parked thoughts, stories set aside', count: counts.later, on: f === 'later' },
+          { key: 'all', label: 'Everything', hint: 'Done and not done', count: notDone + counts.done + counts.later, on: f === 'all' },
+        ],
+      })
+    }
+    const layout = MAP_LAYOUTS.find((l) => l.key === this.mapLayout)
+    menus.push({
+      key: 'menu-layout',
+      name: 'View',
+      value: layout?.name.split(':')[0] ?? '',
+      title: `${layout?.name.split(':')[0] ?? 'View'}: how the map is drawn ( V )`,
+      icon: layout?.icon ?? 'i-columns',
+      iconOnly: true,
+      right: true,
+      options: MAP_LAYOUTS.map((l) => ({ key: l.key, label: l.name.split(':')[0], hint: l.name.split(': ')[1], on: this.mapLayout === l.key })),
+    })
+    return menus
+  },
+  /** The variant menu again, for the Sitemap view's header. */
+  get sitemapMenus(): MapMenu[] {
+    return this.mapMenus.filter((m) => m.key === 'menu-variant').map((m) => ({ ...m, key: 'sitemap-variant' }))
+  },
+  chooseMenu(menu: string, option: string) {
+    this.openMenu = ''
+    if (menu === 'sitemap-variant') menu = 'menu-variant'
+    if (menu === 'menu-columns') this.setGroupBy(option as 'page' | 'topic')
+    else if (menu === 'menu-variant') this.setVariant(option)
+    else if (menu === 'menu-show') this.setProgressFilter(option as ProgressFilter)
+    else if (menu === 'menu-layout') this.setMapLayout(option as never)
+  },
+  feedbackWords: { incoming: 'Incoming', proposed: 'Proposed', ready: 'Ready to test', fixed: 'Fixed' } as Record<FeedbackState, string>,
+  /** Thoughts, comments and stories on the page in view, per status. */
+  get progressCounts(): Record<Progress, number> {
+    return cached('progressCounts', () => {
+      const counts = Object.fromEntries(PROGRESS.map((p) => [p, 0])) as Record<Progress, number>
+      for (const n of this.pageNodes) counts[progressOfNode(n)]++
+      const names = this.pageNames
+      for (const st of this.stories) {
+        const first = this.nodes[st.from[0]]
+        if (this.onAll || (first && samePage(pageOf(first, names), this.currentPage))) counts[progressOfStory(st)]++
+      }
+      return counts
+    })
+  },
+  get hasFeedback(): boolean {
+    return this.pageNodes.some(isFeedback)
+  },
+  /**
+   * Standing on the page the comments land on: the Incoming, Proposed and
+   * Fixed buttons show only there. The page called Feedback, or one that is
+   * mostly comments.
+   */
+  get onFeedbackPage(): boolean {
+    return cached('onFeedbackPage', () => {
+      if (this.scopeScreen || this.onAll) return false
+      if (samePage(this.currentPage, 'Feedback')) return true
+      const nodes = this.pageNodes
+      return nodes.length > 0 && nodes.filter(isFeedback).length * 2 > nodes.length
+    })
+  },
+  setProgressFilter(f: ProgressFilter) {
+    this.progressFilter = f
+    store('grndwrk.progressFilter', f)
+    if (this.selected && !this.visibleNodes.includes(this.selected)) this.select(null)
+  },
+  progressOf(n: GNode): Progress {
+    return progressOfNode(n)
+  },
+  storyProgress(s: Story): Progress {
+    return progressOfStory(s)
+  },
+  feedbackState(n: GNode | null): FeedbackState | null {
+    return n ? feedbackState(n) : null
+  },
+  // Pictures of the screens, and where the product runs to open them.
+  shots: [] as Shot[],
+  runtime: { app: null as string | null, proxied: false },
+  async loadShots() {
+    this.shots = await fetchShots()
+  },
+  async loadRuntime() {
+    this.runtime = await fetchRuntime()
+  },
+  /** Pictures of a screen: the web one first, then iOS ones, newest first. */
+  shotsOf(screen: Screen | null): Shot[] {
+    if (!screen) return []
+    return shotsForScreen(screen, this.shots, this.screens).sort((a, b) => (a.platform === b.platform ? b.taken.localeCompare(a.taken) : a.platform === 'web' ? -1 : 1))
+  },
+  /** Where the screen opens in the running product, or empty when it cannot be opened from here. */
+  openUrl(screen: Screen | null): string {
+    const path = screen ? openPath(screen) : ''
+    return path && this.runtime.app ? this.runtime.app.replace(/\/+$/, '') + path : ''
+  },
+  needsExample,
+  /** Pictures from the app that no screen claims yet: /sitemap places them, or the person drags them onto a screen. */
+  get unplacedShots(): Shot[] {
+    return this.shots.filter((s) => s.platform === 'ios' && !this.screens.some((sc) => shotsForScreen(sc, [s], this.screens).length))
+  },
+  shotTray: false,
+  /** The picture being dragged onto a screen, and the screen it is over. */
+  draggingShot: null as Shot | null,
+  dropOn: '',
+  dragShot(shot: Shot, event: DragEvent) {
+    this.draggingShot = shot
+    event.dataTransfer?.setData('text/plain', shot.file)
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+  },
+  endDragShot() {
+    this.draggingShot = null
+    this.dropOn = ''
+  },
+  overScreen(id: string, event: DragEvent) {
+    if (!this.draggingShot) return
+    event.preventDefault()
+    this.dropOn = id
+  },
+  async dropShot(id: string) {
+    const shot = this.draggingShot
+    this.endDragShot()
+    if (shot) await this.putShot(shot, id)
+  },
+  /** Write the picture into the screen's shots:, or take it off with an empty id. */
+  async putShot(shot: Shot, id: string) {
+    const screen = this.screens.find((s) => s.id === id)
+    try {
+      this.screens = await placeShot(shot.file, id)
+      this.flash(screen ? `${shot.key} is on ${screen.title} now` : `${shot.key} is not placed now`)
+      if (!this.unplacedShots.length) this.shotTray = false
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Pictures a thread entry shows, as ![name](/shots/ios/App-2.jpg): the ones that exist. */
+  entryShots(text: string): Shot[] {
+    const files = [...text.matchAll(/!\[[^\]]*\]\(\/?(?:\.grndwrk\/)?shots\/((?:web|ios)\/[^)\s]+)\)/g)].map((m) => {
+      try {
+        return decodeURIComponent(m[1])
+      } catch {
+        return m[1]
+      }
+    })
+    return files.map((f) => this.shots.find((s) => s.file === f)).filter((s): s is Shot => !!s)
+  },
+  /** The entry's words, without the pictures it shows. */
+  entryWords(text: string): string {
+    return text.replace(/\n?!\[[^\]]*\]\([^)]*\)\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+  },
+  /** Whether the screen names this picture itself, so it can be taken off. */
+  placedOn(shot: Shot, screen: Screen | null): boolean {
+    return !!screen && screen.shots.includes(shot.file)
+  },
+  // A picture opened large, on top of the app, among the other pictures of its screen.
+  viewing: null as Shot | null,
+  viewingSet: [] as Shot[],
+  viewShot(shot: Shot, set: Shot[]) {
+    this.viewing = shot
+    this.viewingSet = set
+  },
+  closeShot() {
+    this.viewing = null
+    this.viewingSet = []
+  },
+  stepShot(by: number) {
+    const set = this.viewingSet
+    if (!this.viewing || set.length < 2) return
+    const at = set.findIndex((s) => s.url === this.viewing!.url)
+    this.viewing = set[(at + by + set.length) % set.length]
+  },
+  shotLabel(shot: Shot): string {
+    const when = new Date(shot.taken).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+    return shot.platform === 'web' ? `Web, ${when}` : `iOS, ${shot.key}, ${when}`
+  },
+  // Phones on the network asking to send comments. The person here allows them, and the phone gets the code.
+  pairRequests: [] as PairRequest[],
+  async loadPairRequests() {
+    this.pairRequests = await fetchPairRequests()
+  },
+  addPairRequest(request: PairRequest) {
+    this.pairRequests = [...this.pairRequests.filter((p) => p.id !== request.id), request]
+  },
+  dropPairRequest(id: string) {
+    this.pairRequests = this.pairRequests.filter((p) => p.id !== id)
+  },
+  async answerPair(id: string, allow: boolean) {
+    const request = this.pairRequests.find((p) => p.id === id)
+    this.dropPairRequest(id)
+    try {
+      await answerPairRequest(id, allow)
+    } catch {
+      return this.flash('That request ran out. Ask again from the phone.')
+    }
+    this.flash(allow ? `${request?.device ?? 'The phone'} can send comments now` : 'Not allowed')
+  },
+  // Local sites whose Comment button sent a comment, waiting to be allowed. The comment waits in that browser and goes once allowed.
+  siteRequests: [] as string[],
+  /** Sites that may send comments, shown in the Comments menu, where one can be removed. */
+  allowedSites: [] as AllowedSite[],
+  async loadSiteRequests() {
+    const { asking, allowed } = await fetchSites()
+    this.siteRequests = asking
+    this.allowedSites = allowed
+  },
+  async removeAllowedSite(origin: string) {
+    try {
+      this.allowedSites = (await removeSite(origin)).allowed
+      this.flash(`${this.siteName(origin)} removed. Its next comment asks again.`)
+    } catch {
+      void this.loadSiteRequests()
+    }
+  },
+  addSiteRequest(origin: string) {
+    if (!this.siteRequests.includes(origin)) this.siteRequests = [...this.siteRequests, origin]
+  },
+  dropSiteRequest(origin: string) {
+    this.siteRequests = this.siteRequests.filter((o) => o !== origin)
+  },
+  siteName(origin: string) {
+    try {
+      return new URL(origin).host
+    } catch {
+      return origin
+    }
+  },
+  async answerSite(origin: string, allow: boolean) {
+    this.dropSiteRequest(origin)
+    try {
+      this.allowedSites = (await answerSiteRequest(origin, allow)).allowed
+    } catch {
+      return this.flash('That request is gone. Send the comment again.')
+    }
+    this.flash(allow ? `${this.siteName(origin)} can send comments now. Its waiting comment arrives shortly.` : 'Not allowed')
+  },
+  /** Mark the open comment fixed, or take that back. Only ever done by the person. */
+  async markFixed(fixed: boolean) {
+    const node = this.selected
+    if (!node) return
+    try {
+      this.upsert(await updateNode(node.id, { fixed: fixed ? today() : '' }))
+    } catch (err) {
+      return this.flash(errorText(err))
+    }
+    if (fixed && !showsProgress(this.progressFilter, 'done')) {
+      this.select(null)
+      this.flash('Marked fixed. Show: Done in the toolbar lists what is finished.')
+    } else if (!fixed && this.progressFilter === 'done') {
+      this.select(null)
+      this.flash('Back with the open ones')
+    }
+  },
+  /** A proposed fix was built: it is ready to test, in the app or here. */
+  async markBuilt() {
+    const node = this.selected
+    if (!node) return
+    try {
+      this.upsert(await updateNode(node.id, { built: today() }))
+      this.flash('Ready to test. It shows on the phone it came from, with Approve and Reject.')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
   },
   // Working on one part: the whole map stays one map, a screen is a filter on it.
   /** The screen being worked on, or null for the whole product. */
-  scope: readStored<string | null>('groundwork.scope', null),
+  scope: readStored<string | null>('grndwrk.scope', null),
   get scopeScreen(): Screen | null {
     return this.scope ? (this.screens.find((s) => s.id === this.scope) ?? null) : null
   },
@@ -188,9 +627,8 @@ export const state = Alpine.reactive({
   },
   setScope(id: string | null) {
     this.scope = id
-    store('groundwork.scope', id)
+    store('grndwrk.scope', id)
     this.select(null)
-    this.focusSkipped = []
     const s = this.scopeScreen
     this.flash(s ? `Working on ${s.title}. New thoughts belong to it.` : 'The whole product')
   },
@@ -200,7 +638,7 @@ export const state = Alpine.reactive({
   scopeIndex: 0,
   /** Whole product first, then every screen with where it sits; filtered while searching. */
   get scopeOptions(): { id: string | null; title: string; path: string; depth: number; count: number }[] {
-    const byId = new Map(this.screens.map((s) => [s.id, s]))
+    const byId = new Map(this.viewScreens.map((s) => [s.id, s]))
     const path = (s: Screen) => {
       const names: string[] = []
       let p = s.parent ? byId.get(s.parent) : undefined
@@ -252,12 +690,54 @@ export const state = Alpine.reactive({
   get thread(): Entry[] {
     return splitBody(this.draft.body).entries
   },
+  /** The questions in one entry of a thread, each with its options and whether it is answered. */
+  entryQuestions(body: string, entry: number): Question[] {
+    return questions(body).filter((q) => q.entry === entry)
+  },
+  /** How many questions wait in a body. Several mean each is answered on its own. */
+  openCount(body: string): number {
+    return openQuestions(body)
+  },
+  /** A **You** entry that answers one question quotes it first: the quote, and the answer. */
+  youParts(text: string): { quote: string; rest: string } {
+    const lines = text.split('\n')
+    let n = 0
+    while (n < lines.length && /^\s*>/.test(lines[n])) n++
+    return { quote: lines.slice(0, n).map((l) => l.replace(/^\s*>\s?/, '')).join(' ').trim(), rest: lines.slice(n).join('\n').trim() }
+  },
+  /** Answer one of Claude's questions on the open screen straight away, with an option it gave. */
+  async answerScreenQuestion(q: Question, text: string) {
+    this.screenReply = text
+    this.screenReplyTo = { entry: q.entry, index: q.index }
+    await this.sendScreenReply()
+  },
+  /** Answer one of Claude's questions on the open card straight away, with an option it gave. */
+  async answerQuestion(q: Question, text: string) {
+    const id = this.selectedId
+    if (!id || this.sending) return
+    this.reply = text
+    this.replyTo = { entry: q.entry, index: q.index }
+    await this.sendReply()
+  },
+  /** Point the reply box at one question, to answer it in words. */
+  replyToQuestion(q: Question, field = 'reply') {
+    if (field === 'screen-reply') this.screenReplyTo = { entry: q.entry, index: q.index }
+    else this.replyTo = { entry: q.entry, index: q.index }
+    focusWhenVisible(field)
+  },
+  /** The question the reply box answers now, or null for all of them. */
+  replyQuestion(body: string, to: { entry: number; index: number } | null): Question | null {
+    if (!to) return null
+    return questions(body).find((q) => q.entry === to.entry && q.index === to.index && q.open) ?? null
+  },
   /** Cards where Claude is waiting for an answer, in list order. */
   get questionIds(): string[] {
-    return groupForList(Object.values(this.nodes), '')
-      .flatMap((g) => g.nodes)
-      .filter((n) => openQuestions(n.body) > 0)
-      .map((n) => n.id)
+    return cached('questionIds', () => {
+      return groupForList(Object.values(this.nodes).filter((n) => !isFixed(n)), '')
+        .flatMap((g) => g.nodes)
+        .filter((n) => openQuestions(n.body) > 0)
+        .map((n) => n.id)
+    })
   },
   /** A thread entry split into its question and the options Claude gave. */
   options: questionOptions,
@@ -266,7 +746,8 @@ export const state = Alpine.reactive({
     return !!n && openQuestions(n.body) > 0
   },
   pageCount(page: string): number {
-    return Object.values(this.nodes).filter((n) => samePage(pageOf(n, this.pageNames), page)).length
+    const names = this.pageNames
+    return Object.values(this.nodes).filter((n) => samePage(pageOf(n, names), page)).length
   },
   get selected(): GNode | null {
     return this.selectedId ? (this.nodes[this.selectedId] ?? null) : null
@@ -276,9 +757,11 @@ export const state = Alpine.reactive({
     return [...topicColumns(this.visibleNodes).values()].filter((c) => c.key).map((c) => c.name)
   },
   get listGroups(): ListGroup[] {
-    const groups = groupForList(this.visibleNodes, this.query)
-    if (!this.onlyAttention) return groups
-    return groups.filter((g) => this.needsAttention(g))
+    return cached('listGroups', () => {
+      const groups = groupForList(this.visibleNodes, this.query)
+      if (!this.onlyAttention) return groups
+      return groups.filter((g) => this.needsAttention(g))
+    })
   },
   /** A topic is thin with two thoughts or fewer; it needs attention when thin or when gaps sit in it. */
   needsAttention(g: ListGroup): boolean {
@@ -292,7 +775,6 @@ export const state = Alpine.reactive({
   },
   /** Width of whatever is docked on the right: the focus card, the details, or nothing. */
   get rightInset(): number {
-    if (this.view === 'focus') return 400
     return this.detailsVisible ? 360 : 0
   },
   get detailsVisible(): boolean {
@@ -303,27 +785,139 @@ export const state = Alpine.reactive({
   },
   /** Stories whose first source thought is on the page in view. */
   get visibleStories(): Story[] {
-    if (this.scopeScreen) return storiesForScreen(this.scopeScreen, this.stories)
-    if (this.onAll) return this.stories
-    return this.stories.filter((st) => {
-      const first = this.nodes[st.from[0]]
-      return first && samePage(pageOf(first, this.pageNames), this.currentPage)
+    return cached('visibleStories', () => {
+      const f = this.progressFilter
+      const wanted = (list: Story[]) => list.filter((st) => showsProgress(f, progressOfStory(st)))
+      if (this.scopeScreen) return wanted(storiesForScreen(this.scopeScreen, this.stories))
+      // A story only screens outside the variant in view cover belongs to the other variant.
+      const hidden = this.hiddenScreens
+      let shown = this.stories
+      if (hidden.size) {
+        // Which screens cover each story, worked out once per screen rather than per story and screen.
+        const covering = new Map<string, string[]>()
+        for (const sc of this.screens) for (const st of storiesForScreen(sc, this.stories)) covering.set(st.id, [...(covering.get(st.id) ?? []), sc.id])
+        shown = this.stories.filter((st) => {
+          const by = covering.get(st.id) ?? []
+          return !by.length || by.some((id) => !hidden.has(id))
+        })
+      }
+      if (this.onAll) return wanted(shown)
+      const names = this.pageNames
+      return wanted(shown).filter((st) => {
+        const first = this.nodes[st.from[0]]
+        return first && samePage(pageOf(first, names), this.currentPage)
+      })
     })
   },
   selectStory(id: string) {
     this.select(null)
     this.selectedStoryId = id
+    this.storyEditing = false
     this.setDetailsMinimized(false)
+  },
+  // Stories, written and changed in the map as well as by Claude.
+  /** Whether the open story's text is being edited. */
+  storyEditing: false,
+  storyText: '',
+  storyLabel(st: Story): string {
+    return storyStatusLabel(st)
+  },
+  criteria(st: Story | null): Criterion[] {
+    return st ? criteriaOf(st.body) : []
+  },
+  putStory(st: Story) {
+    this.stories = this.stories.some((x) => x.id === st.id) ? this.stories.map((x) => (x.id === st.id ? st : x)) : [...this.stories, st]
+  },
+  async changeStory(edit: { title?: string; status?: string; body?: string; later?: string | null }) {
+    const st = this.selectedStory
+    if (!st) return
+    try {
+      this.putStory(await saveStory(st.id, edit))
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Tick a criterion; the status follows: all met is done, some is partly, none is not started. */
+  async tickStory(c: Criterion, met: boolean) {
+    const st = this.selectedStory
+    if (!st) return
+    const body = tickCriterion(st.body, c.line, met)
+    const all = criteriaOf(body)
+    const n = all.filter((x) => x.met).length
+    const status = n === all.length ? 'done' : n ? 'partial' : 'not-started'
+    await this.changeStory({ body, status })
+  },
+  editStoryText() {
+    this.storyText = this.selectedStory?.body ?? ''
+    this.storyEditing = true
+    focusWhenVisible('story-text')
+  },
+  async saveStoryText() {
+    this.storyEditing = false
+    if (this.selectedStory && this.storyText !== this.selectedStory.body) await this.changeStory({ body: this.storyText })
+  },
+  /** Partly met: copy an instruction for Claude to build exactly what is not met yet. */
+  storyBuildRest() {
+    const st = this.selectedStory
+    if (!st) return
+    const open = criteriaOf(st.body).filter((c) => !c.met)
+    this.showPrompt(
+      `Build the rest of "${st.title}"`,
+      [
+        `Build the rest of story ${st.id} (${st.title}), in .grndwrk/stories/${st.id}.md. These acceptance criteria are not met yet:`,
+        ...open.map((c) => `- ${c.text}`),
+        '',
+        'When one is met in the code, tick it in the story (- [x]); when all are, set status: done. Fill applies_to with the routes or files.',
+      ].join('\n'),
+    )
+  },
+  /** Partly met is enough: done now, and each criterion not met becomes a parked thought, so it is not lost. */
+  async storyEnough() {
+    const st = this.selectedStory
+    if (!st) return
+    const open = criteriaOf(st.body).filter((c) => !c.met)
+    for (const c of open) {
+      try {
+        this.upsert(await createNode({ title: c.text, type: 'feature', status: 'parked', links: st.from.filter((id) => this.nodes[id]).slice(0, 1), body: `Not done when story ${st.id} (${st.title}) was called enough on ${today()}.\n` }))
+      } catch (err) {
+        return this.flash(errorText(err))
+      }
+    }
+    await this.changeStory({ status: 'done', later: null })
+    this.flash(open.length ? `Done. ${open.length === 1 ? 'What was not met is' : 'What was not met are'} parked thoughts now.` : 'Done.')
+  },
+  /** Set aside: still partly done, but chosen not to do now, so it leaves what is left. */
+  async storyNotNow(back = false) {
+    await this.changeStory({ later: back ? null : today() })
+    this.flash(back ? 'Back with what is left' : 'Set aside. Show: Not now lists it.')
+  },
+  /** A story from a thought: its title to start from, the thought as where it came from. */
+  async storyFrom(node: GNode | null) {
+    if (!node) return
+    try {
+      const st = await createStory({ title: node.title, from: [node.id] })
+      this.putStory(st)
+      this.selectStory(st.id)
+      this.editStoryText()
+    } catch (err) {
+      this.flash(errorText(err))
+    }
   },
   get selectedGap(): Gap | null {
     return this.readiness?.gaps.find((g) => g.id === this.selectedGapId) ?? null
   },
   /** Gaps on the page in view. Everything on All. */
   get visibleGaps(): Gap[] {
-    const gaps = this.readiness?.gaps ?? []
-    if (this.scopeScreen) return gaps.filter((g) => this.gapInScope(g))
-    if (this.onAll) return gaps
-    return gaps.filter((g) => samePage(g.page || this.pageNames[0], this.currentPage))
+    return cached('visibleGaps', () => {
+      const hidden = this.hiddenScreens
+      const gaps = (this.readiness?.gaps ?? []).filter((g) => !(g.screen && hidden.has(g.screen)))
+      // Gaps are what is open by nature: shown with everything not finished, or with all.
+      if (this.progressFilter !== '' && this.progressFilter !== 'all') return []
+      if (this.scopeScreen) return gaps.filter((g) => this.gapInScope(g))
+      if (this.onAll) return gaps
+      const first = this.pageNames[0]
+      return gaps.filter((g) => samePage(g.page || first, this.currentPage))
+    })
   },
   /** Open gaps per topic, for the counts in the list. */
   missingIn(topicKey: string): number {
@@ -332,19 +926,27 @@ export const state = Alpine.reactive({
   /** The report as HTML. It is a local file written by /readiness, shown as is. */
   get reportHtml(): string {
     const body = this.readiness?.report?.body ?? ''
-    return marked.parse(body, { async: false }) as string
+    return md(body)
   },
   get briefHtml(): string {
-    return linkIds(marked.parse(stripFrontmatter(this.brief ?? ''), { async: false }) as string)
+    return linkIds(md(stripFrontmatter(this.brief ?? '')))
   },
   get briefWritten(): string {
     return /^---[\s\S]*?\bwritten:\s*(\S+)[\s\S]*?---/.exec(this.brief ?? '')?.[1] ?? ''
   },
   get starterHtml(): string {
-    return marked.parse(stripFrontmatter(this.starter ?? ''), { async: false }) as string
+    return md(stripFrontmatter(this.starter ?? ''))
   },
+  /** The story's text; its acceptance criteria are shown as checkboxes above it, so not again here. */
   storyHtml(story: Story): string {
-    return marked.parse(story.body, { async: false }) as string
+    const lines = story.body.split('\n')
+    const out: string[] = []
+    let skipping = false
+    for (const l of lines) {
+      if (/^#{1,6}\s/.test(l)) skipping = /^#{1,6}\s+acceptance\b/i.test(l) && criteriaOf(story.body).length > 0
+      if (!skipping) out.push(l)
+    }
+    return md(out.join('\n'))
   },
   async loadDeliverables() {
     try {
@@ -366,11 +968,13 @@ export const state = Alpine.reactive({
     }
   },
   get screenRows(): { screen: Screen; depth: number }[] {
-    return screenTree(this.screens)
+    return cached('screenRows', () => {
+      return screenTree(this.viewScreens)
+    })
   },
   /** The open screen, or the first one. */
   get screen(): Screen | null {
-    return this.screens.find((s) => s.id === this.screenId) ?? this.screenRows[0]?.screen ?? null
+    return this.viewScreens.find((s) => s.id === this.screenId) ?? this.screenRows[0]?.screen ?? null
   },
   screenById(id: string): Screen | undefined {
     return this.screens.find((s) => s.id === id)
@@ -386,75 +990,78 @@ export const state = Alpine.reactive({
   },
   /** Screens that link here, and the parent, so the way in is visible too. */
   cameFrom(screen: Screen): Screen[] {
-    return this.screens.filter((s) => s.id !== screen.id && (s.leads_to.includes(screen.id) || s.id === screen.parent))
+    return this.viewScreens.filter((s) => s.id !== screen.id && (s.leads_to.includes(screen.id) || s.id === screen.parent))
   },
   get screenThread(): Entry[] {
     return this.screen ? splitBody(this.screen.body).entries : []
   },
   get screenNotesHtml(): string {
     const notes = this.screen ? splitBody(this.screen.body).notes.trim() : ''
-    return notes ? linkIds(marked.parse(notes, { async: false }) as string) : ''
+    return notes ? linkIds(md(notes)) : ''
   },
-  get sitemapSummary(): { screens: number; noStory: number; questions: number; guesses: number } {
+  get sitemapSummary(): { screens: number; noStory: number; questions: number; guesses: number; unreadable: number } {
     return {
-      screens: this.screens.length,
-      noStory: this.screens.filter((s) => s.status !== 'planned' && !this.storiesOf(s).length).length,
-      questions: this.screens.reduce((n, s) => n + openQuestions(s.body), 0),
-      guesses: this.screens.filter((s) => s.source === 'inferred').length,
+      screens: this.viewScreens.length,
+      noStory: this.viewScreens.filter((s) => !s.error && s.status !== 'planned' && !this.storiesOf(s).length).length,
+      questions: this.viewScreens.reduce((n, s) => n + openQuestions(s.body), 0),
+      guesses: this.viewScreens.filter((s) => s.source === 'inferred').length,
+      unreadable: this.screens.filter((s) => s.error).length,
     }
   },
   /** The sitemap as boxes, tree lines, and the links out of the open screen. */
   get sitemapDrawing() {
-    const layout = layoutSitemap(this.screens)
-    const pad = 24
-    const at = new Map(layout.boxes.map((b) => [b.id, { x: b.x + pad, y: b.y + pad }]))
-    const { width: w, height: h } = BOX
-    const tree = layout.edges.map((e) => {
-      const a = at.get(e.from)!
-      const b = at.get(e.to)!
-      const mid = a.y + h + BOX.gapY / 2
-      return `M${a.x + w / 2},${a.y + h} V${mid} H${b.x + w / 2} V${b.y}`
-    })
-    const open: Screen | null = this.screen
-    const links = (open?.leads_to ?? []).filter((id: string) => at.has(id)).map((id: string) => {
-      const a = at.get(open!.id)!
-      const b = at.get(id)!
-      // Above or below: out of the bottom or top, into the facing edge.
-      if (Math.abs(b.x - a.x) < w) {
-        const down = b.y > a.y
-        const sx = a.x + w / 2
-        const ex = b.x + w / 2
-        const sy = a.y + (down ? h : 0)
-        const ey = b.y + (down ? 0 : h)
-        const bend = Math.max(30, Math.abs(ey - sy) / 2) * (down ? 1 : -1)
-        // Off to the side a little, so it does not hide under the tree line.
-        return { id, d: `M${sx + 24},${sy} C${sx + 24},${sy + bend} ${ex + 24},${ey - bend} ${ex + 24},${ey}` }
+    return cached('sitemapDrawing', () => {
+      const layout = layoutSitemap(this.viewScreens)
+      const pad = 24
+      const at = new Map(layout.boxes.map((b) => [b.id, { x: b.x + pad, y: b.y + pad }]))
+      const { width: w, height: h } = BOX
+      const tree = layout.edges.map((e) => {
+        const a = at.get(e.from)!
+        const b = at.get(e.to)!
+        const mid = a.y + h + BOX.gapY / 2
+        return `M${a.x + w / 2},${a.y + h} V${mid} H${b.x + w / 2} V${b.y}`
+      })
+      const open: Screen | null = this.screen
+      const links = (open?.leads_to ?? []).filter((id: string) => at.has(id)).map((id: string) => {
+        const a = at.get(open!.id)!
+        const b = at.get(id)!
+        // Above or below: out of the bottom or top, into the facing edge.
+        if (Math.abs(b.x - a.x) < w) {
+          const down = b.y > a.y
+          const sx = a.x + w / 2
+          const ex = b.x + w / 2
+          const sy = a.y + (down ? h : 0)
+          const ey = b.y + (down ? 0 : h)
+          const bend = Math.max(30, Math.abs(ey - sy) / 2) * (down ? 1 : -1)
+          // Off to the side a little, so it does not hide under the tree line.
+          return { id, d: `M${sx + 24},${sy} C${sx + 24},${sy + bend} ${ex + 24},${ey - bend} ${ex + 24},${ey}` }
+        }
+        // Out of the side facing the target, into the side facing back.
+        const right = b.x >= a.x
+        const sx = a.x + (right ? w : 0)
+        const ex = b.x + (right ? 0 : w)
+        const sy = a.y + h / 2
+        const ey = b.y + h / 2
+        const bend = Math.max(40, Math.abs(ex - sx) / 2)
+        return { id, d: `M${sx},${sy} C${sx + (right ? bend : -bend)},${sy} ${ex + (right ? -bend : bend)},${ey} ${ex},${ey}` }
+      })
+      // Lines as SVG markup: Alpine's template loops cannot live inside an svg element.
+      const svg = [
+        '<defs><marker id="sitemap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0d99ff" /></marker></defs>',
+        ...tree.map((d) => `<path d="${d}" fill="none" stroke="#4a4a4a" stroke-width="1.5" />`),
+        ...links.map((l) => `<path d="${l.d}" fill="none" stroke="#0d99ff" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sitemap-arrow)" />`),
+      ].join('')
+      return {
+        boxes: layout.boxes.map((b) => ({ ...b, x: b.x + pad, y: b.y + pad, screen: this.viewScreens.find((s: Screen) => s.id === b.id) ?? null })),
+        svg,
+        width: layout.width + pad * 2,
+        height: layout.height + pad * 2,
       }
-      // Out of the side facing the target, into the side facing back.
-      const right = b.x >= a.x
-      const sx = a.x + (right ? w : 0)
-      const ex = b.x + (right ? 0 : w)
-      const sy = a.y + h / 2
-      const ey = b.y + h / 2
-      const bend = Math.max(40, Math.abs(ex - sx) / 2)
-      return { id, d: `M${sx},${sy} C${sx + (right ? bend : -bend)},${sy} ${ex + (right ? -bend : bend)},${ey} ${ex},${ey}` }
     })
-    // Lines as SVG markup: Alpine's template loops cannot live inside an svg element.
-    const svg = [
-      '<defs><marker id="sitemap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0d99ff" /></marker></defs>',
-      ...tree.map((d) => `<path d="${d}" fill="none" stroke="#4a4a4a" stroke-width="1.5" />`),
-      ...links.map((l) => `<path d="${l.d}" fill="none" stroke="#0d99ff" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sitemap-arrow)" />`),
-    ].join('')
-    return {
-      boxes: layout.boxes.map((b) => ({ ...b, x: b.x + pad, y: b.y + pad, screen: this.screenById(b.id) ?? null })),
-      svg,
-      width: layout.width + pad * 2,
-      height: layout.height + pad * 2,
-    }
   },
   setSitemapLayout(layout: 'drawn' | 'list') {
     this.sitemapLayout = layout
-    store('groundwork.sitemapLayout', layout)
+    store('grndwrk.sitemapLayout', layout)
   },
   zoomSitemap(by: number | 'fit') {
     if (by === 'fit') {
@@ -463,13 +1070,13 @@ export const state = Alpine.reactive({
       by = pane ? Math.min(1, (pane.clientWidth - 16) / d.width, (pane.clientHeight - 16) / d.height) : 1
     } else by = this.sitemapZoom * by
     this.sitemapZoom = Math.round(Math.min(1.5, Math.max(0.3, by)) * 100) / 100
-    store('groundwork.sitemapZoom', this.sitemapZoom)
+    store('grndwrk.sitemapZoom', this.sitemapZoom)
   },
   selectScreen(id: string) {
     this.screenId = id
     this.screenReply = ''
     this.screenStatus = ''
-    store('groundwork.screen', id)
+    store('grndwrk.screen', id)
   },
   /** Save what the person changed: purpose, who it is for, or what they do there. */
   async saveScreen(field: 'purpose' | 'audience' | 'tasks', value: string) {
@@ -496,7 +1103,9 @@ export const state = Alpine.reactive({
     this.sending = true
     this.screenStatus = 'Saving...'
     try {
-      this.putScreen(await updateScreen(s.id, { body: appendEntry(s.body, 'you', text, today()) }))
+      const target = this.replyQuestion(s.body, this.screenReplyTo)
+      this.screenReplyTo = null
+      this.putScreen(await updateScreen(s.id, { body: target ? appendAnswer(s.body, target, text, today()) : appendEntry(s.body, 'you', text, today()) }))
       this.screenReply = ''
       this.screenStatus = ''
     } catch (err) {
@@ -524,9 +1133,36 @@ export const state = Alpine.reactive({
   },
   /** The status row whose details are open. */
   statusRow: null as string | null,
+  /** The kind of work left whose items are shown (decide, build, setup). */
+  statusKind: null as string | null,
+  /** Whether the full list, done or not, is shown under What's left. */
+  statusAll: false,
+  /** What each kind of work left asks of the person, in words. */
+  statusKinds: {
+    decide: { name: 'Decide', what: 'Questions Claude asked and gaps /readiness found. You answer them, in a line or by picking an option. No code.', action: 'Answer them' },
+    build: { name: 'Build or confirm', what: 'Screens whose stories are not marked done. Many are probably built already and just not checked against the code; the rest need building. Let Claude check them first, then build what is missing.', action: 'Copy for Claude' },
+    setup: { name: 'Set up the project', what: 'What a well-run project has: a README, code standards, design tokens, tools for Claude. Claude can add each one: copy its instruction into Claude Code in the product.', action: '' },
+  } as Record<string, { name: string; what: string; action: string }>,
+  /** The kind's main action: answer in the Inbox, or copy the check-the-stories instruction. */
+  statusKindAction(kind: { key: string; rows: StatusRow[] }) {
+    if (kind.key === 'decide') return this.inbox.length ? this.enterFocus() : this.showGaps()
+    if (kind.key === 'build') {
+      const lines = kind.rows.map((r) => `- ${r.title} (${r.open?.id ?? ''})${r.openStories?.length ? `: ${r.openStories.join(', ')}` : ''}`)
+      return this.showPrompt(
+        'Check these screens against the code',
+        [
+          'Check these screens and their stories in .grndwrk/stories/ against the code.',
+          'For each story, go through its acceptance criteria: tick each one the code meets (- [x]) and leave the rest open (- [ ]); turn a plain - criterion into a checkbox. Set status: done when all are met, partial when some are, and fill applies_to with the routes or files.',
+          'Do not build anything yet. End with a short list of what is left to build, screen by screen, so I can pick what to do first.',
+          '',
+          ...lines,
+        ].join('\n'),
+      )
+    }
+  },
   /** The row's own action: answer in Focus, open the screen, or write the purpose. */
   openStatusRow(row: StatusRow) {
-    if (row.open?.kind === 'focus') return this.enterFocus()
+    if (row.open?.kind === 'focus') return this.inbox.length ? this.enterFocus() : this.showGaps()
     if (row.open?.kind === 'screen' && row.open.id) {
       this.selectScreen(row.open.id)
       return this.setView('sitemap')
@@ -540,7 +1176,7 @@ export const state = Alpine.reactive({
     try {
       const text = await fetchDraft(name)
       if (text) await this.copyText(text)
-      else this.flash(`No draft ${name} in .groundwork/outputs/drafts/`)
+      else this.flash(`No draft ${name} in .grndwrk/outputs/drafts/`)
     } catch (err) {
       this.flash(errorText(err))
     }
@@ -552,7 +1188,7 @@ export const state = Alpine.reactive({
     this.setView('deliverables')
   },
   get surveyHtml(): string {
-    return linkIds(marked.parse(stripFrontmatter(this.survey ?? ''), { async: false }) as string)
+    return linkIds(md(stripFrontmatter(this.survey ?? '')))
   },
   /** How many findings the survey lists under "What I found". */
   get surveyFindings(): number {
@@ -573,7 +1209,7 @@ export const state = Alpine.reactive({
   },
   setDeliverablesTab(tab: 'survey' | 'brief' | 'stories' | 'starter') {
     this.deliverablesTab = tab
-    store('groundwork.deliverablesTab', tab)
+    store('grndwrk.deliverablesTab', tab)
   },
   async copyStarter() {
     if (!this.starter) return
@@ -582,7 +1218,7 @@ export const state = Alpine.reactive({
       this.copied = true
       setTimeout(() => (this.copied = false), 2000)
     } catch {
-      this.flash('The browser did not allow copying. Open .groundwork/outputs/CLAUDE.starter.md instead.')
+      this.flash('The browser did not allow copying. Open .grndwrk/outputs/CLAUDE.starter.md instead.')
     }
   },
   /** The gap a thought answers, if it was written as an answer. The gap may be closed by now. */
@@ -611,6 +1247,18 @@ export const state = Alpine.reactive({
   /** Guesses from /survey that nobody has confirmed yet. */
   get guessCount(): number {
     return Object.values(this.nodes).filter((n) => n.extra?.source === 'inferred' && n.status !== 'settled').length
+  },
+  /** A prompt for Claude, shown in full before it is copied; it can be changed there first. */
+  prompt: null as { title: string; text: string } | null,
+  showPrompt(title: string, text: string) {
+    if (!text) return
+    this.prompt = { title, text }
+    focusWhenVisible('prompt-text')
+  },
+  async copyPrompt() {
+    if (!this.prompt) return
+    await this.copyText(this.prompt.text)
+    this.prompt = null
   },
   async copyText(text: string) {
     try {
@@ -663,8 +1311,10 @@ export const state = Alpine.reactive({
     return parseAreas(this.readiness?.report?.body ?? '')
   },
   get openGaps(): Gap[] {
-    const order = { blocking: 0, important: 1, nice: 2 }
-    return (this.readiness?.gaps ?? []).filter((g) => !g.answered_by).sort((a, b) => order[a.severity] - order[b.severity])
+    return cached('openGaps', () => {
+      const order = { blocking: 0, important: 1, nice: 2 }
+      return (this.readiness?.gaps ?? []).filter((g) => !g.answered_by).sort((a, b) => order[a.severity] - order[b.severity])
+    })
   },
   get waitingGaps(): Gap[] {
     return (this.readiness?.gaps ?? []).filter((g) => g.answered_by && !g.enough)
@@ -715,7 +1365,7 @@ export const state = Alpine.reactive({
     const report = this.readiness?.report
     const fromCode = nodes.filter((n) => ['code', 'docs', 'commit'].includes(String(n.extra?.source))).length
     const settled = nodes.filter((n) => n.status === 'settled').length
-    const waiting = this.focusQueue.length
+    const waiting = this.inbox.length + this.openGaps.length
     const brief = this.briefWritten
     const reportStale = !!report && !!this.mapChanged && this.mapChanged > report.checked
     const briefStale = !!brief && !!report && report.checked > brief
@@ -726,7 +1376,7 @@ export const state = Alpine.reactive({
       name: 'Answer',
       done: signed.answer ?? '',
       status: waiting ? `${waiting} waiting on you` + (this.blockingCount ? `, ${this.blockingCount} blocking` : '') : 'Nothing waiting on you.',
-      next: waiting ? 'Go through them in Focus. "Enough for now" is a fine answer.' : this.waitingGaps.length ? 'Run /readiness to check your answers.' : 'Move on, or run /challenge for a few sharp questions.',
+      next: waiting ? `${this.inbox.length ? 'Answer Claude\'s questions in the Inbox. ' : ''}${this.openGaps.length ? 'Gaps are dashed cards on the map; "Enough for now" is a fine answer.' : ''}`.trim() : this.waitingGaps.length ? 'Run /readiness to check your answers.' : 'Move on, or run /challenge for a few sharp questions.',
       stale: waiting > 0,
     }
 
@@ -861,121 +1511,146 @@ export const state = Alpine.reactive({
     return (m?.[0] ?? starter).trim() + '\n'
   },
 
-  // Focus mode: one thing at a time, only what needs the person.
+  // The Inbox: Claude's questions, each answered in place, with a way to see it on the map.
   /**
-   * Everything waiting on the person, most important first: blocking gaps,
-   * questions from Claude, guesses from /survey to confirm, then the other
-   * gaps. Skipped items wait at the end, in the order they were skipped.
+   * Every open question from Claude: on thoughts, guesses from /survey to
+   * confirm, and on screens. Gaps are not here; they are dashed cards on the
+   * map. Working on one part shows that part's only.
    */
-  get focusQueue(): FocusItem[] {
-    const gaps = this.openGaps.filter((g) => this.gapInScope(g))
-    const nodes = groupForList(Object.values(this.nodes).filter((n) => this.inScope(n)), '').flatMap((g) => g.nodes)
-    const guess = (n: GNode) => n.extra?.source === 'inferred' && n.status === 'open' && !splitBody(n.body).entries.some((e) => e.who === 'you')
-    const items: FocusItem[] = [
-      ...gaps.filter((g) => g.severity === 'blocking').map((g) => ({ key: `gap:${g.id}`, kind: 'gap' as const, id: g.id })),
-      ...nodes.filter((n) => !guess(n) && openQuestions(n.body) > 0).map((n) => ({ key: `node:${n.id}`, kind: 'question' as const, id: n.id })),
-      ...nodes.filter(guess).map((n) => ({ key: `node:${n.id}`, kind: 'guess' as const, id: n.id })),
-      ...gaps.filter((g) => g.severity !== 'blocking').map((g) => ({ key: `gap:${g.id}`, kind: 'gap' as const, id: g.id })),
-    ]
-    const skipped = this.focusSkipped
-    const rank = (i: FocusItem) => (skipped.includes(i.key) ? 1 + skipped.indexOf(i.key) : 0)
-    return items.map((item, i) => ({ item, i })).sort((a, b) => rank(a.item) - rank(b.item) || a.i - b.i).map((x) => x.item)
+  get inbox(): InboxItem[] {
+    return cached('inbox', () => {
+      const nodes = groupForList(Object.values(this.nodes).filter((n) => this.inScope(n) && !isFixed(n)), '').flatMap((g) => g.nodes)
+      const guess = (n: GNode) => n.extra?.source === 'inferred' && n.status === 'open' && !splitBody(n.body).entries.some((e) => e.who === 'you')
+      // Every open question is its own item: Claude may ask several things about one thought.
+      const asked = (body: string) => questions(body).filter((q) => q.open)
+      const entries = (body: string) => splitBody(body).entries
+      const items = (kind: InboxItem['kind'], id: string, about: string, where: string, body: string): InboxItem[] => {
+        const open = asked(body)
+        // A guess without a question is still one thing to confirm.
+        if (!open.length) return kind === 'guess' ? [{ key: `node:${id}`, kind, id, question: '', options: [], text: '', about, where, date: '', entry: -1, index: 0, of: 1 }] : []
+        return open.map((q, n) => ({
+          key: `${kind === 'screen' ? 'screen' : 'node'}:${id}:${q.entry}:${q.index}`,
+          kind, id, about, where,
+          question: this.entryWords(q.question), options: q.options, text: entries(body)[q.entry]?.text ?? '', date: q.date,
+          entry: q.entry, index: q.index, of: open.length, position: n + 1,
+        }))
+      }
+      const screens = screenTree(this.screens).filter(({ screen }) => !screen.error && (!this.scope || screen.id === this.scope))
+      return [
+        ...nodes.filter((n) => !guess(n)).flatMap((n) => items('question', n.id, n.title, n.topic, n.body)),
+        ...screens.flatMap(({ screen }) => items('screen', screen.id, screen.title, this.screenPath(screen), screen.body)),
+        ...nodes.filter(guess).flatMap((n) => items('guess', n.id, n.title, n.topic, n.body)),
+      ]
+    })
   },
-  get focusCurrent(): FocusItem | null {
-    return this.focusQueue[0] ?? null
+  /**
+   * Everything about what a question is on, to read in the Inbox without
+   * leaving it: where it sits, its notes, the conversation before the
+   * question, and for a screen its purpose, who it is for and what they do.
+   */
+  inboxDetail(item: InboxItem): { facts: string[]; notesHtml: string; earlier: Entry[]; links: { id: string; title: string }[]; purpose: string; audience: string[]; tasks: string[] } {
+    const empty = { facts: [], notesHtml: '', earlier: [], links: [], purpose: '', audience: [], tasks: [] }
+    if (item.kind === 'screen') {
+      const s = this.screens.find((x) => x.id === item.id)
+      if (!s) return empty
+      const { notes, entries } = splitBody(s.body)
+      return { ...empty, facts: [s.status, this.screenPath(s) && `under ${this.screenPath(s)}`].filter(Boolean) as string[], notesHtml: notes.trim() ? md(notes) : '', earlier: entries.filter((e) => !e.open), purpose: s.purpose, audience: s.audience, tasks: s.tasks }
+    }
+    const n = this.nodes[item.id]
+    if (!n) return empty
+    const { notes, entries } = splitBody(n.body)
+    const screen = this.screens.find((s) => s.id === n.extra?.screen)
+    return {
+      ...empty,
+      facts: [n.type, n.status, n.page && `page ${n.page}`, n.topic && `topic ${n.topic}`, screen && `screen ${screen.title}`].filter(Boolean) as string[],
+      notesHtml: notes.trim() ? md(notes) : '',
+      earlier: entries.filter((e) => !e.open),
+      links: n.links.filter((id) => this.nodes[id]).map((id) => ({ id, title: this.nodes[id].title })),
+    }
   },
-  /** True when everything left has been skipped once. */
-  get focusOnlySkipped(): boolean {
-    const cur = this.focusCurrent
-    return !!cur && this.focusSkipped.includes(cur.key)
-  },
-  get focusGap(): Gap | null {
-    const cur = this.focusCurrent
-    return cur?.kind === 'gap' ? (this.readiness?.gaps.find((g) => g.id === cur.id) ?? null) : null
-  },
-  get focusNode(): GNode | null {
-    const cur = this.focusCurrent
-    return cur && cur.kind !== 'gap' ? (this.nodes[cur.id] ?? null) : null
-  },
-  /** The open question on the current card, and the options Claude gave with it. */
-  get focusQuestion(): { question: string; options: string[] } | null {
-    const n = this.focusNode
-    const open = n ? splitBody(n.body).entries.find((e) => e.open) : undefined
-    return open ? questionOptions(open.text) : null
-  },
-  /** What the current item offers to start from: suggestions on a gap, options on a question. */
-  get focusOptions(): string[] {
-    if (this.focusGap) return (this.focusGap.suggestions ?? []).map((s) => s.title)
-    return this.focusQuestion?.options ?? []
-  },
-  /** The ids that stay bright in the map: the current item and what it touches. */
-  get focusIds(): string[] {
-    const gap = this.focusGap
-    if (gap) return [`gap:${gap.id}`, ...gap.near]
-    const n = this.focusNode
-    return n ? [n.id, ...n.links] : []
-  },
-  /** The free notes on the current card, without its thread. */
-  get focusNotes(): string {
-    const n = this.focusNode
+  /** The free notes on a thought, without its thread or pictures, for context. */
+  notesOf(id: string): string {
+    const n = this.nodes[id]
     return n ? splitBody(n.body).notes.replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim() : ''
   },
-  /** What to do once nothing needs the person. */
-  get focusNextStep(): string {
+  /** Where a screen sits in the tree: Home › Booking. */
+  screenPath(screen: Screen): string {
+    const byId = new Map(this.screens.map((s) => [s.id, s]))
+    const path: string[] = []
+    const seen = new Set<string>()
+    for (let p = byId.get(screen.parent); p && !seen.has(p.id); p = byId.get(p.parent)) {
+      seen.add(p.id)
+      path.unshift(p.title)
+    }
+    return path.join(' › ')
+  },
+  /** What to do once Claude has nothing to ask. */
+  get inboxNextStep(): string {
+    if (this.openGaps.length) return `${this.openGaps.length} ${this.openGaps.length === 1 ? 'gap waits' : 'gaps wait'} on the map, as dashed cards.`
     if (!this.readiness?.report) return 'Run /readiness in Claude Code to see what is missing.'
     if (this.waitingGaps.length) return `Run /readiness in Claude Code to check your ${this.waitingGaps.length === 1 ? 'answer' : 'answers'}.`
     if (!this.brief) return 'Run /brief in Claude Code to write the brief and the first stories.'
     return 'Run /challenge for a few sharp questions, or keep adding thoughts in the map.'
   },
   enterFocus() {
-    this.focusSkipped = []
+    this.select(null)
     this.setView('focus')
-    this.focusShow()
   },
-  /** Point the map and the selection at the current item, so it scrolls into view. */
-  focusShow() {
-    const cur = this.focusCurrent
-    if (!cur) {
-      this.select(null)
-      return
+  /** Leave the Inbox for the place the question is about: the card on the map, or the screen. */
+  viewInMap(item: InboxItem) {
+    if (item.kind === 'screen') {
+      this.selectScreen(item.id)
+      return this.setView('sitemap')
     }
-    if (cur.kind === 'gap') {
-      const gap = this.focusGap
-      if (gap?.page && !this.onAll && !samePage(gap.page, this.currentPage)) this.currentPage = gap.page
-      if (this.selectedGapId !== cur.id) this.selectGap(cur.id)
-    } else {
-      const node = this.nodes[cur.id]
-      if (node && !this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.currentPage = pageOf(node, this.pageNames)
-      if (this.selectedId !== cur.id) this.select(cur.id)
+    this.goToNode(item.id)
+  },
+  /** Show the first open gap on the map, the blocking ones first. */
+  showGaps() {
+    const gap = [...this.openGaps].sort((a, b) => Number(b.severity === 'blocking') - Number(a.severity === 'blocking'))[0]
+    if (gap) this.showGapInMap(gap.id)
+    else this.setView('map')
+  },
+  /** Answer a question in the Inbox: a **You** entry in its thread. It leaves the Inbox once answered. */
+  async answerInbox(item: InboxItem, given?: string) {
+    const text = (given ?? this.inboxDrafts[item.key] ?? '').trim()
+    if (!text || this.inboxSending) return
+    this.inboxSending = item.key
+    try {
+      // The answer to this question only, quoting it when others wait on the same thought.
+      const answer = (body: string) => {
+        const q = questions(body).find((x) => x.entry === item.entry && x.index === item.index && x.open)
+        return q ? appendAnswer(body, q, text, today()) : appendEntry(body, 'you', text, today())
+      }
+      if (item.kind === 'screen') {
+        const screen = this.screens.find((s) => s.id === item.id)
+        if (!screen) return
+        this.putScreen(await updateScreen(screen.id, { body: answer(screen.body) }))
+      } else {
+        const n = this.nodes[item.id]
+        if (!n) return
+        this.upsert(await updateNode(n.id, { body: answer(n.body) }))
+      }
+      delete this.inboxDrafts[item.key]
+      this.flash(`Answered. Claude reads it on the next ${item.kind === 'screen' ? '/sitemap' : 'command'} run.`)
+    } catch (err) {
+      this.flash(errorText(err))
+    } finally {
+      this.inboxSending = ''
     }
-    focusWhenVisible('focus-answer')
   },
-  focusSkip() {
-    const cur = this.focusCurrent
-    if (!cur) return
-    this.focusSkipped = [...this.focusSkipped.filter((k) => k !== cur.key), cur.key]
-    this.focusShow()
-  },
-  /** Start the skipped ones over, from the top. */
-  focusRestart() {
-    this.focusSkipped = []
-    this.focusShow()
-  },
-  /** Start an answer from a suggestion or an option. It can be edited before sending. */
+  /** Start an answer to the open gap from one of its suggestions. It can be edited before sending. */
   pickOption(text: string) {
-    if (this.focusGap || (this.view !== 'focus' && this.selectedGap)) this.gapAnswer = text
-    else this.reply = text
-    focusWhenVisible(this.view === 'focus' ? 'focus-answer' : 'gap-answer')
+    this.gapAnswer = text
+    focusWhenVisible('gap-answer')
   },
   /** A guess from /survey is right: settle it, and answer its question if one is open. */
-  async confirmGuess() {
-    const n = this.focusNode
+  async confirmGuess(id: string) {
+    const n = this.nodes[id]
     if (!n) return
     const body = openQuestions(n.body) > 0 ? appendEntry(n.body, 'you', 'Yes, that is right.', today()) : n.body
     try {
       this.upsert(await updateNode(n.id, { status: 'settled', body }))
       this.flash('Confirmed and settled.')
-      this.focusShow()
     } catch (err) {
       this.flash(errorText(err))
     }
@@ -1005,7 +1680,6 @@ export const state = Alpine.reactive({
       this.readiness = await markGapAnswered(gap.id, node.id, true)
       this.gapAnswer = ''
       this.flash('Accepted for now. /readiness will not raise it again.')
-      if (this.view === 'focus') this.focusShow()
     } catch (err) {
       this.flash(errorText(err))
     }
@@ -1029,8 +1703,138 @@ export const state = Alpine.reactive({
     // Leaving focus for another page closes the card focus had open. The map keeps it, to see it in place.
     if (this.view === 'focus' && view !== 'focus' && view !== 'map') this.closePanel()
     this.view = view
-    store('groundwork.view', view)
+    store('grndwrk.view', view)
     if (view === 'map') revealSelection()
+    if (view === 'docs') void this.loadDocs()
+  },
+  // Documents: what steers Claude in the product, with what the last check found in each, readable and editable here.
+  docs: [] as Doc[],
+  docPath: readStored<string>('grndwrk.docPath', ''),
+  doc: null as { path: string; text: string; exists: boolean; draft?: string } | null,
+  async loadDocs() {
+    this.docs = await fetchDocs()
+    const keep = this.docs.find((d) => d.path === this.docPath) ?? this.docs[0]
+    if (keep && (!this.doc || this.doc.path !== keep.path)) await this.openDoc(keep.path)
+  },
+  get openDocInfo(): Doc | null {
+    return this.docs.find((d) => d.path === this.docPath) ?? null
+  },
+  /** The worst a check said about a document: missing, partly, or nothing to add. */
+  docStatus(d: Doc): 'missing' | 'partly' | 'ok' | '' {
+    if (!d.exists) return 'missing'
+    const live = d.findings.filter((f) => f.status !== 'done')
+    if (live.some((f) => f.status === 'missing')) return 'missing'
+    if (live.length) return 'partly'
+    return d.findings.length ? 'ok' : ''
+  },
+  /** What the checks found that is not in any document: things to write that have no file yet. */
+  get docsUnplaced(): Foundation[] {
+    const placed = new Set(this.docs.flatMap((d) => d.findings.map((f) => f.id)))
+    return (this.readiness?.foundations ?? []).filter((f: Foundation) => f.status !== 'done' && !placed.has(f.id))
+  },
+  async openDoc(path: string) {
+    this.docPath = path
+    store('grndwrk.docPath', path)
+    try {
+      this.doc = await fetchDoc(path)
+    } catch (err) {
+      this.doc = null
+      this.flash(errorText(err))
+    }
+  },
+  async openDocEditor() {
+    if (!this.doc?.exists) return
+    try {
+      await openDocInEditor(this.doc.path)
+      this.flash(`Opened ${this.doc.path} in your editor`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** The open document's headings, to comment on one. */
+  get docHeadings(): string[] {
+    const t = this.doc ? (this.doc.exists ? this.doc.text : (this.doc.draft ?? '')) : ''
+    return t.split('\n').filter((l) => /^#{1,4}\s+\S/.test(l)).map((l) => l.replace(/^#+\s+/, '').trim()).slice(0, 80)
+  },
+  /** Comments on documents: thoughts about one document, or one of its sections, for Claude to act on. */
+  docSection: '',
+  docComment: '',
+  get docComments(): GNode[] {
+    const path = this.docPath
+    return Object.values(this.nodes).filter((n) => n.extra?.doc === path && n.status !== 'settled')
+  },
+  async commentOnDoc() {
+    const text = this.docComment.trim()
+    const d = this.openDocInfo
+    if (!text || !d) return
+    const first = text.split('\n')[0]
+    try {
+      const node = await createNode({
+        title: first.length > 140 ? first.slice(0, 137) + '...' : first,
+        type: 'idea',
+        topic: 'documents',
+        body: `About ${d.path}${this.docSection ? `, the section "${this.docSection}"` : ''}.${text !== first ? `\n\n${text}` : ''}\n`,
+        doc: d.path,
+        ...(this.docSection ? { doc_section: this.docSection } : {}),
+      } as never)
+      this.upsert(node)
+      this.docComment = ''
+      this.docSection = ''
+      this.flash('Comment added. Copy for Claude includes it.')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async resolveDocComment(id: string) {
+    try {
+      this.upsert(await updateNode(id, { status: 'settled' }))
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** What to give Claude Code in the product for this document: what the check suggests, your comments, or to write it from the draft. */
+  docPrompt(): string {
+    const d = this.openDocInfo
+    if (!d) return ''
+    const comments = this.docComments.map((n) => `- ${n.extra?.doc_section ? `In the "${n.extra.doc_section}" section: ` : ''}${n.title}${n.body.split('\n').slice(2).join(' ').trim() ? `. ${n.body.split('\n').slice(2).join(' ').trim()}` : ''}`)
+    const withComments = (lines: string[]) => (comments.length ? [...lines, '', 'My comments on it:', ...comments, '', 'When a comment is done, settle its thought in .grndwrk/nodes/ (status: settled).'] : lines)
+    const live = d.findings.filter((f) => f.status !== 'done')
+    if (!d.exists) {
+      return withComments([
+        `Create ${d.path} in this project${d.draft ? `, starting from the draft in .grndwrk/outputs/drafts/${d.draft}` : ''}.`,
+        ...live.flatMap((f) => [f.suggestion, ...f.missing.map((m) => `- ${m}`)]).filter(Boolean),
+        d.draft ? 'Answer the questions the draft leaves open with me first; do not guess them.' : '',
+        'Link it from CLAUDE.md if Claude should read it.',
+      ].filter(Boolean)).join('\n')
+    }
+    return withComments([
+      `Update ${d.path}:`,
+      ...live.map((f) => `- ${f.section ? `In the "${f.section.replace(/-/g, ' ')}" section: ` : ''}${f.missing.join('; ')}${f.suggestion ? `. ${f.suggestion}` : ''}`),
+      'Change only what these points ask for, and keep the rest as it is.',
+    ]).join('\n')
+  },
+  /** The rendered document, with the sections a check found something about marked. */
+  docHtml(): string {
+    const d = this.doc
+    if (!d) return ''
+    return md(d.exists ? d.text : (d.draft ?? ''))
+  },
+  /** Mark the headings a finding is about, after the document is drawn. Only text is set, never markup. */
+  markDocSections(el: HTMLElement) {
+    const info = this.openDocInfo
+    const live = (info?.findings ?? []).filter((f) => f.section && f.status !== 'done')
+    const slug = (t: string) => t.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-')
+    el.querySelectorAll('.doc-flag-note').forEach((n) => n.remove())
+    el.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => {
+      h.classList.remove('doc-flag')
+      const hits = live.filter((f) => f.section === slug(h.textContent ?? ''))
+      if (!hits.length) return
+      h.classList.add('doc-flag')
+      const note = document.createElement('div')
+      note.className = 'doc-flag-note'
+      note.textContent = hits.map((f) => `${f.title}: ${f.missing.join('; ') || f.status}`).join(' · ')
+      h.after(note)
+    })
   },
   /**
    * A comment pointed out on the phone, to be written here: open it with the
@@ -1049,6 +1853,11 @@ export const state = Alpine.reactive({
     if (!node) return
     if (!(this.scopeScreen && this.inScope(node)) && !this.onAll && !samePage(pageOf(node, this.pageNames), this.currentPage)) this.showPage(pageOf(node, this.pageNames))
     if (this.view !== 'map') this.setView('map')
+    // A fixed comment, or a thought the feedback filter hides: show what it belongs with.
+    if (!this.visibleNodes.includes(node)) {
+      const p = progressOfNode(node)
+      this.setProgressFilter(p === 'done' || p === 'later' ? p : '')
+    }
     this.select(id)
   },
   get verdictLabel(): string {
@@ -1070,22 +1879,26 @@ export const state = Alpine.reactive({
   },
   // The board and the outline: two ways to draw the same cards.
   get board(): Board {
-    // Inside one part, its thoughts group by topic: the part's areas and features.
-    const groupBy = this.scopeScreen ? 'topic' : this.groupBy
-    return buildBoard(this.visibleNodes, this.visibleGaps, this.visibleStories, { groupBy, screens: this.screens })
+    return cached('board', () => {
+      // Inside one part, its thoughts group by topic: the part's areas and features.
+      const groupBy = this.scopeScreen ? 'topic' : this.groupBy
+      return buildBoard(this.visibleNodes, this.visibleGaps, this.visibleStories, { groupBy, screens: this.viewScreens })
+    })
   },
   get outline(): OutlineSection[] {
-    return buildOutline(this.board)
+    return cached('outline', () => {
+      return buildOutline(this.board)
+    })
   },
   setGroupBy(groupBy: GroupBy) {
     this.groupBy = groupBy
-    store('groundwork.groupBy', groupBy)
+    store('grndwrk.groupBy', groupBy)
     revealSelection()
   },
   firstLine,
   setMapLayout(layout: MapLayout) {
     this.mapLayout = layout
-    store('groundwork.mapLayout', layout)
+    store('grndwrk.mapLayout', layout)
     revealSelection()
   },
   /** `V`: the next way to draw the map. */
@@ -1097,29 +1910,21 @@ export const state = Alpine.reactive({
   },
   /** A card clicked in any layout: a thought, a ghost gap (gap:<id>) or a story (story:<id>). */
   clickCard(id: string) {
-    // In focus mode, clicking another card leaves focus and opens it in the map.
-    if (this.view === 'focus') {
-      this.setView('map')
-      if (id.startsWith('gap:')) return this.showGapInMap(id.slice(4))
-      if (id.startsWith('story:')) return this.selectStory(id.slice(6))
-      return this.goToNode(id)
-    }
     if (id.startsWith('gap:')) return this.selectGap(id.slice(4))
     if (id.startsWith('story:')) return this.selectStory(id.slice(6))
     if (this.mode === 'link' && this.selectedId && id !== this.selectedId) void this.toggleLink(id)
     else this.select(id)
   },
   clickBackground() {
-    if (this.view === 'focus') return
     if (this.mode !== 'link') this.select(null)
   },
   /** Linked to the open card, so it lights up on the board. */
   isLinked(id: string): boolean {
     return !!this.selected?.links.includes(id)
   },
-  /** In focus mode everything but the current item and what it touches is dimmed. */
-  dimmed(id: string): boolean {
-    return this.view === 'focus' && !!this.focusCurrent && !this.focusIds.includes(id)
+  /** Kept for the templates: nothing is dimmed now that the Inbox is a page of its own. */
+  dimmed(_id: string): boolean {
+    return false
   },
   /**
    * Dropping a card in another column moves it to that screen (or General),
@@ -1206,10 +2011,10 @@ export const state = Alpine.reactive({
     if (!gap) return
     if (gap.page && !this.onAll && !samePage(gap.page, this.currentPage)) {
       this.currentPage = gap.page
-      store('groundwork.page', gap.page)
+      store('grndwrk.page', gap.page)
     }
     this.view = 'map'
-    store('groundwork.view', 'map')
+    store('grndwrk.view', 'map')
     this.selectGap(id)
   },
   selectGap(id: string) {
@@ -1238,7 +2043,6 @@ export const state = Alpine.reactive({
       if (closes) this.readiness = await markGapAnswered(gap.id, node.id)
       this.gapAnswer = ''
       this.flash(closes ? 'Marked as answered. /readiness decides if it closes.' : 'Added as a thought. The gap stays open.')
-      if (this.view === 'focus') this.focusShow()
     } catch (err) {
       this.flash(errorText(err))
     }
@@ -1261,7 +2065,7 @@ export const state = Alpine.reactive({
       this.replyStatus = ''
     }
     if (this.selectedId && unsaved.has(this.selectedId) && this.selectedId !== id) {
-      this.flash('Some edits on the last card were not saved. Groundwork is offline.')
+      this.flash('Some edits on the last card were not saved. grndwrk is offline.')
     }
     this.flushAll()
     this.selectedId = id
@@ -1286,12 +2090,39 @@ export const state = Alpine.reactive({
   },
 
   // Capture bar
+  /** What the Add bar adds: a thought, or a story. */
+  captureKind: readStored<'thought' | 'story'>('grndwrk.captureKind', 'thought'),
+  setCaptureKind(kind: 'thought' | 'story') {
+    this.captureKind = kind
+    store('grndwrk.captureKind', kind)
+  },
   async submitCapture() {
     const parsed = parseCapture(this.capture)
     if (!parsed) return
     const raw = this.capture
     const linkTo = this.selected && !this.selected.error && this.captureLinked ? this.selected : null
     this.capture = ''
+
+    // A story comes from a thought: the open one, or a new thought with the same words.
+    if (this.captureKind === 'story') {
+      try {
+        let from = linkTo
+        if (!from) {
+          const page = this.onAll ? '' : this.currentPage
+          from = await createNode({ title: parsed.title, type: 'feature', page, ...(this.scopeScreen ? { screen: this.scopeScreen.id } : {}) })
+          this.upsert(from)
+        }
+        const st = await createStory({ title: parsed.title, from: [from.id] })
+        this.putStory(st)
+        this.selectStory(st.id)
+        this.editStoryText()
+        this.flash(linkTo ? `Story from "${linkTo.title}"` : 'Story added, with a thought it comes from')
+      } catch (err) {
+        if (!this.capture) this.capture = raw
+        this.flash(errorText(err))
+      }
+      return
+    }
 
     // The same thought twice is almost always a second Enter. Point at the first one instead.
     const same = Object.values(this.nodes).find((n) => sameTitle(n.title, parsed.title))
@@ -1416,7 +2247,9 @@ export const state = Alpine.reactive({
     const text = this.reply.trim()
     const id = this.selectedId
     if (!text || !id || this.sending) return
-    const body = appendEntry(this.draft.body, 'you', text, today())
+    const target = this.replyQuestion(this.draft.body, this.replyTo)
+    const body = target ? appendAnswer(this.draft.body, target, text, today()) : appendEntry(this.draft.body, 'you', text, today())
+    this.replyTo = null
     this.sending = true
     this.replyStatus = 'Saving...'
     try {
@@ -1431,7 +2264,6 @@ export const state = Alpine.reactive({
       }
       this.replyStatus = ''
       this.upsert(node)
-      if (this.view === 'focus') this.focusShow()
     } catch (err) {
       this.replyStatus = `Not saved: ${errorText(err)}`
       console.error('Reply not saved', err)
@@ -1454,10 +2286,10 @@ export const state = Alpine.reactive({
     // Choosing a page goes back to the whole product.
     if (this.scope) {
       this.scope = null
-      store('groundwork.scope', null)
+      store('grndwrk.scope', null)
     }
     this.currentPage = page
-    store('groundwork.page', page)
+    store('grndwrk.page', page)
   },
   async addPage() {
     const name = this.newPage.trim()
@@ -1476,7 +2308,7 @@ export const state = Alpine.reactive({
 
   setDetailsMinimized(min: boolean) {
     this.detailsMinimized = min
-    store('groundwork.detailsMinimized', min)
+    store('grndwrk.detailsMinimized', min)
   },
 
   isCollapsed(key: string): boolean {
@@ -1485,7 +2317,7 @@ export const state = Alpine.reactive({
   },
   toggleGroup(key: string) {
     this.collapsed = { ...this.collapsed, [key]: !this.collapsed[key] }
-    store('groundwork.collapsed', this.collapsed)
+    store('grndwrk.collapsed', this.collapsed)
   },
 
   // List and search
@@ -1499,7 +2331,7 @@ export const state = Alpine.reactive({
   setListOpen(open: boolean) {
     this.listOpen = open
     if (!open) this.query = ''
-    store('groundwork.listOpen', open)
+    store('grndwrk.listOpen', open)
   },
   /** Esc in search clears it and gives the keys back to the map. */
   leaveSearch() {
@@ -1563,13 +2395,49 @@ export const state = Alpine.reactive({
   },
 })
 
+/**
+ * Markdown as HTML for x-html. Sanitized: files can hold text from anyone who
+ * sent a comment, quoted by Claude into a report or a brief. Stricter than
+ * DOMPurify's defaults: no styles, forms or embedded content (they can restyle
+ * or cover the map, say hide a pairing request), no Alpine attributes (x-html
+ * starts Alpine on what it inserts), and pictures only from grndwrk itself,
+ * so rendering a file never tells another server that it was opened.
+ */
+export function md(text: string): string {
+  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string, SANITIZE)
+}
+
+const SANITIZE = {
+  FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'option', 'svg', 'math', 'iframe', 'object', 'embed', 'video', 'audio', 'source', 'link', 'meta', 'base', 'template', 'dialog'],
+  FORBID_ATTR: ['style', 'srcset', 'action', 'formaction', 'autofocus', 'tabindex', 'id', 'name'],
+  ALLOW_DATA_ATTR: false,
+}
+
+/** A picture from this server: a relative path, or /files/ and /shots/. */
+const LOCAL_SRC = /^(?:\.{0,2}\/)?(?:files|shots)\/[^:]*$|^\/(?:files|shots)\/[^:]*$/i
+
+DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+  // Alpine's own attributes: x-data, x-init, :href, @click.
+  if (/^(x-|:|@)/i.test(data.attrName)) data.keepAttr = false
+})
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'IMG' && !LOCAL_SRC.test(node.getAttribute('src') ?? '')) node.removeAttribute('src')
+  if (node.tagName === 'A') {
+    const href = node.getAttribute('href') ?? ''
+    if (/^https?:/i.test(href)) {
+      node.setAttribute('target', '_blank')
+      node.setAttribute('rel', 'noopener noreferrer')
+    } else if (href && !/^(#|\/|\.)/.test(href)) node.removeAttribute('href')
+  }
+})
+
 function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
 /** Node ids in rendered text, like (n_bz8p), become links to the thought. Text only, never inside tags. */
 function linkIds(html: string): string {
-  return html.replace(/(<[^>]*>)|\b(n_[a-z0-9]{4})\b/g, (m, tag, id) => (tag ? tag : `<a href="#" class="node-link" data-node="${id}">${id}</a>`))
+  return html.replace(/(<[^>]*>)|\b(n_[a-z0-9]{4,8})\b/g, (m, tag, id) => (tag ? tag : `<a href="#" class="node-link" data-node="${id}">${id}</a>`))
 }
 
 function stripFrontmatter(text: string): string {

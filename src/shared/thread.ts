@@ -10,7 +10,18 @@
  *   **You** · 2026-10-03
  *   Yes.
  *
- * A question is open until any entry comes after it.
+ * A question stays open until the person answers it or Claude moves on with
+ * a plain **Claude** entry. Claude can ask several things at once: several
+ * **Claude asks** entries in a row, or one entry with several questions, each
+ * with its own Options list. Each is a question of its own. A **You** entry
+ * that starts with a quoted question answers that one:
+ *
+ *   **You** · 2026-10-14
+ *   > Which screen is this about?
+ *
+ *   Community
+ *
+ * A **You** entry without a quote answers every question before it.
  */
 
 export type Who = 'you' | 'claude' | 'claude-asks'
@@ -58,8 +69,122 @@ function parseThread(section: string): Entry[] {
     }
   }
   for (const e of entries) e.text = e.text.trim()
-  entries.forEach((e, i) => (e.open = e.who === 'claude-asks' && i === entries.length - 1))
+  const asked = questionsIn(entries)
+  entries.forEach((e, i) => (e.open = asked.some((q) => q.entry === i && q.open)))
   return entries
+}
+
+/** One question Claude asked, where it is in the thread, and whether it is answered. */
+export interface Question {
+  /** The entry it is in, and its place among the questions of that entry. */
+  entry: number
+  index: number
+  date: string
+  question: string
+  options: string[]
+  open: boolean
+  /** What the person answered, when they did. */
+  answer?: string
+}
+
+/** Every question in a body's thread, in order, open or answered. */
+export function questions(body: string): Question[] {
+  return questionsIn(splitBody(body).entries)
+}
+
+function questionsIn(entries: Entry[]): Question[] {
+  const all: Question[] = []
+  entries.forEach((e, i) => {
+    const pending = all.filter((q) => q.open)
+    if (e.who === 'claude-asks') {
+      splitQuestions(e.text).forEach((q, j) => all.push({ entry: i, index: j, date: e.date, ...q, open: true }))
+    } else if (e.who === 'claude') {
+      // Claude moved on: what it asked before is no longer waiting.
+      for (const q of pending) q.open = false
+    } else {
+      const { quoted, rest } = leadingQuote(e.text)
+      const target = quoted ? pending.find((q) => sameQuestion(q.question, quoted)) : undefined
+      for (const q of target ? [target] : pending) {
+        q.open = false
+        q.answer = target ? rest : e.text
+      }
+    }
+  })
+  return all
+}
+
+/** A **You** entry's leading quote, and the words after it. */
+function leadingQuote(text: string): { quoted: string; rest: string } {
+  const lines = text.split('\n')
+  let n = 0
+  while (n < lines.length && /^\s*>/.test(lines[n])) n++
+  const quoted = lines.slice(0, n).map((l) => l.replace(/^\s*>\s?/, '')).join(' ').trim()
+  return { quoted, rest: lines.slice(n).join('\n').trim() }
+}
+
+const plain = (t: string) => t.toLowerCase().replace(/[^a-z0-9åäöæøüéè]+/g, ' ').trim()
+
+/** The quote names this question: its first line, or enough of it. */
+function sameQuestion(question: string, quoted: string): boolean {
+  const q = plain(question)
+  const a = plain(quoted)
+  if (!a) return false
+  const first = plain(question.split('\n').find((l) => l.trim()) ?? '')
+  return q.includes(a) || a.includes(first) || (a.length >= 20 && q.startsWith(a.slice(0, 20)))
+}
+
+/**
+ * The questions in one **Claude asks** entry. Each Options list closes the
+ * question above it; text after a list starts the next question when it asks
+ * something or has options of its own, and is added to the last one otherwise.
+ */
+export function splitQuestions(text: string): { question: string; options: string[] }[] {
+  const out: { question: string; options: string[] }[] = []
+  let words: string[] = []
+  let options: string[] = []
+  let inOptions = false
+  const close = () => {
+    const question = words.join('\n').trim()
+    if (question || options.length) out.push({ question, options })
+    words = []
+    options = []
+    inOptions = false
+  }
+  for (const line of text.split('\n')) {
+    if (/^\s*options:\s*$/i.test(line)) {
+      inOptions = true
+      continue
+    }
+    const option = /^\s*[-*]\s+(.+)$/.exec(line)
+    if (inOptions && option) {
+      options.push(option[1].trim())
+      continue
+    }
+    if (inOptions && !line.trim()) continue
+    if (inOptions) close()
+    words.push(line)
+  }
+  close()
+  // A closing remark without a question mark or options belongs to the question before it.
+  const merged: typeof out = []
+  for (const q of out) {
+    const last = merged[merged.length - 1]
+    if (last && !q.options.length && !q.question.includes('?')) last.question = `${last.question}\n\n${q.question}`.trim()
+    else merged.push(q)
+  }
+  return merged.length ? merged : [{ question: text.trim(), options: [] }]
+}
+
+/**
+ * Answer one question: a **You** entry that quotes it, so it reads as the
+ * answer to that one even when Claude asked several. Without other open
+ * questions the quote is left out.
+ */
+export function appendAnswer(body: string, question: Question, text: string, date: string): string {
+  const others = questions(body).filter((q) => q.open && !(q.entry === question.entry && q.index === question.index))
+  if (!others.length) return appendEntry(body, 'you', text, date)
+  const first = question.question.split('\n').find((l) => l.trim())?.trim() ?? question.question
+  return appendEntry(body, 'you', `> ${first}\n\n${text.trim()}`, date)
 }
 
 /**
@@ -85,8 +210,9 @@ export function questionOptions(text: string): { question: string; options: stri
   return { question: text.slice(0, m.index).trim(), options }
 }
 
+/** How many questions in the thread wait for an answer. */
 export function openQuestions(body: string): number {
-  return splitBody(body).entries.filter((e) => e.open).length
+  return questions(body).filter((q) => q.open).length
 }
 
 /** Replace the free notes and keep the thread exactly as it was. */
