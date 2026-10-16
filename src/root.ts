@@ -40,7 +40,12 @@ export function noMapMessage(start: string): string {
  * (Groundwork) is moved here the first time, unless it is a link.
  */
 export function stateDir(): string {
-  const at = (name: string) => (process.platform === 'darwin' ? join(homedir(), 'Library', 'Application Support', name) : join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), name))
+  const at = (name: string) =>
+    process.platform === 'darwin'
+      ? join(homedir(), 'Library', 'Application Support', name)
+      : process.platform === 'win32'
+        ? join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), name)
+        : join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), name)
   const dir = at('grndwrk')
   const old = at(process.platform === 'darwin' ? 'Groundwork' : 'groundwork')
   try {

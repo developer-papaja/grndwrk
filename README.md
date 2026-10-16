@@ -15,7 +15,7 @@ grndwrk lives inside your project. It keeps everything as plain markdown files i
 
 - Node.js 20.16 or newer
 - [Claude Code](https://claude.com/claude-code), for the commands
-- macOS for the iOS parts; the rest runs anywhere Node runs
+- macOS, Windows or Linux. The iOS parts need a Mac with Xcode, and on Windows and Linux `--lan` does not announce itself on the network, so a phone asks for the pairing code to be typed. Settings that are yours and not the project's (allowed sites, logins for screenshots) live in `~/Library/Application Support/grndwrk` on macOS, `%LOCALAPPDATA%\grndwrk` on Windows and `~/.local/state/grndwrk` on Linux.
 
 ## Install
 

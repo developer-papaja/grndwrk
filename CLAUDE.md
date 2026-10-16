@@ -58,6 +58,8 @@ The local server serves the UI, exposes a small REST API for nodes, and watches 
 
 During development of the tool itself, use `npm link` to run it inside a real project.
 
+The tests, type check and build run on macOS and Windows in GitHub Actions (`.github/workflows/test.yml`, actions pinned by commit) on every push. grndwrk's per-user folder (`stateDir` in `src/root.ts`) is `~/Library/Application Support/grndwrk` on macOS, `%LOCALAPPDATA%\grndwrk` on Windows and `$XDG_STATE_HOME/grndwrk` (or `~/.local/state/grndwrk`) elsewhere.
+
 ## Stack
 
 - Node + TypeScript
