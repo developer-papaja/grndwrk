@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rename, writeFile } from './fs.js'
 import { newId } from './nodes.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
+import { scalar } from './frontmatter.js'
 import { STORY_STATUSES, type Story, type StoryStatus } from '../shared/types.js'
 
 const ID = /^s_[A-Za-z0-9_-]{1,60}$/
@@ -63,14 +64,18 @@ export interface StoryEdit {
   later?: string | null
 }
 
-/** Frontmatter values written by the map: plain, or quoted when YAML would read them otherwise. */
-const yamlText = (v: string) => (/^[\w][\w ,.()/'-]*$/.test(v) && !/: /.test(v) ? v : JSON.stringify(v))
+/** Frontmatter values written by the map: plain, or quoted when YAML would read them otherwise (null, 1e3, a date). */
+const yamlText = scalar
 
-/** A frontmatter field set, changed or removed in place, leaving every other line as it was. */
+/**
+ * A frontmatter field set, changed or removed in place, leaving every other
+ * line as it was. A value written by hand over several lines (`title: |` or
+ * `>` and indented lines after it) is replaced whole.
+ */
 function setField(front: string, key: string, value: string | null): string {
-  const re = new RegExp(`^${key}:.*$`, 'm')
-  if (value === null) return front.replace(new RegExp(`^${key}:.*\\n?`, 'm'), '')
-  return re.test(front) ? front.replace(re, `${key}: ${value}`) : `${front.replace(/\n?$/, '\n')}${key}: ${value}\n`
+  const re = new RegExp(`^${key}:.*(?:\\n[ \\t]+.*)*$`, 'm')
+  if (value === null) return front.replace(new RegExp(`^${key}:.*(?:\\n[ \\t]+.*)*\\n?`, 'm'), '')
+  return re.test(front) ? front.replace(re, () => `${key}: ${value}`) : `${front.replace(/\n?$/, '\n')}${key}: ${value}\n`
 }
 
 /**

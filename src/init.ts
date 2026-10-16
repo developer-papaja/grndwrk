@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { lstat, rename } from 'node:fs/promises'
+import { lstat, readdir as readdirRaw, rename } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, writeFile } from './store/fs.js'
 import { keepOutOfGit } from './store/gitignore.js'
@@ -21,7 +21,7 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   const templates = join(PACKAGE_ROOT, 'templates')
   const say = (verb: string, path: string) => console.log(`  ${verb.padEnd(8)} ${relative(projectRoot, path)}`)
 
-  await moveOldFolder(projectRoot)
+  if (!(await moveOldFolder(projectRoot))) return
   for (const dir of ['nodes', 'stories', 'screens', 'readiness', 'outputs']) {
     await mkdir(join(gw, dir), { recursive: true })
   }
@@ -203,18 +203,39 @@ async function writeOnce(path: string, content: string, say: (verb: string, path
  * `.grndwrk/`, as it is, so the map, its threads and its pictures come along.
  * Never through a symbolic link, and never over a `.grndwrk/` that is there.
  */
-async function moveOldFolder(projectRoot: string): Promise<void> {
+async function moveOldFolder(projectRoot: string): Promise<boolean> {
   const old = join(projectRoot, OLD_GW_DIR)
   const st = await lstat(old).catch(() => null)
-  if (!st) return
+  if (!st) return true
   if (st.isSymbolicLink() || !st.isDirectory()) {
     console.log(`  skipped  ${OLD_GW_DIR}: a symbolic link or not a folder, so it was not moved\n`)
-    return
+    return true
   }
   if (await lstat(join(projectRoot, GW_DIR)).then(() => true, () => false)) {
     console.log(`  kept     ${OLD_GW_DIR}: ${GW_DIR}/ is there too, so nothing was moved. Keep the one you use.\n`)
-    return
+    return true
+  }
+  // A link inside would be refused once moved, leaving a half set up map: say so first, and move nothing.
+  const link = await firstLink(old)
+  if (link) {
+    console.log(`  skipped  ${OLD_GW_DIR}: ${relative(projectRoot, link)} is a symbolic link, so nothing was moved. Replace it with a real file or folder, then run init again.\n`)
+    process.exitCode = 1
+    return false
   }
   await rename(old, join(projectRoot, GW_DIR))
   console.log(`  moved    ${OLD_GW_DIR} to ${GW_DIR} (the name before grndwrk)\n`)
+  return true
+}
+
+/** The first symbolic link anywhere inside a folder, or null. */
+async function firstLink(dir: string): Promise<string | null> {
+  for (const e of await readdirRaw(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name)
+    if (e.isSymbolicLink()) return p
+    if (e.isDirectory()) {
+      const found = await firstLink(p)
+      if (found) return found
+    }
+  }
+  return null
 }

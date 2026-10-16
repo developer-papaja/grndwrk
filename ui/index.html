@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Nothing in the map loads from or sends to another server: pictures, requests, frames and forms stay on this one. -->
-    <meta http-equiv="Content-Security-Policy" content="img-src 'self' data: blob:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'" />
     <title>grndwrk</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%225%22 fill=%22%230d99ff%22/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style.css" />
@@ -1080,7 +1080,8 @@
                 <span class="size-2 shrink-0 rounded-full" :class="{ 'bg-rose-400': $store.gw.docStatus(d) === 'missing', 'bg-question': $store.gw.docStatus(d) === 'partly', 'bg-emerald-400/70': $store.gw.docStatus(d) === 'ok', 'bg-white/20': !$store.gw.docStatus(d) }"></span>
                 <span class="min-w-0 flex-1">
                   <span class="block truncate font-mono text-[12px]" x-text="d.path"></span>
-                  <span x-show="!d.exists" class="block text-[11px] text-rose-300/80">Suggested, not written yet</span>
+                  <span x-show="!d.exists && !d.blocked" class="block text-[11px] text-rose-300/80">Suggested, not written yet</span>
+                  <span x-show="d.blocked" class="block text-[11px] text-rose-300/80" :title="d.blocked">Unreadable: a link or a folder, not a file</span>
                 </span>
                 <span x-show="Object.values($store.gw.nodes).some((n) => n.extra?.doc === d.path && n.status !== 'settled')" class="shrink-0 text-[11px] text-fog/45" title="Your open comments" x-text="((c) => c + (c === 1 ? ' comment' : ' comments'))(Object.values($store.gw.nodes).filter((n) => n.extra?.doc === d.path && n.status !== 'settled').length)"></span>
               </button>

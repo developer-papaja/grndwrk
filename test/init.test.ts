@@ -30,6 +30,20 @@ describe('init', () => {
     expect(noMapMessage(join(root, 'sub'))).toContain('No .grndwrk/ folder')
   })
 
+  it('moves nothing when the old folder holds a link, so the map is never left half set up', async () => {
+    const elsewhere = await mkdtemp(join(tmpdir(), 'gw-elsewhere-'))
+    try {
+      await mkdir(join(root, '.groundwork'))
+      await symlink(elsewhere, join(root, '.groundwork', 'nodes'))
+      await init(root)
+      expect(existsSync(join(root, '.groundwork', 'nodes'))).toBe(true)
+      expect(existsSync(join(root, '.grndwrk'))).toBe(false)
+      process.exitCode = 0
+    } finally {
+      await rm(elsewhere, { recursive: true, force: true })
+    }
+  })
+
   it('updates the map rules an init from before the rename installed', async () => {
     await mkdir(join(root, '.groundwork'), { recursive: true })
     const old = 'Rules for the Groundwork map in .groundwork/\n'

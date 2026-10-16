@@ -1721,7 +1721,7 @@ export const state = Alpine.reactive({
   },
   /** The worst a check said about a document: missing, partly, or nothing to add. */
   docStatus(d: Doc): 'missing' | 'partly' | 'ok' | '' {
-    if (!d.exists) return 'missing'
+    if (d.blocked || !d.exists) return 'missing'
     const live = d.findings.filter((f) => f.status !== 'done')
     if (live.some((f) => f.status === 'missing')) return 'missing'
     if (live.length) return 'partly'
@@ -1795,7 +1795,8 @@ export const state = Alpine.reactive({
   /** What to give Claude Code in the product for this document: what the check suggests, your comments, or to write it from the draft. */
   docPrompt(): string {
     const d = this.openDocInfo
-    if (!d) return ''
+    // A link or a folder named as a document is never one to write: writing it would follow the link.
+    if (!d || d.blocked) return ''
     const comments = this.docComments.map((n) => `- ${n.extra?.doc_section ? `In the "${n.extra.doc_section}" section: ` : ''}${n.title}${n.body.split('\n').slice(2).join(' ').trim() ? `. ${n.body.split('\n').slice(2).join(' ').trim()}` : ''}`)
     const withComments = (lines: string[]) => (comments.length ? [...lines, '', 'My comments on it:', ...comments, '', 'When a comment is done, settle its thought in .grndwrk/nodes/ (status: settled).'] : lines)
     const live = d.findings.filter((f) => f.status !== 'done')
@@ -2424,7 +2425,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'IMG' && !LOCAL_SRC.test(node.getAttribute('src') ?? '')) node.removeAttribute('src')
   if (node.tagName === 'A') {
     const href = node.getAttribute('href') ?? ''
-    if (/^https?:/i.test(href)) {
+    if (/^(https?:|\/\/)/i.test(href)) {
       node.setAttribute('target', '_blank')
       node.setAttribute('rel', 'noopener noreferrer')
     } else if (href && !/^(#|\/|\.)/.test(href)) node.removeAttribute('href')

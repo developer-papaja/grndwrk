@@ -46,4 +46,37 @@ describe('the documents that steer Claude', () => {
     }
     expect(await docOnDisk(gw, foundations(), 'CLAUDE.md')).toBe(join(root, 'CLAUDE.md'))
   })
+  it('shows a link or a folder named as a document as unreadable, never as one to write', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'gw-outside-'))
+    try {
+      await writeFile(join(outside, 'target'), 'not to be overwritten')
+      await mkdir(join(root, 'docs'), { recursive: true })
+      await symlink(join(outside, 'target'), join(root, 'docs', 'DESIGN.md'))
+      await mkdir(join(root, 'docs', 'folder.md'))
+      const f = parseFoundations(JSON.stringify([
+        { id: 'design_philosophy', status: 'missing', seen_in: ['docs/folder.md'], missing: ['x'], suggestion: '', draft: 'design_philosophy.md', file: 'docs/DESIGN.md' },
+      ]))
+      const docs = await listDocs(gw, f)
+      const linked = docs.find((d) => d.path === 'docs/DESIGN.md')!
+      expect(linked.blocked).toMatch(/symbolic link/)
+      expect(linked.draft).toBeUndefined()
+      expect(docs.find((d) => d.path === 'docs/folder.md')!.blocked).toMatch(/not a file/)
+      await expect(readDoc(gw, f, 'docs/DESIGN.md')).rejects.toThrow(/symbolic link/)
+    } finally {
+      await rm(outside, { recursive: true, force: true })
+    }
+  })
+
+  it.runIf(process.platform === 'darwin')('leaves out grndwrk commands and dependencies whatever their letter case', async () => {
+    const f = parseFoundations(JSON.stringify([
+      { id: 'claude_tools', status: 'partly', seen_in: ['.Claude/Commands/brief.md', 'NODE_MODULES/x/README.md'], missing: ['x'], suggestion: '' },
+    ]))
+    const paths = (await listDocs(gw, f)).map((d) => d.path)
+    expect(paths.some((p) => /commands|node_modules/i.test(p))).toBe(false)
+  })
+
+  it('reads only the first megabyte of a huge document', async () => {
+    await writeFile(join(root, 'BIG.md'), 'a'.repeat(3_000_000))
+    expect((await readDoc(gw, [], 'BIG.md')).text.length).toBe(1_000_000)
+  })
 })

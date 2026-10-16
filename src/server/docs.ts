@@ -1,4 +1,5 @@
-import { lstat, readdir, readFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, open, readdir } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { BadInput } from '../store/nodes.js'
 import { readDraft } from '../store/stories.js'
@@ -29,6 +30,8 @@ export interface Doc {
   findings: DocFinding[]
   /** A draft /readiness wrote for a document that is not there yet. */
   draft?: string
+  /** Something is at this path, but not a plain file (a link, or a folder): shown as unreadable, never as one to write. */
+  blocked?: string
 }
 
 const SKIP = new Set(['node_modules', '.git', 'vendor', '.grndwrk', '.groundwork', 'dist', 'build', '.next', '.nuxt', 'storage', 'public'])
@@ -70,19 +73,30 @@ async function skills(root: string): Promise<string[]> {
   return out
 }
 
-/** A real file at this path inside the project, reached without a symbolic link anywhere on the way. */
-async function isPlainFile(root: string, rel: string): Promise<boolean> {
+/**
+ * What is at this path inside the project: a plain file reached without a
+ * symbolic link anywhere on the way, nothing yet (so it can be suggested), or
+ * something else (a link, a folder), with the reason.
+ */
+async function stateOf(root: string, rel: string): Promise<{ is: 'file' } | { is: 'absent' } | { is: 'blocked'; why: string }> {
   const parts = rel.split('/')
   for (let i = 1; i <= parts.length; i++) {
+    const at = parts.slice(0, i).join('/')
+    let st
     try {
-      const st = await lstat(join(root, ...parts.slice(0, i)))
-      if (st.isSymbolicLink()) return false
-      if (i === parts.length) return st.isFile()
-    } catch {
-      return false
+      st = await lstat(join(root, at))
+    } catch (err) {
+      return (err as NodeJS.ErrnoException).code === 'ENOENT' ? { is: 'absent' } : { is: 'blocked', why: `${at} cannot be read` }
     }
+    if (st.isSymbolicLink()) return { is: 'blocked', why: `${at} is a symbolic link. grndwrk does not follow links to documents.` }
+    if (i === parts.length) return st.isFile() ? { is: 'file' } : { is: 'blocked', why: `${rel} is not a file` }
+    if (!st.isDirectory()) return { is: 'blocked', why: `${at} is not a folder` }
   }
-  return false
+  return { is: 'absent' }
+}
+
+async function isPlainFile(root: string, rel: string): Promise<boolean> {
+  return (await stateOf(root, rel)).is === 'file'
 }
 
 /** A path from a file or a check, as a clean path inside the project, or null. */
@@ -92,24 +106,29 @@ function clean(root: string, p: string): string | null {
   const full = resolve(root, bare)
   if (full !== root && !full.startsWith(root + sep)) return null
   const rel = relative(root, full).split(sep).join('/')
-  if (!rel || rel.startsWith('..') || rel.split('/').some((s) => SKIP.has(s))) return null
-  if (rel.startsWith('.claude/commands/')) return null // grndwrk's own commands, updated by init.
+  // macOS and Windows find .Claude/Commands as .claude/commands: compare as they do.
+  const fold = process.platform === 'darwin' || process.platform === 'win32' ? rel.toLowerCase() : rel
+  if (!rel || rel.startsWith('..') || fold.split('/').some((s) => SKIP.has(s))) return null
+  if (fold.startsWith('.claude/commands/')) return null // grndwrk's own commands, updated by init.
   return isMarkdown(rel) ? rel : null
 }
 
 export async function listDocs(gwDir: string, foundations: Foundation[]): Promise<Doc[]> {
   const root = resolve(dirname(gwDir))
   const found = new Map<string, Doc>()
-  const add = (path: string, exists: boolean) => {
-    if (!found.has(path)) found.set(path, { path, exists, findings: [] })
+  const add = async (path: string) => {
+    if (!found.has(path)) {
+      const st = await stateOf(root, path)
+      found.set(path, { path, exists: st.is === 'file', findings: [], ...(st.is === 'blocked' ? { blocked: st.why } : {}) })
+    }
     return found.get(path)!
   }
-  for (const p of [...(await markdownIn(root, '', 0)), ...(await markdownIn(root, 'docs', 2)), ...(await skills(root))]) add(p, true)
+  for (const p of [...(await markdownIn(root, '', 0)), ...(await markdownIn(root, 'docs', 2)), ...(await skills(root))]) await add(p)
   for (const f of foundations) {
     for (const seen of f.seen_in ?? []) {
       const path = clean(root, seen)
       if (!path) continue
-      const doc = add(path, await isPlainFile(root, path))
+      const doc = await add(path)
       const section = seen.includes('#') ? seen.split('#')[1] : undefined
       doc.findings.push({ id: f.id, title: f.title, status: f.status, missing: f.missing ?? [], suggestion: f.suggestion ?? '', ...(section ? { section } : {}) })
     }
@@ -117,8 +136,8 @@ export async function listDocs(gwDir: string, foundations: Foundation[]): Promis
     if (f.draft && f.status !== 'done') {
       const path = clean(root, f.file ?? (f.draft.toLowerCase() === 'readme.md' ? 'README.md' : f.draft))
       if (path) {
-        const doc = add(path, await isPlainFile(root, path))
-        doc.draft = f.draft
+        const doc = await add(path)
+        if (!doc.blocked) doc.draft = f.draft
         if (!doc.findings.some((x) => x.id === f.id)) doc.findings.push({ id: f.id, title: f.title, status: f.status, missing: f.missing ?? [], suggestion: f.suggestion ?? '' })
       }
     }
@@ -131,14 +150,22 @@ export async function listDocs(gwDir: string, foundations: Foundation[]): Promis
 export async function readDoc(gwDir: string, foundations: Foundation[], path: string): Promise<{ path: string; text: string; exists: boolean; draft?: string }> {
   const doc = (await listDocs(gwDir, foundations)).find((d) => d.path === path)
   if (!doc) throw new BadInput('Not a document grndwrk shows')
+  if (doc.blocked) throw new BadInput(doc.blocked)
   const root = resolve(dirname(gwDir))
   if (!doc.exists) {
     const draft = doc.draft ? await readDraft(gwDir, doc.draft) : null
     return { path, text: '', exists: false, ...(draft ? { draft } : {}) }
   }
   if (!(await isPlainFile(root, path))) throw new BadInput(`${path} is a symbolic link or not a file`)
-  const text = await readFile(join(root, path), 'utf8')
-  return { path, text: text.length > 1_000_000 ? text.slice(0, 1_000_000) : text, exists: true }
+  // Only the first megabyte, never the whole of a huge file.
+  const file = await open(join(root, path), constants.O_RDONLY | constants.O_NOFOLLOW)
+  try {
+    const buf = Buffer.alloc(1_000_000)
+    const { bytesRead } = await file.read(buf, 0, buf.length, 0)
+    return { path, text: buf.subarray(0, bytesRead).toString('utf8'), exists: true }
+  } finally {
+    await file.close()
+  }
 }
 
 /** The file on disk for a document in the list that exists, to open in the person's editor. */

@@ -71,4 +71,15 @@ describe('one set of statuses for everything on the map', () => {
     expect(showsProgress('done', 'done')).toBe(true)
     expect(showsProgress('all', 'later')).toBe(true)
   })
+  it('quotes a title YAML would misread, and replaces a title written over several lines', async () => {
+    await writeFile(join(gw, 'stories', 's_k3f9.md'), STORY.replace('title: Book a desk', 'title: |\n  Book a desk\n  in three steps'))
+    await updateStory(gw, 's_k3f9', { title: 'null' })
+    expect((await listStories(gw))[0].title).toBe('null')
+    await updateStory(gw, 's_k3f9', { title: '1e3' })
+    const story = (await listStories(gw))[0]
+    expect(story.title).toBe('1e3')
+    const file = await readFile(join(gw, 'stories', 's_k3f9.md'), 'utf8')
+    expect(file).not.toContain('in three steps')
+    expect(file).toContain('owner: someone')
+  })
 })
