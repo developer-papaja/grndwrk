@@ -12,6 +12,10 @@
   <body class="bg-ink text-fog antialiased" x-data>
     <!-- Icons: Heroicons 24 outline (MIT), plus a panel toggle drawn to match. -->
     <svg class="hidden" aria-hidden="true">
+      <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></symbol>
+      <!-- Appearance: a circle half filled, drawn to match. -->
+      <symbol id="i-appearance" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.25" /><path d="M12 3.75a8.25 8.25 0 0 0 0 16.5Z" fill="currentColor" /></symbol>
       <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v15m7.5-7.5h-15" /></symbol>
       <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></symbol>
@@ -93,7 +97,7 @@
                         'opacity-20': $store.gw.dimmed(it.id),
                         'ring-2 ring-accent': $store.gw.selectedId === it.id,
                         'ring-1 ring-accent/50': $store.gw.selectedId !== it.id && $store.gw.isLinked(it.id),
-                        'ring-1 ring-white/40': $store.gw.selectedId !== it.id && !$store.gw.isLinked(it.id) && $store.gw.freshIds.includes(it.id),
+                        'ring-1 ring-tint/40': $store.gw.selectedId !== it.id && !$store.gw.isLinked(it.id) && $store.gw.freshIds.includes(it.id),
                         'cursor-copy': $store.gw.mode === 'link'
                       }"
                       :style="{ '--type': $store.gw.typeColors[it.node.type] }"
@@ -115,7 +119,7 @@
                       :data-card="it.id"
                       class="w-full rounded-md border border-dashed px-2.5 py-2 text-left"
                       :class="[
-                        it.gap.severity === 'blocking' ? 'border-rose-400/50 text-rose-200/90' : 'border-white/25 text-fog/65',
+                        it.gap.severity === 'blocking' ? 'border-rose-400/50 text-rose-200/90' : 'border-tint/25 text-fog/65',
                         $store.gw.selectedGapId === it.gap.id && 'ring-2 ring-accent',
                         $store.gw.dimmed(it.id) && 'opacity-20'
                       ]"
@@ -134,7 +138,7 @@
                   <template x-for="st in col.stories" :key="st.id">
                     <button
                       :data-card="'story:' + st.id"
-                      class="rounded-md bg-white/5 px-2.5 py-2 text-left text-fog/80 hover:bg-white/10"
+                      class="rounded-md bg-tint/5 px-2.5 py-2 text-left text-fog/80 hover:bg-tint/10"
                       :class="$store.gw.selectedStoryId === st.id && 'ring-2 ring-accent'"
                       @click="$store.gw.clickCard('story:' + st.id)"
                     >
@@ -176,10 +180,10 @@
                     <template x-if="it.kind === 'node'">
                       <button
                         :data-card="it.id"
-                        class="flex w-full gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
+                        class="flex w-full gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-tint/5"
                         :class="{
                           'bg-accent/15 hover:bg-accent/20': $store.gw.selectedId === it.id,
-                          'bg-white/5': $store.gw.selectedId !== it.id && ($store.gw.isLinked(it.id) || $store.gw.freshIds.includes(it.id)),
+                          'bg-tint/5': $store.gw.selectedId !== it.id && ($store.gw.isLinked(it.id) || $store.gw.freshIds.includes(it.id)),
                           'opacity-45': it.node.status === 'parked' || $store.gw.dimmed(it.id)
                         }"
                         @click="$store.gw.clickCard(it.id)"
@@ -191,14 +195,14 @@
                         </span>
                         <span x-show="$store.gw.hasQuestion(it.id)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Your agent asked something"></span>
                         <span x-show="['proposed', 'ready', 'fixed'].includes($store.gw.feedbackState(it.node))" class="mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[10.5px]" :class="{ fixed: 'bg-emerald-400/10 text-emerald-300/80', ready: 'bg-violet-400/15 text-violet-300', proposed: 'bg-accent/15 text-accent' }[$store.gw.feedbackState(it.node)]" x-text="{ fixed: 'fixed', ready: 'ready to test', proposed: 'fix proposed' }[$store.gw.feedbackState(it.node)]"></span>
-                        <span x-show="it.node.status !== 'open'" class="mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[10.5px]" :class="it.node.status === 'settled' ? 'bg-emerald-400/10 text-emerald-300/80' : 'bg-white/8 text-fog/50'" x-text="it.node.status"></span>
+                        <span x-show="it.node.status !== 'open'" class="mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[10.5px]" :class="it.node.status === 'settled' ? 'bg-emerald-400/10 text-emerald-300/80' : 'bg-tint/8 text-fog/50'" x-text="it.node.status"></span>
                       </button>
                     </template>
                     <template x-if="it.kind === 'gap'">
                       <button
                         :data-card="it.id"
                         class="mt-1 flex w-full gap-2.5 rounded-md border border-dashed px-2 py-1.5 text-left"
-                        :class="[it.gap.severity === 'blocking' ? 'border-rose-400/40 text-rose-200/90' : 'border-white/20 text-fog/65', $store.gw.selectedGapId === it.gap.id && 'bg-accent/15', $store.gw.dimmed(it.id) && 'opacity-45']"
+                        :class="[it.gap.severity === 'blocking' ? 'border-rose-400/40 text-rose-200/90' : 'border-tint/20 text-fog/65', $store.gw.selectedGapId === it.gap.id && 'bg-accent/15', $store.gw.dimmed(it.id) && 'opacity-45']"
                         @click="$store.gw.clickCard(it.id)"
                       >
                         <span class="min-w-0 flex-1">
@@ -238,7 +242,7 @@
           <span class="truncate" x-text="$store.gw.scopeScreen ? $store.gw.scopeScreen.title : 'Whole product'"></span>
           <svg class="size-3.5 shrink-0 rotate-90 text-fog/50"><use href="#i-chevron" /></svg>
         </button>
-        <div x-show="$store.gw.scopeOpen" x-transition.opacity.duration.100ms class="absolute left-0 top-10 z-20 flex max-h-[min(520px,70vh)] w-[340px] flex-col overflow-hidden rounded-xl border border-line bg-panel text-[13px] shadow-xl shadow-black/40">
+        <div x-show="$store.gw.scopeOpen" x-transition.opacity.duration.100ms class="absolute left-0 top-10 z-20 flex max-h-[min(520px,70vh)] w-[340px] flex-col overflow-hidden rounded-xl border border-line bg-panel text-[13px] shadow-xl shadow-shade/40">
           <div class="border-b border-line p-2">
             <input
               id="scope-search"
@@ -258,7 +262,7 @@
               <li>
                 <button
                   class="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left"
-                  :class="i === $store.gw.scopeIndex ? 'bg-accent/25 text-white' : 'text-fog/80 hover:bg-white/5'"
+                  :class="i === $store.gw.scopeIndex ? 'bg-accent/25 text-white' : 'text-fog/80 hover:bg-tint/5'"
                   :data-active="i === $store.gw.scopeIndex"
                   :style="{ paddingLeft: (8 + ($store.gw.scopeQuery ? 0 : o.depth * 14)) + 'px' }"
                   @mouseenter="$store.gw.scopeIndex = i"
@@ -277,7 +281,7 @@
           </ul>
           <div x-show="$store.gw.scopeScreen" class="border-t border-line p-2 text-xs">
             <p class="px-1 text-fog/60" x-text="$store.gw.scopeScreen?.purpose || 'No purpose written yet.'"></p>
-            <button class="mt-1.5 rounded-md px-1.5 py-1 text-accent hover:bg-white/5" @click="$store.gw.scopeOpen = false; $store.gw.selectScreen($store.gw.scope); $store.gw.setView('sitemap')">Open in the Sitemap</button>
+            <button class="mt-1.5 rounded-md px-1.5 py-1 text-accent hover:bg-tint/5" @click="$store.gw.scopeOpen = false; $store.gw.selectScreen($store.gw.scope); $store.gw.setView('sitemap')">Open in the Sitemap</button>
           </div>
         </div>
       </div>
@@ -320,25 +324,25 @@
     <!-- A phone on the network asks to send comments: allow it here, and it gets the pairing code -->
     <div x-cloak x-show="$store.gw.pairRequests.length || $store.gw.siteRequests.length" id="pair-requests" class="pointer-events-none fixed inset-x-0 top-16 z-40 flex flex-col items-center gap-2 px-4">
       <template x-for="p in $store.gw.pairRequests" :key="p.id">
-        <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-[13px] shadow-xl shadow-black/40" x-transition.opacity>
+        <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-[13px] shadow-xl shadow-shade/40" x-transition.opacity>
           <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
           <span class="min-w-0 flex-1">
             <span class="block text-fog" x-text="(p.app ? p.app + ' on ' : '') + p.device + ' wants to send comments'"></span>
             <span class="block text-xs text-fog/50">Allow only if your phone shows <span class="font-mono font-semibold tracking-wider text-fog" x-text="p.check"></span> too. From <span class="font-mono" x-text="p.from"></span>.</span>
           </span>
-          <button class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-white/8 hover:text-fog" @click="$store.gw.answerPair(p.id, false)">Not allowed</button>
+          <button class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-tint/8 hover:text-fog" @click="$store.gw.answerPair(p.id, false)">Not allowed</button>
           <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/85" :id="'allow-' + p.id" @click="$store.gw.answerPair(p.id, true)">Allow</button>
         </div>
       </template>
       <!-- A local site's Comment button sent a comment: allow the site here, and its comment arrives -->
       <template x-for="o in $store.gw.siteRequests" :key="o">
-        <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-[13px] shadow-xl shadow-black/40" x-transition.opacity>
+        <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-[13px] shadow-xl shadow-shade/40" x-transition.opacity>
           <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" /></svg>
           <span class="min-w-0 flex-1">
             <span class="block text-fog"><span class="font-medium" x-text="$store.gw.siteName(o)"></span> wants to send comments</span>
             <span class="block text-xs text-fog/50">Allow only if you just sent a comment from <span class="font-mono" x-text="o"></span>.</span>
           </span>
-          <button class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-white/8 hover:text-fog" @click="$store.gw.answerSite(o, false)">Not allowed</button>
+          <button class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-tint/8 hover:text-fog" @click="$store.gw.answerSite(o, false)">Not allowed</button>
           <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/85" @click="$store.gw.answerSite(o, true)">Allow</button>
         </div>
       </template>
@@ -356,15 +360,15 @@
       <template x-if="$store.gw.viewing">
         <img :src="$store.gw.viewing.url" alt="" class="max-h-[calc(100vh-110px)] max-w-full rounded-lg border border-white/10 object-contain shadow-2xl shadow-black/60" />
       </template>
-      <div class="flex items-center gap-3 text-[13px] text-fog/70">
-        <button x-show="$store.gw.viewingSet.length > 1" class="grid size-8 place-items-center rounded-lg hover:bg-white/10 hover:text-fog" title="Previous picture ( ← )" aria-label="Previous picture" @click="$store.gw.stepShot(-1)">
+      <div class="flex items-center gap-3 text-[13px] text-white/70">
+        <button x-show="$store.gw.viewingSet.length > 1" class="grid size-8 place-items-center rounded-lg hover:bg-white/10 hover:text-white" title="Previous picture ( ← )" aria-label="Previous picture" @click="$store.gw.stepShot(-1)">
           <svg class="size-4 rotate-180"><use href="#i-chevron" /></svg>
         </button>
         <span x-text="$store.gw.viewing ? ($store.gw.screen ? $store.gw.screen.title + ' · ' : '') + $store.gw.shotLabel($store.gw.viewing) : ''"></span>
-        <button x-show="$store.gw.viewingSet.length > 1" class="grid size-8 place-items-center rounded-lg hover:bg-white/10 hover:text-fog" title="Next picture ( → )" aria-label="Next picture" @click="$store.gw.stepShot(1)">
+        <button x-show="$store.gw.viewingSet.length > 1" class="grid size-8 place-items-center rounded-lg hover:bg-white/10 hover:text-white" title="Next picture ( → )" aria-label="Next picture" @click="$store.gw.stepShot(1)">
           <svg class="size-4"><use href="#i-chevron" /></svg>
         </button>
-        <button class="ml-2 rounded-md px-2.5 py-1 hover:bg-white/10 hover:text-fog" title="Close ( Esc )" @click="$store.gw.closeShot()">Close</button>
+        <button class="ml-2 rounded-md px-2.5 py-1 hover:bg-white/10 hover:text-white" title="Close ( Esc )" @click="$store.gw.closeShot()">Close</button>
       </div>
     </div>
 
@@ -373,7 +377,7 @@
       <template x-for="v in [['focus', 'Inbox: your agent\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
-          :class="$store.gw.view === v[0] ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
+          :class="$store.gw.view === v[0] ? 'bg-tint/10 text-fog' : 'text-fog/55 hover:bg-tint/5 hover:text-fog'"
           :id="'rail-' + v[0]"
           :title="v[0] === 'readiness' && $store.gw.blockingCount ? v[1] + ' (' + $store.gw.blockingCount + ' block building, listed at the top)' : v[1]"
           :aria-label="v[1]"
@@ -387,7 +391,7 @@
           ></span>
           <span
             x-show="v[0] === 'sitemap' && $store.gw.sitemapSummary.questions"
-            class="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-question text-[10px] font-semibold text-ink"
+            class="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-question text-[10px] font-semibold text-black/80"
             x-text="$store.gw.sitemapSummary.questions"
           ></span>
           <span
@@ -397,12 +401,35 @@
           ></span>
         </button>
       </template>
+      <!-- Appearance: light, dark, or the system's (the default). Kept in this browser. -->
+      <div class="relative mt-auto" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false">
+        <button
+          id="rail-theme"
+          class="grid size-10 place-items-center rounded-lg"
+          :class="open ? 'bg-tint/10 text-fog' : 'text-fog/55 hover:bg-tint/5 hover:text-fog'"
+          title="Appearance: light, dark or as the system"
+          aria-label="Appearance: light, dark or as the system"
+          :aria-expanded="open"
+          @click="open = !open"
+        >
+          <svg class="size-5"><use href="#i-appearance" /></svg>
+        </button>
+        <div id="theme" x-cloak x-show="open" x-transition.opacity.duration.100ms class="menu-pop bottom-0 left-12 top-auto w-48">
+          <template x-for="t in [['system', 'As the system', 'i-appearance'], ['light', 'Light', 'i-sun'], ['dark', 'Dark', 'i-moon']]" :key="t[0]">
+            <button class="menu-item" :data-option="t[0]" @click="$store.gw.setTheme(t[0]); open = false">
+              <svg class="size-4 shrink-0 text-fog/60"><use :href="'#' + t[2]" /></svg>
+              <span class="min-w-0 flex-1" x-text="t[1]"></span>
+              <svg x-show="$store.gw.theme === t[0]" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+            </button>
+          </template>
+        </div>
+      </div>
       <!-- Sites: which local sites may send comments from the Comment button they load. A site asks the first time; here it can be taken off. -->
-      <div class="relative mb-3 mt-auto" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false">
+      <div class="relative mb-3" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false">
         <button
           id="rail-sites"
           class="relative grid size-10 place-items-center rounded-lg"
-          :class="open ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
+          :class="open ? 'bg-tint/10 text-fog' : 'text-fog/55 hover:bg-tint/5 hover:text-fog'"
           title="Sites: which sites can send comments"
           aria-label="Sites: which sites can send comments"
           :aria-expanded="open"
@@ -421,13 +448,13 @@
             <div class="group mt-1.5 flex items-center gap-2 text-[12px]">
               <span class="min-w-0 flex-1 truncate font-mono text-fog/80" :title="s.origin" x-text="$store.gw.siteName(s.origin)"></span>
               <span x-show="!s.kept" class="shrink-0 text-[11px] text-fog/40">--app, while it runs</span>
-              <button x-show="s.kept" class="shrink-0 rounded p-0.5 text-fog/40 hover:bg-white/8 hover:text-fog" :title="'Remove ' + $store.gw.siteName(s.origin) + ': its next comment asks again'" :aria-label="'Remove ' + $store.gw.siteName(s.origin)" @click.stop="$store.gw.removeAllowedSite(s.origin)">
+              <button x-show="s.kept" class="shrink-0 rounded p-0.5 text-fog/40 hover:bg-tint/8 hover:text-fog" :title="'Remove ' + $store.gw.siteName(s.origin) + ': its next comment asks again'" :aria-label="'Remove ' + $store.gw.siteName(s.origin)" @click.stop="$store.gw.removeAllowedSite(s.origin)">
                 <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg>
               </button>
             </div>
           </template>
           <div x-show="!$store.gw.allowedSites.length" class="mt-1.5 text-[11px] text-fog/45">None yet.</div>
-          <p class="mt-2.5 border-t border-white/8 pt-2 text-[11px] leading-snug text-fog/45">A site asks in the map the first time its Comment button sends something. Removed, its next comment asks again. Kept on this Mac, not in the project.</p>
+          <p class="mt-2.5 border-t border-tint/8 pt-2 text-[11px] leading-snug text-fog/45">A site asks in the map the first time its Comment button sends something. Removed, its next comment asks again. Kept on this Mac, not in the project.</p>
         </div>
       </div>
     </nav>
@@ -494,7 +521,7 @@
       <div class="px-2 pb-2" id="pages">
         <button
           class="flex h-8 w-full items-center justify-between rounded-md px-2"
-          :class="$store.gw.onAll && !$store.gw.scopeScreen ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
+          :class="$store.gw.onAll && !$store.gw.scopeScreen ? 'bg-tint/10 font-medium text-fog' : 'text-fog/70 hover:bg-tint/5'"
           @click="$store.gw.showPage('*')"
         >
           <span>All</span>
@@ -503,7 +530,7 @@
         <template x-for="p in $store.gw.pageNames" :key="p">
           <button
             class="flex h-8 w-full items-center justify-between rounded-md px-2"
-            :class="!$store.gw.scopeScreen && !$store.gw.onAll && $store.gw.currentPage.toLowerCase() === p.toLowerCase() ? 'bg-white/10 font-medium text-fog' : 'text-fog/70 hover:bg-white/5'"
+            :class="!$store.gw.scopeScreen && !$store.gw.onAll && $store.gw.currentPage.toLowerCase() === p.toLowerCase() ? 'bg-tint/10 font-medium text-fog' : 'text-fog/70 hover:bg-tint/5'"
             @click="$store.gw.showPage(p)"
           >
             <span class="truncate" x-text="p"></span>
@@ -532,7 +559,7 @@
             x-show="$store.gw.attentionCount || $store.gw.onlyAttention"
             id="attention"
             class="rounded px-1.5 py-0.5 text-[11px]"
-            :class="$store.gw.onlyAttention ? 'bg-question text-ink' : 'bg-question/15 text-question hover:bg-question/25'"
+            :class="$store.gw.onlyAttention ? 'bg-question text-black/80' : 'bg-question/15 text-question hover:bg-question/25'"
             :title="$store.gw.onlyAttention ? 'Show all topics' : 'Show only topics that are thin or have missing pieces'"
             @click="$store.gw.onlyAttention = !$store.gw.onlyAttention"
             x-text="$store.gw.attentionCount + ' thin'"
@@ -569,7 +596,7 @@
         <template x-for="group in $store.gw.listGroups" :key="group.key">
           <section>
             <button
-              class="flex h-8 w-full items-center justify-between rounded-md pl-1 pr-2 text-fog/85 hover:bg-white/5"
+              class="flex h-8 w-full items-center justify-between rounded-md pl-1 pr-2 text-fog/85 hover:bg-tint/5"
               @click="$store.gw.toggleGroup(group.key)"
               :aria-expanded="!$store.gw.isCollapsed(group.key)"
             >
@@ -589,10 +616,10 @@
                   $store.gw.selectedId === n.id
                     ? 'bg-accent/25 text-white'
                     : $store.gw.listRows[$store.gw.listIndex]?.id === n.id && $store.gw.query
-                      ? 'bg-white/10 text-fog'
+                      ? 'bg-tint/10 text-fog'
                       : $store.gw.freshIds.includes(n.id)
-                        ? 'bg-white/10 text-fog'
-                        : 'text-fog/70 hover:bg-white/5'
+                        ? 'bg-tint/10 text-fog'
+                        : 'text-fog/70 hover:bg-tint/5'
                 "
                 @click="$store.gw.chooseRow(n.id)"
               >
@@ -615,25 +642,25 @@
 
     <!-- Notes -->
     <div x-cloak x-show="$store.gw.note" x-transition.opacity class="pointer-events-none fixed bottom-24 flex justify-center px-4" :style="$store.gw.mapArea">
-      <div id="note" class="rounded-lg border border-line bg-panel px-3 py-2 text-xs text-fog/85 shadow-md shadow-black/20" x-text="$store.gw.note"></div>
+      <div id="note" class="rounded-lg border border-line bg-panel px-3 py-2 text-xs text-fog/85 shadow-md shadow-shade/20" x-text="$store.gw.note"></div>
     </div>
 
     <!-- Toolbar: add a thought, act on the open card, frame the map -->
     <div x-show="$store.gw.view === 'map'" class="pointer-events-none fixed bottom-5 flex justify-center px-4" :style="$store.gw.mapArea">
       <form
-        class="pointer-events-auto flex max-w-full items-center gap-1 rounded-2xl border border-line bg-panel p-1.5 shadow-lg shadow-black/25"
+        class="pointer-events-auto flex max-w-full items-center gap-1 rounded-2xl border border-line bg-panel p-1.5 shadow-lg shadow-shade/25"
         @submit.prevent="$store.gw.submitCapture()"
       >
         <!-- What Enter adds: a thought, or a story (from the open thought, or a new one) -->
-        <div class="flex shrink-0 rounded-xl bg-white/5 p-0.5 text-xs" role="group" aria-label="Add a thought or a story">
-          <button type="button" id="capture-thought" class="rounded-lg px-2.5 py-1" :class="$store.gw.captureKind === 'thought' ? 'bg-white/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a thought" @click="$store.gw.setCaptureKind('thought'); $refs.capture.focus()">Thought</button>
-          <button type="button" id="capture-story" class="rounded-lg px-2.5 py-1" :class="$store.gw.captureKind === 'story' ? 'bg-white/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a story: from the open thought, or with a new thought it comes from" @click="$store.gw.setCaptureKind('story'); $refs.capture.focus()">Story</button>
+        <div class="flex shrink-0 rounded-xl bg-tint/5 p-0.5 text-xs" role="group" aria-label="Add a thought or a story">
+          <button type="button" id="capture-thought" class="rounded-lg px-2.5 py-1" :class="$store.gw.captureKind === 'thought' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a thought" @click="$store.gw.setCaptureKind('thought'); $refs.capture.focus()">Thought</button>
+          <button type="button" id="capture-story" class="rounded-lg px-2.5 py-1" :class="$store.gw.captureKind === 'story' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a story: from the open thought, or with a new thought it comes from" @click="$store.gw.setCaptureKind('story'); $refs.capture.focus()">Story</button>
         </div>
-        <div class="flex min-w-0 items-center gap-2 rounded-xl bg-white/5 px-3 py-1.5 focus-within:bg-white/10">
+        <div class="flex min-w-0 items-center gap-2 rounded-xl bg-tint/5 px-3 py-1.5 focus-within:bg-tint/10">
           <template x-if="$store.gw.selected && !$store.gw.selected.error && $store.gw.captureLinked">
-            <span class="flex max-w-[150px] shrink-0 items-center gap-1 rounded-md bg-white/10 py-0.5 pl-2 pr-0.5 text-xs text-fog/70">
+            <span class="flex max-w-[150px] shrink-0 items-center gap-1 rounded-md bg-tint/10 py-0.5 pl-2 pr-0.5 text-xs text-fog/70">
               <span class="truncate" x-text="$store.gw.selected.title"></span>
-              <button type="button" class="rounded p-0.5 text-fog/50 hover:bg-white/10 hover:text-fog" title="Add without linking" @click="$store.gw.captureLinked = false; $refs.capture.focus()">
+              <button type="button" class="rounded p-0.5 text-fog/50 hover:bg-tint/10 hover:text-fog" title="Add without linking" @click="$store.gw.captureLinked = false; $refs.capture.focus()">
                 <svg class="size-3.5"><use href="#i-close" /></svg>
               </button>
             </span>
@@ -694,7 +721,7 @@
               <p class="mt-1 text-xs text-fog/50">
                 <span x-text="$store.gw.sitemapSummary.screens + ($store.gw.sitemapSummary.screens === 1 ? ' screen' : ' screens')"></span>
                 <span x-show="$store.gw.sitemapSummary.noStory" x-text="' · ' + $store.gw.sitemapSummary.noStory + ' without a story'"></span>
-                <span x-show="$store.gw.unplacedShots.length"> · <button id="unplaced-toggle" class="underline decoration-white/25 underline-offset-2 hover:text-fog" :aria-expanded="$store.gw.shotTray" title="Pictures from the app that no screen has yet. Drag one onto its screen, or run /sitemap." @click="$store.gw.shotTray = !$store.gw.shotTray" x-text="$store.gw.unplacedShots.length + ($store.gw.unplacedShots.length === 1 ? ' picture' : ' pictures') + ' not placed yet'"></button></span>
+                <span x-show="$store.gw.unplacedShots.length"> · <button id="unplaced-toggle" class="underline decoration-tint/25 underline-offset-2 hover:text-fog" :aria-expanded="$store.gw.shotTray" title="Pictures from the app that no screen has yet. Drag one onto its screen, or run /sitemap." @click="$store.gw.shotTray = !$store.gw.shotTray" x-text="$store.gw.unplacedShots.length + ($store.gw.unplacedShots.length === 1 ? ' picture' : ' pictures') + ' not placed yet'"></button></span>
                 <span x-show="$store.gw.sitemapSummary.unreadable" class="text-rose-300" x-text="' · ' + $store.gw.sitemapSummary.unreadable + ($store.gw.sitemapSummary.unreadable === 1 ? ' file can\'t be read' : ' files can\'t be read')"></span>
                 <span x-show="$store.gw.sitemapSummary.questions" class="text-question" x-text="' · ' + $store.gw.sitemapSummary.questions + ($store.gw.sitemapSummary.questions === 1 ? ' question' : ' questions')"></span>
               </p>
@@ -722,16 +749,16 @@
                   </div>
                 </div>
               </template>
-              <div x-show="$store.gw.sitemapLayout === 'drawn'" class="flex items-center gap-0.5 rounded-lg bg-white/5 p-0.5 text-xs text-fog/60">
-                <button class="grid size-7 place-items-center rounded-md hover:bg-white/10 hover:text-fog" title="Smaller" @click="$store.gw.zoomSitemap(1 / 1.2)">−</button>
-                <button class="h-7 rounded-md px-1.5 hover:bg-white/10 hover:text-fog" title="Fit to the window" @click="$store.gw.zoomSitemap('fit')" x-text="Math.round($store.gw.sitemapZoom * 100) + '%'"></button>
-                <button class="grid size-7 place-items-center rounded-md hover:bg-white/10 hover:text-fog" title="Bigger" @click="$store.gw.zoomSitemap(1.2)">+</button>
+              <div x-show="$store.gw.sitemapLayout === 'drawn'" class="flex items-center gap-0.5 rounded-lg bg-tint/5 p-0.5 text-xs text-fog/60">
+                <button class="grid size-7 place-items-center rounded-md hover:bg-tint/10 hover:text-fog" title="Smaller" @click="$store.gw.zoomSitemap(1 / 1.2)">−</button>
+                <button class="h-7 rounded-md px-1.5 hover:bg-tint/10 hover:text-fog" title="Fit to the window" @click="$store.gw.zoomSitemap('fit')" x-text="Math.round($store.gw.sitemapZoom * 100) + '%'"></button>
+                <button class="grid size-7 place-items-center rounded-md hover:bg-tint/10 hover:text-fog" title="Bigger" @click="$store.gw.zoomSitemap(1.2)">+</button>
               </div>
-              <div class="flex gap-0.5 rounded-lg bg-white/5 p-0.5" id="sitemap-layouts">
-                <button class="grid size-7 place-items-center rounded-md" :class="$store.gw.sitemapLayout === 'drawn' ? 'bg-white/15 text-fog' : 'text-fog/55 hover:text-fog'" title="Drawn as a site map" @click="$store.gw.setSitemapLayout('drawn')">
+              <div class="flex gap-0.5 rounded-lg bg-tint/5 p-0.5" id="sitemap-layouts">
+                <button class="grid size-7 place-items-center rounded-md" :class="$store.gw.sitemapLayout === 'drawn' ? 'bg-tint/15 text-fog' : 'text-fog/55 hover:text-fog'" title="Drawn as a site map" @click="$store.gw.setSitemapLayout('drawn')">
                   <svg class="size-4"><use href="#i-tree" /></svg>
                 </button>
-                <button class="grid size-7 place-items-center rounded-md" :class="$store.gw.sitemapLayout === 'list' ? 'bg-white/15 text-fog' : 'text-fog/55 hover:text-fog'" title="As a list" @click="$store.gw.setSitemapLayout('list')">
+                <button class="grid size-7 place-items-center rounded-md" :class="$store.gw.sitemapLayout === 'list' ? 'bg-tint/15 text-fog' : 'text-fog/55 hover:text-fog'" title="As a list" @click="$store.gw.setSitemapLayout('list')">
                   <svg class="size-4"><use href="#i-outline" /></svg>
                 </button>
               </div>
@@ -739,13 +766,13 @@
             </div>
 
             <!-- Pictures from the app that no screen has yet, to drag onto their screen -->
-            <div x-show="$store.gw.shotTray && $store.gw.unplacedShots.length" id="unplaced-shots" class="mx-5 mb-3 rounded-lg border border-line bg-white/[0.03] p-3">
+            <div x-show="$store.gw.shotTray && $store.gw.unplacedShots.length" id="unplaced-shots" class="mx-5 mb-3 rounded-lg border border-line bg-tint/[0.03] p-3">
               <p class="mb-2 text-xs text-fog/55">Drag a picture onto the screen it shows. Or run /sitemap, which reads what each one shows.</p>
               <div class="flex gap-3 overflow-x-auto pb-1">
                 <template x-for="shot in $store.gw.unplacedShots" :key="shot.url">
                   <div class="shrink-0 cursor-grab active:cursor-grabbing" draggable="true" :data-shot="shot.file" :title="shot.texts?.length ? 'It shows: ' + shot.texts.slice(0, 8).join(' · ') : shot.key" @dragstart="$store.gw.dragShot(shot, $event)" @dragend="$store.gw.endDragShot()">
                     <button class="block cursor-zoom-in" @click="$store.gw.viewShot(shot, $store.gw.unplacedShots)">
-                      <img :src="shot.url" alt="" draggable="false" class="h-32 w-auto rounded-md border border-line object-cover object-top hover:border-white/30" />
+                      <img :src="shot.url" alt="" draggable="false" class="h-32 w-auto rounded-md border border-line object-cover object-top hover:border-tint/30" />
                     </button>
                     <span class="mt-1 block max-w-[90px] truncate text-[11px] text-fog/45" x-text="shot.key"></span>
                   </div>
@@ -761,16 +788,16 @@
                   <template x-for="b in $store.gw.sitemapDrawing.boxes" :key="'b' + b.id">
                     <div class="absolute" :style="{ left: b.x + 'px', top: b.y + 'px', width: $store.gw.box.width + 'px', height: $store.gw.box.height + 'px' }">
                       <template x-if="!b.screen">
-                        <div class="flex h-full flex-col justify-center rounded-lg border border-white/20 bg-white/8 px-3">
+                        <div class="flex h-full flex-col justify-center rounded-lg border border-tint/20 bg-tint/8 px-3">
                           <span class="truncate font-semibold text-fog" x-text="$store.gw.project.name || 'The product'"></span>
                           <span class="text-xs text-fog/50" x-text="$store.gw.viewScreens.length + ($store.gw.viewScreens.length === 1 ? ' screen' : ' screens')"></span>
                         </div>
                       </template>
                       <template x-if="b.screen">
                         <button
-                          class="flex h-full w-full gap-2 rounded-lg border bg-panel px-3 py-2 text-left shadow-sm shadow-black/30"
+                          class="flex h-full w-full gap-2 rounded-lg border bg-panel px-3 py-2 text-left shadow-sm shadow-shade/30"
                           :class="[
-                            $store.gw.dropOn === b.id ? 'border-accent ring-2 ring-accent' : $store.gw.screen?.id === b.id ? 'border-accent ring-1 ring-accent' : $store.gw.screen?.leads_to.includes(b.id) ? 'border-accent/50' : 'border-line hover:border-white/25',
+                            $store.gw.dropOn === b.id ? 'border-accent ring-2 ring-accent' : $store.gw.screen?.id === b.id ? 'border-accent ring-1 ring-accent' : $store.gw.screen?.leads_to.includes(b.id) ? 'border-accent/50' : 'border-line hover:border-tint/25',
                             b.screen.status === 'planned' && 'border-dashed'
                           ]"
                           :data-screen="b.id"
@@ -781,7 +808,7 @@
                         >
                           <span class="flex min-w-0 flex-1 flex-col">
                           <span class="flex w-full items-center gap-1.5">
-                            <span class="size-1.5 shrink-0 rounded-full" :class="b.screen.error ? 'bg-rose-400' : { 'bg-emerald-400': b.screen.status === 'built', 'bg-question': b.screen.status === 'partial', 'bg-white/30': b.screen.status === 'planned' }" :title="b.screen.error ? 'Can\'t be read' : b.screen.status"></span>
+                            <span class="size-1.5 shrink-0 rounded-full" :class="b.screen.error ? 'bg-rose-400' : { 'bg-emerald-400': b.screen.status === 'built', 'bg-question': b.screen.status === 'partial', 'bg-tint/30': b.screen.status === 'planned' }" :title="b.screen.error ? 'Can\'t be read' : b.screen.status"></span>
                             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-fog" x-text="b.screen.title"></span>
                             <span x-show="$store.gw.questionsOn(b.screen)" class="size-1.5 shrink-0 rounded-full bg-question" title="Your agent asked something"></span>
                           </span>
@@ -816,7 +843,7 @@
                 <li>
                   <button
                     class="flex w-full items-start gap-2 rounded-md py-2 pr-2 text-left"
-                    :class="$store.gw.dropOn === row.screen.id ? 'bg-accent/20 ring-1 ring-accent' : $store.gw.screen?.id === row.screen.id ? 'bg-white/10' : 'hover:bg-white/5'"
+                    :class="$store.gw.dropOn === row.screen.id ? 'bg-accent/20 ring-1 ring-accent' : $store.gw.screen?.id === row.screen.id ? 'bg-tint/10' : 'hover:bg-tint/5'"
                     :style="{ paddingLeft: (10 + row.depth * 18) + 'px' }"
                     :data-screen="row.screen.id"
                     @click="$store.gw.selectScreen(row.screen.id)"
@@ -826,7 +853,7 @@
                   >
                     <span
                       class="mt-[7px] size-1.5 shrink-0 rounded-full"
-                      :class="row.screen.error ? 'bg-rose-400' : { 'bg-emerald-400': row.screen.status === 'built', 'bg-question': row.screen.status === 'partial', 'bg-white/30': row.screen.status === 'planned' }"
+                      :class="row.screen.error ? 'bg-rose-400' : { 'bg-emerald-400': row.screen.status === 'built', 'bg-question': row.screen.status === 'partial', 'bg-tint/30': row.screen.status === 'planned' }"
                       :title="row.screen.error ? 'Can\'t be read' : row.screen.status"
                     ></span>
                     <span class="min-w-0 flex-1">
@@ -851,7 +878,7 @@
                 <div class="flex flex-wrap items-center gap-2 text-[11px]">
                   <span
                     class="rounded px-1.5 py-0.5 font-medium"
-                    :class="{ 'bg-emerald-400/15 text-emerald-300': $store.gw.screen.status === 'built', 'bg-question/15 text-question': $store.gw.screen.status === 'partial', 'bg-white/10 text-fog/60': $store.gw.screen.status === 'planned' }"
+                    :class="{ 'bg-emerald-400/15 text-emerald-300': $store.gw.screen.status === 'built', 'bg-question/15 text-question': $store.gw.screen.status === 'partial', 'bg-tint/10 text-fog/60': $store.gw.screen.status === 'planned' }"
                     x-text="$store.gw.screen.status"
                   ></span>
                   <span x-show="$store.gw.screen.source === 'inferred'" class="rounded bg-question/15 px-1.5 py-0.5 text-question">A guess. Check it.</span>
@@ -865,7 +892,7 @@
                     :href="$store.gw.openUrl($store.gw.screen)"
                     target="_blank"
                     rel="noopener"
-                    class="ml-auto shrink-0 rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog"
+                    class="ml-auto shrink-0 rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog"
                     :title="'Open ' + $store.gw.openUrl($store.gw.screen) + ($store.gw.runtime.proxied ? ', with the Comment button' : '')"
                   >Open</a>
                   <button id="work-on" class="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" title="Open the map with only this screen's thoughts; new ones belong to it" @click="$store.gw.workOn($store.gw.screen.id)" x-text="'Work on this part' + ($store.gw.thoughtsOn($store.gw.screen.id) ? ' (' + $store.gw.thoughtsOn($store.gw.screen.id) + ')' : '')"></button>
@@ -894,7 +921,7 @@
                     <template x-for="shot in $store.gw.shotsOf($store.gw.screen)" :key="shot.url">
                       <div class="shrink-0" :draggable="shot.platform === 'ios'" @dragstart="$store.gw.dragShot(shot, $event)" @dragend="$store.gw.endDragShot()">
                         <button class="block cursor-zoom-in text-left" :title="'Look closer: ' + $store.gw.shotLabel(shot) + (shot.platform === 'ios' ? '. Drag it onto another screen to move it.' : '')" @click="$store.gw.viewShot(shot, $store.gw.shotsOf($store.gw.screen))">
-                          <img :src="shot.url" alt="" draggable="false" class="rounded-lg border border-line object-cover object-top hover:border-white/30" :class="shot.platform === 'ios' ? 'h-64 w-auto' : 'h-48 w-auto max-w-[380px]'" />
+                          <img :src="shot.url" alt="" draggable="false" class="rounded-lg border border-line object-cover object-top hover:border-tint/30" :class="shot.platform === 'ios' ? 'h-64 w-auto' : 'h-48 w-auto max-w-[380px]'" />
                         </button>
                         <span class="mt-1 flex items-center gap-2 text-[11px] text-fog/45">
                           <span x-text="$store.gw.shotLabel(shot)"></span>
@@ -961,7 +988,7 @@
                   <span class="label">Stories</span>
                   <p x-show="!$store.gw.storiesOf($store.gw.screen).length" class="text-fog/40">No story covers this screen.</p>
                   <template x-for="st in $store.gw.storiesOf($store.gw.screen)" :key="st.id">
-                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-white/5 hover:text-fog" @click="$store.gw.openStory(st.id)">
+                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-tint/5 hover:text-fog" @click="$store.gw.openStory(st.id)">
                       <span class="shrink-0 text-[11px]" :class="{ 'text-fog/45': st.status === 'not-started', 'text-question': st.status === 'partial', 'text-emerald-300': st.status === 'done' }" x-text="$store.gw.storyLabel(st)"></span>
                       <span class="truncate" x-text="st.title"></span>
                     </button>
@@ -971,7 +998,7 @@
                 <div class="mt-6" x-show="$store.gw.commentsOf($store.gw.screen).length">
                   <span class="label" x-text="'Comments from the running product · ' + $store.gw.commentsOf($store.gw.screen).length"></span>
                   <template x-for="n in $store.gw.commentsOf($store.gw.screen)" :key="n.id">
-                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
+                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-tint/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
                       <span class="size-1.5 shrink-0 rounded-full" :class="n.status === 'settled' ? 'bg-emerald-400' : 'bg-question'"></span>
                       <span class="truncate" x-text="n.title"></span>
                     </button>
@@ -982,7 +1009,7 @@
                   <span class="label">In the code</span>
                   <div class="flex flex-wrap gap-1">
                     <template x-for="p in $store.gw.screen.code" :key="p">
-                      <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[11px] text-fog/70 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                      <button class="rounded bg-tint/8 px-1.5 py-0.5 font-mono text-[11px] text-fog/70 hover:bg-tint/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
                     </template>
                   </div>
                 </div>
@@ -996,7 +1023,7 @@
                   <span class="label">Thread</span>
                   <ol class="space-y-2">
                     <template x-for="(e, i) in $store.gw.screenThread" :key="i">
-                      <li class="rounded-lg border px-3 py-2" :class="e.open ? 'border-question/50 bg-question/10' : e.who === 'you' ? 'border-transparent bg-white/5' : 'border-line'">
+                      <li class="rounded-lg border px-3 py-2" :class="e.open ? 'border-question/50 bg-question/10' : e.who === 'you' ? 'border-transparent bg-tint/5' : 'border-line'">
                         <div class="mb-0.5 flex items-center justify-between text-[11px]">
                           <span class="font-medium" :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Agent asks you' : 'Agent asked') : 'Claude'"></span>
                           <span class="text-fog/35" x-text="e.date"></span>
@@ -1005,12 +1032,12 @@
                         <template x-if="e.who === 'claude-asks'">
                           <div class="space-y-3">
                             <template x-for="q in $store.gw.entryQuestions($store.gw.screen.body, i)" :key="q.index">
-                              <div :class="q.index > 0 && 'border-t border-white/10 pt-2.5'">
+                              <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
                                 <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
                                 <div x-show="$store.gw.entryShots(q.question).length" class="mt-2 flex gap-2">
                                   <template x-for="shot in $store.gw.entryShots(q.question)" :key="shot.url">
                                     <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryShots(q.question))">
-                                      <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-white/30" />
+                                      <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-tint/30" />
                                     </button>
                                   </template>
                                 </div>
@@ -1018,7 +1045,7 @@
                                   <template x-for="(o, j) in q.options" :key="j">
                                     <button
                                       x-show="q.open"
-                                      class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
+                                      class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
                                       title="Answer this question with it"
                                       @click="$store.gw.answerScreenQuestion(q, o)"
                                       x-text="o"
@@ -1033,7 +1060,7 @@
                         </template>
                         <template x-if="e.who !== 'claude-asks'">
                           <div>
-                            <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-white/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
+                            <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
                             <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text"></p>
                           </div>
                         </template>
@@ -1076,8 +1103,8 @@
         <ul class="flex-1 overflow-y-auto px-2 pb-4">
           <template x-for="d in $store.gw.docs" :key="d.path">
             <li>
-              <button class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left" :class="$store.gw.docPath === d.path ? 'bg-white/10 text-fog' : 'text-fog/75 hover:bg-white/5 hover:text-fog'" @click="$store.gw.openDoc(d.path)">
-                <span class="size-2 shrink-0 rounded-full" :class="{ 'bg-rose-400': $store.gw.docStatus(d) === 'missing', 'bg-question': $store.gw.docStatus(d) === 'partly', 'bg-emerald-400/70': $store.gw.docStatus(d) === 'ok', 'bg-white/20': !$store.gw.docStatus(d) }"></span>
+              <button class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left" :class="$store.gw.docPath === d.path ? 'bg-tint/10 text-fog' : 'text-fog/75 hover:bg-tint/5 hover:text-fog'" @click="$store.gw.openDoc(d.path)">
+                <span class="size-2 shrink-0 rounded-full" :class="{ 'bg-rose-400': $store.gw.docStatus(d) === 'missing', 'bg-question': $store.gw.docStatus(d) === 'partly', 'bg-emerald-400/70': $store.gw.docStatus(d) === 'ok', 'bg-tint/20': !$store.gw.docStatus(d) }"></span>
                 <span class="min-w-0 flex-1">
                   <span class="block truncate font-mono text-[12px]" x-text="d.path"></span>
                   <span x-show="!d.exists && !d.blocked" class="block text-[11px] text-rose-300/80">Suggested, not written yet</span>
@@ -1107,7 +1134,7 @@
           <div class="mx-auto max-w-3xl px-8 pb-24 pt-8">
             <div class="flex items-center gap-3">
               <h2 class="min-w-0 flex-1 truncate font-mono text-[15px] text-fog" x-text="$store.gw.doc.path"></h2>
-              <button x-show="$store.gw.doc.exists" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Open the file in your own editor" @click="$store.gw.openDocEditor()">Open in editor</button>
+              <button x-show="$store.gw.doc.exists" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog" title="Open the file in your own editor" @click="$store.gw.openDocEditor()">Open in editor</button>
               <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" title="Copy an instruction for your agent in the product: what the check found here, and your comments" @click="$store.gw.showPrompt($store.gw.doc.path, $store.gw.docPrompt())">Copy prompt</button>
             </div>
             <p x-show="!$store.gw.doc.exists" class="mt-2 text-fog/65" x-text="$store.gw.doc.draft ? 'Not in the project yet. /readiness suggests writing it; below is its draft. Copy prompt gives your agent a prompt to create it from the draft.' : 'Not in the project yet. Copy prompt gives your agent a prompt to write it.'"></p>
@@ -1140,7 +1167,7 @@
                   <template x-for="h in $store.gw.docHeadings" :key="h"><option :value="h" x-text="h"></option></template>
                 </select>
                 <textarea class="field min-h-[34px] flex-1 resize-y" rows="1" placeholder="Comment: what should change here" x-model="$store.gw.docComment" @keydown.enter="!$event.shiftKey && ($event.preventDefault(), $store.gw.commentOnDoc())"></textarea>
-                <button class="shrink-0 rounded-md border border-line px-2.5 py-1.5 text-xs text-fog/85 hover:bg-white/8" @click="$store.gw.commentOnDoc()">Comment</button>
+                <button class="shrink-0 rounded-md border border-line px-2.5 py-1.5 text-xs text-fog/85 hover:bg-tint/8" @click="$store.gw.commentOnDoc()">Comment</button>
               </div>
             </div>
 
@@ -1152,7 +1179,7 @@
 
     <!-- A prompt for your agent, in full, before it is copied; it can be changed here first -->
     <div x-cloak x-show="$store.gw.prompt" x-transition.opacity.duration.100ms id="prompt" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" @click.self="$store.gw.prompt = null" @keydown.escape.window="$store.gw.prompt && ($store.gw.prompt = null)">
-      <div class="flex max-h-full w-full max-w-2xl flex-col rounded-xl border border-line bg-panel p-4 shadow-2xl shadow-black/50">
+      <div class="flex max-h-full w-full max-w-2xl flex-col rounded-xl border border-line bg-panel p-4 shadow-2xl shadow-shade/50">
         <div class="flex items-center gap-2">
           <h2 class="min-w-0 flex-1 truncate text-[14px] font-semibold text-fog" x-text="'Prompt: ' + ($store.gw.prompt?.title ?? '')"></h2>
           <button class="icon-btn" title="Close ( Esc )" @click="$store.gw.prompt = null"><svg class="size-5"><use href="#i-close" /></svg></button>
@@ -1162,7 +1189,7 @@
           <textarea id="prompt-text" class="field mt-3 min-h-[260px] flex-1 font-mono text-[12px] leading-relaxed" x-model="$store.gw.prompt.text"></textarea>
         </template>
         <div class="mt-3 flex justify-end gap-2">
-          <button class="rounded-md px-3 py-1.5 text-xs text-fog/70 hover:bg-white/8" @click="$store.gw.prompt = null">Close</button>
+          <button class="rounded-md px-3 py-1.5 text-xs text-fog/70 hover:bg-tint/8" @click="$store.gw.prompt = null">Close</button>
           <button id="prompt-copy" class="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.copyPrompt()">Copy</button>
         </div>
       </div>
@@ -1192,7 +1219,7 @@
           <ul class="mt-3 space-y-1.5">
             <template x-for="g in $store.gw.openGaps.filter((x) => x.severity === 'blocking')" :key="g.id">
               <li>
-                <button class="flex w-full items-start gap-3 rounded-lg border border-line bg-ink px-4 py-3 text-left hover:border-white/20" :class="$store.gw.selectedGapId === g.id && 'border-accent'" @click="$store.gw.selectGap(g.id)">
+                <button class="flex w-full items-start gap-3 rounded-lg border border-line bg-ink px-4 py-3 text-left hover:border-tint/20" :class="$store.gw.selectedGapId === g.id && 'border-accent'" @click="$store.gw.selectGap(g.id)">
                   <span class="mt-1.5 size-2 shrink-0 rounded-full bg-rose-400"></span>
                   <span class="min-w-0 flex-1">
                     <span class="block font-medium text-fog" x-text="g.title"></span>
@@ -1228,13 +1255,13 @@
               <li class="min-w-0 flex-1">
                 <button
                   class="flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left"
-                  :class="$store.gw.kickoffShown?.key === st.key ? 'border-accent/70 bg-accent/10' : 'border-line hover:border-white/20'"
+                  :class="$store.gw.kickoffShown?.key === st.key ? 'border-accent/70 bg-accent/10' : 'border-line hover:border-tint/20'"
                   :title="st.done ? 'Done on ' + st.done : st.status"
                   @click="$store.gw.kickoffOpen = st.key"
                 >
                   <span
                     class="grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold"
-                    :class="st.done ? 'bg-emerald-400/20 text-emerald-300' : $store.gw.kickoffCurrent?.key === st.key ? 'bg-accent text-white' : 'bg-white/8 text-fog/50'"
+                    :class="st.done ? 'bg-emerald-400/20 text-emerald-300' : $store.gw.kickoffCurrent?.key === st.key ? 'bg-accent text-white' : 'bg-tint/8 text-fog/50'"
                   >
                     <template x-if="st.done"><svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg></template>
                     <template x-if="!st.done"><span x-text="i + 1"></span></template>
@@ -1273,7 +1300,7 @@
 
               <template x-if="$store.gw.kickoffShown.key === 'build' && $store.gw.starter">
                 <div class="mt-3">
-                  <button class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.copyText($store.gw.handoffText)" x-text="$store.gw.existingProject ? 'Copy the story rules' : 'Copy CLAUDE.starter.md'"></button>
+                  <button class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.copyText($store.gw.handoffText)" x-text="$store.gw.existingProject ? 'Copy the story rules' : 'Copy CLAUDE.starter.md'"></button>
                 </div>
               </template>
               <p x-show="$store.gw.kickoffShown.key === 'build' && !$store.gw.starter" class="mt-2 text-xs text-fog/45">Run /brief first: it writes the starter CLAUDE.md.</p>
@@ -1281,14 +1308,14 @@
               <div class="mt-4 flex items-center gap-2">
                 <button
                   x-show="$store.gw.kickoffShown.key === 'answer' && ($store.gw.inbox.length || $store.gw.openGaps.length)"
-                  class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog"
+                  class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog"
                   @click="$store.gw.inbox.length ? $store.gw.enterFocus() : $store.gw.showGaps()"
                   x-text="$store.gw.inbox.length ? 'Open the Inbox' : 'Show the gaps on the map'"
                 ></button>
                 <span class="flex-1"></span>
                 <button
                   x-show="$store.gw.kickoffShown.done"
-                  class="rounded-md px-3 py-1.5 text-xs text-fog/60 hover:bg-white/8 hover:text-fog"
+                  class="rounded-md px-3 py-1.5 text-xs text-fog/60 hover:bg-tint/8 hover:text-fog"
                   @click="$store.gw.reopenStep($store.gw.kickoffShown.key)"
                 >Reopen</button>
                 <button
@@ -1311,7 +1338,7 @@
             <h2 class="text-[15px] font-semibold text-fog">What's left</h2>
             <span class="text-xs text-fog/50" x-text="$store.gw.projectStatus.done + ' of ' + $store.gw.projectStatus.total + ' in place'"></span>
           </div>
-          <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+          <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-tint/8">
             <div class="h-full rounded-full bg-emerald-400/80" :style="{ width: ($store.gw.projectStatus.total ? Math.round($store.gw.projectStatus.done / $store.gw.projectStatus.total * 100) : 0) + '%' }"></div>
           </div>
           <p x-show="$store.gw.projectStatus.unchecked" class="mt-2 text-xs text-fog/50" x-text="$store.gw.projectStatus.unchecked + ($store.gw.projectStatus.unchecked === 1 ? ' item is' : ' items are') + ' not checked yet. Run /readiness in your agent: it reads the project and says what each one lacks.'"></p>
@@ -1346,8 +1373,8 @@
                         <span class="block truncate text-fog" x-text="row.title"></span>
                         <span x-show="row.detail.length" class="block truncate text-xs text-fog/50" x-text="row.detail[0]"></span>
                       </span>
-                      <button x-show="row.suggestion" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Copy an instruction for your agent in the product's repo" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy prompt</button>
-                      <button x-show="row.open" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer them' : 'Show on the map') : row.open?.kind === 'screen' ? 'Open the screen' : 'Write it'"></button>
+                      <button x-show="row.suggestion" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog" title="Copy an instruction for your agent in the product's repo" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy prompt</button>
+                      <button x-show="row.open" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer them' : 'Show on the map') : row.open?.kind === 'screen' ? 'Open the screen' : 'Write it'"></button>
                     </li>
                   </template>
                 </ul>
@@ -1366,12 +1393,12 @@
               <ul class="divide-y divide-line rounded-lg border border-line">
                 <template x-for="row in g.rows" :key="row.key">
                   <li>
-                    <button class="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.03]" @click="$store.gw.statusRow = $store.gw.statusRow === row.key ? null : row.key">
+                    <button class="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-tint/[0.03]" @click="$store.gw.statusRow = $store.gw.statusRow === row.key ? null : row.key">
                       <span class="min-w-0 flex-1 truncate text-fog" :style="{ paddingLeft: (row.depth || 0) * 16 + 'px' }" x-text="row.title"></span>
                       <span x-show="row.detail.length && $store.gw.statusRow !== row.key" class="hidden min-w-0 max-w-[45%] truncate text-xs text-fog/45 sm:block" x-text="row.detail[0]"></span>
                       <span
                         class="w-16 shrink-0 rounded py-0.5 text-center text-[11px] font-medium"
-                        :class="{ 'bg-emerald-400/15 text-emerald-300': row.status === 'done', 'bg-question/15 text-question': row.status === 'partly', 'bg-rose-400/15 text-rose-300': row.status === 'missing', 'bg-white/8 text-fog/45': !row.status }"
+                        :class="{ 'bg-emerald-400/15 text-emerald-300': row.status === 'done', 'bg-question/15 text-question': row.status === 'partly', 'bg-rose-400/15 text-rose-300': row.status === 'missing', 'bg-tint/8 text-fog/45': !row.status }"
                         x-text="row.status || 'not checked'"
                       ></span>
                     </button>
@@ -1385,17 +1412,17 @@
                       <p x-show="!row.status" class="text-xs text-fog/45">Not checked yet. /readiness looks at the project and says what this lacks.</p>
                       <div x-show="row.seen_in.length" class="flex flex-wrap gap-1">
                         <template x-for="p in row.seen_in" :key="p">
-                          <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/60 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                          <button class="rounded bg-tint/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/60 hover:bg-tint/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
                         </template>
                       </div>
-                      <div x-show="row.suggestion" class="rounded-lg bg-white/5 px-3 py-2">
+                      <div x-show="row.suggestion" class="rounded-lg bg-tint/5 px-3 py-2">
                         <span class="label">Prompt</span>
                         <p class="whitespace-pre-wrap text-fog/80" x-text="row.suggestion"></p>
                       </div>
                       <div class="flex flex-wrap gap-2" x-show="row.suggestion || row.draft || row.open">
                         <button x-show="row.suggestion" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy prompt</button>
-                        <button x-show="row.draft" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.copyDraft(row.draft)">Copy the draft</button>
-                        <button x-show="row.open && row.open.kind !== 'purpose'" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer in the Inbox' : 'Show on the map') : 'Open the screen'"></button>
+                        <button x-show="row.draft" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.copyDraft(row.draft)">Copy the draft</button>
+                        <button x-show="row.open && row.open.kind !== 'purpose'" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer in the Inbox' : 'Show on the map') : 'Open the screen'"></button>
                       </div>
                     </div>
                   </li>
@@ -1466,7 +1493,7 @@
                   <span class="text-[12px] font-medium text-fog/80" x-text="g.platform"></span>
                   <span class="text-xs text-fog/45" x-text="g.score"></span>
                 </div>
-                <div class="mb-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+                <div class="mb-2 h-1.5 overflow-hidden rounded-full bg-tint/8">
                   <div class="h-full rounded-full bg-accent" :style="{ width: g.percent + '%' }"></div>
                 </div>
                 <ul class="divide-y divide-line rounded-lg border border-line">
@@ -1483,7 +1510,7 @@
                         <span x-text="d.note"></span>
                         <span class="mt-1 flex flex-wrap gap-1" x-show="d.seen_in.length">
                           <template x-for="p in d.seen_in" :key="p">
-                            <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/60 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                            <button class="rounded bg-tint/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/60 hover:bg-tint/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
                           </template>
                         </span>
                       </span>
@@ -1502,8 +1529,8 @@
             <ul class="space-y-1.5" id="gaps-open">
               <template x-for="g in $store.gw.openGaps" :key="g.id">
                 <li>
-                  <button class="flex w-full items-start gap-3 rounded-lg border border-line px-4 py-3 text-left hover:border-white/20" :class="$store.gw.selectedGapId === g.id && 'border-accent'" @click="$store.gw.selectGap(g.id)">
-                    <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="{ 'bg-rose-400': g.severity === 'blocking', 'bg-question': g.severity === 'important', 'bg-white/40': g.severity === 'nice' }"></span>
+                  <button class="flex w-full items-start gap-3 rounded-lg border border-line px-4 py-3 text-left hover:border-tint/20" :class="$store.gw.selectedGapId === g.id && 'border-accent'" @click="$store.gw.selectGap(g.id)">
+                    <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="{ 'bg-rose-400': g.severity === 'blocking', 'bg-question': g.severity === 'important', 'bg-tint/40': g.severity === 'nice' }"></span>
                     <span class="min-w-0 flex-1">
                       <span class="block font-medium text-fog" x-text="g.title"></span>
                       <span class="block text-fog/55" x-text="g.why"></span>
@@ -1546,7 +1573,7 @@
                 <section class="rounded-lg border border-line p-3">
                   <h3 class="mb-1.5 text-[11px] text-fog/45" x-text="$store.gw.label(g.topic) + ' · ' + g.nodes.length"></h3>
                   <template x-for="n in g.nodes" :key="n.id">
-                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
+                    <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
                       <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[n.type] }"></span>
                       <span class="truncate" x-text="n.title"></span>
                     </button>
@@ -1580,11 +1607,11 @@
         <template x-if="$store.gw.brief || $store.gw.stories.length || $store.gw.survey">
           <div>
             <div class="mt-4 flex items-center justify-between gap-4">
-              <div class="flex gap-0.5 rounded-lg bg-white/5 p-0.5" id="deliverables-tabs">
+              <div class="flex gap-0.5 rounded-lg bg-tint/5 p-0.5" id="deliverables-tabs">
                 <template x-for="t in $store.gw.deliverableTabs" :key="t[0]">
                   <button
                     class="whitespace-nowrap rounded-md px-3 py-1 text-xs"
-                    :class="$store.gw.deliverablesTab === t[0] ? 'bg-white/15 text-fog' : 'text-fog/55 hover:text-fog'"
+                    :class="$store.gw.deliverablesTab === t[0] ? 'bg-tint/15 text-fog' : 'text-fog/55 hover:text-fog'"
                     @click="$store.gw.setDeliverablesTab(t[0])"
                     x-text="t[1] + (t[0] === 'stories' ? ' · ' + $store.gw.stories.length : '')"
                   ></button>
@@ -1598,11 +1625,11 @@
 
             <div x-show="$store.gw.deliverablesTab === 'stories'" class="mt-6 space-y-1.5" id="stories">
               <template x-for="s in $store.gw.stories" :key="s.id">
-                <section class="rounded-lg border border-line" :class="$store.gw.openStoryId === s.id && 'border-white/20'">
+                <section class="rounded-lg border border-line" :class="$store.gw.openStoryId === s.id && 'border-tint/20'">
                   <button class="flex w-full items-center gap-3 px-4 py-3 text-left" @click="$store.gw.openStoryId = $store.gw.openStoryId === s.id ? null : s.id">
                     <span
                       class="shrink-0 rounded px-1.5 py-0.5 text-[11px]"
-                      :class="{ 'bg-white/10 text-fog/60': s.status === 'not-started', 'bg-question/15 text-question': s.status === 'partial', 'bg-emerald-400/15 text-emerald-300': s.status === 'done' }"
+                      :class="{ 'bg-tint/10 text-fog/60': s.status === 'not-started', 'bg-question/15 text-question': s.status === 'partial', 'bg-emerald-400/15 text-emerald-300': s.status === 'done' }"
                       x-text="$store.gw.storyLabel(s)"
                     ></span>
                     <span class="min-w-0 flex-1 font-medium text-fog" x-text="s.title"></span>
@@ -1613,7 +1640,7 @@
                     <div class="report" x-html="$store.gw.storyHtml(s)"></div>
                     <span class="label mt-3">Came from</span>
                     <template x-for="id in s.from" :key="id">
-                      <button class="flex h-7 w-full items-center gap-2 rounded px-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(id)">
+                      <button class="flex h-7 w-full items-center gap-2 rounded px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.goToNode(id)">
                         <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.nodes[id] ? $store.gw.typeColors[$store.gw.nodes[id].type] : '#666' }"></span>
                         <span class="truncate" x-text="$store.gw.nodes[id]?.title ?? id + ' (not in the map)'"></span>
                       </button>
@@ -1651,7 +1678,7 @@
           </span>
           <h2 class="text-[17px] font-semibold text-fog">No questions waiting</h2>
           <p class="text-fog/70" x-text="$store.gw.inboxNextStep"></p>
-          <button x-show="$store.gw.openGaps.length" class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.showGaps()">Show the gaps on the map</button>
+          <button x-show="$store.gw.openGaps.length" class="rounded-md border border-line px-3 py-1.5 text-xs text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.showGaps()">Show the gaps on the map</button>
         </div>
 
         <ol class="mt-6 flex flex-col gap-3" id="inbox">
@@ -1664,7 +1691,7 @@
                   <span x-show="item.kind !== 'guess'" class="text-fog/85" x-text="'\u201C' + item.about + '\u201D'"></span>
                   <span x-show="item.where" class="text-fog/40" x-text="' in ' + $store.gw.label(item.where)"></span>
                 </span>
-                <span x-show="item.of > 1" class="shrink-0 rounded bg-white/8 px-1.5 py-0.5 text-fog/60" x-text="'Question ' + item.position + ' of ' + item.of"></span>
+                <span x-show="item.of > 1" class="shrink-0 rounded bg-tint/8 px-1.5 py-0.5 text-fog/60" x-text="'Question ' + item.position + ' of ' + item.of"></span>
                 <span class="shrink-0 text-fog/35" x-text="item.date"></span>
               </div>
               <h2 class="mt-2 text-[15px] font-medium leading-snug text-fog" x-text="item.kind === 'guess' ? item.about : item.question || item.about"></h2>
@@ -1673,7 +1700,7 @@
               <div x-show="$store.gw.entryShots(item.text).length" class="mt-3 flex gap-2">
                 <template x-for="shot in $store.gw.entryShots(item.text)" :key="shot.url">
                   <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryShots(item.text))">
-                    <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-white/30" />
+                    <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-tint/30" />
                   </button>
                 </template>
               </div>
@@ -1683,9 +1710,9 @@
                 <span x-text="$store.gw.inboxOpen[item.key] ? 'Hide' : item.kind === 'screen' ? 'Show the whole screen' : 'Show the whole thought'"></span>
               </button>
               <template x-if="$store.gw.inboxOpen[item.key]">
-                <div class="mt-2 space-y-3 rounded-lg bg-black/20 p-3 text-xs" x-data="{ d: $store.gw.inboxDetail(item) }">
+                <div class="mt-2 space-y-3 rounded-lg bg-shade/20 p-3 text-xs" x-data="{ d: $store.gw.inboxDetail(item) }">
                   <div x-show="d.facts.length" class="flex flex-wrap gap-1">
-                    <template x-for="f in d.facts" :key="f"><span class="rounded bg-white/8 px-1.5 py-0.5 text-fog/65" x-text="f"></span></template>
+                    <template x-for="f in d.facts" :key="f"><span class="rounded bg-tint/8 px-1.5 py-0.5 text-fog/65" x-text="f"></span></template>
                   </div>
                   <div x-show="d.purpose || d.audience.length || d.tasks.length" class="space-y-0.5 text-fog/75">
                     <p x-show="d.purpose" x-text="d.purpose"></p>
@@ -1710,7 +1737,7 @@
               </template>
               <div x-show="item.options.length" class="mt-3 flex flex-wrap gap-1.5">
                 <template x-for="(o, j) in item.options" :key="j">
-                  <button class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Answer with this" :disabled="$store.gw.inboxSending === item.key" @click="$store.gw.answerInbox(item, o)" x-text="o"></button>
+                  <button class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Answer with this" :disabled="$store.gw.inboxSending === item.key" @click="$store.gw.answerInbox(item, o)" x-text="o"></button>
                 </template>
               </div>
               <form class="mt-3 flex items-end gap-2" @submit.prevent="$store.gw.answerInbox(item)">
@@ -1739,7 +1766,7 @@
       x-cloak
       x-show="($store.gw.selected || $store.gw.selectedGap || $store.gw.selectedStory || $store.gw.reportOpen) && $store.gw.detailsMinimized && $store.gw.view !== 'focus' && $store.gw.view !== 'map'"
       id="details-tab"
-      class="fixed right-3 top-3 flex max-w-[280px] items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-black/20"
+      class="fixed right-3 top-3 flex max-w-[280px] items-center gap-3 rounded-2xl border border-line bg-panel py-2 pl-4 pr-2 text-[13px] shadow-md shadow-shade/20"
       title="Show details"
       @click="$store.gw.setDetailsMinimized(false)"
     >
@@ -1784,7 +1811,7 @@
                   <option value="done">Done</option>
                 </select>
                 <span class="text-[11px] text-fog/55" x-show="$store.gw.criteria($store.gw.selectedStory).length" x-text="$store.gw.storyLabel($store.gw.selectedStory)"></span>
-                <span x-show="$store.gw.selectedStory.later" class="rounded bg-white/8 px-1.5 py-0.5 text-[11px] text-fog/60">Not now</span>
+                <span x-show="$store.gw.selectedStory.later" class="rounded bg-tint/8 px-1.5 py-0.5 text-[11px] text-fog/60">Not now</span>
                 <span class="ml-auto font-mono text-[11px] text-fog/40" x-text="$store.gw.selectedStory.id"></span>
               </div>
               <input id="story-title" class="field mt-2 w-full text-[15px] font-semibold" :value="$store.gw.selectedStory.title" @keydown.enter.prevent="$event.target.blur()" @blur="$event.target.value.trim() && $event.target.value.trim() !== $store.gw.selectedStory.title && $store.gw.changeStory({ title: $event.target.value })" />
@@ -1796,8 +1823,8 @@
               <p class="text-fog/85" x-text="$store.gw.criteria($store.gw.selectedStory).length ? ($store.gw.criteria($store.gw.selectedStory).filter((c) => !c.met).length + ' of ' + $store.gw.criteria($store.gw.selectedStory).length + ' criteria not met yet. Build the rest, call it enough as it is, or set it aside for now.') : 'Partially done, without criteria saying what is left. Add them with Edit, or decide it is enough.'"></p>
               <div class="mt-2 flex flex-wrap gap-1.5">
                 <button class="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" title="Copies an instruction for your agent: build exactly what is not met yet" @click="$store.gw.storyBuildRest()">Build the rest</button>
-                <button class="rounded-md border border-line px-2.5 py-1 text-xs text-fog/85 hover:bg-white/8" title="Mark it done; what is not met becomes a parked thought, so it is not lost" @click="$store.gw.storyEnough()">Enough as it is</button>
-                <button class="rounded-md border border-line px-2.5 py-1 text-xs text-fog/85 hover:bg-white/8" title="Leave it partly done, out of what is left" @click="$store.gw.storyNotNow()">Not now</button>
+                <button class="rounded-md border border-line px-2.5 py-1 text-xs text-fog/85 hover:bg-tint/8" title="Mark it done; what is not met becomes a parked thought, so it is not lost" @click="$store.gw.storyEnough()">Enough as it is</button>
+                <button class="rounded-md border border-line px-2.5 py-1 text-xs text-fog/85 hover:bg-tint/8" title="Leave it partly done, out of what is left" @click="$store.gw.storyNotNow()">Not now</button>
               </div>
             </div>
             <div x-show="$store.gw.selectedStory.later" class="rounded-lg border border-line p-3 text-fog/70">
@@ -1809,7 +1836,7 @@
             <div x-show="$store.gw.criteria($store.gw.selectedStory).length" id="story-criteria">
               <span class="label">Acceptance</span>
               <template x-for="c in $store.gw.criteria($store.gw.selectedStory)" :key="c.line">
-                <label class="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 hover:bg-white/5">
+                <label class="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 hover:bg-tint/5">
                   <input type="checkbox" class="mt-0.5 accent-emerald-500" :checked="c.met" @change="$store.gw.tickStory(c, $event.target.checked)" />
                   <span :class="c.met ? 'text-fog/55 line-through decoration-fog/30' : 'text-fog/85'" x-text="c.text"></span>
                 </label>
@@ -1827,7 +1854,7 @@
                   <textarea id="story-text" class="field min-h-[220px] w-full font-mono text-[12px]" x-model="$store.gw.storyText" @keydown.escape.stop="$store.gw.storyEditing = false"></textarea>
                   <p class="mt-1 text-[11px] text-fog/45">"As ..., I want ..., so that ...", then the criteria under ## Acceptance, one per line: - [ ] not met, - [x] met.</p>
                   <div class="mt-1.5 flex justify-end gap-1.5">
-                    <button class="rounded-md px-2.5 py-1 text-xs text-fog/70 hover:bg-white/8" @click="$store.gw.storyEditing = false">Cancel</button>
+                    <button class="rounded-md px-2.5 py-1 text-xs text-fog/70 hover:bg-tint/8" @click="$store.gw.storyEditing = false">Cancel</button>
                     <button class="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.saveStoryText()">Save</button>
                   </div>
                 </div>
@@ -1836,7 +1863,7 @@
             <div>
               <span class="label">Came from</span>
               <template x-for="id in $store.gw.selectedStory.from" :key="id">
-                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.goToNode(id)">
+                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.goToNode(id)">
                   <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.nodes[id] ? $store.gw.typeColors[$store.gw.nodes[id].type] : '#666' }"></span>
                   <span class="truncate" x-text="$store.gw.nodes[id]?.title ?? id + ' (not in the map)'"></span>
                 </button>
@@ -1851,7 +1878,7 @@
             <div>
               <span
                 class="inline-block rounded px-1.5 py-0.5 text-[11px] font-medium"
-                :class="{ 'bg-rose-400/15 text-rose-300': $store.gw.selectedGap.severity === 'blocking', 'bg-question/15 text-question': $store.gw.selectedGap.severity === 'important', 'bg-white/10 text-fog/60': $store.gw.selectedGap.severity === 'nice' }"
+                :class="{ 'bg-rose-400/15 text-rose-300': $store.gw.selectedGap.severity === 'blocking', 'bg-question/15 text-question': $store.gw.selectedGap.severity === 'important', 'bg-tint/10 text-fog/60': $store.gw.selectedGap.severity === 'nice' }"
                 :title="$store.gw.meaning[$store.gw.selectedGap.severity]"
                 x-text="$store.gw.selectedGap.severity"
               ></span>
@@ -1871,7 +1898,7 @@
             <div x-show="$store.gw.selectedGap.near.some((id) => $store.gw.nodes[id])">
               <span class="label">Near</span>
               <template x-for="id in $store.gw.selectedGap.near.filter((id) => $store.gw.nodes[id])" :key="id">
-                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.select(id)">
+                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.select(id)">
                   <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[$store.gw.nodes[id].type] }"></span>
                   <span class="truncate" x-text="$store.gw.nodes[id].title"></span>
                 </button>
@@ -1903,8 +1930,8 @@
                 class="field w-full resize-none"
               ></textarea>
               <div class="mt-1.5 flex justify-end gap-2">
-                <button id="gap-enough" type="button" class="mr-auto rounded-md px-3 py-1 text-xs text-fog/70 hover:bg-white/8 hover:text-fog" title="Accept it as it is. What you wrote is kept as the reason." @click="$store.gw.acceptGap()">Enough for now</button>
-                <button id="gap-note" type="button" class="rounded-md px-3 py-1 text-xs text-fog/70 hover:bg-white/8 hover:text-fog disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()" title="Keep the gap open" @click="$store.gw.answerGap(false)">Add as a thought</button>
+                <button id="gap-enough" type="button" class="mr-auto rounded-md px-3 py-1 text-xs text-fog/70 hover:bg-tint/8 hover:text-fog" title="Accept it as it is. What you wrote is kept as the reason." @click="$store.gw.acceptGap()">Enough for now</button>
+                <button id="gap-note" type="button" class="rounded-md px-3 py-1 text-xs text-fog/70 hover:bg-tint/8 hover:text-fog disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()" title="Keep the gap open" @click="$store.gw.answerGap(false)">Add as a thought</button>
                 <button id="gap-add" type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.gapAnswer.trim()" title="Mark the gap for /readiness to check">This answers it</button>
               </div>
             </form>
@@ -1916,7 +1943,7 @@
             <h2 class="font-medium text-rose-200" x-text="$store.gw.selected.id + '.md cannot be read'"></h2>
             <p class="text-xs text-fog/60" x-text="$store.gw.selected.error"></p>
             <p class="text-xs text-fog/60">Fix the frontmatter in the file by hand. The map updates as soon as it parses again.</p>
-            <pre class="whitespace-pre-wrap rounded-md bg-black/30 p-3 text-xs text-fog/70" x-text="$store.gw.selected.body"></pre>
+            <pre class="whitespace-pre-wrap rounded-md bg-shade/30 p-3 text-xs text-fog/70" x-text="$store.gw.selected.body"></pre>
           </div>
         </template>
 
@@ -1926,7 +1953,7 @@
               <h2
                 x-show="!$store.gw.editingTitle"
                 id="title-text"
-                class="-mx-1 cursor-text rounded-md px-1 py-0.5 text-[15px] font-semibold leading-snug text-fog hover:bg-white/5"
+                class="-mx-1 cursor-text rounded-md px-1 py-0.5 text-[15px] font-semibold leading-snug text-fog hover:bg-tint/5"
                 title="Click to edit"
                 @click="$store.gw.editingTitle = true"
                 x-text="$store.gw.draft.title"
@@ -1949,7 +1976,7 @@
                   <span>Answer to</span>
                   <button
                     class="rounded px-1.5 py-0.5"
-                    :class="$store.gw.answeredGap($store.gw.selected).open ? 'bg-rose-400/15 text-rose-200 hover:bg-rose-400/25' : 'cursor-default bg-white/8 text-fog/60'"
+                    :class="$store.gw.answeredGap($store.gw.selected).open ? 'bg-rose-400/15 text-rose-200 hover:bg-rose-400/25' : 'cursor-default bg-tint/8 text-fog/60'"
                     :title="$store.gw.answeredGap($store.gw.selected).open ? 'Open the gap' : 'This gap is closed'"
                     @click="$store.gw.answeredGap($store.gw.selected).open && $store.gw.selectGap($store.gw.answeredGap($store.gw.selected).id)"
                     x-text="$store.gw.answeredGap($store.gw.selected).title"
@@ -1961,18 +1988,18 @@
                 <div id="source" class="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">
                   <span :class="$store.gw.selected.extra.source === 'inferred' ? 'text-question' : 'text-fog/50'" x-text="$store.gw.sourceLabel($store.gw.selected)"></span>
                   <template x-for="p in $store.gw.seenIn($store.gw.selected)" :key="p">
-                    <button class="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/70 hover:bg-white/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
+                    <button class="rounded bg-tint/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/70 hover:bg-tint/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
                   </template>
                 </div>
               </template>
               <!-- A comment is fixed only when the person says so -->
               <template x-if="$store.gw.feedbackState($store.gw.selected)">
-                <div id="feedback-state" class="mt-3 flex items-center gap-2 rounded-lg border border-line bg-white/[0.03] py-1.5 pl-3 pr-1.5 text-xs">
+                <div id="feedback-state" class="mt-3 flex items-center gap-2 rounded-lg border border-line bg-tint/[0.03] py-1.5 pl-3 pr-1.5 text-xs">
                   <span class="size-1.5 shrink-0 rounded-full" :class="{ 'bg-question': $store.gw.feedbackState($store.gw.selected) === 'incoming', 'bg-accent': $store.gw.feedbackState($store.gw.selected) === 'proposed', 'bg-violet-400': $store.gw.feedbackState($store.gw.selected) === 'ready', 'bg-emerald-400': $store.gw.feedbackState($store.gw.selected) === 'fixed' }"></span>
                   <span class="min-w-0 flex-1 text-fog/70" x-text="{ incoming: 'Incoming. No fix proposed yet.', proposed: 'Fix proposed, not built yet. See the thread.', ready: 'Built, ready to test. Test it in the app, then mark it fixed.', fixed: 'Fixed on ' + $store.gw.selected.extra.fixed }[$store.gw.feedbackState($store.gw.selected)]"></span>
                   <button
                     x-show="$store.gw.feedbackState($store.gw.selected) === 'proposed'"
-                    class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-white/8 hover:text-fog"
+                    class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-tint/8 hover:text-fog"
                     title="The proposed fix is in the code now: test it in the app"
                     @click="$store.gw.markBuilt()"
                   >Built</button>
@@ -1984,7 +2011,7 @@
                   >Mark fixed</button>
                   <button
                     x-show="$store.gw.feedbackState($store.gw.selected) === 'fixed'"
-                    class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-white/8 hover:text-fog"
+                    class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-tint/8 hover:text-fog"
                     @click="$store.gw.markFixed(false)"
                   >Not fixed</button>
                 </div>
@@ -2013,8 +2040,8 @@
             <!-- Stories this thought leads to, and a new one from it -->
             <div id="thought-stories">
               <template x-for="st in $store.gw.stories.filter((x) => x.from.includes($store.gw.selected.id))" :key="st.id">
-                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-white/5 hover:text-fog" @click="$store.gw.selectStory(st.id)">
-                  <span class="shrink-0 rounded bg-white/8 px-1 text-[10px] text-fog/55">Story</span>
+                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.selectStory(st.id)">
+                  <span class="shrink-0 rounded bg-tint/8 px-1 text-[10px] text-fog/55">Story</span>
                   <span class="min-w-0 flex-1 truncate" x-text="st.title"></span>
                   <span class="shrink-0 text-[11px] text-fog/45" x-text="$store.gw.storyLabel(st)"></span>
                 </button>
@@ -2058,12 +2085,12 @@
 
             <div>
               <span class="label">Altitude</span>
-              <div class="flex gap-0.5 rounded-lg bg-white/5 p-0.5" id="field-altitude">
+              <div class="flex gap-0.5 rounded-lg bg-tint/5 p-0.5" id="field-altitude">
                 <template x-for="a in [1, 2, 3, 4, 5]" :key="a">
                   <button
                     type="button"
                     class="flex-1 rounded-md py-1 text-xs"
-                    :class="$store.gw.draft.altitude === a ? 'bg-white/15 text-fog' : 'text-fog/50 hover:text-fog/80'"
+                    :class="$store.gw.draft.altitude === a ? 'bg-tint/15 text-fog' : 'text-fog/50 hover:text-fog/80'"
                     :data-altitude="a"
                     :title="'Altitude ' + a"
                     @click="$store.gw.draft.altitude = a; $store.gw.edit('altitude', true)"
@@ -2103,7 +2130,7 @@
                 <template x-for="(e, i) in $store.gw.thread" :key="i">
                   <li
                     class="rounded-lg border px-3 py-2"
-                    :class="e.open ? 'border-question/50 bg-question/10' : e.who === 'you' ? 'border-transparent bg-white/5' : 'border-line'"
+                    :class="e.open ? 'border-question/50 bg-question/10' : e.who === 'you' ? 'border-transparent bg-tint/5' : 'border-line'"
                   >
                     <div class="mb-0.5 flex items-center justify-between text-[11px]">
                       <span
@@ -2117,13 +2144,13 @@
                     <template x-if="e.who === 'claude-asks'">
                       <div class="space-y-3">
                         <template x-for="q in $store.gw.entryQuestions($store.gw.draft.body, i)" :key="q.index">
-                          <div :class="q.index > 0 && 'border-t border-white/10 pt-2.5'">
+                          <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
                             <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
                             <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
                               <template x-for="(o, j) in q.options" :key="j">
                                 <button
                                   x-show="q.open"
-                                  class="rounded-md border border-line bg-black/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
+                                  class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
                                   title="Answer this question with it"
                                   @click="$store.gw.answerQuestion(q, o)"
                                   x-text="o"
@@ -2138,7 +2165,7 @@
                     </template>
                     <template x-if="e.who !== 'claude-asks'">
                       <div>
-                        <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-white/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
+                        <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
                         <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text"></p>
                       </div>
                     </template>
@@ -2180,7 +2207,7 @@
               <p x-show="$store.gw.linkedNodes.length === 0" class="text-xs text-fog/35">No links yet.</p>
               <ul id="links">
                 <template x-for="n in $store.gw.linkedNodes" :key="n.id">
-                  <li class="group flex h-8 items-center gap-2 rounded-md px-1 hover:bg-white/5">
+                  <li class="group flex h-8 items-center gap-2 rounded-md px-1 hover:bg-tint/5">
                     <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[n.type] }"></span>
                     <button class="min-w-0 flex-1 truncate text-left text-fog/75 hover:text-fog" @click="$store.gw.select(n.id)" x-text="n.title"></button>
                     <button class="rounded p-0.5 text-fog/40 opacity-0 hover:text-fog group-hover:opacity-100" title="Unlink" @click="$store.gw.toggleLink(n.id)">

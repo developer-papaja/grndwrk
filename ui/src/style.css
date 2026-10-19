@@ -1,30 +1,69 @@
 @import 'tailwindcss';
 
-/* Neutral greys and one blue accent, in the spirit of a design tool's dark UI. */
+/*
+ * Neutral greys and one blue accent, in the spirit of a design tool's UI.
+ * Every color is light-dark(light, dark): the page follows the system unless
+ * the Appearance setting puts .light or .dark on <html>.
+ * tint lifts a surface (white on dark, black on light); shade sinks it.
+ */
 @theme {
-  --color-ink: #1e1e1e;
-  --color-panel: #2c2c2c;
-  --color-line: #3d3d3d;
-  --color-fog: #f2f2f2;
+  --color-ink: light-dark(#f5f5f5, #1e1e1e);
+  --color-panel: light-dark(#ffffff, #2c2c2c);
+  --color-line: light-dark(#e3e3e3, #3d3d3d);
+  --color-fog: light-dark(#1e1e1e, #f2f2f2);
+  --color-tint: light-dark(#000000, #ffffff);
+  --color-shade: light-dark(rgb(0 0 0 / 0.25), #000000);
   --color-accent: #0d99ff;
-  --color-question: #f5b942;
+  --color-question: light-dark(#d4900f, #f5b942);
+  /* The pale shades read on dark; on light they take the deep ones. */
+  --color-rose-200: light-dark(oklch(45.5% 0.188 13.697), oklch(89.2% 0.058 10.001));
+  --color-rose-300: light-dark(oklch(51.4% 0.222 16.935), oklch(81% 0.117 11.638));
+  --color-emerald-200: light-dark(oklch(43.2% 0.095 166.913), oklch(90.5% 0.093 164.15));
+  --color-emerald-300: light-dark(oklch(50.8% 0.118 165.612), oklch(84.5% 0.143 164.978));
+  --color-violet-200: light-dark(oklch(43.2% 0.232 292.759), oklch(89.4% 0.057 293.283));
+  --color-violet-300: light-dark(oklch(49.1% 0.27 292.581), oklch(81.1% 0.111 293.571));
+  --color-sky-100: light-dark(oklch(44.3% 0.11 240.79), oklch(95.1% 0.026 236.824));
+  --color-sky-200: light-dark(oklch(44.3% 0.11 240.79), oklch(90.1% 0.058 230.902));
+  --color-sky-300: light-dark(oklch(50% 0.134 242.749), oklch(82.8% 0.111 230.318));
+  --color-amber-200: light-dark(oklch(47.3% 0.137 46.201), oklch(92.4% 0.12 95.746));
   --font-sans: Inter, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light dark;
+  /* Type colors, a thin edge on each card: calm on dark, deeper on light. */
+  --type-idea: light-dark(#a0954f, #d9d3b8);
+  --type-audience: light-dark(#c46a32, #e2a982);
+  --type-flow: light-dark(#3d8c63, #8fc4a8);
+  --type-feature: light-dark(#3a76b5, #8db4dc);
+  --type-content: light-dark(#8758b0, #c4a6dc);
+  --type-design: light-dark(#c24f78, #e29db2);
+  --type-constraint: light-dark(#837769, #b3aaa2);
+  --type-question: light-dark(#c98a12, #efc56d);
+  --type-decision: light-dark(#258f82, #79cfc4);
+  --type-reference: light-dark(#5f6d87, #9ba6b9);
+}
+:root.light {
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
 }
 
 @layer components {
   .field {
-    @apply rounded-md border border-transparent bg-white/5 px-2 py-1.5 text-fog placeholder:text-fog/30 hover:border-white/10 focus:border-accent focus:outline-none;
+    @apply rounded-md border border-transparent bg-tint/5 px-2 py-1.5 text-fog placeholder:text-fog/30 hover:border-tint/10 focus:border-accent focus:outline-none;
   }
   .label {
     @apply mb-1.5 block text-[11px] text-fog/50;
   }
   /* A square button holding one icon, as in panel headers. */
   .icon-btn {
-    @apply grid size-8 place-items-center rounded-md text-fog/60 hover:bg-white/8 hover:text-fog;
+    @apply grid size-8 place-items-center rounded-md text-fog/60 hover:bg-tint/8 hover:text-fog;
   }
   /* A tool in the floating toolbar. */
   .tool {
-    @apply grid size-9 place-items-center rounded-lg text-fog/75 hover:bg-white/10 hover:text-fog;
+    @apply grid size-9 place-items-center rounded-lg text-fog/75 hover:bg-tint/10 hover:text-fog;
   }
   .tool-on {
     @apply bg-accent text-white hover:bg-accent;
@@ -38,20 +77,20 @@
   }
   /* A setting in the map's toolbar: its current value, the choices in a menu. */
   .menu-btn {
-    @apply flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-fog hover:bg-white/8;
+    @apply flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-fog hover:bg-tint/8;
   }
   .menu-btn-on {
     @apply bg-accent/20 text-white ring-1 ring-accent hover:bg-accent/25;
   }
   .menu-pop {
-    @apply absolute left-0 top-10 z-20 flex min-w-[220px] flex-col rounded-xl border border-line bg-panel p-1 text-[13px] shadow-xl shadow-black/40;
+    @apply absolute left-0 top-10 z-20 flex min-w-[220px] flex-col rounded-xl border border-line bg-panel p-1 text-[13px] shadow-xl shadow-shade/40;
   }
   .menu-item {
-    @apply flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-fog/85 hover:bg-white/8 hover:text-fog;
+    @apply flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-fog/85 hover:bg-tint/8 hover:text-fog;
   }
   /* A card on the board: the type as a thin edge, settled as an outline in that color. */
   .board-card {
-    @apply relative rounded-md border border-line bg-panel py-2 pl-2.5 pr-4 text-left leading-snug text-fog/90 shadow-sm shadow-black/20 hover:border-white/25;
+    @apply relative rounded-md border border-line bg-panel py-2 pl-2.5 pr-4 text-left leading-snug text-fog/90 shadow-sm shadow-shade/20 hover:border-tint/25;
     border-left: 3px solid var(--type);
   }
   .board-card.is-settled {
@@ -86,7 +125,7 @@
   @apply mb-0;
 }
 .report code {
-  @apply rounded bg-white/8 px-1 text-[12px] text-fog;
+  @apply rounded bg-tint/8 px-1 text-[12px] text-fog;
 }
 .report ul ul {
   @apply mb-0 mt-1;
@@ -105,7 +144,7 @@ body {
 /* Quiet scrollbars that match the panels. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-fog) 18%, transparent) transparent;
 }
 
 select.field option {
@@ -117,9 +156,12 @@ select.field option {
 }
 /* Node ids in a document: click to open the thought. */
 .report .node-link {
-  @apply rounded bg-white/8 px-1 font-mono text-[11.5px] text-accent hover:bg-accent/15;
+  @apply rounded bg-tint/8 px-1 font-mono text-[11.5px] text-accent hover:bg-accent/15;
 }
 
 /* Documents: a heading a check found something about, and what it found, set as text under it. */
-.doc-flag { border-left: 3px solid rgb(250 204 21 / 0.7); padding-left: 0.6rem; }
-.doc-flag-note { margin: -0.25rem 0 0.75rem; padding-left: 0.75rem; border-left: 3px solid rgb(250 204 21 / 0.35); font-size: 12px; color: rgb(250 204 21 / 0.85); }
+.doc-flag { border-left: 3px solid light-dark(rgb(202 138 4 / 0.8), rgb(250 204 21 / 0.7)); padding-left: 0.6rem; }
+.doc-flag-note { margin: -0.25rem 0 0.75rem; padding-left: 0.75rem; border-left: 3px solid light-dark(rgb(202 138 4 / 0.4), rgb(250 204 21 / 0.35)); font-size: 12px; color: light-dark(rgb(133 77 14), rgb(250 204 21 / 0.85)); }
+
+/* The tree lines in the drawn sitemap. */
+.sitemap-tree { stroke: light-dark(#c4c4c4, #4a4a4a); }

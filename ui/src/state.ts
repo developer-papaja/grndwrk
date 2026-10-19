@@ -182,6 +182,8 @@ export const state = Alpine.reactive({
   listOpen: readStored('grndwrk.listOpen', true),
   detailsMinimized: readStored('grndwrk.detailsMinimized', false),
   collapsed: readStored<Record<string, boolean>>('grndwrk.collapsed', {}),
+  /** Light or dark, or whatever the system uses (the default). Kept per browser. */
+  theme: readTheme(),
   editingTitle: false,
   /** Select the whole title when it opens for editing, so typing replaces it. */
   selectTitle: false,
@@ -1048,7 +1050,7 @@ export const state = Alpine.reactive({
       // Lines as SVG markup: Alpine's template loops cannot live inside an svg element.
       const svg = [
         '<defs><marker id="sitemap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0d99ff" /></marker></defs>',
-        ...tree.map((d) => `<path d="${d}" fill="none" stroke="#4a4a4a" stroke-width="1.5" />`),
+        ...tree.map((d) => `<path d="${d}" fill="none" class="sitemap-tree" stroke-width="1.5" />`),
         ...links.map((l) => `<path d="${l.d}" fill="none" stroke="#0d99ff" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sitemap-arrow)" />`),
       ].join('')
       return {
@@ -2329,6 +2331,11 @@ export const state = Alpine.reactive({
     this.listIndex = 0
     focusWhenVisible('search')
   },
+  setTheme(theme: Theme) {
+    this.theme = theme
+    store('grndwrk.theme', theme)
+    applyTheme(theme)
+  },
   setListOpen(open: boolean) {
     this.listOpen = open
     if (!open) this.query = ''
@@ -2443,6 +2450,19 @@ function linkIds(html: string): string {
 
 function stripFrontmatter(text: string): string {
   return text.replace(/^---\n[\s\S]*?\n---\n?/, '')
+}
+
+export type Theme = 'system' | 'light' | 'dark'
+
+function readTheme(): Theme {
+  const t = readStored<string>('grndwrk.theme', 'system')
+  return t === 'light' || t === 'dark' ? t : 'system'
+}
+
+/** The colors follow the system (prefers-color-scheme) unless <html> has .light or .dark. */
+export function applyTheme(theme: Theme) {
+  document.documentElement.classList.toggle('light', theme === 'light')
+  document.documentElement.classList.toggle('dark', theme === 'dark')
 }
 
 /** Layout choices are remembered per browser. Storage can be blocked, so fall back quietly. */

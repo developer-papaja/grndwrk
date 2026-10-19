@@ -3,7 +3,9 @@ import Alpine from 'alpinejs'
 import { fetchNodes, fetchProject, subscribe } from './api'
 import type { ServerEvent } from '../../src/shared/types'
 import { bindKeys } from './keys'
-import { state } from './state'
+import { applyTheme, state } from './state'
+
+applyTheme(state.theme)
 
 // A handle for poking at the map from the browser console.
 Object.assign(window, { grndwrk: { state } })

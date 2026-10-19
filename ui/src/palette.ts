@@ -1,15 +1,15 @@
 import type { NodeType } from '../../src/shared/types'
 
-/** Calm colors that stay readable on the dark background. */
+/** Calm colors that stay readable on the background; each theme's values are in style.css. */
 export const TYPE_COLORS: Record<NodeType, string> = {
-  idea: '#d9d3b8',
-  audience: '#e2a982',
-  flow: '#8fc4a8',
-  feature: '#8db4dc',
-  content: '#c4a6dc',
-  design: '#e29db2',
-  constraint: '#b3aaa2',
-  question: '#efc56d',
-  decision: '#79cfc4',
-  reference: '#9ba6b9',
+  idea: 'var(--type-idea)',
+  audience: 'var(--type-audience)',
+  flow: 'var(--type-flow)',
+  feature: 'var(--type-feature)',
+  content: 'var(--type-content)',
+  design: 'var(--type-design)',
+  constraint: 'var(--type-constraint)',
+  question: 'var(--type-question)',
+  decision: 'var(--type-decision)',
+  reference: 'var(--type-reference)',
 }
