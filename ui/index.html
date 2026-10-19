@@ -107,7 +107,7 @@
                         <span x-show="['proposed', 'ready', 'fixed'].includes($store.gw.feedbackState(it.node))" :class="{ fixed: 'text-emerald-300/80', ready: 'text-violet-300', proposed: 'text-accent' }[$store.gw.feedbackState(it.node)]" x-text="{ fixed: 'Fixed', ready: 'Ready to test', proposed: 'Fix proposed' }[$store.gw.feedbackState(it.node)]"></span>
                       </span>
                       <span class="line-clamp-3" x-text="it.node.title"></span>
-                      <span x-show="$store.gw.hasQuestion(it.id)" class="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-question" title="Claude asked something"></span>
+                      <span x-show="$store.gw.hasQuestion(it.id)" class="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-question" title="Your agent asked something"></span>
                     </button>
                   </template>
                   <template x-if="it.kind === 'gap'">
@@ -189,7 +189,7 @@
                           <span class="block text-fog" x-text="it.node.title"></span>
                           <span x-show="$store.gw.firstLine(it.node.body)" class="mt-0.5 line-clamp-2 block text-fog/50" x-text="$store.gw.firstLine(it.node.body)"></span>
                         </span>
-                        <span x-show="$store.gw.hasQuestion(it.id)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
+                        <span x-show="$store.gw.hasQuestion(it.id)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Your agent asked something"></span>
                         <span x-show="['proposed', 'ready', 'fixed'].includes($store.gw.feedbackState(it.node))" class="mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[10.5px]" :class="{ fixed: 'bg-emerald-400/10 text-emerald-300/80', ready: 'bg-violet-400/15 text-violet-300', proposed: 'bg-accent/15 text-accent' }[$store.gw.feedbackState(it.node)]" x-text="{ fixed: 'fixed', ready: 'ready to test', proposed: 'fix proposed' }[$store.gw.feedbackState(it.node)]"></span>
                         <span x-show="it.node.status !== 'open'" class="mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[10.5px]" :class="it.node.status === 'settled' ? 'bg-emerald-400/10 text-emerald-300/80' : 'bg-white/8 text-fog/50'" x-text="it.node.status"></span>
                       </button>
@@ -370,7 +370,7 @@
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
-      <template x-for="v in [['focus', 'Inbox: Claude\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers Claude in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
+      <template x-for="v in [['focus', 'Inbox: your agent\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
           :class="$store.gw.view === v[0] ? 'bg-white/10 text-fog' : 'text-fog/55 hover:bg-white/5 hover:text-fog'"
@@ -598,7 +598,7 @@
               >
                 <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[n.type] }"></span>
                 <span class="min-w-0 flex-1 truncate" :class="n.status === 'settled' && 'text-fog/45'" x-text="n.title"></span>
-                <span x-show="$store.gw.hasQuestion(n.id)" class="size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
+                <span x-show="$store.gw.hasQuestion(n.id)" class="size-1.5 shrink-0 rounded-full bg-question" title="Your agent asked something"></span>
               </button>
             </template>
           </section>
@@ -680,7 +680,7 @@
       <template x-if="!$store.gw.screens.length">
         <div class="mx-auto max-w-3xl flex-1 px-8 pt-10">
           <h1 class="text-xl font-semibold text-fog">Sitemap</h1>
-          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">No screens yet. Run <code class="text-fog">/sitemap</code> in Claude Code. It reads the code and writes every screen: what it is for, who it is meant for, and what the person is expected to do there.</p>
+          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">No screens yet. Run <code class="text-fog">/sitemap</code> in your agent. It reads the code and writes every screen: what it is for, who it is meant for, and what the person is expected to do there.</p>
         </div>
       </template>
 
@@ -783,7 +783,7 @@
                           <span class="flex w-full items-center gap-1.5">
                             <span class="size-1.5 shrink-0 rounded-full" :class="b.screen.error ? 'bg-rose-400' : { 'bg-emerald-400': b.screen.status === 'built', 'bg-question': b.screen.status === 'partial', 'bg-white/30': b.screen.status === 'planned' }" :title="b.screen.error ? 'Can\'t be read' : b.screen.status"></span>
                             <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-fog" x-text="b.screen.title"></span>
-                            <span x-show="$store.gw.questionsOn(b.screen)" class="size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
+                            <span x-show="$store.gw.questionsOn(b.screen)" class="size-1.5 shrink-0 rounded-full bg-question" title="Your agent asked something"></span>
                           </span>
                           <span x-show="b.screen.error" class="mt-0.5 line-clamp-3 text-[11.5px] leading-snug text-rose-300" :title="b.screen.error" x-text="'Can\'t read this file. ' + b.screen.error"></span>
                           <span x-show="!b.screen.error" class="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-fog/55" x-text="b.screen.purpose || 'No purpose written yet'"></span>
@@ -837,7 +837,7 @@
                       <span x-show="row.screen.error" class="block truncate text-xs text-rose-300" :title="row.screen.error" x-text="'Can\'t read this file. ' + row.screen.error"></span>
                       <span x-show="!row.screen.error" class="block truncate text-xs text-fog/50" x-text="row.screen.purpose || 'No purpose written yet'"></span>
                     </span>
-                    <span x-show="$store.gw.questionsOn(row.screen)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Claude asked something"></span>
+                    <span x-show="$store.gw.questionsOn(row.screen)" class="mt-[7px] size-1.5 shrink-0 rounded-full bg-question" title="Your agent asked something"></span>
                   </button>
                 </li>
               </template>
@@ -854,7 +854,7 @@
                     :class="{ 'bg-emerald-400/15 text-emerald-300': $store.gw.screen.status === 'built', 'bg-question/15 text-question': $store.gw.screen.status === 'partial', 'bg-white/10 text-fog/60': $store.gw.screen.status === 'planned' }"
                     x-text="$store.gw.screen.status"
                   ></span>
-                  <span x-show="$store.gw.screen.source === 'inferred'" class="rounded bg-question/15 px-1.5 py-0.5 text-question">Claude's guess. Check it.</span>
+                  <span x-show="$store.gw.screen.source === 'inferred'" class="rounded bg-question/15 px-1.5 py-0.5 text-question">A guess. Check it.</span>
                   <span class="font-mono text-fog/35" x-text="$store.gw.screen.id"></span>
                 </div>
                 <div class="mt-2 flex items-center justify-between gap-3">
@@ -998,10 +998,10 @@
                     <template x-for="(e, i) in $store.gw.screenThread" :key="i">
                       <li class="rounded-lg border px-3 py-2" :class="e.open ? 'border-question/50 bg-question/10' : e.who === 'you' ? 'border-transparent bg-white/5' : 'border-line'">
                         <div class="mb-0.5 flex items-center justify-between text-[11px]">
-                          <span class="font-medium" :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Claude asks you' : 'Claude asked') : 'Claude'"></span>
+                          <span class="font-medium" :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Agent asks you' : 'Agent asked') : 'Claude'"></span>
                           <span class="text-fog/35" x-text="e.date"></span>
                         </div>
-                        <!-- Claude's questions, each on its own: Claude may ask several at once -->
+                        <!-- Questions, each on its own: there may be several at once -->
                         <template x-if="e.who === 'claude-asks'">
                           <div class="space-y-3">
                             <template x-for="q in $store.gw.entryQuestions($store.gw.screen.body, i)" :key="q.index">
@@ -1050,7 +1050,7 @@
                       rows="2"
                       x-model="$store.gw.screenReply"
                       @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendScreenReply() }"
-                      :placeholder="$store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo) ? 'Your answer to this question' : $store.gw.screenThread.some((e) => e.open) ? 'Answer Claude' : 'Add a comment for the next /sitemap run'"
+                      :placeholder="$store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo) ? 'Your answer to this question' : $store.gw.screenThread.some((e) => e.open) ? 'Your answer' : 'Add a comment for the next /sitemap run'"
                       class="field w-full resize-none"
                     ></textarea>
                     <div class="mt-1.5 flex items-center justify-between gap-2">
@@ -1066,12 +1066,12 @@
       </template>
     </main>
 
-    <!-- Documents: what steers Claude in the product, read only, with what the last check found in each and your comments -->
+    <!-- Documents: what steers your agent in the product, read only, with what the last check found in each and your comments -->
     <div x-cloak x-show="$store.gw.view === 'docs'" id="docs-view" class="fixed inset-y-0 left-16 right-0 flex bg-ink text-[13px]">
       <aside class="flex w-72 shrink-0 flex-col border-r border-line bg-panel">
         <div class="px-4 pb-2 pt-4">
           <h1 class="text-[15px] font-semibold text-fog">Documents</h1>
-          <p class="mt-1 text-xs text-fog/55">What steers Claude in the product, and what the last /readiness found in each. Read here, comment, and copy what to change for Claude.</p>
+          <p class="mt-1 text-xs text-fog/55">What steers your agent in the product, and what the last /readiness found in each. Read here, comment, and copy a prompt for what to change.</p>
         </div>
         <ul class="flex-1 overflow-y-auto px-2 pb-4">
           <template x-for="d in $store.gw.docs" :key="d.path">
@@ -1095,7 +1095,7 @@
                 <div class="mt-1.5 rounded-md border border-line px-2.5 py-2">
                   <span class="block text-fog/85" x-text="f.title"></span>
                   <span x-show="f.missing.length" class="block text-[11px] text-fog/50" x-text="f.missing[0]"></span>
-                  <button x-show="f.suggestion" class="mt-1 text-[11px] text-accent hover:underline" @click="$store.gw.showPrompt(f.title, f.suggestion)">Copy for Claude</button>
+                  <button x-show="f.suggestion" class="mt-1 text-[11px] text-accent hover:underline" @click="$store.gw.showPrompt(f.title, f.suggestion)">Copy prompt</button>
                 </div>
               </template>
             </li>
@@ -1108,9 +1108,9 @@
             <div class="flex items-center gap-3">
               <h2 class="min-w-0 flex-1 truncate font-mono text-[15px] text-fog" x-text="$store.gw.doc.path"></h2>
               <button x-show="$store.gw.doc.exists" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Open the file in your own editor" @click="$store.gw.openDocEditor()">Open in editor</button>
-              <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" title="Copy an instruction for Claude Code in the product: what the check found here, and your comments" @click="$store.gw.showPrompt($store.gw.doc.path, $store.gw.docPrompt())">Copy for Claude</button>
+              <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" title="Copy an instruction for your agent in the product: what the check found here, and your comments" @click="$store.gw.showPrompt($store.gw.doc.path, $store.gw.docPrompt())">Copy prompt</button>
             </div>
-            <p x-show="!$store.gw.doc.exists" class="mt-2 text-fog/65" x-text="$store.gw.doc.draft ? 'Not in the project yet. /readiness suggests writing it; below is its draft. Copy for Claude asks Claude Code to create it from the draft.' : 'Not in the project yet. Copy for Claude asks Claude Code to write it.'"></p>
+            <p x-show="!$store.gw.doc.exists" class="mt-2 text-fog/65" x-text="$store.gw.doc.draft ? 'Not in the project yet. /readiness suggests writing it; below is its draft. Copy prompt gives your agent a prompt to create it from the draft.' : 'Not in the project yet. Copy prompt gives your agent a prompt to write it.'"></p>
 
             <template x-if="$store.gw.openDocInfo.findings.filter((f) => f.status !== 'done').length">
               <div class="mt-4 rounded-lg border border-question/30 bg-question/5 p-3" id="doc-findings">
@@ -1150,14 +1150,14 @@
       </section>
     </div>
 
-    <!-- A prompt for Claude, in full, before it is copied; it can be changed here first -->
+    <!-- A prompt for your agent, in full, before it is copied; it can be changed here first -->
     <div x-cloak x-show="$store.gw.prompt" x-transition.opacity.duration.100ms id="prompt" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" @click.self="$store.gw.prompt = null" @keydown.escape.window="$store.gw.prompt && ($store.gw.prompt = null)">
       <div class="flex max-h-full w-full max-w-2xl flex-col rounded-xl border border-line bg-panel p-4 shadow-2xl shadow-black/50">
         <div class="flex items-center gap-2">
-          <h2 class="min-w-0 flex-1 truncate text-[14px] font-semibold text-fog" x-text="'For Claude: ' + ($store.gw.prompt?.title ?? '')"></h2>
+          <h2 class="min-w-0 flex-1 truncate text-[14px] font-semibold text-fog" x-text="'Prompt: ' + ($store.gw.prompt?.title ?? '')"></h2>
           <button class="icon-btn" title="Close ( Esc )" @click="$store.gw.prompt = null"><svg class="size-5"><use href="#i-close" /></svg></button>
         </div>
-        <p class="mt-1 text-xs text-fog/55">Paste it into Claude Code in the product. Change anything here first if you like.</p>
+        <p class="mt-1 text-xs text-fog/55">Paste it into your agent in the product. Change anything here first if you like.</p>
         <template x-if="$store.gw.prompt">
           <textarea id="prompt-text" class="field mt-3 min-h-[260px] flex-1 font-mono text-[12px] leading-relaxed" x-model="$store.gw.prompt.text"></textarea>
         </template>
@@ -1314,7 +1314,7 @@
           <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
             <div class="h-full rounded-full bg-emerald-400/80" :style="{ width: ($store.gw.projectStatus.total ? Math.round($store.gw.projectStatus.done / $store.gw.projectStatus.total * 100) : 0) + '%' }"></div>
           </div>
-          <p x-show="$store.gw.projectStatus.unchecked" class="mt-2 text-xs text-fog/50" x-text="$store.gw.projectStatus.unchecked + ($store.gw.projectStatus.unchecked === 1 ? ' item is' : ' items are') + ' not checked yet. Run /readiness in Claude Code: it reads the project and says what each one lacks.'"></p>
+          <p x-show="$store.gw.projectStatus.unchecked" class="mt-2 text-xs text-fog/50" x-text="$store.gw.projectStatus.unchecked + ($store.gw.projectStatus.unchecked === 1 ? ' item is' : ' items are') + ' not checked yet. Run /readiness in your agent: it reads the project and says what each one lacks.'"></p>
           <p x-show="!$store.gw.projectStatus.left.length && !$store.gw.projectStatus.unchecked" class="mt-3 text-emerald-300/90">Everything is in place.</p>
           <!-- What is left, by the kind of work: what it asks of you, one action, the items when opened -->
           <p x-show="$store.gw.projectStatus.left.length" id="status-summary" class="mt-3 text-fog/80">
@@ -1332,7 +1332,7 @@
                     </div>
                     <p class="mt-0.5 text-fog/60" x-text="$store.gw.statusKinds[k.key].what"></p>
                   </div>
-                  <button x-show="$store.gw.statusKinds[k.key].action" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90" :title="k.key === 'build' ? 'Copies an instruction for Claude Code in the product: check these stories against the code, mark what is built, list what is not' : ''" @click="$store.gw.statusKindAction(k)" x-text="$store.gw.statusKinds[k.key].action"></button>
+                  <button x-show="$store.gw.statusKinds[k.key].action" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90" :title="k.key === 'build' ? 'Copies an instruction for your agent in the product: check these stories against the code, mark what is built, list what is not' : ''" @click="$store.gw.statusKindAction(k)" x-text="$store.gw.statusKinds[k.key].action"></button>
                 </div>
                 <button class="flex w-full items-center gap-1.5 border-t border-line px-4 py-2 text-left text-xs text-fog/55 hover:text-fog" @click="$store.gw.statusKind = $store.gw.statusKind === k.key ? null : k.key" :aria-expanded="$store.gw.statusKind === k.key">
                   <svg class="size-3.5 transition-transform" :class="$store.gw.statusKind === k.key && 'rotate-90'"><use href="#i-chevron" /></svg>
@@ -1346,7 +1346,7 @@
                         <span class="block truncate text-fog" x-text="row.title"></span>
                         <span x-show="row.detail.length" class="block truncate text-xs text-fog/50" x-text="row.detail[0]"></span>
                       </span>
-                      <button x-show="row.suggestion" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Copy an instruction for Claude Code in the product's repo" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy for Claude</button>
+                      <button x-show="row.suggestion" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" title="Copy an instruction for your agent in the product's repo" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy prompt</button>
                       <button x-show="row.open" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer them' : 'Show on the map') : row.open?.kind === 'screen' ? 'Open the screen' : 'Write it'"></button>
                     </li>
                   </template>
@@ -1389,11 +1389,11 @@
                         </template>
                       </div>
                       <div x-show="row.suggestion" class="rounded-lg bg-white/5 px-3 py-2">
-                        <span class="label">Suggestion for Claude</span>
+                        <span class="label">Prompt</span>
                         <p class="whitespace-pre-wrap text-fog/80" x-text="row.suggestion"></p>
                       </div>
                       <div class="flex flex-wrap gap-2" x-show="row.suggestion || row.draft || row.open">
-                        <button x-show="row.suggestion" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy for Claude</button>
+                        <button x-show="row.suggestion" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy prompt</button>
                         <button x-show="row.draft" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.copyDraft(row.draft)">Copy the draft</button>
                         <button x-show="row.open && row.open.kind !== 'purpose'" class="rounded-md border border-line px-3 py-1 text-xs text-fog/80 hover:bg-white/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer in the Inbox' : 'Show on the map') : 'Open the screen'"></button>
                       </div>
@@ -1409,7 +1409,7 @@
         <h2 class="mb-1 mt-10 text-[15px] font-semibold text-fog">The thinking in the map</h2>
         <p class="text-xs text-fog/45">What /readiness found in the map itself: the verdict, each area, and the gaps.</p>
         <template x-if="!$store.gw.readiness?.report">
-          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Not checked yet. Run <code class="text-fog">/readiness</code> in Claude Code. It judges the map against your checklist and lists what is missing.</p>
+          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Not checked yet. Run <code class="text-fog">/readiness</code> in your agent. It judges the map against your checklist and lists what is missing.</p>
         </template>
 
         <template x-if="$store.gw.readiness?.report">
@@ -1431,7 +1431,7 @@
               <span x-text="'Closed since the last check: ' + $store.gw.readiness.report.closed.join(', ') + '.'"></span>
               <span x-show="$store.gw.readiness.report.added.length" class="text-fog/50" x-text="' New: ' + $store.gw.readiness.report.added.join(', ') + '.'"></span>
             </p>
-            <button x-show="$store.gw.inbox.length" id="readiness-focus" class="mt-4 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.enterFocus()" x-text="'Answer Claude\'s questions (' + $store.gw.inbox.length + ')'"></button>
+            <button x-show="$store.gw.inbox.length" id="readiness-focus" class="mt-4 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90" @click="$store.gw.enterFocus()" x-text="'Answer the questions (' + $store.gw.inbox.length + ')'"></button>
             <p class="mt-3 text-xs text-fog/40">Run <code class="text-fog/70">/readiness</code> to check again, or <code class="text-fog/70">/challenge</code> for questions on the thinnest parts.</p>
 
             <h2 class="mb-2 mt-8 text-[13px] font-semibold text-fog">Areas</h2>
@@ -1574,7 +1574,7 @@
         </div>
 
         <template x-if="!$store.gw.brief && !$store.gw.stories.length && !$store.gw.survey">
-          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Nothing yet. Run <code class="text-fog">/brief</code> in Claude Code to turn the map into a brief, a site map, the first stories and a CLAUDE.md to start building with.</p>
+          <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Nothing yet. Run <code class="text-fog">/brief</code> in your agent to turn the map into a brief, a site map, the first stories and a CLAUDE.md to start building with.</p>
         </template>
 
         <template x-if="$store.gw.brief || $store.gw.stories.length || $store.gw.survey">
@@ -1626,7 +1626,7 @@
 
             <div x-show="$store.gw.deliverablesTab === 'starter'" class="mt-6" id="starter">
               <div class="mb-3 flex items-center justify-between gap-4 rounded-lg border border-line px-4 py-3">
-                <span class="text-fog/70">Put this in the product's repository as CLAUDE.md. Every Claude Code session there starts from it.</span>
+                <span class="text-fog/70">Put this in the product's repository as CLAUDE.md (Claude Code) or AGENTS.md (Codex, Cursor and others). Every session there starts from it.</span>
                 <button id="copy-starter" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.starter" @click="$store.gw.copyStarter()" x-text="$store.gw.copied ? 'Copied' : 'Copy'"></button>
               </div>
               <div class="report" x-html="$store.gw.starter ? $store.gw.starterHtml : '<p>No starter yet.</p>'"></div>
@@ -1643,7 +1643,7 @@
           <h1 class="text-xl font-semibold text-fog">Inbox<span x-show="$store.gw.scopeScreen" class="font-normal text-fog/50" x-text="' · ' + ($store.gw.scopeScreen?.title ?? '')"></span></h1>
           <span id="focus-count" class="text-xs text-fog/45" x-text="$store.gw.inbox.length ? $store.gw.inbox.length + ($store.gw.inbox.length === 1 ? ' question' : ' questions') : ''"></span>
         </div>
-        <p class="mt-1 text-xs text-fog/50">What Claude asked you. Answer here; Claude reads it the next time a command runs.</p>
+        <p class="mt-1 text-xs text-fog/50">What your agent asked you. Answer here; it reads the answer the next time a command runs.</p>
 
         <div x-show="!$store.gw.inbox.length" id="focus-done" class="mt-10 flex flex-col items-start gap-3">
           <span class="grid size-10 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
@@ -1658,7 +1658,7 @@
           <template x-for="item in $store.gw.inbox" :key="item.key">
             <li class="rounded-xl border border-line bg-panel p-4" :data-inbox="item.key">
               <div class="flex items-center gap-2 text-[11px]">
-                <span class="rounded bg-question/15 px-1.5 py-0.5 font-medium text-question" x-text="item.kind === 'guess' ? 'Is this right?' : 'Claude asks'"></span>
+                <span class="rounded bg-question/15 px-1.5 py-0.5 font-medium text-question" x-text="item.kind === 'guess' ? 'Is this right?' : 'Agent asks'"></span>
                 <span class="min-w-0 flex-1 truncate text-fog/55">
                   <span x-text="item.kind === 'screen' ? 'about the screen' : item.kind === 'guess' ? 'a guess from the code' : 'about'"></span>
                   <span x-show="item.kind !== 'guess'" class="text-fog/85" x-text="'\u201C' + item.about + '\u201D'"></span>
@@ -1697,7 +1697,7 @@
                     <span class="label">Before the question</span>
                     <template x-for="(e, j) in d.earlier" :key="j">
                       <div class="mb-1.5">
-                        <span class="text-[11px]" :class="e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="(e.who === 'you' ? 'You' : 'Claude') + ' · ' + e.date"></span>
+                        <span class="text-[11px]" :class="e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="(e.who === 'you' ? 'You' : 'Agent') + ' · ' + e.date"></span>
                         <p class="whitespace-pre-wrap text-fog/75" x-text="$store.gw.entryWords(e.text)"></p>
                       </div>
                     </template>
@@ -1770,7 +1770,7 @@
           <div id="report">
             <p class="mb-3 text-xs text-fog/45" x-text="'Checked ' + $store.gw.readiness.report.checked + ' · ' + $store.gw.readiness.gaps.length + ' gaps'"></p>
             <div class="report" x-html="$store.gw.reportHtml"></div>
-            <p class="mt-4 text-xs text-fog/40">Run /readiness in Claude Code to check again, or /challenge for questions on the thinnest parts.</p>
+            <p class="mt-4 text-xs text-fog/40">Run /readiness in your agent to check again, or /challenge for questions on the thinnest parts.</p>
           </div>
         </template>
 
@@ -1795,7 +1795,7 @@
             <div x-show="$store.gw.selectedStory.status === 'partial' && !$store.gw.selectedStory.later" id="story-partial" class="rounded-lg border border-question/30 bg-question/5 p-3">
               <p class="text-fog/85" x-text="$store.gw.criteria($store.gw.selectedStory).length ? ($store.gw.criteria($store.gw.selectedStory).filter((c) => !c.met).length + ' of ' + $store.gw.criteria($store.gw.selectedStory).length + ' criteria not met yet. Build the rest, call it enough as it is, or set it aside for now.') : 'Partially done, without criteria saying what is left. Add them with Edit, or decide it is enough.'"></p>
               <div class="mt-2 flex flex-wrap gap-1.5">
-                <button class="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" title="Copies an instruction for Claude Code: build exactly what is not met yet" @click="$store.gw.storyBuildRest()">Build the rest</button>
+                <button class="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" title="Copies an instruction for your agent: build exactly what is not met yet" @click="$store.gw.storyBuildRest()">Build the rest</button>
                 <button class="rounded-md border border-line px-2.5 py-1 text-xs text-fog/85 hover:bg-white/8" title="Mark it done; what is not met becomes a parked thought, so it is not lost" @click="$store.gw.storyEnough()">Enough as it is</button>
                 <button class="rounded-md border border-line px-2.5 py-1 text-xs text-fog/85 hover:bg-white/8" title="Leave it partly done, out of what is left" @click="$store.gw.storyNotNow()">Not now</button>
               </div>
@@ -1881,7 +1881,7 @@
               <div class="rounded-lg border border-line px-3 py-2 text-fog/70">
                 <span class="label mb-1" x-text="$store.gw.selectedGap.enough ? 'Accepted for now' : 'Answered by'"></span>
                 <button class="block w-full text-left text-accent hover:underline" @click="$store.gw.select($store.gw.selectedGap.answered_by)" x-text="$store.gw.nodes[$store.gw.selectedGap.answered_by]?.title ?? $store.gw.selectedGap.answered_by"></button>
-                <p x-show="!$store.gw.selectedGap.enough" class="mt-1.5 text-xs text-fog/45">Run /readiness in Claude Code to check whether this closes the gap.</p>
+                <p x-show="!$store.gw.selectedGap.enough" class="mt-1.5 text-xs text-fog/45">Run /readiness in your agent to check whether this closes the gap.</p>
               </div>
             </template>
             <div x-show="!$store.gw.selectedGap.answered_by && $store.gw.selectedGap.suggestions?.length">
@@ -2050,7 +2050,7 @@
                 placeholder="No topic yet"
                 class="field w-full"
               />
-              <span x-show="$store.gw.selected.extra?.topic_by === 'claude'" class="mt-1 block text-[11px] text-fog/40">Suggested by Claude</span>
+              <span x-show="$store.gw.selected.extra?.topic_by === 'claude'" class="mt-1 block text-[11px] text-fog/40">Suggested by your agent</span>
               <datalist id="topic-names">
                 <template x-for="t in $store.gw.topicNames" :key="t"><option :value="t"></option></template>
               </datalist>
@@ -2109,11 +2109,11 @@
                       <span
                         class="font-medium"
                         :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'"
-                        x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Claude asks you' : 'Claude asked') : 'Claude'"
+                        x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Agent asks you' : 'Agent asked') : 'Claude'"
                       ></span>
                       <span class="text-fog/35" x-text="e.date"></span>
                     </div>
-                    <!-- Claude's questions, each on its own: Claude may ask several at once -->
+                    <!-- Questions, each on its own: there may be several at once -->
                     <template x-if="e.who === 'claude-asks'">
                       <div class="space-y-3">
                         <template x-for="q in $store.gw.entryQuestions($store.gw.draft.body, i)" :key="q.index">
@@ -2155,7 +2155,7 @@
                   rows="2"
                   x-model="$store.gw.reply"
                   @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendReply() }"
-                  :placeholder="$store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo) ? 'Your answer to this question' : $store.gw.openCount($store.gw.draft.body) > 1 ? 'Answer all of them at once, or pick one above' : $store.gw.openCount($store.gw.draft.body) ? 'Answer Claude' : 'Add a comment'"
+                  :placeholder="$store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo) ? 'Your answer to this question' : $store.gw.openCount($store.gw.draft.body) > 1 ? 'Answer all of them at once, or pick one above' : $store.gw.openCount($store.gw.draft.body) ? 'Your answer' : 'Add a comment'"
                   class="field w-full resize-none"
                 ></textarea>
                 <div class="mt-1.5 flex items-center justify-between gap-2">

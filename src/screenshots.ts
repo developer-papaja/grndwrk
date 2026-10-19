@@ -37,7 +37,7 @@ export async function takeScreenshots(gwDir: string, options: ScreenshotOptions)
     throw new Error(`project.md says the product runs at ${app}, which is not this machine. To take pictures there, say so: grndwrk screenshots --app ${app}`)
   }
   const screens = (await listScreens(gwDir)).filter((s) => !s.error)
-  if (!screens.length) throw new Error('No screens yet. Run /sitemap in Claude Code first.')
+  if (!screens.length) throw new Error('No screens yet. Run /sitemap in your agent first.')
   const wanted = options.only?.map((o) => o.toLowerCase())
   const chosen = wanted?.length ? screens.filter((s) => wanted.includes(s.id.toLowerCase()) || wanted.includes(s.title.toLowerCase())) : screens
 

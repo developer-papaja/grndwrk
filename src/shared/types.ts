@@ -149,7 +149,7 @@ export type FoundationStatus = (typeof FOUNDATION_STATUSES)[number]
  */
 export const FOUNDATIONS: { id: string; group: string; title: string }[] = [
   { id: 'purpose', group: 'purpose', title: 'What it is, who it is for, and what success is' },
-  { id: 'claude_md', group: 'building with claude', title: 'Coding instructions in CLAUDE.md' },
+  { id: 'claude_md', group: 'building with claude', title: 'Coding instructions in CLAUDE.md or AGENTS.md' },
   { id: 'code_standards', group: 'building with claude', title: 'Code standards: linting and formatting' },
   { id: 'claude_tools', group: 'building with claude', title: 'Skills and commands for the work' },
   { id: 'readme', group: 'documentation', title: 'A README: what it is and how to run it' },

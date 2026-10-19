@@ -3,7 +3,7 @@ import { lstat, readdir as readdirRaw, rename } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, writeFile } from './store/fs.js'
 import { keepOutOfGit } from './store/gitignore.js'
-import { basename, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { GW_DIR, OLD_GW_DIR, PACKAGE_ROOT } from './root.js'
 import { scalar } from './store/frontmatter.js'
@@ -37,9 +37,7 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   await dropRetiredAreas(join(gw, 'readiness', 'checklist.md'), say)
 
   const commandsSrc = join(PACKAGE_ROOT, 'commands')
-  const commandsDest = join(projectRoot, '.claude', 'commands')
-  await mkdir(commandsDest, { recursive: true })
-  // What init installed, by hash, so a later run can tell an untouched command from an edited one.
+  // What init installed, by hash, so a later run can tell an untouched file from an edited one.
   const manifestPath = join(gw, 'commands.json')
   const installed: Record<string, string> = await readFile(manifestPath, 'utf8').then(
     (t) => {
@@ -52,63 +50,38 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
     },
     () => ({}),
   )
-  for (const file of (await readdir(commandsSrc)).filter((f) => f.endsWith('.md')).sort()) {
-    const shipped = await readFile(join(commandsSrc, file), 'utf8')
-    const dest = join(commandsDest, file)
-    const current = await readFile(dest, 'utf8').catch(() => null)
-    if (current === null) {
-      await writeFile(dest, shipped)
-      say('created', dest)
-    } else if (current === shipped) {
-      say('ok', dest)
-    } else if (installed[file] && installed[file] !== hash(current)) {
-      // Changed by the person since init put it there: theirs wins.
-      say('kept', dest)
-      console.log('           you changed it, so it was not updated')
-      continue
-    } else {
-      if (!installed[file]) {
-        // Installed before init kept track: keep a copy, in case it was changed by hand.
-        const backup = join(gw, 'backup', 'commands', file)
-        await mkdir(join(gw, 'backup', 'commands'), { recursive: true })
-        await writeFile(backup, current)
-      }
-      await writeFile(dest, shipped)
-      say('updated', dest)
-    }
-    installed[file] = hash(shipped)
-  }
-  // The rules for working with the map, read by Claude Code whenever it opens a
-  // file in .grndwrk/: a comment fixed without /feedback still becomes ready to test.
-  const rules = await readFile(join(templates, 'CLAUDE.md'), 'utf8')
-  const rulesPath = join(gw, 'CLAUDE.md')
-  const currentRules = await readFile(rulesPath, 'utf8').catch(() => null)
   // Recorded under the folder's name before the rename to grndwrk.
   const OLD_KEY = `${OLD_GW_DIR}/CLAUDE.md`
   if (installed[OLD_KEY]) {
     installed['.grndwrk/CLAUDE.md'] ??= installed[OLD_KEY]
     delete installed[OLD_KEY]
   }
-  if (currentRules === null) {
-    await writeFile(rulesPath, rules)
-    say('created', rulesPath)
-  } else if (currentRules === rules) {
-    say('ok', rulesPath)
-  } else if (installed['.grndwrk/CLAUDE.md'] !== hash(currentRules)) {
-    // Written by hand before, or changed since: kept. Claude Code follows this
-    // file whenever it opens the map, so a change to it, also one that came
-    // in a pull request, is worth a look.
-    say('kept', rulesPath)
-    console.log('           it differs from what grndwrk ships, so it was not updated.')
-    console.log('           Claude follows it whenever it opens the map: check what it says (git log -p .grndwrk/CLAUDE.md).')
-  } else {
-    await writeFile(rulesPath, rules)
-    say('updated', rulesPath)
+  const install = (dest: string, shipped: string, key: string, unknown: Unknown) => installManaged({ dest, shipped, key, unknown, installed, gw, say })
+
+  // The commands, for Claude Code (.claude/commands) and as skills for Codex,
+  // Cursor and other agents that read .agents/skills (/readiness, or $readiness in Codex).
+  for (const file of (await readdir(commandsSrc)).filter((f) => f.endsWith('.md')).sort()) {
+    const shipped = await readFile(join(commandsSrc, file), 'utf8')
+    await install(join(projectRoot, '.claude', 'commands', file), shipped, file, 'backup')
+    const name = file.replace(/\.md$/, '')
+    await install(join(projectRoot, '.agents', 'skills', name, 'SKILL.md'), asSkill(name, shipped, false), `.agents/skills/${name}`, 'keep')
   }
-  if (currentRules === null || currentRules === rules || installed['.grndwrk/CLAUDE.md'] === hash(currentRules)) installed['.grndwrk/CLAUDE.md'] = hash(rules)
+  // The rules for working with the map, read whenever an agent opens a file in
+  // .grndwrk/: a comment fixed without /feedback still becomes ready to test.
+  // Claude Code reads CLAUDE.md there, Cursor AGENTS.md; Codex reads AGENTS.md
+  // only from the root down, so it gets them as a skill it picks up itself.
+  const rules = await readFile(join(templates, 'CLAUDE.md'), 'utf8')
+  for (const file of ['CLAUDE.md', 'AGENTS.md']) await install(join(gw, file), rules, `.grndwrk/${file}`, 'review')
+  await install(join(projectRoot, '.agents', 'skills', 'grndwrk-map', 'SKILL.md'), asSkill('grndwrk-map', rules, true), '.agents/skills/grndwrk-map', 'review')
   await writeFile(manifestPath, JSON.stringify(installed, null, 2) + '\n')
 
-  console.log(`\n${nextSteps(start)}\n\nAfter updating grndwrk, run \`grndwrk init\` again to update the commands.`)
+  const rootAgents = await readFile(join(projectRoot, 'AGENTS.md'), 'utf8').catch(() => null)
+  if (rootAgents !== null && !rootAgents.includes('.grndwrk')) {
+    console.log('\n  Codex reads AGENTS.md only from the root down. To give it the map rules every time, add this line to AGENTS.md:')
+    console.log('    When you work with anything in .grndwrk/, or fix something a comment or story there asks for, follow .grndwrk/AGENTS.md.')
+  }
+
+  console.log(`\n${nextSteps(start)}\n\nAfter updating grndwrk, run \`grndwrk init\` again to update the commands and skills.`)
 }
 
 /**
@@ -136,15 +109,15 @@ export function nextSteps(start: Start): string {
   return start === 'existing'
     ? [
         'Done. This is an existing project, so start from what is built:',
-        '  1. In Claude Code, run /survey. It reads the code, docs and history into the map.',
+        '  1. In your coding agent, run /survey ($survey in Codex). It reads the code, docs and history into the map.',
         '  2. Run /sitemap. It writes every screen: what it is for, who it is for, what they do there.',
         '  3. Run `grndwrk` to open the map. Status shows what the project has and what it lacks.',
       ].join('\n')
     : [
         'Done. This is a new project, so start from the idea:',
         '  1. Run `grndwrk` to open the map, write the purpose in one line, and capture what is on your mind.',
-        '  2. In Claude Code, run /readiness to see what is missing, then answer it in Focus.',
-        '  3. Run /brief for the brief, the first stories and the screens, and a CLAUDE.md to build with.',
+        '  2. In your coding agent, run /readiness ($readiness in Codex) to see what is missing, then answer it in Focus.',
+        '  3. Run /brief for the brief, the first stories and the screens, and a CLAUDE.md (or AGENTS.md) to build with.',
       ].join('\n')
 }
 
@@ -238,4 +211,58 @@ async function firstLink(dir: string): Promise<string | null> {
     }
   }
   return null
+}
+
+/** What to do with a file init did not write, or one the person changed: back it up and replace it, keep it, or keep it and say it is worth a look. */
+type Unknown = 'backup' | 'keep' | 'review'
+
+/**
+ * Write a file grndwrk ships, unless the person changed it since init put it
+ * there. A file that was there before init kept track is backed up and
+ * replaced (commands), kept (a skill of the same name is someone else's), or
+ * kept with a notice (rules an agent follows: a change, also one that came in
+ * a pull request, is worth a look).
+ */
+async function installManaged(o: { dest: string; shipped: string; key: string; unknown: Unknown; installed: Record<string, string>; gw: string; say: (verb: string, path: string) => void }): Promise<void> {
+  const { dest, shipped, key, unknown, installed, gw, say } = o
+  const current = await readFile(dest, 'utf8').catch(() => null)
+  if (current === null) {
+    await mkdir(dirname(dest), { recursive: true })
+    await writeFile(dest, shipped)
+    say('created', dest)
+  } else if (current === shipped) {
+    say('ok', dest)
+  } else if (installed[key] && installed[key] === hash(current)) {
+    await writeFile(dest, shipped)
+    say('updated', dest)
+  } else if (installed[key] || unknown !== 'backup') {
+    say('kept', dest)
+    if (installed[key]) console.log('           you changed it, so it was not updated')
+    else if (unknown === 'keep') console.log('           grndwrk did not write it, so it was left as it is')
+    if (unknown === 'review') console.log(`           it differs from what grndwrk ships. Agents follow it whenever they open the map: check what it says (git log -p ${relative(join(gw, '..'), dest)}).`)
+    return
+  } else {
+    // Installed before init kept track: keep a copy, in case it was changed by hand.
+    const backup = join(gw, 'backup', 'commands', basename(dest))
+    await mkdir(join(gw, 'backup', 'commands'), { recursive: true })
+    await writeFile(backup, current)
+    await writeFile(dest, shipped)
+    say('updated', dest)
+  }
+  installed[key] = hash(shipped)
+}
+
+/**
+ * A command as an Agent Skill (`.agents/skills/<name>/SKILL.md`), the format
+ * Codex and Cursor read: `name` and `description` in the frontmatter, the
+ * same instructions below. The commands run only when asked for; the map's
+ * rules are picked up by the agent itself when it works in .grndwrk/.
+ */
+export function asSkill(name: string, text: string, rules: boolean): string {
+  const m = /^---\n([\s\S]*?)\n---\n?/.exec(text)
+  const body = m ? text.slice(m[0].length) : text
+  const description = rules
+    ? 'Rules for the grndwrk map in .grndwrk/: thoughts, screens, stories and comments made in the running product. Use whenever you read or change anything in .grndwrk/, or fix, build or change something a comment or a story there asks for.'
+    : (/^description:\s*(.+)$/m.exec(m?.[1] ?? '')?.[1].trim() ?? `The grndwrk ${name} command`)
+  return `---\nname: ${name}\ndescription: ${scalar(description)}\n${rules ? '' : 'disable-model-invocation: true\n'}---\n${body}`
 }

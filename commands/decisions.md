@@ -1,5 +1,5 @@
 ---
-description: Write the decisions made in this Claude Code session into the grndwrk map
+description: Write the decisions made in this agent session into the grndwrk map
 ---
 Look back over this conversation and write the decisions made in it into this project's grndwrk map, so the map keeps up with what was actually decided.
 

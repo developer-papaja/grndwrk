@@ -118,7 +118,7 @@ final class CommentsController: UITableViewController {
       if section == 0, case .offline(let why) = Connection.state {
         return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again."
       }
-      return section == 1 ? "Ready to test: comments of yours whose fix Claude has built. Tap Test on one: it shows what to do, over the app, with Approve and Reject." : nil
+      return section == 1 ? "Ready to test: comments of yours whose fix your agent has built. Tap Test on one: it shows what to do, over the app, with Approve and Reject." : nil
     case .toTest: return items.isEmpty ? "Nothing to test right now. A fix shows up here once it is built." : "Test opens the app where it can be tested, with the steps on top. Tap a row to read more first."
     case .waiting: return items.isEmpty ? "Nothing waits." : "They go by themselves once grndwrk is reachable. Or share them as a file."
     case .sent: return items.isEmpty ? "Nothing sent yet." : "In grndwrk they are on the Feedback page, in a topic per screen. Deleting one here deletes it there too."

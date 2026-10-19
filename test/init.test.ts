@@ -3,7 +3,8 @@ import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { init } from '../src/init.js'
+import { asSkill, init } from '../src/init.js'
+import { readMatter } from '../src/store/matter.js'
 import { noMapMessage, PACKAGE_ROOT } from '../src/root.js'
 
 let root: string
@@ -20,6 +21,40 @@ const command = (name: string) => join(root, '.claude', 'commands', name)
 const shipped = (name: string) => readFile(join(PACKAGE_ROOT, 'commands', name), 'utf8')
 
 describe('init', () => {
+  it('installs the commands as skills for Codex and Cursor, and the map rules as AGENTS.md and a skill', async () => {
+    await init(root)
+    const skill = readMatter(await readFile(join(root, '.agents', 'skills', 'readiness', 'SKILL.md'), 'utf8'))
+    expect(skill.data.name).toBe('readiness')
+    expect(skill.data.description).toMatch(/ready to build/)
+    expect(skill.data['disable-model-invocation']).toBe(true)
+    expect(skill.content).toBe(readMatter(await shipped('readiness.md')).content)
+    const rules = await readFile(join(PACKAGE_ROOT, 'templates', 'CLAUDE.md'), 'utf8')
+    expect(await readFile(join(root, '.grndwrk', 'AGENTS.md'), 'utf8')).toBe(rules)
+    const map = readMatter(await readFile(join(root, '.agents', 'skills', 'grndwrk-map', 'SKILL.md'), 'utf8'))
+    expect(map.data.name).toBe('grndwrk-map')
+    expect(map.data['disable-model-invocation']).toBeUndefined()
+  })
+
+  it("never replaces someone's own skill of the same name", async () => {
+    await mkdir(join(root, '.agents', 'skills', 'import'), { recursive: true })
+    await writeFile(join(root, '.agents', 'skills', 'import', 'SKILL.md'), '---\nname: import\ndescription: Mine\n---\nMine.\n')
+    await init(root)
+    await init(root)
+    expect(await readFile(join(root, '.agents', 'skills', 'import', 'SKILL.md'), 'utf8')).toContain('Mine.')
+  })
+
+  it('tells Codex users how to give it the map rules when the project has an AGENTS.md', async () => {
+    await writeFile(join(root, 'AGENTS.md'), '# Agents\n')
+    const log = vi.spyOn(console, 'log')
+    await init(root)
+    expect(log.mock.calls.flat().join('\n')).toContain('follow .grndwrk/AGENTS.md')
+  })
+
+  it('makes a skill whose description YAML reads back as written', () => {
+    const skill = asSkill('x', '---\ndescription: Judge it: ready or not\n---\nBody\n', false)
+    expect(readMatter(skill).data.description).toBe('Judge it: ready or not')
+  })
+
   it('moves a map from before the rename, .groundwork/, to .grndwrk/', async () => {
     await mkdir(join(root, '.groundwork', 'nodes'), { recursive: true })
     await writeFile(join(root, '.groundwork', 'nodes', 'n_abc123.md'), '---\nid: n_abc123\ntitle: Kept\n---\n')

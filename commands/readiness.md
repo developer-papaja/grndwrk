@@ -53,7 +53,7 @@ Without an argument, judge the whole project as below.
 2. `.grndwrk/readiness/checklist.md`: what "ready" means for this project. Each area has an "Enough when" line. The person may have edited it; follow their version.
 3. Every file in `.grndwrk/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and the notes, including any `## Thread`. A settled thought counts more than an open one. A thread answer from the person counts as settled for what it answers.
 4. The previous `.grndwrk/readiness/report.md` and `gaps.json`, if they exist. A gap with `answered_by` was answered from the map: read that node and decide whether the gap is closed now. A gap with `enough: true` was accepted by the person as it is ("Enough for now"): it is closed for good.
-5. The project itself, outside `.grndwrk/` (read only), for the foundations below and the "Setup for building with Claude" area: `CLAUDE.md`, README and docs, design docs and references, code standards or linting config, design tokens in the code, and skills or commands in `.claude/`.
+5. The project itself, outside `.grndwrk/` (read only), for the foundations below and the "Setup for building with your agent" area (called "Setup for building with Claude" in older checklists): `CLAUDE.md` or `AGENTS.md`, README and docs, design docs and references, code standards or linting config, design tokens in the code, and skills or commands in `.claude/`.
 6. `.grndwrk/screens/` and `.grndwrk/stories/`: the Status page shows each screen as a part, done when it is built and its stories are done. You do not write about parts, but name the parts that matter most in the report when they are not done.
 7. **Variants,** when `project.md` lists `variants:` (like `[New UI, Previous UI]`, the first is the default): a screen with `in:` exists only in those variants, one without it in all of them, and `replaced_by` names its counterpart in another variant. Judge the default variant first. When a gap or a part not done concerns one variant only, say so in a few words ("Only in Previous UI"). Do not raise gaps about a variant's screens missing from another variant; that difference is the point of variants. Give a gap about one variant's screens their `screen`, so the map hides it in the other variant.
 
@@ -115,14 +115,14 @@ The design scorecard: nine fixed items (design docs, colors as tokens, typograph
 
 ## Write `.grndwrk/readiness/foundations.json`
 
-What the project has and lacks, as the Status page shows it: each item **done**, **partly** or **missing**, and for anything not done, what is lacking *inside* the files and an instruction Claude Code can follow in the product's repo. Look at the project itself, read only. In a new project with no code yet, judge from the map and `.grndwrk/outputs/` (the brief and `CLAUDE.starter.md` count as the coding instructions to come).
+What the project has and lacks, as the Status page shows it: each item **done**, **partly** or **missing**, and for anything not done, what is lacking *inside* the files and an instruction a coding agent can follow in the product's repo. Look at the project itself, read only. In a new project with no code yet, judge from the map and `.grndwrk/outputs/` (the brief and `CLAUDE.starter.md` count as the coding instructions to come).
 
 Always these eight, with these ids:
 
 | id | Done when |
 |---|---|
 | `purpose` | the map or `project.md` says what it is, who it is for and what success is, in a way two people would agree on |
-| `claude_md` | a CLAUDE.md gives a fresh session the product's context, how the code is laid out, the rules to build by, and how to run it |
+| `claude_md` | a CLAUDE.md (or AGENTS.md, for Codex, Cursor and others) gives a fresh session the product's context, how the code is laid out, the rules to build by, and how to run it |
 | `code_standards` | linting and formatting are configured and used (ESLint, Prettier, SwiftLint, SwiftFormat, Ruff...) |
 | `claude_tools` | the skills or commands the work leans on exist in `.claude/` (for example a command to add a screen the house way) |
 | `readme` | a README says what it is and how to run and build it |
@@ -145,7 +145,7 @@ Always these eight, with these ids:
 ```
 
 - `missing`: concrete lines about what is lacking inside the files, not only "the file is missing". For a CLAUDE.md that exists, say which parts are thin ("Nothing on how screens are structured", "No rule on tokens versus raw colors").
-- `suggestion`: an instruction for Claude Code in the product's repo, ready to paste, grounded in what the project has (file names, values, existing patterns). Empty when done.
+- `suggestion`: an instruction for the coding agent in the product's repo, ready to paste, grounded in what the project has (file names, values, existing patterns). Empty when done.
 - `draft`: when it saves the person real work (a DESIGN.md, a section for CLAUDE.md), write a draft of the file itself to `.grndwrk/outputs/drafts/<id>.md` and name it here. Base it only on what the project and the map say; mark guesses as questions in the draft. **Whenever a missing item belongs in a document of its own that the project does not have, write a draft**: the person sees it in the map's Documents view as a suggested file, and can edit and create it there.
 - `file`: with a draft for a new document, where it should go in the product, as a path from the project's root (`DESIGN.md`, `docs/tone.md`, `CONTENT.md`). Markdown only. Leave it out when the draft is a section for an existing file; then name that file in `seen_in` with the section (`CLAUDE.md#design`).
 - More items are allowed (for example `tests`), with a `title` and a `group`, when the project type calls for them.

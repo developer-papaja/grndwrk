@@ -79,4 +79,13 @@ describe('the documents that steer Claude', () => {
     await writeFile(join(root, 'BIG.md'), 'a'.repeat(3_000_000))
     expect((await readDoc(gw, [], 'BIG.md')).text.length).toBe(1_000_000)
   })
+  it("lists the product's own skills in .agents/skills but not grndwrk's", async () => {
+    for (const n of ['readiness', 'deploy']) {
+      await mkdir(join(root, '.agents', 'skills', n), { recursive: true })
+      await writeFile(join(root, '.agents', 'skills', n, 'SKILL.md'), '# Skill\n')
+    }
+    const paths = (await listDocs(gw, [])).map((d) => d.path)
+    expect(paths).toContain('.agents/skills/deploy/SKILL.md')
+    expect(paths).not.toContain('.agents/skills/readiness/SKILL.md')
+  })
 })

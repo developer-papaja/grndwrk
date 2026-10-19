@@ -140,7 +140,7 @@
     <div class="mark"></div>
     <div class="panel">
       <div class="head"><h3>Ready to test</h3><button class="x panel-close" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg></button></div>
-      <div class="muted">Fixes Claude built for comments made on this site. Test one: it opens its page and shows the steps.</div>
+      <div class="muted">Fixes your agent built for comments made on this site. Test one: it opens its page and shows the steps.</div>
       <div class="items"></div>
     </div>
     <div class="tcard" role="dialog" aria-label="Test a fix">
@@ -894,7 +894,7 @@
     $('.t-said').textContent = t.text
     // The words again only when they say more than the title.
     $('.t-said').style.display = $('.t-said').previousElementSibling.style.display = t.text !== t.title ? 'block' : 'none'
-    $('.t-fix').textContent = t.fix || 'Claude did not say.'
+    $('.t-fix').textContent = t.fix || 'Your agent did not say.'
     $('.t-test').textContent = t.test
     $('.t-test-wrap').style.display = t.test ? 'block' : 'none'
     rejecting(false)
@@ -930,7 +930,7 @@
     try {
       const res = await fetch(`${base}/__grndwrk/tested`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id, works, note: works ? '' : note.value }) })
       if (!res.ok) throw new Error()
-      flash(works ? 'Approved. Marked fixed.' : 'Rejected. It goes back to Claude with your note.')
+      flash(works ? 'Approved. Marked fixed.' : 'Rejected. It goes back to your agent with your note.')
       closeTest()
       loadTests()
     } catch {

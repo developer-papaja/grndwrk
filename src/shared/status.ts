@@ -57,7 +57,7 @@ const GROUPS: [string, string][] = [
   ['thinking', 'Open thinking'],
   ['purpose', 'Purpose'],
   ['parts', 'Parts'],
-  ['building with claude', 'Building with Claude'],
+  ['building with claude', 'Building with your agent'],
   ['documentation', 'Documentation'],
   ['design', 'Design'],
 ]
@@ -101,7 +101,7 @@ export function buildStatus(input: {
     status: open ? 'missing' : other ? 'partly' : 'done',
     detail: [
       ...(input.blocking ? [`${input.blocking} blocking ${input.blocking === 1 ? 'gap' : 'gaps'}`] : []),
-      ...(input.questions ? [`${input.questions} ${input.questions === 1 ? 'question' : 'questions'} from Claude`] : []),
+      ...(input.questions ? [`${input.questions} ${input.questions === 1 ? 'question' : 'questions'} from your agent`] : []),
       ...(other ? [`${other} other ${other === 1 ? 'gap' : 'gaps'} worth answering`] : []),
     ],
     seen_in: [],

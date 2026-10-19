@@ -6,7 +6,7 @@ import { startServer } from './server/index.js'
 import { clientCount, tabAround } from './server/events.js'
 
 const HELP = `Usage:
-  grndwrk init        create .grndwrk/ and copy the Claude Code commands, or update them
+  grndwrk init        create .grndwrk/ and install the agent commands and skills, or update them
   grndwrk [start]     open the map in the browser
   grndwrk import-feedback <file>
                          add comments a tester shared as a file

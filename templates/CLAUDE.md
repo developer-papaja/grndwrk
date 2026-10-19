@@ -1,6 +1,6 @@
 # grndwrk
 
-This folder is the project's grndwrk map: thoughts, screens, stories, and comments people made in the running product. Claude Code reads this file whenever it opens something in `.grndwrk/`. It holds the rules for working with the map, whatever you were asked; the commands in `.claude/commands/` (`/feedback`, `/decisions` and the rest) say more.
+This folder is the project's grndwrk map: thoughts, screens, stories, and comments people made in the running product. Your coding agent reads these rules whenever it opens something in `.grndwrk/` (Claude Code as `.grndwrk/CLAUDE.md`, Cursor as `.grndwrk/AGENTS.md`, Codex as the `grndwrk-map` skill). It holds the rules for working with the map, whatever you were asked; the commands in `.claude/commands/` (`/feedback`, `/decisions` and the rest) say more.
 
 ## Comments from the running product
 

@@ -118,7 +118,7 @@ so that booking never feels like a chore.
 
 ## Write `.grndwrk/outputs/CLAUDE.starter.md`
 
-The starting CLAUDE.md for the product's own repository. It is read by Claude Code at the start of every session, so it must be short, concrete and true to the map:
+The starting CLAUDE.md for the product's own repository. It is read by the coding agent at the start of every session (by Claude Code as CLAUDE.md; Codex, Cursor and others read the same text as AGENTS.md), so it must be short, concrete and true to the map:
 
 - what the product is, who it is for, and what success is
 - the core flows and the site map, in brief

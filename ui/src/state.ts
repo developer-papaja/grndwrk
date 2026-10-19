@@ -1139,9 +1139,9 @@ export const state = Alpine.reactive({
   statusAll: false,
   /** What each kind of work left asks of the person, in words. */
   statusKinds: {
-    decide: { name: 'Decide', what: 'Questions Claude asked and gaps /readiness found. You answer them, in a line or by picking an option. No code.', action: 'Answer them' },
-    build: { name: 'Build or confirm', what: 'Screens whose stories are not marked done. Many are probably built already and just not checked against the code; the rest need building. Let Claude check them first, then build what is missing.', action: 'Copy for Claude' },
-    setup: { name: 'Set up the project', what: 'What a well-run project has: a README, code standards, design tokens, tools for Claude. Claude can add each one: copy its instruction into Claude Code in the product.', action: '' },
+    decide: { name: 'Decide', what: 'Questions your agent asked and gaps /readiness found. You answer them, in a line or by picking an option. No code.', action: 'Answer them' },
+    build: { name: 'Build or confirm', what: 'Screens whose stories are not marked done. Many are probably built already and just not checked against the code; the rest need building. Let your agent check them first, then build what is missing.', action: 'Copy prompt' },
+    setup: { name: 'Set up the project', what: 'What a well-run project has: a README, code standards, design tokens, tools for your agent. Your agent can add each one: copy its prompt into your agent in the product.', action: '' },
   } as Record<string, { name: string; what: string; action: string }>,
   /** The kind's main action: answer in the Inbox, or copy the check-the-stories instruction. */
   statusKindAction(kind: { key: string; rows: StatusRow[] }) {
@@ -1236,7 +1236,7 @@ export const state = Alpine.reactive({
     if (source === 'code') return 'Seen in code'
     if (source === 'docs') return 'From the docs'
     if (source === 'commit') return 'From a commit'
-    if (source === 'inferred') return "Claude's guess. Check the thread."
+    if (source === 'inferred') return 'A guess. Check the thread.'
     if (source === 'app') return 'Commented in the running product'
     return ''
   },
@@ -1376,7 +1376,7 @@ export const state = Alpine.reactive({
       name: 'Answer',
       done: signed.answer ?? '',
       status: waiting ? `${waiting} waiting on you` + (this.blockingCount ? `, ${this.blockingCount} blocking` : '') : 'Nothing waiting on you.',
-      next: waiting ? `${this.inbox.length ? 'Answer Claude\'s questions in the Inbox. ' : ''}${this.openGaps.length ? 'Gaps are dashed cards on the map; "Enough for now" is a fine answer.' : ''}`.trim() : this.waitingGaps.length ? 'Run /readiness to check your answers.' : 'Move on, or run /challenge for a few sharp questions.',
+      next: waiting ? `${this.inbox.length ? 'Answer the questions in the Inbox. ' : ''}${this.openGaps.length ? 'Gaps are dashed cards on the map; "Enough for now" is a fine answer.' : ''}`.trim() : this.waitingGaps.length ? 'Run /readiness to check your answers.' : 'Move on, or run /challenge for a few sharp questions.',
       stale: waiting > 0,
     }
 
@@ -1391,12 +1391,12 @@ export const state = Alpine.reactive({
             ? `${fromCode} ${fromCode === 1 ? 'thought' : 'thoughts'} found in the project, ${screens} ${screens === 1 ? 'screen' : 'screens'} in the sitemap`
             : 'Nothing read from the project yet.',
           next: !fromCode
-            ? 'Run /survey in Claude Code. It reads the code, docs and history into the map.'
+            ? 'Run /survey in your agent. It reads the code, docs and history into the map.'
             : !screens
-              ? 'Run /sitemap in Claude Code. It writes every screen: what it is for, who it is for, what they do there.'
+              ? 'Run /sitemap in your agent. It writes every screen: what it is for, who it is for, what they do there.'
               : this.survey
                 ? `/survey found ${this.surveyFindings || 'some'} things worth knowing. Read them under Deliverables, State of the project.`
-                : 'Check the sitemap and the map, and correct what Claude guessed.',
+                : 'Check the sitemap and the map, and correct what your agent guessed.',
           stale: !fromCode || !screens,
         },
         {
@@ -1404,7 +1404,7 @@ export const state = Alpine.reactive({
           name: 'Foundations',
           done: signed.check ?? '',
           status: report ? `Checked ${report.checked}` + (reportStale ? '. The map changed since.' : '') : 'Not checked yet.',
-          next: 'Run /readiness in Claude Code. It checks what the project has and lacks: purpose, CLAUDE.md, docs, design philosophy, design tokens.',
+          next: 'Run /readiness in your agent. It checks what the project has and lacks: purpose, CLAUDE.md, docs, design philosophy, design tokens.',
           stale: !report || reportStale,
         },
         answer,
@@ -1413,7 +1413,7 @@ export const state = Alpine.reactive({
           name: 'Plan',
           done: signed.brief ?? '',
           status: brief ? `Brief written ${brief}, ${stories}` + (briefStale ? '. Checked again since.' : '') : `${stories}, no brief yet.`,
-          next: 'Run /brief in Claude Code: what is built, what comes next, and stories for it.',
+          next: 'Run /brief in your agent: what is built, what comes next, and stories for it.',
           stale: !brief || briefStale,
         },
         {
@@ -1449,7 +1449,7 @@ export const state = Alpine.reactive({
         name: 'Check',
         done: signed.check ?? '',
         status: report ? `${this.verdictLabel}, checked ${report.checked}` + (reportStale ? '. The map changed since.' : '') : 'Not checked yet.',
-        next: 'Run /readiness in Claude Code. It says what is missing and suggests answers.',
+        next: 'Run /readiness in your agent. It says what is missing and suggests answers.',
         stale: !report || reportStale,
       },
       answer,
@@ -1458,7 +1458,7 @@ export const state = Alpine.reactive({
         name: 'Brief',
         done: signed.brief ?? '',
         status: brief ? `Written ${brief}, ${stories}` + (briefStale ? '. Checked again since.' : '') : 'Not written yet.',
-        next: 'Run /brief in Claude Code: the brief, the stories, the screens, and a CLAUDE.md to start with.',
+        next: 'Run /brief in your agent: the brief, the stories, the screens, and a CLAUDE.md to start with.',
         stale: !brief || briefStale,
       },
       {
@@ -1587,9 +1587,9 @@ export const state = Alpine.reactive({
   /** What to do once Claude has nothing to ask. */
   get inboxNextStep(): string {
     if (this.openGaps.length) return `${this.openGaps.length} ${this.openGaps.length === 1 ? 'gap waits' : 'gaps wait'} on the map, as dashed cards.`
-    if (!this.readiness?.report) return 'Run /readiness in Claude Code to see what is missing.'
-    if (this.waitingGaps.length) return `Run /readiness in Claude Code to check your ${this.waitingGaps.length === 1 ? 'answer' : 'answers'}.`
-    if (!this.brief) return 'Run /brief in Claude Code to write the brief and the first stories.'
+    if (!this.readiness?.report) return 'Run /readiness in your agent to see what is missing.'
+    if (this.waitingGaps.length) return `Run /readiness in your agent to check your ${this.waitingGaps.length === 1 ? 'answer' : 'answers'}.`
+    if (!this.brief) return 'Run /brief in your agent to write the brief and the first stories.'
     return 'Run /challenge for a few sharp questions, or keep adding thoughts in the map.'
   },
   enterFocus() {
@@ -1631,7 +1631,7 @@ export const state = Alpine.reactive({
         this.upsert(await updateNode(n.id, { body: answer(n.body) }))
       }
       delete this.inboxDrafts[item.key]
-      this.flash(`Answered. Claude reads it on the next ${item.kind === 'screen' ? '/sitemap' : 'command'} run.`)
+      this.flash(`Answered. Your agent reads it on the next ${item.kind === 'screen' ? '/sitemap' : 'command'} run.`)
     } catch (err) {
       this.flash(errorText(err))
     } finally {
@@ -1707,7 +1707,7 @@ export const state = Alpine.reactive({
     if (view === 'map') revealSelection()
     if (view === 'docs') void this.loadDocs()
   },
-  // Documents: what steers Claude in the product, with what the last check found in each, readable and editable here.
+  // Documents: what steers your agent in the product, with what the last check found in each, readable and editable here.
   docs: [] as Doc[],
   docPath: readStored<string>('grndwrk.docPath', ''),
   doc: null as { path: string; text: string; exists: boolean; draft?: string } | null,
@@ -1780,7 +1780,7 @@ export const state = Alpine.reactive({
       this.upsert(node)
       this.docComment = ''
       this.docSection = ''
-      this.flash('Comment added. Copy for Claude includes it.')
+      this.flash('Comment added. Copy prompt includes it.')
     } catch (err) {
       this.flash(errorText(err))
     }
@@ -1792,7 +1792,7 @@ export const state = Alpine.reactive({
       this.flash(errorText(err))
     }
   },
-  /** What to give Claude Code in the product for this document: what the check suggests, your comments, or to write it from the draft. */
+  /** What to give your agent in the product for this document: what the check suggests, your comments, or to write it from the draft. */
   docPrompt(): string {
     const d = this.openDocInfo
     // A link or a folder named as a document is never one to write: writing it would follow the link.
@@ -1805,7 +1805,7 @@ export const state = Alpine.reactive({
         `Create ${d.path} in this project${d.draft ? `, starting from the draft in .grndwrk/outputs/drafts/${d.draft}` : ''}.`,
         ...live.flatMap((f) => [f.suggestion, ...f.missing.map((m) => `- ${m}`)]).filter(Boolean),
         d.draft ? 'Answer the questions the draft leaves open with me first; do not guess them.' : '',
-        'Link it from CLAUDE.md if Claude should read it.',
+        'Link it from CLAUDE.md or AGENTS.md if your agent should read it.',
       ].filter(Boolean)).join('\n')
     }
     return withComments([

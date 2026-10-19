@@ -1,6 +1,8 @@
 import { constants } from 'node:fs'
 import { lstat, open, readdir } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
+import { readdirSync } from 'node:fs'
+import { PACKAGE_ROOT } from '../root.js'
 import { BadInput } from '../store/nodes.js'
 import { readDraft } from '../store/stories.js'
 import type { Foundation } from '../shared/types.js'
@@ -38,6 +40,13 @@ const SKIP = new Set(['node_modules', '.git', 'vendor', '.grndwrk', '.groundwork
 
 const isMarkdown = (p: string) => /\.(md|markdown)$/i.test(p)
 
+/** grndwrk's own skills in .agents/skills (its commands, and the map's rules), updated by init: not the product's documents. */
+const OWN_SKILLS = new Set(['grndwrk-map', ...readdirSync(join(PACKAGE_ROOT, 'commands')).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3))])
+const isOwnSkill = (rel: string) => {
+  const m = /^\.agents\/skills\/([^/]+)\//.exec(rel)
+  return !!m && OWN_SKILLS.has(m[1])
+}
+
 /** Markdown files in a folder, a level or two down, skipping what is not the project's own. */
 async function markdownIn(root: string, dir: string, depth: number): Promise<string[]> {
   let entries
@@ -58,7 +67,7 @@ async function markdownIn(root: string, dir: string, depth: number): Promise<str
 
 async function skills(root: string): Promise<string[]> {
   const out: string[] = []
-  for (const base of ['.claude/skills']) {
+  for (const base of ['.claude/skills', '.agents/skills']) {
     let names: string[] = []
     try {
       names = await readdir(join(root, base))
@@ -67,7 +76,7 @@ async function skills(root: string): Promise<string[]> {
     }
     for (const n of names) {
       const p = `${base}/${n}/SKILL.md`
-      if (await isPlainFile(root, p)) out.push(p)
+      if (!isOwnSkill(p) && (await isPlainFile(root, p))) out.push(p)
     }
   }
   return out
@@ -109,7 +118,7 @@ function clean(root: string, p: string): string | null {
   // macOS and Windows find .Claude/Commands as .claude/commands: compare as they do.
   const fold = process.platform === 'darwin' || process.platform === 'win32' ? rel.toLowerCase() : rel
   if (!rel || rel.startsWith('..') || fold.split('/').some((s) => SKIP.has(s))) return null
-  if (fold.startsWith('.claude/commands/')) return null // grndwrk's own commands, updated by init.
+  if (fold.startsWith('.claude/commands/') || isOwnSkill(fold)) return null // grndwrk's own commands and skills, updated by init.
   return isMarkdown(rel) ? rel : null
 }
 
@@ -142,7 +151,7 @@ export async function listDocs(gwDir: string, foundations: Foundation[]): Promis
       }
     }
   }
-  const order = (p: string) => (/^claude\.md$/i.test(p) ? 0 : /^readme\.md$/i.test(p) ? 1 : !p.includes('/') ? 2 : p.startsWith('.claude/') ? 4 : 3)
+  const order = (p: string) => (/^(claude|agents)\.md$/i.test(p) ? 0 : /^readme\.md$/i.test(p) ? 1 : !p.includes('/') ? 2 : p.startsWith('.claude/') || p.startsWith('.agents/') ? 4 : 3)
   return [...found.values()].sort((a, b) => order(a.path) - order(b.path) || a.path.localeCompare(b.path))
 }
 

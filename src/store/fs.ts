@@ -8,13 +8,13 @@ import { dirname, resolve, sep } from 'node:path'
  * `.grndwrk/threads/n_abc123 -> ../../.claude/commands` or a brief that
  * points at `~/.ssh/id_rsa`; following it would write outside the folder or
  * show any file on this Mac in the map. Every path under a folder named
- * `.grndwrk` or `.claude` (where init writes the commands) is checked from
+ * `.grndwrk`, `.claude` or `.agents` (where init writes the commands and skills) is checked from
  * that folder down (the folder itself included); paths elsewhere pass through
  * unchanged.
  */
 export class LinkRefused extends Error {}
 
-const GUARDED = ['.grndwrk', '.claude']
+const GUARDED = ['.grndwrk', '.claude', '.agents']
 
 async function check(path: string): Promise<void> {
   const full = resolve(path)
@@ -32,7 +32,7 @@ async function check(path: string): Promise<void> {
     } catch {
       return // Not there yet: nothing below it exists to follow.
     }
-    if (link) throw new LinkRefused(`${parts.slice(at, i + 1).join('/')} is a symbolic link. grndwrk does not follow links inside .grndwrk or .claude; replace it with a real file or folder.`)
+    if (link) throw new LinkRefused(`${parts.slice(at, i + 1).join('/')} is a symbolic link. grndwrk does not follow links inside .grndwrk, .claude or .agents; replace it with a real file or folder.`)
   }
 }
 
