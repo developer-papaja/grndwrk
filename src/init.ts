@@ -259,6 +259,8 @@ async function installManaged(o: { dest: string; shipped: string; key: string; u
  * rules are picked up by the agent itself when it works in .grndwrk/.
  */
 export function asSkill(name: string, text: string, rules: boolean): string {
+  // Git on Windows may check the shipped commands out with CRLF line ends.
+  text = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n')
   const m = /^---\n([\s\S]*?)\n---\n?/.exec(text)
   const body = m ? text.slice(m[0].length) : text
   const description = rules

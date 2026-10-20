@@ -55,6 +55,11 @@ describe('init', () => {
     expect(readMatter(skill).data.description).toBe('Judge it: ready or not')
   })
 
+  it('reads a command checked out with Windows line ends', () => {
+    const skill = asSkill('x', '---\r\ndescription: Judge it\r\n---\r\nBody\r\n', false)
+    expect(skill).toBe('---\nname: x\ndescription: Judge it\ndisable-model-invocation: true\n---\nBody\n')
+  })
+
   it('moves a map from before the rename, .groundwork/, to .grndwrk/', async () => {
     await mkdir(join(root, '.groundwork', 'nodes'), { recursive: true })
     await writeFile(join(root, '.groundwork', 'nodes', 'n_abc123.md'), '---\nid: n_abc123\ntitle: Kept\n---\n')
