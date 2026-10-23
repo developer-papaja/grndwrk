@@ -43,5 +43,8 @@ jobs:
           fi
       - run: npm run typecheck
       - run: npm test
+      # The package as users will get it: installed on its own, init, the map answers.
+      - run: npm run build
+      - run: node scripts/check-package.mjs
       # Packs (prepack builds it) and stages it on npm, to approve on npmjs.com.
       - run: npm stage publish

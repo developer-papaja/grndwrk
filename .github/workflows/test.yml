@@ -1,5 +1,6 @@
 # The tests, the type check and the build on macOS and Windows, on every
 # push and pull request, so a change that breaks one of them shows here.
+# Then the package as users get it: packed, installed on its own, run.
 name: Test
 
 on:
@@ -29,3 +30,23 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # The package, not the repo: what works here but breaks for users (a file
+  # left out of "files", a runtime import of a dev dependency) shows here.
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/check-package.mjs
