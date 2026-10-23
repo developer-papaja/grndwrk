@@ -40,8 +40,6 @@ grndwrk         # starts the map and opens it in the browser
 
 Run `grndwrk init` again after updating grndwrk: it updates the commands you have not changed yourself.
 
-**Used it when it was called Groundwork?** Install it as above (the command is now `grndwrk`; if you had linked a copy, `npm unlink -g groundwork` first), then `grndwrk init` in each project: it moves `.groundwork/` to `.grndwrk/` as it is and updates the commands. Allowed sites, logins for screenshots and the map's view settings carry over. What has to be changed by hand: the line in your layout that loads the Comment button (`/__grndwrk/feedback.js` now), and in an iOS app the package (`clients/ios/GrndwrkFeedback`, `import GrndwrkFeedback`, `.grndwrkScreen`), `_grndwrk._tcp` in `NSBonjourServices`, `GRNDWRK_FEEDBACK=1` in a loader scheme, and pairing the phone once more.
-
 The map shows what to do next. For a new idea: write the purpose, add thoughts, run `/readiness`, answer what is missing, run `/brief`. For an existing project: run `/survey` and `/sitemap` first.
 
 ## Commands for your agent
