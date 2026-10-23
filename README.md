@@ -19,17 +19,15 @@ grndwrk lives inside your project. It keeps everything as plain markdown files i
 
 ## Install
 
-grndwrk is not on npm yet. Until it is, install it from this folder:
+Install it once, so the `grndwrk` command is on your path:
 
 ```
-git clone <this repository> grndwrk
-cd grndwrk
-npm install
-npm run build
-npm link
+npm install -g grndwrk
 ```
 
-`npm link` puts the `grndwrk` command on your path. Run `git pull && npm install && npm run build` to update.
+Run the same command again to update. Or skip installing and put `npx` in front of every command below (`npx grndwrk init`, `npx grndwrk`), which always runs the newest version.
+
+**Working on grndwrk itself?** Clone the repository, then `npm install`, `npm run build` and `npm link` in it: the `grndwrk` command then runs your copy.
 
 ## Start
 
@@ -42,7 +40,7 @@ grndwrk         # starts the map and opens it in the browser
 
 Run `grndwrk init` again after updating grndwrk: it updates the commands you have not changed yourself.
 
-**Used it when it was called Groundwork?** Run `npm link` again in this folder (the command is now `grndwrk`), then `grndwrk init` in each project: it moves `.groundwork/` to `.grndwrk/` as it is and updates the commands. Allowed sites, logins for screenshots and the map's view settings carry over. What has to be changed by hand: the line in your layout that loads the Comment button (`/__grndwrk/feedback.js` now), and in an iOS app the package (`clients/ios/GrndwrkFeedback`, `import GrndwrkFeedback`, `.grndwrkScreen`), `_grndwrk._tcp` in `NSBonjourServices`, `GRNDWRK_FEEDBACK=1` in a loader scheme, and pairing the phone once more.
+**Used it when it was called Groundwork?** Install it as above (the command is now `grndwrk`; if you had linked a copy, `npm unlink -g groundwork` first), then `grndwrk init` in each project: it moves `.groundwork/` to `.grndwrk/` as it is and updates the commands. Allowed sites, logins for screenshots and the map's view settings carry over. What has to be changed by hand: the line in your layout that loads the Comment button (`/__grndwrk/feedback.js` now), and in an iOS app the package (`clients/ios/GrndwrkFeedback`, `import GrndwrkFeedback`, `.grndwrkScreen`), `_grndwrk._tcp` in `NSBonjourServices`, `GRNDWRK_FEEDBACK=1` in a loader scheme, and pairing the phone once more.
 
 The map shows what to do next. For a new idea: write the purpose, add thoughts, run `/readiness`, answer what is missing, run `/brief`. For an existing project: run `/survey` and `/sitemap` first.
 
@@ -103,7 +101,7 @@ The button only runs on addresses on your own machine (`localhost`, `*.test`, `*
 
 ### In an iOS app
 
-Add the Swift package in `clients/ios/GrndwrkFeedback` to the app's debug build, and start it with one line. Its [README](clients/ios/GrndwrkFeedback/README.md) has the steps, how to use it on a real iPhone over Wi-Fi (`grndwrk --lan`), and how to try it in the Simulator without changing the app at all (`grndwrk build-ios-loader`).
+Add the Swift package in `clients/ios/GrndwrkFeedback` to the app's debug build, and start it with one line. It comes with grndwrk: after `npm install -g grndwrk` it is in `$(npm root -g)/grndwrk/clients/ios/GrndwrkFeedback`; add that folder in Xcode as a local package. Its [README](clients/ios/GrndwrkFeedback/README.md) has the steps, how to use it on a real iPhone over Wi-Fi (`grndwrk --lan`), and how to try it in the Simulator without changing the app at all (`grndwrk build-ios-loader`).
 
 ### Testing fixes
 
