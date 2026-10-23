@@ -1,8 +1,9 @@
-# Publishes grndwrk to npm when a version tag is pushed (git tag v0.1.0 &&
-# git push origin v0.1.0). npm trusts this workflow through trusted
+# Stages a release of grndwrk on npm when a version tag is pushed (git tag
+# v0.1.1 && git push origin v0.1.1). npm trusts this workflow through trusted
 # publishing (set up on npmjs.com under the package's settings), so no npm
-# token is stored anywhere, and each release shows provenance: the commit
-# and the workflow run it was built from.
+# token is stored anywhere. The release is staged, not published: it goes
+# live when a maintainer approves it on npmjs.com (Staged Packages) with
+# their second factor, so nothing reaches users without a person.
 name: Publish
 
 on:
@@ -18,6 +19,8 @@ jobs:
   publish:
     # macOS, where the tool is used and tested.
     runs-on: macos-latest
+    # The GitHub environment named in the trusted publisher; it only accepts version tags.
+    environment: npm
     steps:
       # Actions pinned by commit, so a moved tag cannot change what runs here.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -27,8 +30,8 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      # Trusted publishing needs npm 11.5.1 or newer; Node 22 comes with npm 10.
-      - run: npm install -g npm@11.6.2
+      # Trusted publishing and npm stage need a newer npm than the one Node 22 comes with.
+      - run: npm install -g npm@11.19.0
       - run: npm ci
       # The tag must say the version package.json says, so a release is never published under the wrong number.
       - name: Check the tag matches the version
@@ -38,5 +41,7 @@ jobs:
             echo "The tag is $GITHUB_REF_NAME but package.json says $version"
             exit 1
           fi
-      # prepack runs the type check, the tests and the build first.
-      - run: npm publish
+      - run: npm run typecheck
+      - run: npm test
+      # Packs (prepack builds it) and stages it on npm, to approve on npmjs.com.
+      - run: npm stage publish
