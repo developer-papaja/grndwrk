@@ -36,6 +36,8 @@ Gaps are one file each, `readiness/gaps/<gap id>.json`, holding that one gap's o
 
 ## One part, or the whole
 
+Screens with `hidden:` in `.grndwrk/screens/`, and the screens under them, are not part of the product: do not ask about them or their thoughts.
+
 `$ARGUMENTS` may name one screen: an id from `.grndwrk/screens/` (like `p_k2m4`) or its title. Then work on that part only:
 - Read the screen file: its purpose, `for`, `does`, and thread.
 - The thoughts that belong to it have `screen: <id>` in their frontmatter. Ask about its features and details: what each feature must do, edge cases, empty and error states, what is out of scope for this screen.

@@ -72,10 +72,14 @@ const yamlText = scalar
  * line as it was. A value written by hand over several lines (`title: |` or
  * `>` and indented lines after it) is replaced whole.
  */
-function setField(front: string, key: string, value: string | null): string {
-  const re = new RegExp(`^${key}:.*(?:\\n[ \\t]+.*)*$`, 'm')
-  if (value === null) return front.replace(new RegExp(`^${key}:.*(?:\\n[ \\t]+.*)*\\n?`, 'm'), '')
-  return re.test(front) ? front.replace(re, () => `${key}: ${value}`) : `${front.replace(/\n?$/, '\n')}${key}: ${value}\n`
+export function setField(front: string, key: string, value: string | null): string {
+  // A block value runs on over indented lines, and over blank lines between them.
+  const block = `^${key}:.*(?:(?:\\n[ \\t]*)*\\n[ \\t]+\\S.*)*`
+  const re = new RegExp(`${block}$`, 'm')
+  if (value === null) return front.replace(new RegExp(`${block}\\n?`, 'm'), '')
+  // A value on lines of its own (a map, indented under the key) starts with a newline.
+  const line = `${key}:${value.startsWith('\n') ? '' : ' '}${value}`
+  return re.test(front) ? front.replace(re, () => line) : `${front.replace(/\n?$/, '\n')}${line}\n`
 }
 
 /**
@@ -128,10 +132,10 @@ export async function createStory(gwDir: string, input: { title: string; from: s
 }
 
 /** The outputs /brief and /survey write. Nothing else in outputs/ is served. */
-export const OUTPUTS = ['brief.md', 'CLAUDE.starter.md', 'survey.md'] as const
+export const OUTPUTS = ['brief.md', 'CLAUDE.starter.md', 'survey.md', 'personas.md'] as const
 
 /** Where each output's runs are kept, one file per run. */
-const RUNS: Record<(typeof OUTPUTS)[number], string> = { 'brief.md': 'brief', 'CLAUDE.starter.md': 'claude-starter', 'survey.md': 'survey' }
+const RUNS: Record<(typeof OUTPUTS)[number], string> = { 'brief.md': 'brief', 'CLAUDE.starter.md': 'claude-starter', 'survey.md': 'survey', 'personas.md': 'personas' }
 
 /** The newest run of an output, or the single file of an older map. */
 export async function readOutput(gwDir: string, name: string): Promise<string | null> {

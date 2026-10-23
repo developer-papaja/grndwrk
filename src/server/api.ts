@@ -5,11 +5,14 @@ import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/fil
 import { markAnswered, readReadiness } from '../store/readiness.js'
 import { createStory, listStories, readDraft, readOutput, updateStory } from '../store/stories.js'
 import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
+import { createPersona, deletePersona, listPersonas, settleAudienceName, updatePersona } from '../store/personas.js'
+import { createSegment, deleteSegment, listSegments, updateSegment } from '../store/segments.js'
 import { listShots, readShot } from '../store/shots.js'
 import { rememberedApp } from '../store/local.js'
 import { LinkRefused } from '../store/fs.js'
+import { today } from '../store/frontmatter.js'
 import { docOnDisk, listDocs, readDoc } from './docs.js'
-import type { NodeInput } from '../shared/types.js'
+import { PERSONA_CHOICES, PERSONA_LISTS, PERSONA_SECTIONS, type NodeInput, type PersonaInSegment } from '../shared/types.js'
 import { noteTab, subscribe, type NodeSync } from './events.js'
 import type { Pairings } from './pairing.js'
 import type { Sites } from './sites.js'
@@ -161,6 +164,101 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       const screen = await updateScreen(ctx.gwDir, screenMatch[1], parseScreenEdit(await readBody(req)))
       if (!screen) throw new NotFound(screenMatch[1])
       return send(res, 200, screen)
+    }
+    if (url.pathname === '/api/personas' && method === 'GET') {
+      return send(res, 200, await listPersonas(ctx.gwDir))
+    }
+    if (url.pathname === '/api/personas' && method === 'POST') {
+      const b = (await readBody(req)) as { name?: unknown; summary?: unknown }
+      try {
+        const persona = await createPersona(ctx.gwDir, { name: typeof b.name === 'string' ? b.name : '', ...(typeof b.summary === 'string' ? { summary: b.summary.slice(0, 2_000) } : {}) })
+        return send(res, 201, persona)
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+    }
+    // A name on screens that is no persona: made one, merged into one, or taken off every screen.
+    if (url.pathname === '/api/personas/settle' && method === 'POST') {
+      const b = (await readBody(req)) as { name?: unknown; to?: unknown }
+      const name = typeof b.name === 'string' ? b.name.trim().slice(0, 200) : ''
+      const to = b.to === 'new' || b.to === 'remove' ? b.to : typeof b.to === 'string' && /^pe_[A-Za-z0-9_-]{1,60}$/.test(b.to) ? { persona: b.to } : null
+      if (!name || !to) throw new BadInput('name and to (new, remove or a persona id) are needed')
+      try {
+        return send(res, 200, { persona: await settleAudienceName(ctx.gwDir, name, to) })
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+    }
+    const personaMatch = url.pathname.match(/^\/api\/personas\/(pe_[A-Za-z0-9_-]{1,60})$/)
+    if (personaMatch && method === 'PATCH') {
+      const b = (await readBody(req)) as Record<string, unknown>
+      const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : undefined)
+      let persona
+      try {
+        const words = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map((x) => x.slice(0, 200)).slice(0, 60) : undefined)
+        persona = await updatePersona(ctx.gwDir, personaMatch[1], {
+          name: text(b.name, 200),
+          summary: text(b.summary, 2_000),
+          ...Object.fromEntries(Object.keys(PERSONA_CHOICES).map((k) => [k, text(b[k], 60)])),
+          ...Object.fromEntries(PERSONA_LISTS.map((k) => [k, words(b[k])])),
+          ...(b.segments && typeof b.segments === 'object' && !Array.isArray(b.segments) ? { segments: segmentsInput(b.segments as Record<string, unknown>) } : {}),
+          ...Object.fromEntries(PERSONA_SECTIONS.map((k) => [k, text(b[k], 20_000)])),
+          ...(typeof b.confirmed === 'boolean' ? { confirmed: b.confirmed } : {}),
+          body: text(b.body, 50_000),
+        })
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+      if (!persona) throw new NotFound(personaMatch[1])
+      return send(res, 200, persona)
+    }
+    if (personaMatch && method === 'DELETE') {
+      if (!(await deletePersona(ctx.gwDir, personaMatch[1]))) throw new NotFound(personaMatch[1])
+      res.writeHead(204).end()
+      return true
+    }
+    if (url.pathname === '/api/segments' && method === 'GET') {
+      return send(res, 200, await listSegments(ctx.gwDir))
+    }
+    if (url.pathname === '/api/segments' && method === 'POST') {
+      const b = (await readBody(req)) as { name?: unknown }
+      try {
+        return send(res, 201, await createSegment(ctx.gwDir, { name: typeof b.name === 'string' ? b.name : '' }))
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+    }
+    const segmentMatch = url.pathname.match(/^\/api\/segments\/(sg_[A-Za-z0-9_-]{1,60})$/)
+    if (segmentMatch && method === 'PATCH') {
+      const b = (await readBody(req)) as Record<string, unknown>
+      const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : undefined)
+      const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined)
+      let segment
+      try {
+        segment = await updateSegment(ctx.gwDir, segmentMatch[1], {
+          name: text(b.name, 200),
+          type: text(b.type, 60),
+          industry: text(b.industry, 200),
+          size_min: num(b.size_min),
+          size_max: num(b.size_max),
+          admins: Array.isArray(b.admins) ? b.admins.filter((x): x is string => typeof x === 'string').map((x) => x.slice(0, 200)).slice(0, 60) : undefined,
+          body: text(b.body, 50_000),
+        })
+      } catch (err) {
+        if (err instanceof LinkRefused) throw err
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+      if (!segment) throw new NotFound(segmentMatch[1])
+      return send(res, 200, segment)
+    }
+    if (segmentMatch && method === 'DELETE') {
+      if (!(await deleteSegment(ctx.gwDir, segmentMatch[1]))) throw new NotFound(segmentMatch[1])
+      res.writeHead(204).end()
+      return true
     }
     const draftMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)$/)
     if (draftMatch && method === 'GET') {
@@ -333,6 +431,25 @@ function parseScreenEdit(input: unknown): ScreenEdit {
   if (o.body !== undefined) {
     if (typeof o.body !== 'string') throw new BadInput('body must be text')
     out.body = o.body
+  }
+  if (o.features !== undefined) out.features = [...new Set(words(o.features, 'features'))]
+  if (o.hidden !== undefined) {
+    if (typeof o.hidden !== 'boolean') throw new BadInput('hidden must be true or false')
+    out.hidden = o.hidden ? today() : ''
+  }
+  return out
+}
+
+/** A persona's `segments` as the map sends them: per segment id, how common and the titles. */
+function segmentsInput(o: Record<string, unknown>): Record<string, PersonaInSegment> {
+  const out: Record<string, PersonaInSegment> = {}
+  for (const [id, v] of Object.entries(o).slice(0, 100)) {
+    if (!/^sg_[A-Za-z0-9_-]{1,60}$/.test(id) || !v || typeof v !== 'object') continue
+    const x = v as Record<string, unknown>
+    out[id] = {
+      how: typeof x.how === 'string' ? x.how.slice(0, 20) : '',
+      titles: Array.isArray(x.titles) ? x.titles.filter((t): t is string => typeof t === 'string').map((t) => t.slice(0, 120)).slice(0, 30) : [],
+    }
   }
   return out
 }

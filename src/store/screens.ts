@@ -36,7 +36,7 @@ export async function listScreens(gwDir: string): Promise<Screen[]> {
   return screens
 }
 
-const KNOWN = ['id', 'title', 'parent', 'in', 'replaced_by', 'purpose', 'for', 'does', 'leads_to', 'code', 'open', 'seen_as', 'shots', 'stories', 'status', 'source', 'created']
+const KNOWN = ['id', 'title', 'parent', 'in', 'replaced_by', 'purpose', 'for', 'does', 'leads_to', 'code', 'open', 'seen_as', 'shots', 'stories', 'features', 'status', 'hidden', 'source', 'created']
 
 export function parseScreen(id: string, raw: string): Screen {
   let data: Record<string, unknown>
@@ -72,9 +72,11 @@ export function parseScreen(id: string, raw: string): Screen {
     seen_as: list(data.seen_as),
     shots: list(data.shots).map(shotRef).filter(Boolean),
     stories: list(data.stories),
+    features: list(data.features),
     status: oneOf(data.status, SCREEN_STATUSES, 'built'),
+    hidden: date(data.hidden),
     source: text(data.source),
-    created: data.created instanceof Date ? data.created.toISOString().slice(0, 10) : text(data.created),
+    created: date(data.created),
     body,
   }
 }
@@ -96,7 +98,13 @@ async function withThread(gwDir: string, screen: Screen): Promise<Screen> {
 }
 
 function empty(id: string): Screen {
-  return { id, title: id, parent: '', in: [], replaced_by: '', purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], stories: [], status: 'built', source: '', created: '', body: '' }
+  return { id, title: id, parent: '', in: [], replaced_by: '', purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], stories: [], features: [], status: 'built', hidden: '', source: '', created: '', body: '' }
+}
+
+/** A date as YYYY-MM-DD, or empty: anything else would be written back unquoted. */
+function date(v: unknown): string {
+  const d = v instanceof Date ? v.toISOString().slice(0, 10) : text(v)
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ''
 }
 
 function text(v: unknown): string {
@@ -115,6 +123,9 @@ export interface ScreenEdit {
   tasks?: string[]
   body?: string
   shots?: string[]
+  /** A date hides the screen, empty shows it again. */
+  hidden?: string
+  features?: string[]
 }
 
 /**
@@ -183,7 +194,9 @@ export function serializeScreen(s: Screen, extra: Record<string, unknown>, body:
     ...(s.seen_as.length ? [`seen_as: ${inline(s.seen_as)}`] : []),
     ...(s.shots.length ? [`shots: ${inline(s.shots)}`] : []),
     `stories: ${inline(s.stories)}`,
+    ...(s.features.length ? [`features: ${inline(s.features)}`] : []),
     `status: ${s.status}`,
+    ...(s.hidden ? [`hidden: ${s.hidden}`] : []),
     ...(s.source ? [`source: ${s.source}`] : []),
     ...(s.created ? [`created: ${s.created}`] : []),
   ]

@@ -54,13 +54,14 @@ The map shows what to do next. For a new idea: write the purpose, add thoughts, 
 | --- | --- |
 | `/survey` | Draws the map from an existing project: what is built, decided, half done, and where the why is missing |
 | `/sitemap` | Draws every screen, its purpose, who it is for, and how they connect |
+| `/personas` | Maps out who the product is for: a persona per hat, the person behind it, and an overview of who wears which hat |
 | `/topics` | Groups the thoughts into a few topics |
 | `/readiness` | Checks whether you have enough to start building, and what to add |
 | `/challenge` | Asks a few sharp questions where the thinking is thin |
 | `/brief` | Writes the brief, the first user stories (with acceptance criteria to tick), and a starter `CLAUDE.md` |
 | `/decisions` | Looks back over a session and its commits, and settles what was decided |
 | `/feedback` | Proposes, and when you ask, builds fixes for comments made in the running product |
-| `/import <file>` | Turns a document into cards |
+| `/import <file or text>` | Turns a document, a file or text pasted after the command, into cards |
 
 The **Documents** view shows the files that steer your agent in your product (CLAUDE.md, AGENTS.md, the README, design and content docs, skills), what the last `/readiness` found in each, and the files it suggests writing, with a draft. Comment on a document or a section, and copy a prompt for your agent with the findings and your comments; every prompt is shown in full before you copy it. grndwrk reads these files but never changes them.
 

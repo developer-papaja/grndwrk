@@ -24,6 +24,26 @@ export function screenTree(screens: Screen[]): { screen: Screen; depth: number }
   return out
 }
 
+/**
+ * Screens the person hid from the sitemap (`hidden:`), and every screen under
+ * one: hiding a playground hides what sits in it too.
+ */
+export function hiddenScreenIds(screens: Screen[]): Set<string> {
+  const byId = new Map(screens.map((s) => [s.id, s]))
+  const out = new Set<string>()
+  for (const s of screens) {
+    const seen = new Set<string>()
+    for (let at: Screen | undefined = s; at && !seen.has(at.id); at = byId.get(at.parent)) {
+      seen.add(at.id)
+      if (at.hidden) {
+        out.add(s.id)
+        break
+      }
+    }
+  }
+  return out
+}
+
 /** File names that say nothing about which screen they are, like app/booking/page.tsx. */
 const GENERIC = new Set(['index', 'page', 'layout', 'route', 'main', 'app', 'view', 'screen', 'content', 'contentview', '+page', 'default'])
 

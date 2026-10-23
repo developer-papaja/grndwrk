@@ -72,7 +72,7 @@ One or two lines on what is on the screen, and anything half built.
 - `title`: the name a person would use for it, as the app shows it when it has one ("Booking", "Settings"). Not a type name like BookingView.
 - `parent`: the screen it sits under: the tab or page it is opened from. Top level screens (tabs, the start page) have none. The tree should read like the app's navigation.
 - `purpose`: one plain sentence, what the screen is for from the person's side, not what the code does.
-- `for`: who it is meant for, in the product's own words for its people (reuse the audience nodes and `project.md`). Several when it serves several. Empty when nothing says.
+- `for`: who it is meant for, as the names of personas in `.grndwrk/personas/`, exactly as they are written there. Several when it serves several. Only persona names: the map shows each as a link, and a name that is no persona shows as one to fix. When there are no personas yet, or none fits, leave it empty and say in the report that `/personas` maps out who the product is for. Never remove a persona name the person put there.
 - `does`: what the person is expected to do there, as short verb phrases, most important first. Two to five.
 - `leads_to`: the screens reached from here, by id.
 - `code`: the route (for the web) and the main source files. These connect the screen to stories and to comments made on it in the running product, so use the type and file names the code really has.
@@ -82,10 +82,12 @@ One or two lines on what is on the screen, and anything half built.
 - `in`: only when the product has variants (below) and the screen exists in some of them only: `in: [Previous UI]`. Leave it out for a screen every variant has; that is most screens.
 - `replaced_by`: on a screen that exists in one variant only, the id of the screen that does its job in the other: `replaced_by: p_plan` on the old desk list. Only when the counterpart is clear.
 - `stories`: ids of stories that cover the screen, when their `applies_to` or their text points at it.
+- `features`: the screen's main features, in the order a person meets them, as short names (`features: [Pick a day, Confirm]`): what its thoughts are grouped by in the map. Two to six, from what the screen asks of the person and from the thoughts about it. Keep the ones the person added or renamed, in their order; add new ones at the end; never remove one (ask in the thread when one seems gone).
 - `status`: `built`, `partial` (started, TODOs, dead ends, placeholder text) or `planned` (a story or the brief needs it, but no code has it yet).
 - `source`: `code` when the code shows what the screen is for, `inferred` when purpose or audience is your guess.
+- `hidden`: a date the person set when they hid the screen from the sitemap: a playground, a demo or a leftover that is not part of the product. Never set it yourself and never remove it. A hidden screen, and every screen under it, stays out of what you ask about and report on.
 
-**When purpose or audience is a guess,** write your best guess, set `source: inferred`, and ask in a thread at the end of the notes, with options to pick from:
+**When purpose or audience is a guess,** write your best guess, set `source: inferred`, and ask in a thread at the end of the notes, with options to pick from (for audience, the personas):
 
 ```md
 ## Thread
@@ -103,7 +105,7 @@ Ask at most five questions in the whole run, about the screens that matter most.
 
 **The same screen twice,** after two people ran `/sitemap` on their own branches and merged: two files whose `code` names the same route or view. Keep the one with the older `created` (or the lower id), copy into it what only the other has (purpose, `for`, `does`, `seen_as`, `shots`, stories), move the other's thread files from `.grndwrk/threads/<its id>/` to the kept screen's folder, point every `screen:`, `parent:` and `leads_to` that names the other id at the kept one, then delete the other file. Say so in the report.
 
-**On a re-run,** keep ids, `created` and anything the person wrote: purpose, `for`, `does` and answers in the thread are theirs. Update `code`, `leads_to`, `stories` and `status` from the code. When the code no longer has a screen, set `status: partial` and say so in the notes instead of deleting the file; ask in its thread whether to remove it.
+**On a re-run,** keep ids, `created` and anything the person wrote: purpose, `for`, `does`, `hidden` and answers in the thread are theirs. Update `code`, `leads_to`, `stories` and `status` from the code. When the code no longer has a screen, set `status: partial` and say so in the notes instead of deleting the file; ask in its thread whether to remove it.
 
 ## File the thoughts under their screens
 
@@ -123,9 +125,11 @@ The map can show a column per screen, with General first for what is about the w
   - The whole product
   ```
 
+**Then the feature.** A thought with a `screen:` that is clearly about one of that screen's features gets one line `feature: <name>`, the name exactly as the screen lists it, right after `screen:`. Leave it out when it is about the screen as a whole or when unsure. Never change a `feature:` that is already set.
+
 Never change a `screen:` that is already set; the person or an earlier run chose it. Comments with `source: app` already belong to the screen they were made on through their topic; add `screen:` to them too when the screen exists.
 
-Write plainly. Do not use the dash characters "–" or "—". Write only inside `.grndwrk/screens/`, and in `.grndwrk/nodes/` only the `screen:` line and thread questions.
+Write plainly. Do not use the dash characters "–" or "—". Write only inside `.grndwrk/screens/`, and in `.grndwrk/nodes/` only the `screen:` and `feature:` lines and thread questions.
 
 ## Variants
 

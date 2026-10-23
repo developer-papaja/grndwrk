@@ -42,6 +42,8 @@ export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'page' 
   answers?: string
   /** The screen this thought is about, a p_ id from screens/. Empty removes it. Kept as `screen:` in the file. */
   screen?: string
+  /** The feature of its screen it is about, by name, as the screen lists it in `features:`. Empty removes it. */
+  feature?: string
   /** A comment from the running product: the date the person marked it fixed, or empty to undo. Kept as `fixed:` in the file. */
   fixed?: string
   /** A comment from the running product: the date a fix was proposed, or empty when the fix turned out not to work. */
@@ -201,6 +203,110 @@ export type ScreenStatus = (typeof SCREEN_STATUSES)[number]
  * One screen, page or view of the product, written by /sitemap from the code
  * (or by /brief for a product not built yet). Kept in .grndwrk/screens/.
  */
+/**
+ * A persona: someone the product is for, one file each in `personas/`. Its
+ * name is what screens write in `for:`, so a screen meant for "Office
+ * manager" links to the persona of that name. A persona is a hat: one person
+ * may wear several, and who wears it differs per segment.
+ *
+ * Most of it is standardized fields, so personas compare in a matrix; the
+ * sections hold what a table cannot say, and the evidence it rests on.
+ */
+export interface Persona extends Record<PersonaSection, string> {
+  id: string
+  name: string
+  /** Who they are, in a sentence. */
+  summary: string
+  /** primary, secondary or occasional: how much the product is theirs. */
+  tier: string
+  /** Who employs them: customer, service provider, partner, vendor. */
+  employer: string[]
+  /** low, medium or high: how much they know about IT. */
+  technical: string
+  /** daily, weekly, monthly, on incident or once. */
+  frequency: string
+  /** laptop, desktop, phone, tablet. */
+  device: string[]
+  /** The learning curve they can bear: none, little or some. */
+  learning_curve: string
+  /** Parts of the product they live in, and those they only visit. */
+  lives_in: string[]
+  visits: string[]
+  /** What they ask about: hardware, permissions, login, scope... */
+  themes: string[]
+  /** Per segment id: how common the hat is there, and the titles that wear it. */
+  segments: Record<string, PersonaInSegment>
+  /** The date the person confirmed it; until then a persona Claude guessed is a Guess. */
+  confirmed: string
+  /** data, code or docs when there is evidence, inferred when Claude guessed; empty when the person wrote it. */
+  source: string
+  /** Where it was seen: paths, doc anchors, commits, research files. */
+  seen_in: string[]
+  /** Thoughts it came from. */
+  from: string[]
+  /** Fields the person changed in the map: /personas never rewrites them. */
+  edited: PersonaField[]
+  created: string
+  /** The notes, with the sections and anything else, and the thread. */
+  body: string
+  error?: string
+}
+
+export interface PersonaInSegment {
+  /** most, common, present or none. */
+  how: string
+  titles: string[]
+}
+
+/** The sections of a persona's notes, each `## <heading>` in the file and a text field in the map. */
+export const PERSONA_SECTIONS = ['jobs', 'first', 'judged_on', 'goes_wrong', 'implications', 'evidence'] as const
+export type PersonaSection = (typeof PERSONA_SECTIONS)[number]
+/** Fields written as one word. */
+export const PERSONA_CHOICES = { tier: ['primary', 'secondary', 'occasional'], technical: ['low', 'medium', 'high'], frequency: ['daily', 'weekly', 'monthly', 'on incident', 'once'], learning_curve: ['none', 'little', 'some'] } as const
+export type PersonaChoice = keyof typeof PERSONA_CHOICES
+/** Fields written as a list. */
+export const PERSONA_LISTS = ['employer', 'device', 'lives_in', 'visits', 'themes'] as const
+export type PersonaList = (typeof PERSONA_LISTS)[number]
+export const PERSONA_FIELDS = ['name', 'summary', 'tier', 'technical', 'frequency', 'learning_curve', ...PERSONA_LISTS, 'segments', ...PERSONA_SECTIONS] as const
+export type PersonaField = (typeof PERSONA_FIELDS)[number]
+export const PERSONA_TIERS = PERSONA_CHOICES.tier
+export const SEGMENT_HOW = ['most', 'common', 'present', 'none'] as const
+export const PERSONA_EMPLOYERS = ['customer', 'service provider', 'partner', 'vendor'] as const
+export const PERSONA_DEVICES = ['laptop', 'desktop', 'phone', 'tablet'] as const
+
+/**
+ * A segment of customers, one file each in `segments/`: a kind of customer
+ * with its industry and size. Personas say how common they are in each one,
+ * and who wears the hat there.
+ */
+export interface Segment {
+  id: string
+  name: string
+  /** own office, property owner, coworking, partner or other. */
+  type: string
+  industry: string
+  /** People employed, from and to; 0 when not known. Without size_max it is open upwards. */
+  size_min: number
+  size_max: number
+  /** Who is admin in this segment, as titles. */
+  admins: string[]
+  source: string
+  created: string
+  /** Notes, and the thread. */
+  body: string
+  error?: string
+}
+
+export const SEGMENT_TYPES = ['own office', 'property owner', 'coworking', 'partner', 'other'] as const
+/** Size bands to filter segments by: [label, from, to]. */
+export const SIZE_BANDS: [string, number, number][] = [
+  ['Under 50', 0, 49],
+  ['50 to 250', 50, 250],
+  ['250 to 1 000', 251, 1000],
+  ['1 000 to 10 000', 1001, 10000],
+  ['Over 10 000', 10001, Infinity],
+]
+
 export interface Screen {
   id: string
   title: string
@@ -235,7 +341,15 @@ export interface Screen {
   shots: string[]
   /** Stories that cover the screen. */
   stories: string[]
+  /** The screen's features, in order: what its thoughts are grouped by (`feature:` on a thought). */
+  features: string[]
   status: ScreenStatus
+  /**
+   * The date the person hid it from the sitemap (`hidden:`), empty when shown:
+   * a playground or a leftover that is not part of the product. Its screens
+   * below it are hidden with it, and so are their thoughts, gaps and stories.
+   */
+  hidden: string
   /** code when read from the code, inferred when Claude guessed. */
   source: string
   created: string

@@ -88,6 +88,13 @@
   .menu-item {
     @apply flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-fog/85 hover:bg-tint/8 hover:text-fog;
   }
+  /* A value to switch on or off, like who employs a persona. */
+  .chip {
+    @apply rounded-md border border-line px-2 py-0.5 text-xs text-fog/60 hover:border-tint/25 hover:text-fog;
+  }
+  .chip-on {
+    @apply border-accent/60 bg-accent/15 text-fog hover:border-accent;
+  }
   /* A card on the board: the type as a thin edge, settled as an outline in that color. */
   .board-card {
     @apply relative rounded-md border border-line bg-panel py-2 pl-2.5 pr-4 text-left leading-snug text-fog/90 shadow-sm shadow-shade/20 hover:border-tint/25;
@@ -127,6 +134,26 @@
 .report code {
   @apply rounded bg-tint/8 px-1 text-[12px] text-fog;
 }
+/* A persona's section, read as formatted text inside its field. */
+.report.persona-section > :last-child {
+  @apply mb-0;
+}
+.report.persona-section p,
+.report.persona-section ul,
+.report.persona-section ol {
+  @apply text-inherit;
+}
+
+/* Tables, like the personas overview's: who wears which hat, tiers, where each lives. */
+.report table {
+  @apply mb-4 block max-w-full overflow-x-auto border-collapse text-[12.5px];
+}
+.report th {
+  @apply border-b border-line px-2.5 py-1.5 text-left font-medium whitespace-nowrap text-fog/90;
+}
+.report td {
+  @apply border-b border-line/60 px-2.5 py-1.5 align-top text-fog/80;
+}
 .report ul ul {
   @apply mb-0 mt-1;
 }
@@ -165,3 +192,39 @@ select.field option {
 
 /* The tree lines in the drawn sitemap. */
 .sitemap-tree { stroke: light-dark(#c4c4c4, #4a4a4a); }
+
+/* The personas overview: personas down the side, segments, themes or areas across. */
+.matrix {
+  @apply border-separate border-spacing-0 text-[12.5px];
+}
+.matrix th,
+.matrix td {
+  @apply border-b border-line px-3 py-2 align-top;
+}
+.matrix thead th {
+  @apply min-w-32 text-left font-medium;
+}
+.matrix tbody th {
+  @apply min-w-44 pr-4 font-medium;
+}
+.matrix td {
+  @apply min-w-32;
+}
+/* Counts and marks need less room than who wears the hat. */
+.matrix-compact thead th,
+.matrix-compact td {
+  @apply min-w-20 text-center;
+}
+/* How common a persona is in a segment. */
+.how {
+  @apply mb-0.5 inline-block rounded px-1.5 py-px text-[10.5px] font-medium;
+}
+.how-most {
+  @apply bg-accent text-white;
+}
+.how-common {
+  @apply bg-accent/20 text-accent;
+}
+.how-present {
+  @apply bg-tint/10 text-fog/60;
+}

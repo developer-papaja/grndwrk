@@ -1,4 +1,4 @@
-import type { GNode, NodeInput, PairRequest, Readiness, Screen, ServerEvent, Story } from '../../src/shared/types'
+import type { GNode, NodeInput, PairRequest, Persona, PersonaInSegment, PersonaList, PersonaSection, Readiness, Screen, Segment, ServerEvent, Story } from '../../src/shared/types'
 
 export const OFFLINE_MESSAGE = "Can't reach grndwrk. Is `grndwrk` still running in your terminal?"
 
@@ -32,9 +32,22 @@ export const openDocInEditor = (path: string) => request<{ opened: boolean }>('P
 export const createStory = (input: { title: string; from: string[]; body?: string }) => request<Story>('POST', '/api/stories', input)
 export const updateStory = (id: string, edit: { title?: string; status?: string; body?: string; later?: string | null }) => request<Story>('PATCH', `/api/stories/${encodeURIComponent(id)}`, edit)
 export const fetchScreens = () => request<Screen[]>('GET', '/api/screens')
-export const updateScreen = (id: string, input: { purpose?: string; audience?: string[]; tasks?: string[]; body?: string }) =>
+export const fetchPersonas = () => request<Persona[]>('GET', '/api/personas')
+export const createPersona = (input: { name: string; summary?: string }) => request<Persona>('POST', '/api/personas', input)
+export type PersonaInput = Partial<Record<'name' | 'summary' | 'tier' | 'technical' | 'frequency' | 'learning_curve' | PersonaSection | 'body', string>> &
+  Partial<Record<PersonaList, string[]>> & { segments?: Record<string, PersonaInSegment>; confirmed?: boolean }
+export const updatePersona = (id: string, input: PersonaInput) =>
+  request<Persona>('PATCH', `/api/personas/${encodeURIComponent(id)}`, input)
+export const deletePersona = (id: string) => request<void>('DELETE', `/api/personas/${encodeURIComponent(id)}`)
+export const settleName = (name: string, to: string) => request<{ persona: Persona | null }>('POST', '/api/personas/settle', { name, to })
+export const fetchSegments = () => request<Segment[]>('GET', '/api/segments')
+export const createSegment = (name: string) => request<Segment>('POST', '/api/segments', { name })
+export type SegmentInput = { name?: string; type?: string; industry?: string; size_min?: number; size_max?: number; admins?: string[]; body?: string }
+export const updateSegment = (id: string, input: SegmentInput) => request<Segment>('PATCH', `/api/segments/${encodeURIComponent(id)}`, input)
+export const deleteSegment = (id: string) => request<void>('DELETE', `/api/segments/${encodeURIComponent(id)}`)
+export const updateScreen = (id: string, input: { purpose?: string; audience?: string[]; tasks?: string[]; body?: string; hidden?: boolean; features?: string[] }) =>
   request<Screen>('PATCH', `/api/screens/${encodeURIComponent(id)}`, input)
-export const fetchOutput = (name: 'brief.md' | 'CLAUDE.starter.md' | 'survey.md') =>
+export const fetchOutput = (name: 'brief.md' | 'CLAUDE.starter.md' | 'survey.md' | 'personas.md') =>
   request<{ text: string | null }>('GET', `/api/outputs/${encodeURIComponent(name)}`).then((r) => r.text)
 export const fetchDraft = (name: string) => request<{ text: string | null }>('GET', `/api/drafts/${encodeURIComponent(name)}`).then((r) => r.text)
 export const fetchReadiness = () => request<Readiness>('GET', '/api/readiness')

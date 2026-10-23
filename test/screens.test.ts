@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { listScreens, parseScreen, updateScreen } from '../src/store/screens.js'
-import { commentsForScreen, layoutSitemap, screenTree, storiesForScreen } from '../src/shared/screens.js'
+import { commentsForScreen, hiddenScreenIds, layoutSitemap, screenTree, storiesForScreen } from '../src/shared/screens.js'
 import type { GNode, Screen, Story } from '../src/shared/types.js'
 
 let root: string
@@ -34,7 +34,7 @@ On the screen: a calendar and a floor plan.
 `
 
 const screen = (id: string, title: string, parent = '', extra: Partial<Screen> = {}): Screen => ({
-  id, title, parent, purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], in: [], replaced_by: '', stories: [], status: 'built', source: '', created: '', body: '', ...extra,
+  id, title, parent, purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], in: [], replaced_by: '', stories: [], features: [], status: 'built', hidden: '', source: '', created: '', body: '', ...extra,
 })
 
 describe('screens store', () => {
@@ -61,6 +61,55 @@ describe('screens store', () => {
     expect(raw).toContain('reviewed: "yes"')
     expect(raw).toContain('On the screen: a calendar and a floor plan.')
     expect(await updateScreen(root, 'p_none', { purpose: 'x' })).toBeNull()
+  })
+})
+
+describe('features of a screen', () => {
+  it('keeps the features in order, and drops the line when there are none', async () => {
+    await writeFile(join(root, 'screens', 'p_book.md'), booking)
+    const s = await updateScreen(root, 'p_book', { features: ['Pick a day', 'Confirm, then pay'] })
+    expect(s?.features).toEqual(['Pick a day', 'Confirm, then pay'])
+    expect(await readFile(join(root, 'screens', 'p_book.md'), 'utf8')).toContain('features: [Pick a day, "Confirm, then pay"]')
+    await updateScreen(root, 'p_book', { features: [] })
+    expect(await readFile(join(root, 'screens', 'p_book.md'), 'utf8')).not.toContain('features:')
+  })
+})
+
+describe('hidden screens', () => {
+  it('hides a screen from the sitemap and shows it again, keeping the rest of the file', async () => {
+    await writeFile(join(root, 'screens', 'p_book.md'), booking)
+    const hidden = await updateScreen(root, 'p_book', { hidden: '2026-10-20' })
+    expect(hidden?.hidden).toBe('2026-10-20')
+    const raw = await readFile(join(root, 'screens', 'p_book.md'), 'utf8')
+    expect(raw).toContain('\nhidden: 2026-10-20\n')
+    expect(raw).toContain('reviewed: "yes"')
+    const shown = await updateScreen(root, 'p_book', { hidden: '' })
+    expect(shown?.hidden).toBe('')
+    expect(await readFile(join(root, 'screens', 'p_book.md'), 'utf8')).not.toContain('hidden:')
+  })
+
+  it('reads hidden and created only as dates, so a crafted value is never written back unquoted', async () => {
+    await writeFile(join(root, 'screens', 'p_book.md'), booking.replace('created: 2026-10-12', 'created: "x\\nowner: evil"\nhidden: "y\\nfor: [Evil]"'))
+    const [before] = await listScreens(root)
+    expect([before.hidden, before.created]).toEqual(['', ''])
+    const after = await updateScreen(root, 'p_book', { purpose: 'Book a desk, fast' })
+    expect(after?.error).toBeUndefined()
+    const raw = await readFile(join(root, 'screens', 'p_book.md'), 'utf8')
+    expect(raw).not.toMatch(/^owner:/m)
+    expect(raw).not.toMatch(/^hidden:/m)
+  })
+
+  it('hides the screens under a hidden one, and survives a loop of parents', () => {
+    const screens = [
+      screen('p_home', 'Home'),
+      screen('p_play', 'Playground', 'p_home', { hidden: '2026-10-20' }),
+      screen('p_demo', 'Demo', 'p_play'),
+      screen('p_deep', 'Deeper', 'p_demo'),
+      screen('p_book', 'Booking', 'p_home'),
+      screen('p_a', 'A', 'p_b'),
+      screen('p_b', 'B', 'p_a'),
+    ]
+    expect([...hiddenScreenIds(screens)].sort()).toEqual(['p_deep', 'p_demo', 'p_play'])
   })
 })
 

@@ -55,6 +55,7 @@ const handlers = {
     void state.loadReadiness()
     void state.loadDeliverables()
     void state.loadScreens()
+    void state.loadPersonas()
     void state.loadPairRequests()
     void state.loadSiteRequests()
     void state.loadShots()
@@ -88,8 +89,11 @@ const handlers = {
       if (state.view === 'docs') void state.loadDocs()
     } else if (event.type === 'file:change' && event.path.startsWith('screens/')) {
       void state.loadScreens()
+    } else if (event.type === 'file:change' && event.path.startsWith('personas/')) {
+      void state.loadPersonas()
     } else if (event.type === 'file:change' && (event.path.startsWith('stories/') || event.path.startsWith('outputs/'))) {
       void state.loadDeliverables()
+      if (event.path.startsWith('outputs/personas')) void state.loadPersonas()
     }
   },
 }

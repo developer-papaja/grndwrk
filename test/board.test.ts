@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildBoard, buildOutline, firstLine, screenOf } from '../ui/src/board.js'
+import { buildBoard, buildOutline, firstLine, screenOf, sectionsOf } from '../ui/src/board.js'
 import type { Gap, GNode, Screen, Story } from '../src/shared/types.js'
 
 const node = (id: string, topic: string, altitude: number, extra: Record<string, unknown> = {}, modified?: string): GNode =>
   ({ id, type: 'idea', title: id, topic, page: '', altitude, links: [], status: 'open', created: '2026-10-01', body: '', extra, ...(modified ? { modified } : {}) }) as GNode
 const gap = (id: string, topic: string, altitude: number, more: Partial<Gap> = {}): Gap => ({ id, area: 'design', title: id, why: '', near: [], severity: 'blocking', topic, altitude, ...more })
 const screen = (id: string, title: string, parent = ''): Screen => ({
-  id, title, parent, purpose: '', audience: [], tasks: [], leads_to: [], code: [], stories: [], status: 'built', source: '', created: '', body: '',
+  id, title, parent, purpose: '', audience: [], tasks: [], leads_to: [], code: [], stories: [], features: [], status: 'built', source: '', created: '', body: '',
 })
 const ids = (col: { items: { id: string }[] }) => col.items.map((i) => i.id)
 
@@ -64,5 +64,46 @@ describe('first line', () => {
   it('takes the first plain line of the notes, before the thread', () => {
     expect(firstLine('![shot](../files/x/a.png)\n\n## Why\nBecause [the doc](x.md) says so.\n\n## Thread\n**You** · 1')).toBe('Why')
     expect(firstLine('\n## Thread\n**Claude asks** · 2026')).toBe('')
+  })
+})
+
+describe('cards grouped inside a column', () => {
+  const book = { ...screen('p_book', 'Booking'), features: ['Pick a day', 'Confirm', 'Cancel'] } as Screen
+  const nodes = [
+    node('a', 'Look', 2, { screen: 'p_book', feature: 'pick a day' }),
+    node('b', '', 1, { screen: 'p_book', feature: 'Confirm' }),
+    node('c', 'Look', 1, { screen: 'p_book' }),
+    node('d', '', 3, { screen: 'p_book', feature: 'Weekends' }),
+  ]
+
+  it('by feature: in the order the screen lists them, empty ones too, then others, then no feature', () => {
+    const b = buildBoard(nodes, [gap('g', 'Look', 2, { screen: 'p_book' })], [], { groupBy: 'page', cardGroup: 'feature', screens: [book] })
+    const col = b.columns.find((c) => c.key === 'p_book')!
+    expect(col.screen).toBe('p_book')
+    expect(col.sections.map((s) => [s.name, s.items.map((i) => i.id)])).toEqual([
+      ['Pick a day', ['a']],
+      ['Confirm', ['b']],
+      ['Cancel', []],
+      ['Weekends', ['d']],
+      ['No feature', ['gap:g', 'c']],
+    ])
+  })
+
+  it('by level: one section without a name, as before', () => {
+    const b = buildBoard(nodes, [], [], { groupBy: 'page', screens: [book] })
+    expect(b.cardGroup).toBe('level')
+    expect(b.columns.find((c) => c.key === 'p_book')!.sections.map((s) => s.name)).toEqual([''])
+  })
+
+  it('by topic and by type, with the ones without last', () => {
+    const items = nodes.map((n) => ({ kind: 'node' as const, id: n.id, node: n, altitude: n.altitude }))
+    expect(sectionsOf(items, 'topic').map((s) => [s.name, s.items.length])).toEqual([['Look', 2], ['No topic', 2]])
+    const typed = items.map((i, n) => ({ ...i, node: { ...i.node, type: (['question', 'idea', 'feature', 'idea'] as const)[n] } }))
+    expect(sectionsOf(typed, 'type').map((s) => s.name)).toEqual(['idea', 'feature', 'question'])
+  })
+
+  it('reads the sections as the outline, when grouped', () => {
+    const b = buildBoard(nodes, [], [], { groupBy: 'page', cardGroup: 'feature', screens: [book] })
+    expect(buildOutline(b).find((s) => s.key === 'p_book')!.levels.map((l) => l.word)).toEqual(['Pick a day', 'Confirm', 'Weekends', 'No feature'])
   })
 })

@@ -115,6 +115,17 @@ describe('NodeStore', () => {
 })
 
 describe('a thought about one screen', () => {
+  it('keeps the feature of its screen, renames it and takes it off', async () => {
+    const [n] = (await store.create({ title: 'Show the week as a strip', screen: 'p_book', feature: '  Pick   a day ' })).upserted
+    expect(n.extra.feature).toBe('Pick a day')
+    expect(await file(n.id)).toMatch(/^feature: Pick a day$/m)
+    const [moved] = (await store.update(n.id, { feature: 'Choose a day' })).upserted
+    expect(moved.extra.feature).toBe('Choose a day')
+    const [gone] = (await store.update(n.id, { feature: '' })).upserted
+    expect(gone.extra.feature).toBeUndefined()
+    expect(await file(n.id)).not.toContain('feature:')
+  })
+
   it('keeps screen: from capture, moves it, and removes it, without touching the rest', async () => {
     const [n] = (await store.create({ title: 'Filters on the floor plan', screen: 'p_book' })).upserted
     expect(n.extra.screen).toBe('p_book')

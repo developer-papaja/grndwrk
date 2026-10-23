@@ -29,6 +29,8 @@ export function watchgrndwrk(gwDir: string, nodes: NodeSync) {
     // A thread entry in a file of its own: its card, or its screen, changed.
     else if (rel.startsWith('threads/n_')) scheduleSync()
     else if (rel.startsWith('threads/p_')) broadcast({ type: 'file:change', path: `screens/${rel.split('/')[1]}.md` })
+    else if (rel.startsWith('threads/pe_')) broadcast({ type: 'file:change', path: `personas/${rel.split('/')[1]}.md` })
+    else if (rel.startsWith('threads/sg_')) broadcast({ type: 'file:change', path: `segments/${rel.split('/')[1]}.md` })
     else broadcast({ type: 'file:change', path: rel })
   })
 

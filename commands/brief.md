@@ -41,7 +41,7 @@ Gaps are one file each, `readiness/gaps/<gap id>.json`, holding that one gap's o
 1. `.grndwrk/project.md`: name, purpose, project type, `pages:`.
 2. Every file in `.grndwrk/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and notes, including threads. Settled thoughts and decisions carry the most weight. A thread answer from the person counts as decided.
 3. `.grndwrk/readiness/report.md` and `gaps.json`, if they exist.
-4. Existing `.grndwrk/stories/*.md`, `.grndwrk/screens/*.md` and `.grndwrk/outputs/*.md`, if they exist. Update stories and outputs; never duplicate them.
+4. Existing `.grndwrk/stories/*.md`, `.grndwrk/screens/*.md`, `.grndwrk/personas/*.md` and `.grndwrk/outputs/*.md`, if they exist. Write stories from the personas' point of view, by their names, when there are personas. Update stories and outputs; never duplicate them.
 
 Use only what the map says. Where the map is silent, say so in the brief instead of inventing an answer.
 
@@ -68,7 +68,7 @@ Two sentences: what the product is and the problem it solves.
 Each flow as numbered steps from start to end.
 
 ## Site map
-Every screen, page or view the product needs, as a short nested list. For each: what it is for, in one line, and which flows pass through it. If `.grndwrk/screens/` has screens (written by `/sitemap`), follow them and their purpose, `for` and `does`, and cite their ids.
+Every screen, page or view the product needs, as a short nested list. For each: what it is for, in one line, and which flows pass through it. If `.grndwrk/screens/` has screens (written by `/sitemap`), follow them and their purpose, `for` and `does`, and cite their ids. Leave out screens with `hidden:` and the screens under them: the person hid them as not part of the product.
 
 When `project.md` lists `variants:`, the list follows the default variant (the first), and screens that only another variant has are marked after their line: "(only in Previous UI, replaced by Floor plan)". End the section with what retiring each non-default variant would remove: its screens without a counterpart, and the stories only those screens need.
 

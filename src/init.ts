@@ -110,7 +110,7 @@ export function nextSteps(start: Start): string {
     ? [
         'Done. This is an existing project, so start from what is built:',
         '  1. In your coding agent, run /survey ($survey in Codex). It reads the code, docs and history into the map.',
-        '  2. Run /sitemap. It writes every screen: what it is for, who it is for, what they do there.',
+        '  2. Run /sitemap. It writes every screen: what it is for, who it is for, what they do there. Then /personas for the people it is for.',
         '  3. Run `grndwrk` to open the map. Status shows what the project has and what it lacks.',
       ].join('\n')
     : [

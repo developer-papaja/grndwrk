@@ -35,8 +35,16 @@ export function unknownVariants(screen: Screen, variants: string[]): string[] {
  */
 export function variantView(screens: Screen[], variant: string | null): Screen[] {
   if (variant === null) return screens
+  return narrowView(screens, new Set(screens.filter((s) => inVariant(s, variant)).map((s) => s.id)))
+}
+
+/**
+ * Only the screens in `shown`, as a site map of their own: a parent left out
+ * gives way to the nearest ancestor shown (or the top), and links to screens
+ * left out are dropped.
+ */
+export function narrowView(screens: Screen[], shown: Set<string>): Screen[] {
   const byId = new Map(screens.map((s) => [s.id, s]))
-  const shown = new Set(screens.filter((s) => inVariant(s, variant)).map((s) => s.id))
   const parentIn = (s: Screen): string => {
     const seen = new Set<string>()
     let p = s.parent

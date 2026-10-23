@@ -110,6 +110,7 @@ export class NodeStore {
       // A thought written as the answer to a gap remembers which gap, even after the gap closes.
       if (typeof input.answers === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(input.answers)) node.extra = { answers: input.answers }
       if (typeof input.screen === 'string' && SCREEN_ID.test(input.screen)) node.extra = { ...node.extra, screen: input.screen }
+      if (featureName(input.feature)) node.extra = { ...node.extra, feature: featureName(input.feature) }
       // A comment on a document in the product: a Markdown path inside the project, and the heading.
       if (typeof input.doc === 'string' && /^(?!\/)(?!.*(^|\/)\.\.(\/|$))[A-Za-z0-9_./ -]{1,160}\.(md|markdown)$/i.test(input.doc)) {
         node.extra = { ...node.extra, doc: input.doc }
@@ -141,6 +142,10 @@ export class NodeStore {
       if (input.screen !== undefined) {
         const { screen: _, ...rest } = next.extra
         next.extra = typeof input.screen === 'string' && SCREEN_ID.test(input.screen) ? { ...rest, screen: input.screen } : rest
+      }
+      if (input.feature !== undefined) {
+        const { feature: _, ...rest } = next.extra
+        next.extra = featureName(input.feature) ? { ...rest, feature: featureName(input.feature) } : rest
       }
       // Only the person marks a comment fixed, from the panel. A date sets it, empty takes it back.
       if (input.fixed !== undefined) {
@@ -231,6 +236,11 @@ export class NodeStore {
 }
 
 /** Normalize client input the same way a file is normalized. Bad values fall back to defaults. */
+/** A feature's name as written on a thought: one line, plain words. Empty when there is none. */
+function featureName(v: unknown): string {
+  return typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 120) : ''
+}
+
 /** A screen id from screens/, like p_k2m4. */
 const SCREEN_ID = /^p_[A-Za-z0-9_-]{1,60}$/
 

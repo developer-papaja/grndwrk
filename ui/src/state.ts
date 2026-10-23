@@ -1,9 +1,9 @@
 import Alpine from 'alpinejs'
 import { cached } from './reactivity'
-import type { DesignCheck, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Readiness, Screen, Status, Story } from '../../src/shared/types'
-import { NODE_TYPES, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
-import { BOX, commentsForScreen, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
+import type { DesignCheck, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
+import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
+import { BOX, commentsForScreen, hiddenScreenIds, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
@@ -17,17 +17,18 @@ import DOMPurify from 'dompurify'
 import { ALTITUDE_WORDS, displayName, topicColumns, topicKey } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
-import { buildBoard, buildOutline, firstLine, MAP_LAYOUTS, screenOf, type Board, type GroupBy, type MapLayout, type OutlineSection } from './board'
-import { counterpart, inVariant, projectVariants, unknownVariants, variantView } from '../../src/shared/variants'
+import { buildBoard, buildOutline, CARD_GROUPS, featureOf, firstLine, MAP_LAYOUTS, screenOf, type Board, type CardGroup, type GroupBy, type MapLayout, type OutlineSection } from './board'
+import { counterpart, inVariant, narrowView, projectVariants, unknownVariants } from '../../src/shared/variants'
+import { inBand, isGuess, looseNames, personaNamed, readEvidence, readSections, screensForPersona, SECTIONS, sizeLabel, themeCounts, type Evidence } from '../../src/shared/personas'
 
-export type View = 'focus' | 'map' | 'sitemap' | 'readiness' | 'docs' | 'deliverables'
+export type View = 'focus' | 'map' | 'sitemap' | 'personas' | 'readiness' | 'docs' | 'deliverables'
 
 /** A question from Claude waiting on the person, in the Inbox. */
 export interface InboxItem {
   /** Unique across kinds: node:<id> or screen:<id>. */
   key: string
   /** A question on a thought, a guess from /survey to confirm, or a question on a screen. */
-  kind: 'question' | 'guess' | 'screen'
+  kind: 'question' | 'guess' | 'screen' | 'persona'
   id: string
   /** The question, without its options and pictures. */
   question: string
@@ -253,18 +254,57 @@ export const state = Alpine.reactive({
     this.variantChoice = { ...this.variantChoice, [String(this.project.name ?? '')]: key }
     store('grndwrk.variant', this.variantChoice)
   },
-  /** The screens of the variant in view: shared ones and its own, with parents and links inside it. */
+  /**
+   * The screens in view: those of the variant in view, without the ones the
+   * person hid (unless hidden ones are shown), with parents and links inside them.
+   */
   get viewScreens(): Screen[] {
     return cached('viewScreens', () => {
-      return variantView(this.screens, this.variant)
+      const out = this.hiddenScreens
+      return out.size ? narrowView(this.screens, new Set(this.screens.filter((s) => !out.has(s.id)).map((s) => s.id))) : this.screens
     })
   },
-  /** Screens the variant in view does not have. Their thoughts, gaps and stories are hidden too. */
+  /** Screens out of view: not in the variant in view, or hidden. Their thoughts, gaps and stories are out of view too. */
   get hiddenScreens(): Set<string> {
     return cached('hiddenScreens', () => {
       const variant = this.variant
-      return new Set(variant === null ? [] : this.screens.filter((s) => !inVariant(s, variant)).map((s) => s.id))
+      const out = new Set(variant === null ? [] : this.screens.filter((s) => !inVariant(s, variant)).map((s) => s.id))
+      if (!this.showHidden) for (const id of this.hiddenIds) out.add(id)
+      return out
     })
+  },
+  // Hidden screens: playgrounds and leftovers someone hid from the sitemap, for everyone (`hidden:` in the file).
+  /** Screens hidden in their files, and the screens under them. Not part of the product: Status and the Inbox leave them out. */
+  get hiddenIds(): Set<string> {
+    return cached('hiddenIds', () => hiddenScreenIds(this.screens))
+  },
+  /** Whether hidden screens are shown anyway, marked as hidden. Kept in the browser. */
+  showHidden: readStored('grndwrk.showHidden', false),
+  setShowHidden(show: boolean) {
+    this.showHidden = show
+    store('grndwrk.showHidden', show)
+  },
+  /** Hide a screen (and what sits under it) from the sitemap, or show it again. */
+  async setScreenHidden(id: string, hidden: boolean) {
+    try {
+      this.putScreen(await updateScreen(id, { hidden }))
+      this.flash(hidden ? (this.showHidden ? 'Hidden' : 'Hidden. Show hidden screens brings it back.') : 'Shown again')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** "Hidden", or "Hidden with Playground" for a screen under a hidden one. Empty when shown. */
+  hiddenTag(screen: Screen | null): string {
+    if (!screen || !this.hiddenIds.has(screen.id)) return ''
+    if (screen.hidden) return 'Hidden'
+    const byId = new Map(this.screens.map((s) => [s.id, s]))
+    const seen = new Set<string>()
+    let at = byId.get(screen.parent)
+    while (at && !at.hidden && !seen.has(at.id)) {
+      seen.add(at.id)
+      at = byId.get(at.parent)
+    }
+    return at ? `Hidden with ${at.title}` : 'Hidden'
   },
   /** "Only in Previous UI" for a screen in some variants only. */
   variantTag(screen: Screen | null): string {
@@ -312,6 +352,19 @@ export const state = Alpine.reactive({
           { key: 'page', label: 'Screens', hint: 'General first, then each screen in sitemap order', on: this.groupBy === 'page' },
           { key: 'topic', label: 'Topics', hint: 'A column per topic', on: this.groupBy === 'topic' },
         ],
+      })
+    }
+    {
+      // Inside each column: sections by feature, topic or type, like sub-groups in Notion.
+      const g = CARD_GROUPS.find((c) => c.key === this.cardGroup) ?? CARD_GROUPS[0]
+      menus.push({
+        key: 'menu-cards',
+        name: 'Group cards by',
+        value: g.label,
+        title: 'Group cards by: sections inside each column',
+        icon: 'i-outline',
+        active: this.cardGroup !== 'level',
+        options: CARD_GROUPS.map((c) => ({ key: c.key, label: c.label, hint: c.hint, on: this.cardGroup === c.key })),
       })
     }
     if (this.variants.length) {
@@ -370,6 +423,7 @@ export const state = Alpine.reactive({
     this.openMenu = ''
     if (menu === 'sitemap-variant') menu = 'menu-variant'
     if (menu === 'menu-columns') this.setGroupBy(option as 'page' | 'topic')
+    else if (menu === 'menu-cards') this.setCardGroup(option as CardGroup)
     else if (menu === 'menu-variant') this.setVariant(option)
     else if (menu === 'menu-show') this.setProgressFilter(option as ProgressFilter)
     else if (menu === 'menu-layout') this.setMapLayout(option as never)
@@ -724,6 +778,7 @@ export const state = Alpine.reactive({
   /** Point the reply box at one question, to answer it in words. */
   replyToQuestion(q: Question, field = 'reply') {
     if (field === 'screen-reply') this.screenReplyTo = { entry: q.entry, index: q.index }
+    else if (field === 'persona-reply') this.personaReplyTo = { entry: q.entry, index: q.index }
     else this.replyTo = { entry: q.entry, index: q.index }
     focusWhenVisible(field)
   },
@@ -987,7 +1042,7 @@ export const state = Alpine.reactive({
   commentsOf(screen: Screen): GNode[] {
     return commentsForScreen(screen, Object.values(this.nodes))
   },
-  questionsOn(screen: Screen): number {
+  questionsOn(screen: { body: string }): number {
     return openQuestions(screen.body)
   },
   /** Screens that link here, and the parent, so the way in is visible too. */
@@ -1121,11 +1176,364 @@ export const state = Alpine.reactive({
     if (i >= 0) this.screens[i] = screen
     else this.screens.push(screen)
   },
+  // Personas: the people the product is for, one file each. Screens name them in `for:`.
+  personas: [] as Persona[],
+  personaId: readStored<string | null>('grndwrk.persona', null),
+  personaReply: '',
+  personaReplyTo: null as { entry: number; index: number } | null,
+  personaStatus: '',
+  newPersona: '',
+  /** The persona whose Delete was pressed once; a second press deletes it. */
+  deletingPersona: '',
+  /** The overview /personas writes: what the matrices cannot say. Null until it has run. */
+  personaOverview: null as string | null,
+  /** What the Personas view shows: the overview (matrices), the segments, or a persona. */
+  personaPane: readStored<'overview' | 'segments' | 'persona'>('grndwrk.personaPane', 'overview'),
+  segments: [] as Segment[],
+  async loadPersonas() {
+    try {
+      const [personas, segments, overview] = await Promise.all([fetchPersonas(), fetchSegments(), fetchOutput('personas.md')])
+      this.personas = personas
+      this.segments = segments
+      this.personaOverview = overview
+    } catch {
+      // Offline: the next reconnect loads them.
+    }
+  },
+  /** Primary first, then secondary, occasional and the rest; by name within a tier. */
+  get personaList(): Persona[] {
+    // A future tier ("primary (future)") comes after the tier as it is today.
+    const rank = (p: Persona) => {
+      const i = PERSONA_TIERS.findIndex((t) => p.tier.toLowerCase().startsWith(t))
+      return (i === -1 ? PERSONA_TIERS.length : i) + (/future/i.test(p.tier) ? 0.5 : 0)
+    }
+    return [...this.personas].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+  },
+  get personaOverviewHtml(): string {
+    return this.personaOverview ? linkIds(md(stripFrontmatter(this.personaOverview))) : ''
+  },
+  /** The tiers to pick from, with the persona's own when it is another, like "primary (future)". */
+  tierOptions(p: Persona): { value: string; label: string }[] {
+    const tiers: string[] = ['', ...PERSONA_TIERS]
+    if (!tiers.includes(p.tier)) tiers.push(p.tier)
+    return tiers.map((t) => ({ value: t, label: t ? t[0].toUpperCase() + t.slice(1) : 'No tier' }))
+  },
+  isGuess(p: Persona | null): boolean {
+    return !!p && isGuess(p)
+  },
+  showPersonaPane(pane: 'overview' | 'segments' | 'persona') {
+    this.personaPane = pane
+    this.deletingPersona = ''
+    this.deletingSegment = ''
+    store('grndwrk.personaPane', pane)
+  },
+  // The overview: personas against segments, themes or the product's areas, filtered by size and customer type.
+  overviewTab: readStored<'segments' | 'themes' | 'areas'>('grndwrk.overviewTab', 'segments'),
+  sizeBand: readStored<string>('grndwrk.sizeBand', ''),
+  segmentType: readStored<string>('grndwrk.segmentType', ''),
+  setOverview(field: 'overviewTab' | 'sizeBand' | 'segmentType', value: string) {
+    ;(this as Record<string, unknown>)[field] = value
+    store(`grndwrk.${field}`, value)
+  },
+  sizeBands: SIZE_BANDS.map(([label]) => label),
+  segmentTypes: SEGMENT_TYPES,
+  segmentHow: SEGMENT_HOW,
+  employers: PERSONA_EMPLOYERS,
+  devices: PERSONA_DEVICES,
+  choices: PERSONA_CHOICES,
+  sizeLabel,
+  /** How common a persona is in a segment, in words. */
+  howLabel(how: string): string {
+    return ({ most: 'Most common', common: 'Common', present: 'Present', none: 'Not here' } as Record<string, string>)[how] ?? how
+  },
+  /** A field's value as a label: "Service provider", "On incident". */
+  valueLabel(value: string): string {
+    return value ? (value[0].toUpperCase() + value.slice(1)).replace(/^Fm\b/, 'FM') : ''
+  },
+  /** Every readable segment, smallest customers first; one of unknown size last. */
+  get sortedSegments(): Segment[] {
+    const size = (s: Segment) => s.size_min || s.size_max || Infinity
+    return this.segments.filter((s) => !s.error).sort((a, b) => size(a) - size(b) || a.name.localeCompare(b.name))
+  },
+  /** The segments in view, by the size and type filters. */
+  get viewSegments(): Segment[] {
+    return this.sortedSegments.filter((s) => (!this.sizeBand || inBand(s, this.sizeBand)) && (!this.segmentType || s.type === this.segmentType))
+  },
+  /** The personas in view: with the size or type filter on, those present in a segment in view. */
+  get viewPersonas(): Persona[] {
+    const ids = new Set(this.viewSegments.map((s) => s.id))
+    const filtered = !!(this.sizeBand || this.segmentType)
+    return this.personaList.filter((p) => !p.error && (!filtered || Object.entries(p.segments).some(([id, v]) => ids.has(id) && v.how !== 'none')))
+  },
+  /** Every theme any persona has, the most asked about first. */
+  get allThemes(): string[] {
+    const counts = new Map<string, number>()
+    const only = new Set(this.viewSegments.map((s) => s.id))
+    for (const p of this.viewPersonas) for (const [t, n] of themeCounts(p, this.segments, this.sizeBand || this.segmentType ? only : null)) counts.set(t, (counts.get(t) ?? 0) + n + 0.001)
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t)
+  },
+  /** How often a persona asked about a theme, in the segments in view. */
+  themeCount(p: Persona, theme: string): number | null {
+    const only = this.sizeBand || this.segmentType ? new Set(this.viewSegments.map((s) => s.id)) : null
+    const n = themeCounts(p, this.segments, only).get(theme)
+    return n === undefined ? null : n
+  },
+  /** Every area of the product any persona lives in or visits. */
+  get allAreas(): string[] {
+    const seen: string[] = []
+    for (const p of this.viewPersonas) for (const a of [...p.lives_in, ...p.visits]) if (!seen.some((x) => x.toLowerCase() === a.toLowerCase())) seen.push(a)
+    return seen
+  },
+  areaMark(p: Persona, area: string): string {
+    const has = (xs: string[]) => xs.some((x) => x.toLowerCase() === area.toLowerCase())
+    return has(p.lives_in) ? '●' : has(p.visits) ? '○' : ''
+  },
+  /** A persona's evidence, each line with its segment's name. */
+  evidenceOf(p: Persona): (Evidence & { segmentName: string })[] {
+    return readEvidence(p.evidence, this.segments).map((e) => ({ ...e, segmentName: this.segments.find((s) => s.id === e.segment)?.name ?? '' }))
+  },
+  /** Names on screens that are no persona yet: to make personas, merge into one, or take off, all at once. */
+  get looseNames(): { name: string; screens: Screen[] }[] {
+    return looseNames(this.screens.filter((s) => !s.error), this.personas)
+  },
+  async settle(name: string, to: string) {
+    if (!to) return
+    try {
+      const { persona } = await settleName(name, to)
+      await Promise.all([this.loadScreens(), this.loadPersonas()])
+      this.flash(to === 'remove' ? `Took ${name} off its screens` : to === 'new' ? `${name} is a persona now` : `Merged into ${persona?.name ?? 'the persona'}`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  // Segments: kinds of customers, edited in place in the Personas view.
+  newSegment: '',
+  deletingSegment: '',
+  async addSegment() {
+    const name = this.newSegment.trim()
+    if (!name) return
+    try {
+      this.segments.push(await createSegment(name))
+      this.newSegment = ''
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async editSegment(id: string, input: SegmentInput) {
+    const before = this.segments.find((s) => s.id === id)
+    if (!before) return
+    const changed = Object.entries(input).some(([k, v]) => JSON.stringify(v) !== JSON.stringify((before as unknown as Record<string, unknown>)[k]))
+    if (!changed) return
+    try {
+      const next = await saveSegment(id, input)
+      this.segments = this.segments.map((s) => (s.id === id ? next : s))
+      this.flash('Saved')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async removeSegment(id: string) {
+    if (this.deletingSegment !== id) {
+      this.deletingSegment = id
+      return
+    }
+    try {
+      await deleteSegment(id)
+      this.segments = this.segments.filter((s) => s.id !== id)
+      this.deletingSegment = ''
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Words separated by commas, as a list. */
+  words(text: string): string[] {
+    return text.split(',').map((x) => x.trim()).filter(Boolean)
+  },
+  /** A number typed with spaces or a plus, like "10 000+"; 0 when empty. */
+  sizeNumber(text: string): number {
+    const n = Number(text.replace(/[\s+_]/g, ''))
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0
+  },
+  get persona(): Persona | null {
+    return this.personas.find((p) => p.id === this.personaId) ?? this.personaList[0] ?? null
+  },
+  selectPersona(id: string) {
+    this.personaPane = 'persona'
+    store('grndwrk.personaPane', 'persona')
+    this.personaEditing = ''
+    this.personaId = id
+    this.personaReply = ''
+    this.personaReplyTo = null
+    this.personaStatus = ''
+    this.deletingPersona = ''
+    store('grndwrk.persona', id)
+  },
+  openPersona(id: string) {
+    this.selectPersona(id)
+    this.setView('personas')
+  },
+  /** The persona a name in a screen's `for:` stands for, if any. */
+  personaFor(name: string): Persona | null {
+    return personaNamed(name, this.personas)
+  },
+  /** The screens in view meant for a persona. */
+  screensFor(p: Persona): Screen[] {
+    return screensForPersona(p, this.viewScreens)
+  },
+  /** Personas a screen does not name yet, to add to its `for:` with one click. */
+  personasToAdd(screen: Screen | null): Persona[] {
+    return screen ? this.personaList.filter((p) => !p.error && !screen.audience.some((a) => personaNamed(a, [p]))) : []
+  },
+  personaSections: SECTIONS,
+  /** The section being edited as Markdown; the others read as formatted text. */
+  personaEditing: '',
+  editSection(key: string) {
+    if (!this.persona?.error) this.personaEditing = key
+  },
+  /** A section's Markdown as safe HTML: bold labels, lists, links. */
+  sectionHtml(text: string): string {
+    return linkIds(md(text))
+  },
+  /** Grow a text field to fit what it holds, so a long section reads whole. */
+  fitField(el: HTMLTextAreaElement) {
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight + 2}px`
+  },
+  get personaThread(): Entry[] {
+    return this.persona ? splitBody(this.persona.body).entries : []
+  },
+  /** Notes beyond the three sections, read only here. */
+  get personaNotesHtml(): string {
+    const rest = this.persona ? readSections(splitBody(this.persona.body).notes).rest : ''
+    return rest ? linkIds(md(rest)) : ''
+  },
+  putPersona(p: Persona) {
+    const i = this.personas.findIndex((x) => x.id === p.id)
+    if (i >= 0) this.personas[i] = p
+    else this.personas.push(p)
+  },
+  /** Save a field the person changed. It becomes theirs: /personas never rewrites it. */
+  async savePersona(field: Exclude<keyof PersonaInput, PersonaList | 'segments' | 'confirmed' | 'body'>, value: string) {
+    const p = this.persona
+    if (!p || value.trim() === String(p[field] ?? '').trim()) return
+    if (field === 'name' && !value.trim()) return this.flash('A persona needs a name')
+    await this.patchPersona({ [field]: value })
+    if (field === 'name') void this.loadScreens()
+  },
+  async patchPersona(input: PersonaInput) {
+    const p = this.persona
+    if (!p) return
+    try {
+      this.putPersona(await updatePersona(p.id, input))
+      this.flash('Saved')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Add or take off one value of a list field: employed by, device. */
+  togglePersona(field: PersonaList, value: string) {
+    const p = this.persona
+    if (!p) return
+    const has = p[field].some((x) => x.toLowerCase() === value.toLowerCase())
+    void this.patchPersona({ [field]: has ? p[field].filter((x) => x.toLowerCase() !== value.toLowerCase()) : [...p[field], value] })
+  },
+  /** Save a list field typed as words separated by commas: lives in, visits, themes. */
+  savePersonaList(field: PersonaList, text: string) {
+    const p = this.persona
+    if (!p) return
+    const next = this.words(text)
+    if (next.join('\n') !== p[field].join('\n')) void this.patchPersona({ [field]: next })
+  },
+  /** How common the persona is in a segment, and who wears the hat there. */
+  savePersonaSegment(segment: string, how: string | null, titles: string | null) {
+    const p = this.persona
+    if (!p) return
+    const was = p.segments[segment] ?? { how: '', titles: [] }
+    const next = { how: how ?? was.how, titles: titles === null ? was.titles : this.words(titles) }
+    if (next.how === was.how && next.titles.join('\n') === was.titles.join('\n')) return
+    void this.patchPersona({ segments: { ...p.segments, [segment]: next } })
+  },
+  /** The person says the guess is right, or takes that back. */
+  async confirmPersona(confirmed: boolean) {
+    const p = this.persona
+    if (!p) return
+    try {
+      this.putPersona(await updatePersona(p.id, { confirmed }))
+      this.flash(confirmed ? 'Confirmed' : 'Back to a guess')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async addPersona() {
+    const name = this.newPersona.trim()
+    if (!name) return
+    try {
+      const p = await createPersona({ name })
+      this.putPersona(p)
+      this.newPersona = ''
+      this.selectPersona(p.id)
+      focusWhenVisible('persona-summary')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async removePersona(id: string) {
+    if (this.deletingPersona !== id) {
+      this.deletingPersona = id
+      return
+    }
+    try {
+      const name = this.personas.find((p) => p.id === id)?.name
+      await deletePersona(id)
+      // Screens link only to personas: the name comes off them too.
+      if (name) await settleName(name, 'remove')
+      this.personas = this.personas.filter((p) => p.id !== id)
+      this.deletingPersona = ''
+      void this.loadScreens()
+      this.flash('Deleted, and taken off its screens.')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Put a persona in the open screen's `for:`, or take it off. */
+  async addPersonaToScreen(p: Persona) {
+    const s = this.screen
+    if (!s) return
+    await this.saveScreen('audience', [...s.audience, p.name].join(', '))
+  },
+  async removeFromScreen(name: string) {
+    const s = this.screen
+    if (!s) return
+    await this.saveScreen('audience', s.audience.filter((a) => a !== name).join(', '))
+  },
+  async answerPersonaQuestion(q: Question, text: string) {
+    this.personaReply = text
+    this.personaReplyTo = { entry: q.entry, index: q.index }
+    await this.sendPersonaReply()
+  },
+  async sendPersonaReply() {
+    const p = this.persona
+    const text = this.personaReply.trim()
+    if (!p || !text || this.sending) return
+    this.sending = true
+    this.personaStatus = 'Saving...'
+    try {
+      const target = this.replyQuestion(p.body, this.personaReplyTo)
+      this.personaReplyTo = null
+      this.putPersona(await updatePersona(p.id, { body: target ? appendAnswer(p.body, target, text, today()) : appendEntry(p.body, 'you', text, today()) }))
+      this.personaReply = ''
+      this.personaStatus = ''
+    } catch (err) {
+      this.personaStatus = `Not saved: ${errorText(err)}`
+    } finally {
+      this.sending = false
+    }
+  },
   // Status: everything a good project has, done or not.
   get projectStatus(): ProjectStatus {
     return buildStatus({
       foundations: this.readiness?.foundations ?? [],
-      screens: this.screens,
+      screens: this.screens.filter((s) => !this.hiddenIds.has(s.id)),
       stories: this.stories,
       purpose: String(this.project.purpose ?? '').trim(),
       blocking: this.blockingCount,
@@ -1521,7 +1929,7 @@ export const state = Alpine.reactive({
    */
   get inbox(): InboxItem[] {
     return cached('inbox', () => {
-      const nodes = groupForList(Object.values(this.nodes).filter((n) => this.inScope(n) && !isFixed(n)), '').flatMap((g) => g.nodes)
+      const nodes = groupForList(Object.values(this.nodes).filter((n) => this.inScope(n) && !isFixed(n) && !this.hiddenIds.has(screenOf(n, this.screens))), '').flatMap((g) => g.nodes)
       const guess = (n: GNode) => n.extra?.source === 'inferred' && n.status === 'open' && !splitBody(n.body).entries.some((e) => e.who === 'you')
       // Every open question is its own item: Claude may ask several things about one thought.
       const asked = (body: string) => questions(body).filter((q) => q.open)
@@ -1531,16 +1939,17 @@ export const state = Alpine.reactive({
         // A guess without a question is still one thing to confirm.
         if (!open.length) return kind === 'guess' ? [{ key: `node:${id}`, kind, id, question: '', options: [], text: '', about, where, date: '', entry: -1, index: 0, of: 1 }] : []
         return open.map((q, n) => ({
-          key: `${kind === 'screen' ? 'screen' : 'node'}:${id}:${q.entry}:${q.index}`,
+          key: `${kind === 'screen' || kind === 'persona' ? kind : 'node'}:${id}:${q.entry}:${q.index}`,
           kind, id, about, where,
           question: this.entryWords(q.question), options: q.options, text: entries(body)[q.entry]?.text ?? '', date: q.date,
           entry: q.entry, index: q.index, of: open.length, position: n + 1,
         }))
       }
-      const screens = screenTree(this.screens).filter(({ screen }) => !screen.error && (!this.scope || screen.id === this.scope))
+      const screens = screenTree(this.screens).filter(({ screen }) => !screen.error && !this.hiddenIds.has(screen.id) && (!this.scope || screen.id === this.scope))
       return [
         ...nodes.filter((n) => !guess(n)).flatMap((n) => items('question', n.id, n.title, n.topic, n.body)),
         ...screens.flatMap(({ screen }) => items('screen', screen.id, screen.title, this.screenPath(screen), screen.body)),
+        ...(this.scope ? [] : this.personas.filter((p) => !p.error).flatMap((p) => items('persona', p.id, p.name, 'Personas', p.body))),
         ...nodes.filter(guess).flatMap((n) => items('guess', n.id, n.title, n.topic, n.body)),
       ]
     })
@@ -1552,6 +1961,12 @@ export const state = Alpine.reactive({
    */
   inboxDetail(item: InboxItem): { facts: string[]; notesHtml: string; earlier: Entry[]; links: { id: string; title: string }[]; purpose: string; audience: string[]; tasks: string[] } {
     const empty = { facts: [], notesHtml: '', earlier: [], links: [], purpose: '', audience: [], tasks: [] }
+    if (item.kind === 'persona') {
+      const p = this.personas.find((x) => x.id === item.id)
+      if (!p) return empty
+      const { notes, entries } = splitBody(p.body)
+      return { ...empty, facts: [p.source === 'inferred' ? 'a guess' : p.source, ...this.screensFor(p).slice(0, 4).map((s) => `on ${s.title}`)].filter(Boolean) as string[], notesHtml: notes.trim() ? md(notes) : '', earlier: entries.filter((e) => !e.open), purpose: p.summary }
+    }
     if (item.kind === 'screen') {
       const s = this.screens.find((x) => x.id === item.id)
       if (!s) return empty
@@ -1604,6 +2019,7 @@ export const state = Alpine.reactive({
       this.selectScreen(item.id)
       return this.setView('sitemap')
     }
+    if (item.kind === 'persona') return this.openPersona(item.id)
     this.goToNode(item.id)
   },
   /** Show the first open gap on the map, the blocking ones first. */
@@ -1627,13 +2043,17 @@ export const state = Alpine.reactive({
         const screen = this.screens.find((s) => s.id === item.id)
         if (!screen) return
         this.putScreen(await updateScreen(screen.id, { body: answer(screen.body) }))
+      } else if (item.kind === 'persona') {
+        const p = this.personas.find((x) => x.id === item.id)
+        if (!p) return
+        this.putPersona(await updatePersona(p.id, { body: answer(p.body) }))
       } else {
         const n = this.nodes[item.id]
         if (!n) return
         this.upsert(await updateNode(n.id, { body: answer(n.body) }))
       }
       delete this.inboxDrafts[item.key]
-      this.flash(`Answered. Your agent reads it on the next ${item.kind === 'screen' ? '/sitemap' : 'command'} run.`)
+      this.flash(`Answered. Your agent reads it on the next ${item.kind === 'screen' ? '/sitemap' : item.kind === 'persona' ? '/personas' : 'command'} run.`)
     } catch (err) {
       this.flash(errorText(err))
     } finally {
@@ -1885,13 +2305,93 @@ export const state = Alpine.reactive({
     return cached('board', () => {
       // Inside one part, its thoughts group by topic: the part's areas and features.
       const groupBy = this.scopeScreen ? 'topic' : this.groupBy
-      return buildBoard(this.visibleNodes, this.visibleGaps, this.visibleStories, { groupBy, screens: this.viewScreens })
+      return buildBoard(this.visibleNodes, this.visibleGaps, this.visibleStories, { groupBy, cardGroup: this.cardGroup, screens: this.viewScreens, scope: this.scopeScreen })
     })
   },
   get outline(): OutlineSection[] {
     return cached('outline', () => {
       return buildOutline(this.board)
     })
+  },
+  /** How cards are grouped inside each column. Kept in the browser. */
+  cardGroup: readStored<CardGroup>('grndwrk.cardGroup', 'level'),
+  setCardGroup(group: CardGroup) {
+    this.cardGroup = group
+    store('grndwrk.cardGroup', group)
+  },
+  /** The feature a new section is being named for, as "<screen id>", and the one being renamed, as "<screen id>:<feature>". */
+  addingFeature: '',
+  /** The section a dragged card is over, with dropCell for its column. */
+  dropSection: '',
+  renamingFeature: '',
+  /** Add a feature to a screen: an empty section to drop cards in. */
+  async addFeature(screenId: string, name: string) {
+    this.addingFeature = ''
+    const s = this.screens.find((x) => x.id === screenId)
+    const clean = name.replace(/\s+/g, ' ').trim()
+    if (!s || !clean) return
+    if (s.features.some((f) => f.toLowerCase() === clean.toLowerCase())) return this.flash(`${s.title} already has ${clean}`)
+    try {
+      this.putScreen(await updateScreen(s.id, { features: [...s.features, clean] }))
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Rename a feature on its screen and every thought that names it. An empty name removes it; its thoughts keep no feature. */
+  async renameFeature(screenId: string, from: string, to: string) {
+    this.renamingFeature = ''
+    const s = this.screens.find((x) => x.id === screenId)
+    const name = to.replace(/\s+/g, ' ').trim()
+    if (!s || name === from) return
+    const same = (a: string) => a.toLowerCase() === from.toLowerCase()
+    try {
+      const listed = s.features.some(same) || !name ? s.features : [...s.features, from]
+      const features = name ? listed.map((f) => (same(f) ? name : f)) : listed.filter((f) => !same(f))
+      this.putScreen(await updateScreen(s.id, { features: features.filter((f, i) => features.findIndex((g) => g.toLowerCase() === f.toLowerCase()) === i) }))
+      const mine = Object.values(this.nodes).filter((n) => screenOf(n, this.screens) === s.id && same(featureOf(n)))
+      for (const n of mine) this.upsert(await updateNode(n.id, { feature: name }))
+      this.flash(name ? `Renamed to ${name}` : `Removed ${from}; its thoughts have no feature now`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Set the open thought's feature. A new one is added to its screen's features. */
+  async saveFeature(value: string) {
+    const n = this.selected
+    if (!n) return
+    const name = value.replace(/\s+/g, ' ').trim()
+    if (name === featureOf(n)) return
+    try {
+      this.upsert(await updateNode(n.id, { feature: name }))
+      const s = this.screens.find((x) => x.id === screenOf(n, this.screens))
+      if (s && name && !s.features.some((f) => f.toLowerCase() === name.toLowerCase())) this.putScreen(await updateScreen(s.id, { features: [...s.features, name] }))
+      this.flash('Saved')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  featureOf,
+  /** The screen a thought is about, for the panel. */
+  screenOf(n: GNode | null): string {
+    return n ? screenOf(n, this.screens) : ''
+  },
+  /** A screen's features with how many thoughts each has, listed ones first, then any a thought names. */
+  featuresOf(screen: Screen): { name: string; count: number }[] {
+    const mine = Object.values(this.nodes).filter((n) => screenOf(n, this.screens) === screen.id)
+    const names = [...screen.features]
+    for (const n of mine) if (featureOf(n) && !names.some((f) => f.toLowerCase() === featureOf(n).toLowerCase())) names.push(featureOf(n))
+    return names.map((name) => ({ name, count: mine.filter((n) => featureOf(n).toLowerCase() === name.toLowerCase()).length }))
+  },
+  /** Open a screen's part of the map with its thoughts grouped by feature. */
+  workOnFeatures(id: string) {
+    this.setCardGroup('feature')
+    this.workOn(id)
+  },
+  /** The features of the open thought's screen, for its Feature field. */
+  get selectedFeatures(): string[] {
+    const n = this.selected
+    const s = n ? this.screens.find((x) => x.id === screenOf(n, this.screens)) : null
+    return s?.features ?? []
   },
   setGroupBy(groupBy: GroupBy) {
     this.groupBy = groupBy
@@ -1933,7 +2433,7 @@ export const state = Alpine.reactive({
    * Dropping a card in another column moves it to that screen (or General),
    * or that topic. Dropped on another card, it also takes that card's level.
    */
-  async moveCard(id: string, column: string, altitude?: number) {
+  async moveCard(id: string, column: string, altitude?: number, section?: string) {
     const node = this.nodes[id]
     this.dragId = null
     this.dropCell = ''
@@ -1942,11 +2442,25 @@ export const state = Alpine.reactive({
     const col = board.columns.find((c) => c.key === column)
     const changes: NodeInput = {}
     let where = ''
-    if (board.groupBy === 'page') {
+    // Dropped in a section: it takes that feature, topic or type, like a card moved between groups in Notion.
+    const sec = section !== undefined ? col?.sections.find((x) => x.key === section) : undefined
+    if (sec && board.cardGroup === 'feature' && sec.key !== featureOf(node).toLowerCase()) {
+      changes.feature = sec.key ? sec.name : ''
+      where = sec.key ? `to ${sec.name}` : 'to no feature'
+    } else if (sec && board.cardGroup === 'topic' && topicKey(node.topic) !== topicKey(sec.name) && board.groupBy !== 'topic') {
+      changes.topic = sec.key ? sec.name : ''
+      where = `to ${changes.topic || 'no topic'}`
+    } else if (sec && board.cardGroup === 'type' && sec.key && node.type !== sec.key) {
+      changes.type = sec.key as NodeType
+      where = `to ${sec.key}`
+    }
+    if (board.groupBy === 'page' && !this.scopeScreen) {
       const now = typeof node.extra?.screen === 'string' ? node.extra.screen : ''
       if (now !== column) {
         changes.screen = column
-        where = `to ${col?.name ?? 'General'}`
+        // A feature belongs to its screen: on another screen, the card keeps one only when dropped in one of its sections.
+        if (changes.feature === undefined && featureOf(node)) changes.feature = ''
+        where = [where, `to ${col?.name ?? 'General'}`].filter(Boolean).join(', ')
       }
     } else if (topicKey(node.topic) !== column) {
       changes.topic = column && col ? col.name : ''
@@ -2140,7 +2654,9 @@ export const state = Alpine.reactive({
       // New thoughts land on the page in view, or next to the node they link to.
       const page = linkTo ? linkTo.page : this.onAll ? '' : this.currentPage
       const screen = this.scopeScreen?.id ?? (typeof linkTo?.extra?.screen === 'string' ? linkTo.extra.screen : undefined)
-      const node = await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '', page, ...(screen ? { screen } : {}) })
+      // And its feature, when it is about the same screen.
+      const feature = linkTo && screen && linkTo.extra?.screen === screen ? featureOf(linkTo) : ''
+      const node = await createNode({ ...parsed, links: linkTo ? [linkTo.id] : [], topic: linkTo?.topic ?? '', page, ...(screen ? { screen } : {}), ...(feature ? { feature } : {}) })
       this.upsert(node)
       this.markFresh(node.id)
       this.flash(`Added to ${node.topic || 'no topic'}`)
