@@ -40,7 +40,7 @@ npx grndwrk        # starts local server and opens the browser
 npx grndwrk --app http://localhost:5173   # also puts a Comment button on every page of the product
 npx grndwrk --lan                         # lets phones on the same Wi-Fi send comments (comments only, with the pairing code it prints)
 npx grndwrk import-feedback <file>        # adds comments a tester shared as a file
-npx grndwrk screenshots [--login]         # a picture of each web screen, for the Sitemap view (uses Chrome)
+npx grndwrk screenshots [--login]         # a picture of each web screen, for the Sitemap view (uses Chrome through Playwright, installed next to grndwrk, never from the project)
                                               # Chrome sandboxed; opens only localhost unless --app says otherwise; skips log out and delete routes;
                                               # the --login session lives in ~/Library/Application Support/grndwrk/sessions/, mode 0600, never in the project
 ```

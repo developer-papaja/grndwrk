@@ -1,6 +1,6 @@
 {
   "name": "grndwrk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Explore a product idea as a map of cards and find out if you are ready to build",
   "license": "MIT",
   "repository": {
@@ -39,8 +39,6 @@
   },
   "dependencies": {
     "chokidar": "5.0.0",
-    "open": "11.0.0",
-    "playwright-core": "1.64.0",
     "sirv": "3.0.2",
     "yaml": "2.9.1"
   },
@@ -53,6 +51,7 @@
     "dompurify": "^3.4.17",
     "marked": "^18.1.1",
     "modern-screenshot": "4.7.0",
+    "playwright-core": "1.64.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

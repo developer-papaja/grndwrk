@@ -16,6 +16,7 @@ import { PERSONA_CHOICES, PERSONA_LISTS, PERSONA_SECTIONS, type NodeInput, type 
 import { noteTab, subscribe, type NodeSync } from './events.js'
 import type { Pairings } from './pairing.js'
 import type { Sites } from './sites.js'
+import { openTarget } from '../opener.js'
 
 interface Ctx {
   gwDir: string
@@ -115,8 +116,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
       const b = (await readBody(req)) as { path?: unknown }
       const full = await docOnDisk(ctx.gwDir, (await readReadiness(ctx.gwDir)).foundations, typeof b.path === 'string' ? b.path : '')
-      const { default: open } = await import('open')
-      await open(full)
+      await openTarget(full)
       return send(res, 200, { opened: true })
     }
     if (url.pathname === '/api/stories' && method === 'GET') {

@@ -3,6 +3,7 @@ import { BadInput, type NodeStore } from '../store/nodes.js'
 import { broadcast, clientCount, type NodeSync } from './events.js'
 import { createFeedback, feedbackStatus, ownComments, parseFeedback, removeFeedback, testedOnDevice } from './feedback.js'
 import { saveIosShot, type ShotAbout } from '../store/shots.js'
+import { openTarget } from '../opener.js'
 
 export interface CommentsCtx {
   gwDir: string
@@ -104,8 +105,7 @@ export async function openOnMac(id: string, uiUrl: string): Promise<'browser' | 
   // Someone on the network could ask over and over. One new tab every few seconds at most.
   if (Date.now() - lastTab < 5000) return 'new tab'
   lastTab = Date.now()
-  const { default: open } = await import('open')
-  await open(`${uiUrl}/#write=${id}`).catch(() => {})
+  await openTarget(`${uiUrl}/#write=${id}`).catch(() => {})
   return 'new tab'
 }
 

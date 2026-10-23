@@ -122,6 +122,8 @@ grndwrk screenshots           # a picture of each web screen, for the Sitemap vi
 grndwrk screenshots --login   # log in first, for screens behind a login
 ```
 
+Screenshots use Playwright to drive Chrome. It is not installed with grndwrk (it is large), so add it once next to it: `npm install -g playwright-core`, or with npx, `npx -p grndwrk -p playwright-core grndwrk screenshots`.
+
 The iOS package sends a picture of each screen as you use the app.
 
 ## Several projects at once

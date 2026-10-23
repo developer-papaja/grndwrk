@@ -41,7 +41,7 @@ export async function takeScreenshots(gwDir: string, options: ScreenshotOptions)
   const wanted = options.only?.map((o) => o.toLowerCase())
   const chosen = wanted?.length ? screens.filter((s) => wanted.includes(s.id.toLowerCase()) || wanted.includes(s.title.toLowerCase())) : screens
 
-  const { chromium } = await import('playwright-core')
+  const { chromium } = await loadPlaywright()
   // With Chrome's sandbox on: Playwright turns it off unless asked.
   const launch = (headless: boolean) =>
     chromium.launch({ channel: 'chrome', headless, chromiumSandbox: true }).catch(() => {
@@ -129,4 +129,22 @@ export function sessionPath(gwDir: string): string {
     }
   }
   return path
+}
+
+/**
+ * Playwright drives Chrome for the pictures. It is not a dependency of
+ * grndwrk (it is large, and ships scripts that install browsers), so it is
+ * found next to grndwrk: installed globally beside it, or with npx -p. Never
+ * from the project's node_modules, which a pull request could fill.
+ */
+async function loadPlaywright(): Promise<typeof import('playwright-core')> {
+  try {
+    return await import('playwright-core')
+  } catch {
+    throw new Error(
+      'grndwrk screenshots uses Playwright to drive your Chrome, and it is not installed.\n' +
+        '  Installed grndwrk with npm install -g? Add it next to it: npm install -g playwright-core\n' +
+        '  Using npx? Run: npx -p grndwrk -p playwright-core grndwrk screenshots',
+    )
+  }
 }

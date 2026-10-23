@@ -4,6 +4,7 @@ import { init } from './init.js'
 import { findProjectRoot, GW_DIR, noMapMessage, PACKAGE_ROOT } from './root.js'
 import { startServer } from './server/index.js'
 import { clientCount, tabAround } from './server/events.js'
+import { openTarget } from './opener.js'
 
 const HELP = `Usage:
   grndwrk init        create .grndwrk/ and install the agent commands and skills, or update them
@@ -167,8 +168,7 @@ async function main() {
       } else if (hadTab) {
         console.log(`Your grndwrk tab picks this up when you switch to it. Closed it? Open ${url}`)
       } else {
-        const { default: open } = await import('open')
-        await open(url).catch(() => {})
+        await openTarget(url).catch(() => {})
       }
     }
     return
