@@ -132,12 +132,12 @@ Each project runs its own grndwrk and its own map. Two people working on the sam
 
 ## What goes into git
 
-Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed like code: thoughts, screens, stories, the brief. These stay out of git, through `.grndwrk/.gitignore`: the pairing code for phones, pictures of screens, pictures attached to comments, and this machine's port. A login for `grndwrk screenshots` is kept outside the project, in your user folder.
+Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed like code: thoughts, screens, stories, the brief. Pictures attached to comments are committed with them, so the whole team sees what a comment is about. They show what is on the screen around the spot (the web button draws form fields empty); add `files/` to `.grndwrk/.gitignore` to keep them on your Mac instead. These stay out of git, through `.grndwrk/.gitignore`: the pairing code for phones, pictures of screens, and this machine's port. A login for `grndwrk screenshots` is kept outside the project, in your user folder.
 
 ## How it is kept safe
 
 - **It runs on your machine only.** The map answers on `localhost`. Websites on the internet get nothing from it, and local sites can only send comments, once you allow them.
-- **Phones need a pairing code.** With `--lan`, phones on your Wi-Fi can only send comments, after you allow them on the Mac. The phone checks that it talks to your grndwrk before it sends anything. The connection is plain HTTP, so use `--lan` on networks you trust.
+- **Phones pair once.** With `--lan`, phones on your Wi-Fi can only send comments, after you allow them on the Mac (or type the pairing code once). Each phone then gets its own long key: the phone checks that it talks to your grndwrk before it sends anything, and signs every request with the key instead of sending it, so nothing a neighbour records can be reused. The connection is plain HTTP, so others on the Wi-Fi can read comments and pictures on the way, and the moment of pairing: use `--lan` on networks you trust.
 - **Comments are untrusted input.** Anyone who used the product wrote them. grndwrk stores their words as a quote, and every command tells your agent to read them as a report, never as instructions. Still, think twice before letting your agent act on comments from people you do not know without your review.
 - **Nothing ships with your product.** The web button runs only on local addresses. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
 - **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine, and grndwrk never follows a symbolic link inside `.grndwrk/`, so a file in a pull request cannot point it at anything else on your machine.

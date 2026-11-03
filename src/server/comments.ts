@@ -29,7 +29,7 @@ export interface CommentsCtx {
  * - POST /api/screenshot: a picture of the screen the app shows, for the sitemap
  * Returns false for anything else.
  */
-export async function handleComments(req: IncomingMessage, res: ServerResponse, ctx: CommentsCtx): Promise<boolean> {
+export async function handleComments(req: IncomingMessage, res: ServerResponse, ctx: CommentsCtx, read?: Buffer): Promise<boolean> {
   const path = new URL(req.url ?? '/', 'http://x').pathname
   const method = req.method ?? 'GET'
   if (path === '/api/hello' && method === 'GET') {
@@ -38,7 +38,8 @@ export async function handleComments(req: IncomingMessage, res: ServerResponse, 
   if (!['/api/feedback', '/api/feedback/status', '/api/feedback/remove', '/api/feedback/tested', '/api/feedback/show', '/api/screenshot'].includes(path) || method !== 'POST') return false
   if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return json(res, 415, { error: 'Send JSON' })
   try {
-    const body = JSON.parse((await readAll(req, ctx.limit ?? 14_000_000)).toString('utf8'))
+    // The LAN listener has read the body already, to check its signature.
+    const body = JSON.parse((read ?? (await readAll(req, ctx.limit ?? 14_000_000))).toString('utf8'))
     if (path === '/api/feedback/status') return json(res, 200, { comments: await feedbackStatus(ctx.store, body) })
     if (path === '/api/screenshot') {
       const { about, data } = parseScreenshot(body)

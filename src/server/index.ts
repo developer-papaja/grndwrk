@@ -9,6 +9,7 @@ import { createProxy, handleOverlay, proxyName, type OverlayCtx } from './proxy.
 import { Sites } from './sites.js'
 import { rememberApp } from '../store/local.js'
 import { advertise, createLanServer, lanAddresses, pairingCode } from './lan.js'
+import { Devices } from './devices.js'
 import { readProject, writeFields } from '../store/project.js'
 import { broadcast, NodeSync } from './events.js'
 import { Pairings } from './pairing.js'
@@ -38,9 +39,10 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   // Comments from the iOS package: in the Simulator on this port, from a phone on the LAN port.
   const comments: CommentsCtx = { gwDir, store, nodes, project, uiUrl: `http://localhost:${port}` }
 
-  // With --lan: the pairing code, and phones asking the person here to allow them.
+  // With --lan: the pairing code to type once, the phones paired so far, and phones asking the person here to allow them.
   const lanCode = lan ? await pairingCode(gwDir) : undefined
-  const pairings = lanCode ? new Pairings(lanCode, broadcast) : undefined
+  const devices = lanCode ? await new Devices(gwDir).load() : undefined
+  const pairings = devices ? new Pairings((name) => devices.add(name), broadcast) : undefined
 
   // Sites that load the Comment button themselves send only once allowed in the map; the --app address given now is allowed.
   const sites = new Sites(
@@ -101,8 +103,8 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
     runtime.app = appUrl
   }
   let lanUrls: string[] | undefined
-  if (lanCode) {
-    const lanServer = createLanServer(comments, lanCode, pairings)
+  if (lanCode && devices) {
+    const lanServer = createLanServer(comments, lanCode, devices, pairings)
     const p = await listen(lanServer, lanPort ?? actualPort + 2, 20, '0.0.0.0')
     advertise(p, project)
     lanUrls = lanAddresses().map((a) => `http://${a}:${p}`)

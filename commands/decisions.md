@@ -7,7 +7,7 @@ Look back over this conversation and write the decisions made in it into this pr
 
 **Several questions.** Put each question in its own `**Claude asks**` entry, with its own `Options:` list, one after the other; never several questions with one list. Each one is answered on its own. A `**You**` entry that starts with a quoted line (`> Which screen is this about?`) answers that question only; a `**You**` entry without a quote answers every question before it. A question is open until it is answered, or until a plain `**Claude**` entry after it.
 
-**Threads.** A thread is the `## Thread` section at the end of a card's or screen's file, plus the files in `.grndwrk/threads/<its id>/`, one entry each, read in file-name order. Wherever this command adds an entry to a thread, write it as a new file there instead of into the card or screen: `.grndwrk/threads/<id>/<Unix time in milliseconds>-<two random lowercase letters or digits>.md`, holding
+**Threads.** A thread is the `## Thread` section at the end of a card's or screen's file, plus the files in `.grndwrk/threads/<its id>/`, one entry each, read in file-name order. Wherever this command adds an entry to a thread, write it as a new file there instead of into the card or screen: `.grndwrk/threads/<id>/<Unix time in milliseconds>-<two random lowercase letters or digits>.md` (the time now, read from the clock with `date +%s000`, never guessed: entries are read in file-name order, so an entry named later than it was written stays below the answers to it, and a question there never closes), holding
 
 ```md
 ---

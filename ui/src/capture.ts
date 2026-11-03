@@ -8,7 +8,8 @@ const PREFIXES: Record<string, NodeType> = { '?': 'question', '!': 'decision' }
  * Returns null when there is nothing to capture.
  */
 export function parseCapture(raw: string): { title: string; type?: NodeType } | null {
-  const text = raw.trim()
+  // A title is one line, even when pasted from several.
+  const text = raw.replace(/\s+/g, ' ').trim()
   const type = PREFIXES[text[0]]
   if (type) {
     const title = text.slice(1).trim()

@@ -246,11 +246,19 @@ export function createProxy({ target, gwDir, store, nodes, ca, uiUrl }: ProxyOpt
         }
         readAll(up, 50_000_000).then(
           (body) => {
+            // A UTF-16 page is not ASCII underneath: rewriting it would break it, so it passes as it came.
+            if (/charset\s*=\s*"?utf-?16/i.test(String(up.headers['content-type']))) {
+              res.writeHead(up.statusCode ?? 200, out).end(body)
+              return
+            }
             // Links the product writes in full (Laravel's url() and route(), APP_URL) stay on the proxy too.
-            const page = inject(toProxy(body.toString('utf8'), target, here))
+            // Rewritten as bytes (latin1 maps each byte to one character and back), so every byte outside
+            // the ASCII rewrites stays as the product sent it, whatever its charset. Decoding as UTF-8 turned
+            // Shift_JIS into different characters, and correctly escaped text into script.
+            const page = Buffer.from(inject(toProxy(body.toString('latin1'), target, here)), 'latin1')
             delete out['content-length']
             delete out['transfer-encoding']
-            res.writeHead(up.statusCode ?? 200, { ...out, 'content-length': Buffer.byteLength(page) }).end(page)
+            res.writeHead(up.statusCode ?? 200, { ...out, 'content-length': page.length }).end(page)
           },
           () => res.writeHead(502).end(),
         )

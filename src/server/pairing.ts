@@ -18,16 +18,17 @@ const validSecret = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9-]{16,
 
 /**
  * Pairing by asking: a phone on the network asks to send comments, the person
- * at the Mac allows it in the map, and the phone gets the pairing code. The
- * phone knows its request by a secret it made; the map only ever sees a
- * separate id, so nothing in the browser can be used to fetch the code.
+ * at the Mac allows it in the map, and the phone gets its own long key (see
+ * devices.ts). The phone knows its request by a secret it made; the map only
+ * ever sees a separate id, so nothing in the browser can be used to fetch the key.
  */
 export class Pairings {
   private pending = new Map<string, PairRequest & { secret: string; ip: string; time: number }>()
-  private answers = new Map<string, { answer: Answer; time: number }>()
+  private answers = new Map<string, { answer: Answer; key?: string; time: number }>()
 
   constructor(
-    private code: string,
+    /** Makes and keeps a key for an allowed phone. */
+    private issue: (device: string) => Promise<string>,
     private onChange: (event: Extract<ServerEvent, { type: 'pair:request' | 'pair:done' }>) => void,
   ) {}
 
@@ -55,24 +56,24 @@ export class Pairings {
     return request
   }
 
-  /** What became of a request, by the phone's secret. The code is told once, when allowed. */
-  status(body: unknown): { status: 'waiting' | 'denied' | 'unknown' } | { status: 'allowed'; code: string } {
+  /** What became of a request, by the phone's secret. The key is told once, when allowed. */
+  status(body: unknown): { status: 'waiting' | 'denied' | 'unknown' } | { status: 'allowed'; key: string } {
     this.expire()
     const secret = validSecret((body as Record<string, unknown> | null)?.request)
     const answered = secret ? this.answers.get(secret) : undefined
     if (answered) {
       this.answers.delete(secret)
-      return answered.answer === 'allowed' ? { status: 'allowed', code: this.code } : { status: 'denied' }
+      return answered.answer === 'allowed' && answered.key ? { status: 'allowed', key: answered.key } : { status: 'denied' }
     }
     return { status: secret && [...this.pending.values()].some((p) => p.secret === secret) ? 'waiting' : 'unknown' }
   }
 
   /** The person at the Mac answers. */
-  answer(id: string, allow: boolean): boolean {
+  async answer(id: string, allow: boolean): Promise<boolean> {
     const p = this.pending.get(id)
     if (!p) return false
-    this.answers.set(p.secret, { answer: allow ? 'allowed' : 'denied', time: Date.now() })
     this.drop(id)
+    this.answers.set(p.secret, allow ? { answer: 'allowed', key: await this.issue(p.device), time: Date.now() } : { answer: 'denied', time: Date.now() })
     return true
   }
 

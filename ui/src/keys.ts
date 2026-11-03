@@ -5,7 +5,7 @@ function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-export function bindKeys(captureInput: () => HTMLInputElement | null, actions: { layout: () => void }) {
+export function bindKeys(captureInput: () => HTMLElement | null, actions: { layout: () => void }) {
   window.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return
 

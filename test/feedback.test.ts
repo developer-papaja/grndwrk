@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { createHmac, randomBytes } from 'node:crypto'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -10,6 +11,7 @@ import { createFeedback, importFeedback, parseFeedback, storiesFor } from '../sr
 import { createProxy, inject } from '../src/server/proxy.js'
 import { appendEntry } from '../src/shared/thread.js'
 import { createLanServer } from '../src/server/lan.js'
+import { Devices, deviceId, helloProof, requestSignature } from '../src/server/devices.js'
 
 let gw: string
 let store: NodeStore
@@ -42,8 +44,8 @@ describe('feedback', () => {
     expect(node.body).toContain('Comment on the button "Book" (#book-button) on BookingView (iOS).')
     expect(node.body).toContain('Stories for this screen: s_k3f9 (Book a desk)')
     expect(node.body).toMatch(/!\[\]\(\.\.\/files\/n_[a-z0-9]{4,8}\/\d+\.png\)/)
-    // The picture, and a .gitignore that keeps it out of git: it can show real data.
-    expect((await readdir(join(gw, 'files', node.id))).sort()).toEqual(['.gitignore', expect.stringMatching(/\.png$/)])
+    // The picture, committed with the comment: no .gitignore next to it.
+    expect(await readdir(join(gw, 'files', node.id))).toEqual([expect.stringMatching(/\.png$/)])
   })
 
   it('imports a shared file once, even when the same comment was also sent', async () => {
@@ -104,21 +106,63 @@ describe('proxy', () => {
     // A plain form post from another site cannot write.
     expect((await fetch(`${base}/__grndwrk/feedback`, { method: 'POST', body: 'text=x' })).status).toBe(415)
   })
+
+  it('changes no byte of a page in another charset but the rewritten links and the overlay', async () => {
+    // Shift_JIS: 0x83 0x5C is one character, and its second byte is a backslash. Decoded as UTF-8 and
+    // sent again under the same charset, the backslash stood alone and escaped the string's quote.
+    const head = Buffer.from('<html><body><script>var label = "', 'latin1')
+    const tail = Buffer.from('"; var note = "+alert(1)//";</script></body></html>', 'latin1')
+    const sjis = Buffer.concat([head, Buffer.from([0x83, 0x5c]), tail])
+    const app = createServer((_req, res) => res.writeHead(200, { 'Content-Type': 'text/html; charset=Shift_JIS' }).end(sjis))
+    const appPort = await listen(app)
+    const proxy = createProxy({ target: new URL(`http://localhost:${appPort}`), gwDir: gw, store, nodes: new NodeSync(() => store.list()) })
+    servers.push(app, proxy)
+    const got = Buffer.from(await (await fetch(`http://localhost:${await listen(proxy)}/`)).arrayBuffer())
+    expect(got.equals(Buffer.from(inject(sjis.toString('latin1')), 'latin1'))).toBe(true)
+    expect(got.includes(Buffer.from([0x83, 0x5c, 0x22]))).toBe(true)
+  })
 })
 
+/** A paired phone's request, signed the way Connection.swift signs it. */
+function signedPost(base: string, key: string, path: string, body: unknown, opts: { time?: number; nonce?: string } = {}) {
+  const data = Buffer.from(JSON.stringify(body))
+  const time = String(opts.time ?? Date.now())
+  const nonce = opts.nonce ?? randomBytes(12).toString('hex')
+  return fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Grndwrk-Device': deviceId(key),
+      'X-Grndwrk-Time': time,
+      'X-Grndwrk-Nonce': nonce,
+      'X-Grndwrk-Signature': requestSignature(key, 'POST', path, time, nonce, data),
+    },
+    body: data,
+  })
+}
+
+const lanCtx = () => ({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks', uiUrl: 'http://localhost:1' })
+async function listenLan(server: Server) {
+  const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
+  return `http://127.0.0.1:${port}`
+}
+
 describe('lan', () => {
-  it('takes comments and nothing else', async () => {
-    const server = createLanServer({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks', uiUrl: 'http://localhost:1' }, 'ABC234')
-    const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
-    const base = `http://127.0.0.1:${port}`
+  it('takes comments signed by a paired phone, and nothing else', async () => {
+    const devices = await new Devices(gw).load()
+    const key = await devices.add('iPhone')
+    const server = createLanServer(lanCtx(), 'ABC234', devices)
+    const base = await listenLan(server)
     try {
       expect(await (await fetch(`${base}/api/hello`)).json()).toEqual({ grndwrk: true, project: 'Desks', paired: false })
-      expect(await (await fetch(`${base}/api/hello`, { headers: { 'X-Grndwrk-Code': 'abc 234' } })).json()).toEqual({ grndwrk: true, project: 'Desks', paired: true })
-      const post = (path: string, body: unknown, code = 'ABC234') =>
-        fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Grndwrk-Code': code }, body: JSON.stringify(body) })
-      // Without the code, or with a wrong one, nothing gets in.
-      expect((await post('/api/feedback', { text: 'Hi' }, '')).status).toBe(401)
-      expect((await post('/api/feedback', { text: 'Hi' }, 'ZZZ999')).status).toBe(401)
+      expect(await (await fetch(`${base}/api/hello?device=${deviceId(key)}`)).json()).toEqual({ grndwrk: true, project: 'Desks', paired: true })
+      const post = (path: string, body: unknown) => signedPost(base, key, path, body)
+      const plain = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+        fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) })
+      // Unsigned, with the code as phones sent it before keys, or signed with a key grndwrk does not know: nothing gets in.
+      expect((await plain('/api/feedback', { text: 'Hi' })).status).toBe(401)
+      expect((await plain('/api/feedback', { text: 'Hi' }, { 'X-Grndwrk-Code': 'ABC234' })).status).toBe(401)
+      expect((await signedPost(base, 'f'.repeat(64), '/api/feedback', { text: 'Hi' })).status).toBe(401)
       expect((await post('/api/feedback', { text: 'x'.repeat(5_000_000) })).status).toBe(413)
       const sent = await post('/api/feedback', { text: 'From the phone', platform: 'iOS', screen: 'Home', key: 'K'.repeat(20) })
       expect(sent.status).toBe(201)
@@ -127,15 +171,43 @@ describe('lan', () => {
       expect(await (await post('/api/feedback/remove', { comments: [{ id, key: 'Q'.repeat(20) }] })).json()).toEqual({ removed: [] })
       expect((await post('/api/nodes', { title: 'Sneaky' })).status).toBe(404)
       expect((await fetch(`${base}/api/nodes`)).status).toBe(401)
-      expect((await fetch(`${base}/`, { headers: { 'X-Grndwrk-Code': 'ABC234' } })).status).toBe(404)
       expect((await store.list()).map((n) => n.title)).toEqual(['From the phone'])
       expect((await store.list())[0].extra.via).toBe('lan')
     } finally {
       server.close()
     }
   })
-})
 
+  it('refuses a signed request that was changed, sent again, or is too old', async () => {
+    const devices = await new Devices(gw).load()
+    const key = await devices.add('iPhone')
+    const server = createLanServer(lanCtx(), 'ABC234', devices)
+    const base = await listenLan(server)
+    try {
+      // A relay that saw a request can pass it on once, unchanged; it cannot send it again or change it.
+      const nonce = 'n'.repeat(24)
+      expect((await signedPost(base, key, '/api/feedback', { text: 'Once' }, { nonce })).status).toBe(201)
+      expect((await signedPost(base, key, '/api/feedback', { text: 'Once' }, { nonce })).status).toBe(401)
+      const time = String(Date.now())
+      const changed = await fetch(`${base}/api/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Grndwrk-Device': deviceId(key),
+          'X-Grndwrk-Time': time,
+          'X-Grndwrk-Nonce': 'm'.repeat(24),
+          'X-Grndwrk-Signature': requestSignature(key, 'POST', '/api/feedback', time, 'm'.repeat(24), Buffer.from(JSON.stringify({ text: 'Mine' }))),
+        },
+        body: JSON.stringify({ text: 'Theirs' }),
+      })
+      expect(changed.status).toBe(401)
+      expect((await signedPost(base, key, '/api/feedback', { text: 'Old' }, { time: Date.now() - 10 * 60_000 })).status).toBe(401)
+      expect((await store.list()).map((n) => n.title)).toEqual(['Once'])
+    } finally {
+      server.close()
+    }
+  })
+})
 
 describe('comments a device can follow up on', () => {
   const key = 'A1B2C3D4-E5F6-4711-8899-AABBCCDDEEFF'
@@ -160,6 +232,12 @@ describe('comments a device can follow up on', () => {
     await store.update(node.id, { proposed: '2026-10-13', body: appendEntry(node.body, 'claude', 'Made the ring 20% bigger in DayRing.swift.', '2026-10-13') })
     expect((await feedbackStatus(store, { comments: [{ id: node.id, key }] }))[0]).toMatchObject({ state: 'proposed', status: 'fix proposed', fix: 'Made the ring 20% bigger in DayRing.swift.' })
 
+    // A fix only proposed is not tested yet: approving or rejecting it changes nothing.
+    expect(await testedOnDevice(store, { comments: [{ id: node.id, key }], works: true })).toEqual([])
+    expect(await testedOnDevice(store, { comments: [{ id: node.id, key }], works: false, note: 'No' })).toEqual([])
+    expect((await store.get(node.id))!.extra.proposed).toBe('2026-10-13')
+    await store.update(node.id, { built: '2026-10-13' })
+
     // Someone else's key changes nothing.
     expect(await testedOnDevice(store, { comments: [{ id: node.id, key: 'Z'.repeat(20) }], works: true })).toEqual([])
 
@@ -170,7 +248,8 @@ describe('comments a device can follow up on', () => {
     expect(now.body).toContain('> **You** · 2026-10-13')
     expect(splitBody(now.body).entries.map((e) => e.who)).toEqual(['claude', 'you'])
 
-    // It works: fixed today.
+    // Built again, and it works: fixed today.
+    await store.update(node.id, { proposed: '2026-10-14', built: '2026-10-14' })
     expect(await testedOnDevice(store, { comments: [{ id: node.id, key }], works: true })).toEqual([{ id: node.id, state: 'fixed' }])
     now = (await store.get(node.id))!
     expect(now.extra.fixed).toMatch(/^\d{4}-\d{2}-\d{2}$/)
@@ -248,7 +327,6 @@ describe('incoming, proposed and fixed', () => {
 
     // Claude proposes a fix by writing proposed: in the file.
     const file = join(gw, 'nodes', `${node.id}.md`)
-    const { readFile } = await import('node:fs/promises')
     await writeFile(file, (await readFile(file, 'utf8')).replace(/^created: (.*)$/m, 'created: $1\nproposed: 2026-10-13'))
     const proposed = (await store.list()).find((n) => n.id === node.id)!
     expect(proposed.extra.proposed).toBe('2026-10-13')
@@ -275,7 +353,6 @@ describe('incoming, proposed and fixed', () => {
 describe('pairing', () => {
   it('keeps one code per project, out of git', async () => {
     const { pairingCode } = await import('../src/server/lan.js')
-    const { readFile } = await import('node:fs/promises')
     const code = await pairingCode(gw)
     expect(code).toMatch(/^[A-HJKMNP-Z2-9]{6}$/)
     expect(await pairingCode(gw)).toBe(code)
@@ -283,15 +360,21 @@ describe('pairing', () => {
     expect(await readFile(join(gw, '.gitignore'), 'utf8')).toBe('lan-code\n')
   })
 
-  it('stops answering guesses from a device that keeps guessing, but never refuses the right code', async () => {
-    const server = createLanServer({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks', uiUrl: 'http://localhost:1' }, 'ABC234')
-    const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
-    const hello = (code: string) => fetch(`http://127.0.0.1:${port}/api/hello`, { headers: { 'X-Grndwrk-Code': code } })
+  it('gives a key for the right code, and stops answering guesses from a device that keeps guessing', async () => {
+    const devices = await new Devices(gw).load()
+    const server = createLanServer(lanCtx(), 'ABC234', devices)
+    const base = await listenLan(server)
+    const typed = (code: string) => fetch(`${base}/api/pair/code`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, device: 'iPhone' }) })
     try {
-      for (let i = 0; i < 10; i++) expect((await hello(`WRONG${i}`)).status).toBe(200)
-      expect((await hello('WRONG10')).status).toBe(429)
-      // A neighbour guessing from the same address cannot lock a real phone out.
-      expect((await hello('ABC234')).status).toBe(200)
+      // Typed as people type it: case and spaces do not matter.
+      const { key } = (await (await typed('abc 234')).json()) as { key: string }
+      expect(key).toMatch(/^[a-f0-9]{64}$/)
+      expect(devices.byId(deviceId(key))?.name).toBe('iPhone')
+      expect((await readFile(join(gw, '.gitignore'), 'utf8')).split('\n')).toContain('lan-devices.json')
+      for (let i = 0; i < 10; i++) expect((await typed(`WRONG${i}`)).status).toBe(401)
+      expect((await typed('WRONG10')).status).toBe(429)
+      // A paired phone is not shut out by a neighbour guessing from the same address.
+      expect((await signedPost(base, key, '/api/feedback', { text: 'Still here' })).status).toBe(201)
     } finally {
       server.close()
     }
@@ -300,7 +383,7 @@ describe('pairing', () => {
 
 describe('the network listener', () => {
   const lanServer = async () => {
-    const server = createLanServer({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks', uiUrl: 'http://localhost:1' }, 'ABC234')
+    const server = createLanServer(lanCtx(), 'ABC234', await new Devices(gw).load())
     const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
     return { server, port }
   }
@@ -326,17 +409,21 @@ describe('the network listener', () => {
     }
   })
 
-  it('proves it knows the code without sending it, so a phone can tell a stranger from its Mac', async () => {
-    const { helloProof } = await import('../src/server/lan.js')
-    const { createHmac } = await import('node:crypto')
-    const { server, port } = await lanServer()
+  it("proves it holds a phone's key without sending it, and proves nothing about the code", async () => {
+    const devices = await new Devices(gw).load()
+    const key = await devices.add('iPhone')
+    const server = createLanServer(lanCtx(), 'ABC234', devices)
+    const base = await listenLan(server)
     try {
       const challenge = 'c'.repeat(32)
-      const body = (await (await fetch(`http://127.0.0.1:${port}/api/hello?challenge=${challenge}`)).json()) as { proof?: string; paired: boolean }
-      expect(body.paired).toBe(false)
-      expect(body.proof).toBe(createHmac('sha256', 'ABC234').update(`grndwrk-hello:${challenge}`).digest('hex'))
-      expect(body.proof).toBe(helloProof('ABC234', challenge))
-      expect(JSON.stringify(body)).not.toContain('ABC234')
+      // Without a known phone, no proof: one answer used to let anyone on the Wi-Fi guess the code offline.
+      const stranger = (await (await fetch(`${base}/api/hello?challenge=${challenge}`)).json()) as { proof?: string }
+      expect(stranger.proof).toBeUndefined()
+      const body = (await (await fetch(`${base}/api/hello?challenge=${challenge}&device=${deviceId(key)}`)).json()) as { proof?: string; paired: boolean }
+      expect(body.paired).toBe(true)
+      expect(body.proof).toBe(createHmac('sha256', key).update(`grndwrk-hello:${challenge}`).digest('hex'))
+      expect(body.proof).toBe(helloProof(key, challenge))
+      expect(JSON.stringify(body)).not.toContain(key)
     } finally {
       server.close()
     }
@@ -366,7 +453,7 @@ describe('comment text', () => {
 describe('pairing by asking', () => {
   it('shows the map four digits the phone shows too, and where the request came from', async () => {
     const { Pairings, checkDigits } = await import('../src/server/pairing.js')
-    const pairings = new Pairings('ABC234', () => {})
+    const pairings = new Pairings(async () => 'k', () => {})
     const asked = pairings.ask({ request: 'S'.repeat(32), device: 'Måns iPhone\u202e(trusted)\u0001' }, '::ffff:192.168.1.30')!
     expect(asked.check).toMatch(/^\d{4}$/)
     expect(asked.check).toBe(checkDigits('S'.repeat(32)))
@@ -374,10 +461,11 @@ describe('pairing by asking', () => {
     expect(asked.device).toBe('Måns iPhone(trusted)')
   })
 
-  it('gives the code to a phone the person allowed, once, and to nobody else', async () => {
+  it('gives a key to a phone the person allowed, once, and to nobody else', async () => {
     const { Pairings } = await import('../src/server/pairing.js')
     const events: string[] = []
-    const pairings = new Pairings('ABC234', (e) => events.push(e.type))
+    const issued: string[] = []
+    const pairings = new Pairings(async (device) => (issued.push(device), 'a'.repeat(64)), (e) => events.push(e.type))
     const secret = 'S'.repeat(32)
     const asked = pairings.ask({ request: secret, device: 'iPhone', app: 'Desks' }, '10.0.0.5')!
     expect(asked).toMatchObject({ device: 'iPhone', app: 'Desks' })
@@ -385,20 +473,23 @@ describe('pairing by asking', () => {
     expect(pairings.status({ request: secret })).toEqual({ status: 'waiting' })
     expect(pairings.status({ request: 'T'.repeat(32) })).toEqual({ status: 'unknown' })
 
-    expect(pairings.answer(asked.id, true)).toBe(true)
-    expect(pairings.status({ request: secret })).toEqual({ status: 'allowed', code: 'ABC234' })
+    expect(await pairings.answer(asked.id, true)).toBe(true)
+    expect(issued).toEqual(['iPhone'])
+    expect(pairings.status({ request: secret })).toEqual({ status: 'allowed', key: 'a'.repeat(64) })
     expect(pairings.status({ request: secret })).toEqual({ status: 'unknown' })
     expect(events).toEqual(['pair:request', 'pair:done'])
 
     const other = pairings.ask({ request: 'U'.repeat(32), device: 'iPad' }, '10.0.0.6')!
-    pairings.answer(other.id, false)
+    await pairings.answer(other.id, false)
     expect(pairings.status({ request: 'U'.repeat(32) })).toEqual({ status: 'denied' })
+    expect(issued).toEqual(['iPhone'])
   })
 
-  it('asks over the network without the code, and pairs once allowed', async () => {
+  it('asks over the network without the code, and pairs once allowed, with a key that signs', async () => {
     const { Pairings } = await import('../src/server/pairing.js')
-    const pairings = new Pairings('ABC234', () => {})
-    const server = createLanServer({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Desks', uiUrl: 'http://localhost:1' }, 'ABC234', pairings)
+    const devices = await new Devices(gw).load()
+    const pairings = new Pairings((name) => devices.add(name), () => {})
+    const server = createLanServer(lanCtx(), 'ABC234', devices, pairings)
     const port = await new Promise<number>((r) => server.listen(0, '127.0.0.1', () => r((server.address() as AddressInfo).port)))
     const post = (path: string, body: unknown) =>
       fetch(`http://127.0.0.1:${port}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -406,8 +497,10 @@ describe('pairing by asking', () => {
       const request = 'R'.repeat(32)
       expect((await post('/api/pair', { request, device: 'iPhone' })).status).toBe(202)
       expect(await (await post('/api/pair/status', { request })).json()).toEqual({ status: 'waiting' })
-      pairings.answer(pairings.list()[0].id, true)
-      expect(await (await post('/api/pair/status', { request })).json()).toEqual({ status: 'allowed', code: 'ABC234' })
+      await pairings.answer(pairings.list()[0].id, true)
+      const answer = (await (await post('/api/pair/status', { request })).json()) as { status: string; key: string }
+      expect(answer.status).toBe('allowed')
+      expect((await signedPost(`http://127.0.0.1:${port}`, answer.key, '/api/feedback', { text: 'Paired' })).status).toBe(201)
     } finally {
       server.close()
     }
@@ -433,7 +526,6 @@ describe('proxy in front of an https site (Herd, Valet)', () => {
 
   it('reaches the site over https with a certificate it trusts, and adds the overlay', async () => {
     const { execFileSync } = await import('node:child_process')
-    const { readFile } = await import('node:fs/promises')
     const { createServer: createHttps } = await import('node:https')
     // A site with its own certificate, as Herd makes one.
     execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost', '-keyout', join(gw, 'key.pem'), '-out', join(gw, 'cert.pem')], { stdio: 'ignore' })
@@ -586,7 +678,6 @@ describe('the Comment button loaded by the product itself', () => {
 
   it('keeps the sites allowed before the rename, when the folder was .groundwork', async () => {
     const { Sites } = await import('../src/server/sites.js')
-    const { readFile } = await import('node:fs/promises')
     const { resolve } = await import('node:path')
     const file = join(gw, '..', `sites-old-${Math.random()}.json`)
     const oldKey = join(resolve(gw), '..', '.groundwork')
@@ -599,7 +690,6 @@ describe('the Comment button loaded by the product itself', () => {
 
   it('keeps the project on the same port from one start to the next, out of git', async () => {
     const { rememberedPort, rememberPort } = await import('../src/store/local.js')
-    const { readFile } = await import('node:fs/promises')
     expect(await rememberedPort(gw)).toBeUndefined()
     await rememberPort(gw, 7778)
     expect(await rememberedPort(gw)).toBe(7778)

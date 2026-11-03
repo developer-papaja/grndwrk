@@ -332,7 +332,7 @@
     const text = el.getAttribute('aria-label') || labelled || el.getAttribute('alt') || el.getAttribute('title') || el.getAttribute('placeholder') || el.innerText || buttonValue(el) || ''
     return String(text).replace(/\s+/g, ' ').trim().slice(0, 80)
   }
-  /** What a field holds is never sent, only what a button input says on it (a typed card number or password stays in the page). */
+  /** What a field holds is never sent, only what a button input says on it (a typed card number or password stays in the page; the picture leaves fields empty too). */
   function buttonValue(el) {
     return el.tagName === 'INPUT' && /^(button|submit|reset)$/i.test(el.type) ? el.value : ''
   }
@@ -659,6 +659,16 @@
     if (clone.nodeType !== 1) return
     for (const attr of [...clone.attributes]) {
       if (!attr.namespaceURI && !/^[A-Za-z_][\w.-]*$/.test(attr.name)) clone.removeAttribute(attr.name)
+    }
+    // What a field holds stays in the page, in the picture too: the drawing copies typed values otherwise.
+    const tag = clone.tagName
+    if ((tag === 'INPUT' && !/^(button|submit|reset|checkbox|radio|image|color|range|hidden)$/i.test(clone.type)) || tag === 'TEXTAREA' || tag === 'SELECT') {
+      clone.removeAttribute('value')
+      try {
+        clone.value = ''
+      } catch {}
+      if (tag === 'TEXTAREA') clone.textContent = ''
+      if (tag === 'SELECT') for (const o of clone.options) o.removeAttribute('selected')
     }
   }
 

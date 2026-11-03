@@ -127,7 +127,8 @@ enum Inspector {
     }
 
     var list: [Found] = under.map { e in
-      Found(frame: e.frame, label: clean(e.object.accessibilityLabel ?? e.object.accessibilityValue), identifier: identifier(of: e.object), role: role(of: e.object.accessibilityTraits))
+      // A field's value is what was typed in it: never its label.
+      Found(frame: e.frame, label: clean(e.object.accessibilityLabel ?? (isTextEntry(e.object) ? nil : e.object.accessibilityValue)), identifier: identifier(of: e.object), role: role(of: e.object.accessibilityTraits))
     }
     for box in boxes {
       let texts = elements
@@ -300,10 +301,39 @@ enum Inspector {
     guard !area.isNull, area.width > 1, area.height > 1 else { return nil }
     let format = UIGraphicsImageRendererFormat()
     format.scale = min(2, window.screen.scale)
+    let fields = textFields(in: window)
     let image = UIGraphicsImageRenderer(bounds: area, format: format).image { _ in
       window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+      blank(fields)
     }
     return image.pngData()
+  }
+
+  /// Whether this is something a person types into: its value is what they typed.
+  static func isTextEntry(_ object: NSObject) -> Bool {
+    object is UITextField || (object as? UITextView)?.isEditable == true || object.accessibilityTraits.contains(.searchField)
+  }
+
+  /// Where the window's text fields are, to draw over what they hold. SwiftUI's
+  /// TextField, SecureField and TextEditor are UITextField and UITextView underneath.
+  static func textFields(in window: UIWindow) -> [CGRect] {
+    var found: [CGRect] = []
+    func visit(_ view: UIView) {
+      if view.isHidden || view.alpha < 0.01 { return }
+      if isTextEntry(view) {
+        found.append(view.convert(view.bounds, to: window))
+        return
+      }
+      view.subviews.forEach(visit)
+    }
+    visit(window)
+    return found
+  }
+
+  /// What a field holds stays on the phone: drawn as an empty box in pictures, as the web button does.
+  static func blank(_ fields: [CGRect]) {
+    UIColor.secondarySystemBackground.setFill()
+    for frame in fields { UIBezierPath(roundedRect: frame, cornerRadius: min(8, frame.height / 4)).fill() }
   }
 }
 #endif

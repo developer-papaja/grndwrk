@@ -144,7 +144,7 @@ async function main() {
     }
     if (lanUrls) {
       console.log(`Phones on this network can send comments: ${lanUrls.join(', ') || 'no network found'}`)
-      console.log(`  Pairing code: ${lanCode}. Enter it once on each phone. Delete .grndwrk/lan-code for a new one.`)
+      console.log(`  Pairing code: ${lanCode}. Enter it once on a phone, or allow the phone in the map. Delete .grndwrk/lan-code for a new code, .grndwrk/lan-devices.json to unpair every phone.`)
       console.log('  Only comments can be sent from there. The map stays on this Mac.')
     }
     console.log('Press Ctrl+C to stop.')

@@ -707,13 +707,14 @@
     <!-- Toolbar: add a thought, act on the open card, frame the map -->
     <div x-show="$store.gw.view === 'map'" class="pointer-events-none fixed bottom-5 flex justify-center px-4" :style="$store.gw.mapArea">
       <form
-        class="pointer-events-auto flex max-w-full items-center gap-1 rounded-2xl border border-line bg-panel p-1.5 shadow-lg shadow-shade/25"
+        class="pointer-events-auto flex max-w-full items-end gap-1 rounded-2xl border border-line bg-panel p-1.5 shadow-lg shadow-shade/25"
         @submit.prevent="$store.gw.submitCapture()"
       >
-        <!-- What Enter adds: a thought, or a story (from the open thought, or a new one) -->
-        <div class="flex shrink-0 rounded-xl bg-tint/5 p-0.5 text-xs" role="group" aria-label="Add a thought or a story">
-          <button type="button" id="capture-thought" class="rounded-lg px-2.5 py-1" :class="$store.gw.captureKind === 'thought' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a thought" @click="$store.gw.setCaptureKind('thought'); $refs.capture.focus()">Thought</button>
-          <button type="button" id="capture-story" class="rounded-lg px-2.5 py-1" :class="$store.gw.captureKind === 'story' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a story: from the open thought, or with a new thought it comes from" @click="$store.gw.setCaptureKind('story'); $refs.capture.focus()">Story</button>
+        <!-- What Enter adds: a thought, or a story (from the open thought, or a new one).
+             As tall as a one line field; with a longer thought it stays by its last line, like the tools. -->
+        <div class="flex h-10 shrink-0 rounded-xl bg-tint/5 p-1 text-xs" role="group" aria-label="Add a thought or a story">
+          <button type="button" id="capture-thought" class="flex items-center rounded-lg px-3" :class="$store.gw.captureKind === 'thought' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a thought" @click="$store.gw.setCaptureKind('thought'); $refs.capture.focus()">Thought</button>
+          <button type="button" id="capture-story" class="flex items-center rounded-lg px-3" :class="$store.gw.captureKind === 'story' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a story: from the open thought, or with a new thought it comes from" @click="$store.gw.setCaptureKind('story'); $refs.capture.focus()">Story</button>
         </div>
         <div class="flex min-w-0 items-center gap-2 rounded-xl bg-tint/5 px-3 py-1.5 focus-within:bg-tint/10">
           <template x-if="$store.gw.selected && !$store.gw.selected.error && $store.gw.captureLinked">
@@ -724,21 +725,25 @@
               </button>
             </span>
           </template>
-          <input
+          <!-- Widens with the text, then wraps and grows to five lines. Enter adds it. -->
+          <textarea
             id="capture"
             x-ref="capture"
             x-model="$store.gw.capture"
+            rows="1"
             autocomplete="off"
             spellcheck="false"
             :placeholder="$store.gw.captureKind === 'story' ? 'Add a story: what someone can do' : $store.gw.count === 0 ? 'Add your first thought' : 'Add a thought'"
             :title="$store.gw.captureKind === 'story' ? 'A story the open thought leads to, or a new one with its own thought' : 'Start with ? for a question or ! for a decision'"
-            class="w-[260px] min-w-0 bg-transparent py-1 text-[13px] text-fog placeholder:text-fog/40 focus:outline-none"
-          />
+            x-init="$watch('$store.gw.capture', () => $nextTick(() => fitCapture($el)))"
+            @keydown.enter.prevent="!$event.isComposing && $el.form.requestSubmit()"
+            class="block w-[260px] max-h-[calc(5*1.25rem+0.5rem)] min-w-0 resize-none bg-transparent py-1 text-[13px] leading-5 text-fog placeholder:text-fog/40 focus:outline-none"
+          ></textarea>
         </div>
 
-        <div class="mx-1 h-6 w-px bg-line"></div>
+        <div class="mx-1 mb-2 h-6 w-px bg-line"></div>
 
-        <div id="toolbar" class="flex items-center gap-0.5" :class="!($store.gw.selected && !$store.gw.selected.error) && 'tools-off'">
+        <div id="toolbar" class="flex h-10 items-center gap-0.5" :class="!($store.gw.selected && !$store.gw.selected.error) && 'tools-off'">
           <button type="button" class="tool" :class="$store.gw.mode === 'link' && 'tool-on'" title="Link to other cards ( L )" @click="$store.gw.toggleLinkMode()">
             <svg class="size-5"><use href="#i-link" /></svg>
           </button>
@@ -1038,7 +1043,24 @@
                           <span x-text="p.name"></span>
                         </button>
                       </template>
-                      <span x-show="!$store.gw.personas.length" class="text-fog/40">No personas yet. <button class="text-accent hover:underline" @click="$store.gw.setView('personas')">Add them in Personas</button>, or run /personas.</span>
+                      <!-- A persona that does not exist yet: named here, made, and put on this screen -->
+                      <template x-if="$store.gw.screenPersonaOpen">
+                        <input
+                          id="screen-new-persona"
+                          class="field w-44 py-0.5 text-[12px]"
+                          placeholder="New persona, like Receptionist"
+                          x-model="$store.gw.screenPersona"
+                          x-init="$nextTick(() => $el.focus())"
+                          @keydown.enter.prevent="$store.gw.addPersonaFromScreen()"
+                          @keydown.escape.stop="$store.gw.screenPersonaOpen = false; $store.gw.screenPersona = ''"
+                          @blur="$store.gw.screenPersona.trim() ? $store.gw.addPersonaFromScreen() : ($store.gw.screenPersonaOpen = false)"
+                        />
+                      </template>
+                      <button x-show="!$store.gw.screenPersonaOpen" class="flex items-center gap-1 rounded border border-dashed border-line px-1.5 py-0.5 text-fog/55 hover:border-tint/30 hover:text-fog" title="A new persona, for this screen" @click="$store.gw.screenPersonaOpen = true">
+                        <svg class="size-3"><use href="#i-plus" /></svg>
+                        <span>New persona</span>
+                      </button>
+                      <span x-show="!$store.gw.personas.length && !$store.gw.screenPersonaOpen" class="text-fog/40">or run /personas.</span>
                     </div>
                     <p x-show="$store.gw.screen.audience.some((a) => !$store.gw.personaFor(a))" class="mt-1.5 text-[11.5px] text-question">
                       <span x-text="'Not a persona yet: ' + $store.gw.screen.audience.filter((a) => !$store.gw.personaFor(a)).join(', ') + '. '"></span>

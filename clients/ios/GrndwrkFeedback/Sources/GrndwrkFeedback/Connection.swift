@@ -29,6 +29,7 @@ enum Connection {
   }
 
   static func start() {
+    Pairing.dropCodes()
     NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
       MainActor.assumeIsolated { resume() }
     }
@@ -59,12 +60,8 @@ enum Connection {
       return set(.offline(Locator.problem ?? "No grndwrk found on this Wi-Fi."))
     }
     let host = server.host ?? ""
-    // Never send the code first: anything on the Wi-Fi can call itself
-    // grndwrk. grndwrk proves it knows the code, and only then does
-    // this phone send it, and comments and pictures with it.
-    let challenge = Pairing.newChallenge()
     let first: [String: Any]
-    switch await hello(server, challenge: challenge) {
+    switch await hello(server) {
     case .answer(let answer): first = answer
     case .failed(let why):
       gwLog.error("Hello to \(server.absoluteString, privacy: .public) failed: \(why, privacy: .public)")
@@ -72,16 +69,29 @@ enum Connection {
       return set(.offline("grndwrk at \(host) did not answer: \(why)."))
     }
     let project = first["project"] as? String ?? ""
-    // This Mac, from the Simulator: nothing travels over the network, no code needed.
+    // This Mac, from the Simulator: nothing travels over the network, no key needed.
     if isThisMac(server), first["paired"] == nil { return set(.connected(project: project, host: host)) }
-    if let code = Pairing.proven(by: first["proof"] as? String, challenge: challenge, project: project) {
-      Pairing.current = code
-      Pairing.save(code, for: project)
+    // Anything on the Wi-Fi can call itself grndwrk. Comments and pictures go
+    // only to a grndwrk that proves it holds this phone's key; the key itself
+    // is never sent, every request is signed with it instead.
+    if let key = await proves(server, project: project) {
+      Pairing.current = key
       return set(.connected(project: project, host: host))
     }
-    if first["proof"] == nil { gwLog.error("\(host, privacy: .public) gave no proof: an older grndwrk, or not grndwrk") }
     Pairing.current = nil
     set(.needsCode(project: project, host: host))
+  }
+
+  /// The key this phone keeps for the project, if the grndwrk at this address proves it holds it too.
+  private static func proves(_ server: URL, project: String) async -> String? {
+    guard let key = Pairing.key(for: project) else { return nil }
+    let challenge = Pairing.newChallenge()
+    guard case .answer(let answer) = await hello(server, challenge: challenge, device: Pairing.deviceId(key)) else { return nil }
+    guard let proof = answer["proof"] as? String, Pairing.proof(key, challenge) == proof.lowercased() else {
+      gwLog.error("\(server.host ?? "", privacy: .public) did not prove it knows this phone: not the grndwrk it paired with, or it was unpaired")
+      return nil
+    }
+    return key
   }
 
   /// localhost, which in the Simulator is the Mac itself.
@@ -93,11 +103,10 @@ enum Connection {
     #endif
   }
 
-  /// Whether the grndwrk at this address proves it knows a code this phone keeps.
-  static func knowsOurCode(_ server: URL) async -> Bool {
-    let challenge = Pairing.newChallenge()
-    guard case .answer(let answer) = await hello(server, challenge: challenge) else { return false }
-    return Pairing.proven(by: answer["proof"] as? String, challenge: challenge, project: answer["project"] as? String ?? "") != nil
+  /// Whether the grndwrk at this address proves it holds the key this phone keeps for its project.
+  static func knowsUs(_ server: URL) async -> Bool {
+    guard case .answer(let answer) = await hello(server) else { return false }
+    return await proves(server, project: answer["project"] as? String ?? "") != nil
   }
 
   enum Hello {
@@ -105,10 +114,10 @@ enum Connection {
     case failed(String)
   }
 
-  /// What /api/hello says, or why it said nothing. Never sends the code.
-  private static func hello(_ server: URL, challenge: String? = nil) async -> Hello {
+  /// What /api/hello says, or why it said nothing. Never sends the key, only which one, by a hash of it.
+  private static func hello(_ server: URL, challenge: String? = nil, device: String? = nil) async -> Hello {
     var parts = URLComponents(url: server.appendingPathComponent("api/hello"), resolvingAgainstBaseURL: false)
-    if let challenge { parts?.queryItems = [URLQueryItem(name: "challenge", value: challenge)] }
+    if let challenge, let device { parts?.queryItems = [URLQueryItem(name: "challenge", value: challenge), URLQueryItem(name: "device", value: device)] }
     guard let url = parts?.url else { return .failed("a bad address") }
     var request = URLRequest(url: url)
     request.timeoutInterval = 4
@@ -145,7 +154,7 @@ enum Connection {
     }
   }
 
-  /// grndwrk turned a request down for want of the code: ask for it again.
+  /// grndwrk turned a request down: it does not know this phone (any more). Pair again.
   static func codeRefused() {
     Pairing.current = nil
     Task { await check() }
@@ -177,71 +186,91 @@ enum Connection {
     }
   }
 }
-/// The pairing code `grndwrk --lan` prints, entered once per project and
-/// kept on the device. Sent with every request on the network.
+/// Pairing with `grndwrk --lan`: the person allows this phone in the map on
+/// the Mac (or types the code the terminal shows, once), and grndwrk gives
+/// the phone its own long random key, kept here per project. The key is
+/// never sent again: grndwrk proves it holds it, and every request is signed
+/// with it, so a recording or a fake grndwrk on the Wi-Fi gets nothing to reuse.
 @MainActor
 enum Pairing {
-  static let header = "X-Grndwrk-Code"
-  private static let key = "GrndwrkFeedback.codes"
-  /// The code grndwrk accepted last, sent with every request.
+  private static let storeKey = "GrndwrkFeedback.keys"
+  /// The key of the grndwrk this phone talks to, which signs every request.
   static var current: String?
 
-  private static var codes: [String: String] {
-    get { UserDefaults.standard.dictionary(forKey: key) as? [String: String] ?? [:] }
-    set { UserDefaults.standard.set(newValue, forKey: key) }
+  private static var keys: [String: String] {
+    get { UserDefaults.standard.dictionary(forKey: storeKey) as? [String: String] ?? [:] }
+    set { UserDefaults.standard.set(newValue, forKey: storeKey) }
   }
 
-  static func code(for project: String) -> String? { codes[project] }
+  static func key(for project: String) -> String? { keys[project] }
 
-  static func save(_ code: String, for project: String) {
-    let clean = code.uppercased().filter { $0.isLetter || $0.isNumber }
-    guard !clean.isEmpty else { return }
-    codes[project] = clean
+  static func save(_ key: String, for project: String) {
+    guard key.count == 64, key.allSatisfy(\.isHexDigit) else { return }
+    keys[project] = key.lowercased()
   }
 
-  static func forget(_ project: String) { codes[project] = nil }
+  static func forget(_ project: String) { keys[project] = nil }
 
-  /// A one-time word for /api/hello to prove the code with.
+  /// Codes kept before keys: grndwrk no longer takes them, so each phone pairs once more.
+  static func dropCodes() { UserDefaults.standard.removeObject(forKey: "GrndwrkFeedback.codes") }
+
+  /// A one-time word for /api/hello to prove the key with.
   static func newChallenge() -> String {
     (UUID().uuidString + UUID().uuidString).replacingOccurrences(of: "-", with: "")
   }
 
-  /// The code this phone keeps that grndwrk's proof was made with, if any:
-  /// the one in use, the one kept for this project, then any other.
-  static func proven(by proof: String?, challenge: String, project: String) -> String? {
-    guard let proof, !proof.isEmpty else { return nil }
-    var tried = Set<String>()
-    for code in [current, code(for: project)].compactMap({ $0 }) + codes.values.sorted() where tried.insert(code).inserted {
-      if self.proof(code, challenge) == proof.lowercased() { return code }
-    }
-    return nil
+  /// Which key this phone signs with, as grndwrk knows it: a hash, so it tells nobody the key.
+  static func deviceId(_ key: String) -> String {
+    String(hex(SHA256.hash(data: Data("grndwrk-device:\(key)".utf8))).prefix(32))
   }
 
-  private static func proof(_ code: String, _ challenge: String) -> String {
-    let mac = HMAC<SHA256>.authenticationCode(for: Data("grndwrk-hello:\(challenge)".utf8), using: SymmetricKey(data: Data(code.utf8)))
-    return mac.map { String(format: "%02x", $0) }.joined()
+  static func proof(_ key: String, _ challenge: String) -> String {
+    hex(HMAC<SHA256>.authenticationCode(for: Data("grndwrk-hello:\(challenge)".utf8), using: SymmetricKey(data: Data(key.utf8))))
+  }
+
+  private static func hex<D: Sequence>(_ bytes: D) -> String where D.Element == UInt8 {
+    bytes.map { String(format: "%02x", $0) }.joined()
   }
 
   /// The four digits grndwrk shows next to this request in the map, worked out the same way from the secret.
   static func checkDigits(_ secret: String) -> String {
-    let hash = SHA256.hash(data: Data("grndwrk-pair:\(secret)".utf8)).map { String(format: "%02x", $0) }.joined()
+    let hash = hex(SHA256.hash(data: Data("grndwrk-pair:\(secret)".utf8)))
     let n = UInt64(hash.prefix(8), radix: 16) ?? 0
     return String(format: "%04d", n % 10000)
   }
 
+  /// Signs a request with the key, the same lines in the same order as src/server/devices.ts:
+  /// the method, the path, the time, a nonce and a hash of the body. Call it after setting the body.
   static func sign(_ request: inout URLRequest) {
-    if let current { request.setValue(current, forHTTPHeaderField: header) }
+    guard let current, let url = request.url else { return }
+    let method = (request.httpMethod ?? "GET").uppercased()
+    let time = String(Int64(Date().timeIntervalSince1970 * 1000))
+    let nonce = UUID().uuidString + UUID().uuidString.prefix(8)
+    let body = hex(SHA256.hash(data: request.httpBody ?? Data()))
+    let line = "grndwrk-request\n\(method)\n\(url.path)\n\(time)\n\(nonce)\n\(body)"
+    let mac = hex(HMAC<SHA256>.authenticationCode(for: Data(line.utf8), using: SymmetricKey(data: Data(current.utf8))))
+    request.setValue(deviceId(current), forHTTPHeaderField: "X-Grndwrk-Device")
+    request.setValue(time, forHTTPHeaderField: "X-Grndwrk-Time")
+    request.setValue(nonce, forHTTPHeaderField: "X-Grndwrk-Nonce")
+    request.setValue(mac, forHTTPHeaderField: "X-Grndwrk-Signature")
   }
 
-  enum Asked { case allowed(code: String, digits: String), denied, noBrowser, unanswered }
+  /// The code typed from the terminal, for a key of this phone's own. Wrong codes lock out for a while.
+  static func pair(code: String) async -> String? {
+    guard let server = await Locator.url() else { return nil }
+    let answer = await call(server, "api/pair/code", ["code": code, "device": UIDevice.current.name])
+    return answer?["key"] as? String
+  }
+
+  enum Asked { case allowed(key: String, digits: String), denied, noBrowser, unanswered }
 
   /// Ask the person at the Mac to allow this phone. grndwrk shows the
   /// request in the map with four digits, which `asking` gets too, to show
-  /// here. Once allowed, the code comes back; it is kept only after the
+  /// here. Once allowed, this phone's key comes back; it is kept only after the
   /// person confirms they allowed it next to those digits. Waits up to three minutes.
   static func ask(project: String, asking: (String) -> Void) async -> Asked {
     guard let server = await Locator.url() else { return .unanswered }
-    // Known only to this phone: grndwrk tells the code to whoever holds it.
+    // Known only to this phone: grndwrk tells the key to whoever holds it.
     let secret = UUID().uuidString + "-" + UUID().uuidString.prefix(8)
     let digits = checkDigits(secret)
     let app = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
@@ -254,8 +283,8 @@ enum Pairing {
       guard let answer = await call(server, "api/pair/status", ["request": secret]) else { continue }
       switch answer["status"] as? String {
       case "allowed":
-        guard let code = answer["code"] as? String else { return .unanswered }
-        return .allowed(code: code, digits: digits)
+        guard let key = answer["key"] as? String else { return .unanswered }
+        return .allowed(key: key, digits: digits)
       case "denied": return .denied
       case "waiting": continue
       default: return .unanswered

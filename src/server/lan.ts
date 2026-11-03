@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto'
+import { randomInt, timingSafeEqual } from 'node:crypto'
 import { readFile, writeFile } from '../store/fs.js'
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import { networkInterfaces } from 'node:os'
@@ -7,7 +7,9 @@ import { join } from 'node:path'
 import { clientCount } from './events.js'
 import { handleComments, readAll, type CommentsCtx } from './comments.js'
 import type { Pairings } from './pairing.js'
+import type { Devices } from './devices.js'
 import { keepOutOfGit } from '../store/gitignore.js'
+import { cleanText } from '../shared/text.js'
 
 /** A comment with its picture is well under this. */
 export const LAN_LIMIT = 4_000_000
@@ -15,17 +17,22 @@ export const LAN_LIMIT = 4_000_000
 const HOUR_BUDGET = 200_000_000
 /** Wrong codes one device may try in ten minutes. */
 const WRONG_TRIES = 10
+/** Wrong codes the whole network may try in an hour, however many addresses it uses. Asking in the map still works after. */
+const WRONG_PER_HOUR = 30
 
 /**
  * What devices on the same network can reach, when `--lan` is on: they can
- * see that grndwrk is there, and with the pairing code add a comment, and
- * ask about or delete their own comments by the key they made for each.
+ * see that grndwrk is there, and once paired add a comment, and ask about
+ * or delete their own comments by the key they made for each. Pairing gives
+ * a phone its own key (devices.ts), by the person allowing it in the map or
+ * by typing the code once; every later request is signed with it.
  * Nothing else. The map, the API and the files stay on this machine only.
  */
-export function createLanServer(ctx: CommentsCtx, code: string, pairings?: Pairings): Server {
+export function createLanServer(ctx: CommentsCtx, code: string, devices: Devices, pairings?: Pairings): Server {
   const lan: CommentsCtx = { ...ctx, via: 'lan', limit: LAN_LIMIT }
   const recent = new Map<string, number[]>()
   const wrong = new Map<string, number[]>()
+  let wrongAll: number[] = []
   let spent: { at: number; bytes: number }[] = []
   return createServer(async (req, res) => {
     // Phones reach this by an address or a .local name. A web page that points
@@ -40,30 +47,41 @@ export function createLanServer(ctx: CommentsCtx, code: string, pairings?: Pairi
     if (times.length >= 120) return json(res, 429, { error: 'Too many requests at once. Try again in a minute.' })
     recent.set(ip, [...times, now])
 
-    // A device that keeps guessing the code gets no more answers to its guesses
-    // for a while. The right code still works, so nobody is shut out by a neighbour.
-    const sent = req.headers['x-grndwrk-code']
-    const paired = typeof sent === 'string' && sameCode(sent, code)
-    if (typeof sent === 'string' && sent && !paired) {
-      const misses = (wrong.get(ip) ?? []).filter((t) => now - t < 600_000)
-      if (misses.length >= WRONG_TRIES) return json(res, 429, { error: 'Too many wrong codes. Try again in ten minutes.' })
-      wrong.set(ip, [...misses, now])
+    // A device that keeps guessing gets no more answers to its guesses for a
+    // while, and so does the whole network after enough wrong ones in an hour.
+    const missed = () => {
+      wrong.set(ip, [...(wrong.get(ip) ?? []).filter((t) => now - t < 600_000), now])
+      wrongAll = [...wrongAll.filter((t) => now - t < 3_600_000), now]
     }
+    const guessedTooOften = () =>
+      (wrong.get(ip) ?? []).filter((t) => now - t < 600_000).length >= WRONG_TRIES || wrongAll.filter((t) => now - t < 3_600_000).length >= WRONG_PER_HOUR
 
     const url = new URL(req.url ?? '/', 'http://x')
     const path = url.pathname
     if (path === '/api/hello' && req.method === 'GET') {
-      // Answers without the code, so the phone can tell grndwrk is there and ask for it.
-      // With ?challenge=, it also proves it knows the code without sending it: a
-      // phone sends its code and comments only to a grndwrk that can.
-      const challenge = url.searchParams.get('challenge') ?? ''
-      const proof = /^[A-Za-z0-9-]{16,64}$/.test(challenge) ? helloProof(code, challenge) : undefined
-      return json(res, 200, { grndwrk: true, project: ctx.project, paired, ...(proof ? { proof } : {}) })
+      // Answers without a key, so the phone can tell grndwrk is there and ask to pair.
+      // With ?device= and ?challenge=, it also proves it holds that phone's key without
+      // sending it: a phone sends comments only to a grndwrk that can. The key is long
+      // and random, so a recorded proof lets nobody work it out.
+      const device = url.searchParams.get('device')
+      const proof = devices.proof(device, url.searchParams.get('challenge') ?? '')
+      return json(res, 200, { grndwrk: true, project: ctx.project, paired: !!devices.byId(device), ...(proof ? { proof } : {}) })
     }
-    // Asking the person at the Mac to allow this phone, which then gets the code. Needs no code.
-    if (pairings && req.method === 'POST' && (path === '/api/pair' || path === '/api/pair/status')) {
+    // Pairing: asking the person at the Mac to allow this phone, or typing the code once.
+    // Either gives the phone its own key. Needs no key.
+    if (req.method === 'POST' && (path === '/api/pair' || path === '/api/pair/status' || path === '/api/pair/code')) {
       try {
         const body = JSON.parse((await readAll(req, 10_000)).toString('utf8'))
+        if (path === '/api/pair/code') {
+          if (guessedTooOften()) return json(res, 429, { error: 'Too many wrong codes. Try again later, or allow this phone in grndwrk on the Mac.' })
+          if (typeof body?.code !== 'string' || !sameCode(body.code, code)) {
+            missed()
+            return json(res, 401, { error: 'That is not the code grndwrk shows', code_needed: true })
+          }
+          const name = typeof body.device === 'string' ? cleanText(body.device).trim().slice(0, 60) : ''
+          return json(res, 200, { key: await devices.add(name || 'A phone') })
+        }
+        if (!pairings) return json(res, 404, { error: 'Pair by typing the code grndwrk shows' })
         if (path === '/api/pair/status') return json(res, 200, pairings.status(body))
         const asked = pairings.ask(body, ip)
         if (!asked) return json(res, 429, { error: 'grndwrk is not taking this request. Try again in a few minutes.' })
@@ -72,23 +90,30 @@ export function createLanServer(ctx: CommentsCtx, code: string, pairings?: Pairi
         return json(res, 400, { error: 'Send { request, device, app }' })
       }
     }
-    if (!paired) return json(res, 401, { error: 'Allow this phone in grndwrk on the Mac, or enter the code it shows in the terminal', code_needed: true })
-
-    if (req.method === 'POST') {
-      const length = Number(req.headers['content-length'])
-      if (!Number.isFinite(length)) return json(res, 411, { error: 'Send a Content-Length' })
-      if (length > LAN_LIMIT) return json(res, 413, { error: 'Too large' })
-      spent = spent.filter((s) => now - s.at < 3_600_000)
-      if (spent.reduce((sum, s) => sum + s.bytes, 0) + length > HOUR_BUDGET) return json(res, 429, { error: 'Enough comments for this hour. Try again later.' })
-      spent.push({ at: now, bytes: length })
+    // Everything else is signed by a paired phone. A phone from before keys sends its code instead: it must pair again.
+    const unpaired = { error: 'Allow this phone in grndwrk on the Mac, or enter the code it shows in the terminal', code_needed: true }
+    if (req.method !== 'POST') return json(res, req.headers['x-grndwrk-device'] ? 404 : 401, req.headers['x-grndwrk-device'] ? { error: 'Only comments can be sent here' } : unpaired)
+    if (guessedTooOften() && !devices.byId(req.headers['x-grndwrk-device'])) return json(res, 429, { error: 'Too many wrong tries. Try again in ten minutes.' })
+    const length = Number(req.headers['content-length'])
+    if (!Number.isFinite(length)) return json(res, 411, { error: 'Send a Content-Length' })
+    if (length > LAN_LIMIT) return json(res, 413, { error: 'Too large' })
+    spent = spent.filter((s) => now - s.at < 3_600_000)
+    if (spent.reduce((sum, s) => sum + s.bytes, 0) + length > HOUR_BUDGET) return json(res, 429, { error: 'Enough comments for this hour. Try again later.' })
+    let body: Buffer
+    try {
+      body = await readAll(req, LAN_LIMIT)
+    } catch {
+      return json(res, 413, { error: 'Too large' })
     }
-    if (!(await handleComments(req, res, lan))) json(res, 404, { error: 'Only comments can be sent here' })
+    const from = devices.verify(req.headers, 'POST', path, body, now)
+    if (from === 'unsigned') return json(res, 401, unpaired)
+    if (from === 'refused') {
+      missed()
+      return json(res, 401, { ...unpaired, error: 'grndwrk does not know this phone, or the request was changed. Pair it again.' })
+    }
+    spent.push({ at: now, bytes: length })
+    if (!(await handleComments(req, res, lan, body))) json(res, 404, { error: 'Only comments can be sent here' })
   })
-}
-
-/** HMAC-SHA256 of the challenge, keyed by the code, as hex. The phone works out the same with the code it keeps. */
-export function helloProof(code: string, challenge: string): string {
-  return createHmac('sha256', code).update(`grndwrk-hello:${challenge}`).digest('hex')
 }
 
 /** An address, or a .local name: what a phone on the network uses. Never a domain a web page could own. */

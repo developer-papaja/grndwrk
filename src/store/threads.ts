@@ -83,7 +83,11 @@ export async function saveBody(gwDir: string, owner: string, fileBody: string, n
   }
   const added = entries.slice(before.length)
   if (added.length) await mkdir(folder(gwDir, owner), { recursive: true })
-  let ms = Date.now()
+  // After the newest entry, even one named later than the clock says (written
+  // by hand or by an agent that guessed the time): an answer always comes
+  // after the question it answers.
+  const newest = files.reduce((max, f) => Math.max(max, Number(ENTRY_FILE.exec(f.file)?.[1] ?? 0)), 0)
+  let ms = Math.max(Date.now(), newest + 1)
   for (const e of added) {
     const name = `${ms++}-${ALPHABET[randomInt(36)]}${ALPHABET[randomInt(36)]}.md`
     const tmp = join(folder(gwDir, owner), `.${name}.tmp`)

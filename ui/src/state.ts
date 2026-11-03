@@ -1133,6 +1133,8 @@ export const state = Alpine.reactive({
     this.screenId = id
     this.screenReply = ''
     this.screenStatus = ''
+    this.screenPersonaOpen = false
+    this.screenPersona = ''
     store('grndwrk.screen', id)
   },
   /** Save what the person changed: purpose, who it is for, or what they do there. */
@@ -1500,6 +1502,31 @@ export const state = Alpine.reactive({
     const s = this.screen
     if (!s) return
     await this.saveScreen('audience', [...s.audience, p.name].join(', '))
+  },
+  /** A new persona named from the open screen's "Who it is for", put on that screen. */
+  screenPersonaOpen: false,
+  screenPersona: '',
+  async addPersonaFromScreen() {
+    const name = this.screenPersona.trim()
+    if (!name || this.sending) return
+    this.sending = true
+    try {
+      // A name that is a persona already is linked, not made twice.
+      let p = this.personaFor(name)
+      const made = !p
+      if (!p) {
+        p = await createPersona({ name })
+        this.putPersona(p)
+      }
+      this.screenPersona = ''
+      this.screenPersonaOpen = false
+      if (!this.screen?.audience.some((a) => personaNamed(a, [p]))) await this.addPersonaToScreen(p)
+      this.flash(made ? `${p.name} is a persona now, for this screen` : `For ${p.name} too`)
+    } catch (err) {
+      this.flash(errorText(err))
+    } finally {
+      this.sending = false
+    }
   },
   async removeFromScreen(name: string) {
     const s = this.screen
@@ -2948,7 +2975,8 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'IMG' && !LOCAL_SRC.test(node.getAttribute('src') ?? '')) node.removeAttribute('src')
   if (node.tagName === 'A') {
     const href = node.getAttribute('href') ?? ''
-    if (/^(https?:|\/\/)/i.test(href)) {
+    // A path starting with a backslash after the slash is read as '//host' by browsers: outside too.
+    if (/^(https?:|[\/\\]{2})/i.test(href)) {
       node.setAttribute('target', '_blank')
       node.setAttribute('rel', 'noopener noreferrer')
     } else if (href && !/^(#|\/|\.)/.test(href)) node.removeAttribute('href')
@@ -2959,9 +2987,41 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-/** Node ids in rendered text, like (n_bz8p), become links to the thought. Text only, never inside tags. */
+const NODE_ID = /\b(n_[a-z0-9]{4,8})\b/g
+
+/**
+ * Node ids in rendered text, like (n_bz8p), become links to the thought.
+ * Done on the parsed text nodes, never on the HTML as a string: a rewrite of
+ * sanitized markup can turn an attribute's text into live markup again.
+ */
 function linkIds(html: string): string {
-  return html.replace(/(<[^>]*>)|\b(n_[a-z0-9]{4,8})\b/g, (m, tag, id) => (tag ? tag : `<a href="#" class="node-link" data-node="${id}">${id}</a>`))
+  if (!html.includes('n_')) return html
+  const t = document.createElement('template')
+  t.innerHTML = html
+  const walk = document.createTreeWalker(t.content, NodeFilter.SHOW_TEXT)
+  const texts: Text[] = []
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (!(n.parentElement?.closest('a, code, pre')) && NODE_ID.test((n as Text).data)) texts.push(n as Text)
+    NODE_ID.lastIndex = 0
+  }
+  for (const text of texts) {
+    const parts = text.data.split(NODE_ID)
+    const frag = document.createDocumentFragment()
+    parts.forEach((part, i) => {
+      if (i % 2 === 0) {
+        if (part) frag.append(part)
+        return
+      }
+      const a = document.createElement('a')
+      a.href = '#'
+      a.className = 'node-link'
+      a.dataset.node = part
+      a.textContent = part
+      frag.append(a)
+    })
+    text.replaceWith(frag)
+  }
+  return t.innerHTML
 }
 
 function stripFrontmatter(text: string): string {

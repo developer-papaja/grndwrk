@@ -10,7 +10,23 @@ applyTheme(state.theme)
 // A handle for poking at the map from the browser console.
 Object.assign(window, { grndwrk: { state } })
 
-bindKeys(() => document.querySelector<HTMLInputElement>('#capture'), {
+// The Add bar grows with what is typed: wider with each character up to a
+// limit, then a line at a time up to five (its max-height), then it scrolls.
+// Growing smoothly, never in a step, so the text does not jump.
+const measure = document.createElement('canvas').getContext('2d')
+Object.assign(window, {
+  fitCapture(el: HTMLTextAreaElement) {
+    if (measure) {
+      measure.font = getComputedStyle(el).font
+      const text = measure.measureText(el.value.replace(/\s+/g, ' ')).width
+      el.style.width = `${Math.min(420, Math.max(260, Math.ceil(text) + 4))}px`
+    }
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  },
+})
+
+bindKeys(() => document.querySelector<HTMLTextAreaElement>('#capture'), {
   layout: () => state.cycleLayout(),
 })
 Alpine.start()

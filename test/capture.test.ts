@@ -22,6 +22,9 @@ describe('parseCapture', () => {
     expect(parseCapture('?')).toBeNull()
     expect(parseCapture('!   ')).toBeNull()
   })
+  it('makes one line of a title pasted over several', () => {
+    expect(parseCapture('Booking should\nfeel like\r\n  texting ')).toEqual({ title: 'Booking should feel like texting' })
+  })
 })
 
 describe('sameTitle', () => {

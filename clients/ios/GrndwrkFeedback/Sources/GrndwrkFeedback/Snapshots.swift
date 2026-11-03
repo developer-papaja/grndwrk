@@ -73,8 +73,10 @@ enum Snapshots {
     let key = screen.component ?? screen.name
     let format = UIGraphicsImageRendererFormat()
     format.scale = min(2, window.screen.scale)
+    let fields = Inspector.textFields(in: window)
     let image = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
       window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+      Inspector.blank(fields)
     }
     guard let jpeg = image.jpegData(compressionQuality: 0.6) else { return }
     contents.texts = Array(contents.texts.prefix(60))

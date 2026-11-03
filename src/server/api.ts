@@ -73,7 +73,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     const pairMatch = url.pathname.match(/^\/api\/pair\/(pair_[a-f0-9]{12})$/)
     if (pairMatch && method === 'POST') {
       const body = (await readBody(req)) as { allow?: unknown }
-      if (!ctx.pairings?.answer(pairMatch[1], body.allow === true)) throw new NotFound(pairMatch[1])
+      if (!(await ctx.pairings?.answer(pairMatch[1], body.allow === true))) throw new NotFound(pairMatch[1])
       return send(res, 200, { ok: true })
     }
     // Local sites asking to send comments, answered in the map. Only from the map's own page.

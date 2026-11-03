@@ -74,13 +74,14 @@ enum Locator {
       return nil
     }
     let last = UserDefaults.standard.string(forKey: lastProjectKey)
-    let rank = { (s: Browse.Service) -> Int in s.project == last ? 0 : Pairing.code(for: s.project) != nil ? 1 : 2 }
+    let rank = { (s: Browse.Service) -> Int in s.project == last ? 0 : Pairing.key(for: s.project) != nil ? 1 : 2 }
     let ordered = services.sorted { rank($0) < rank($1) }
     gwLog.info("Found \(ordered.count) adverts: \(ordered.map { "\($0.name) [\($0.project)]" }.joined(separator: ", "), privacy: .public)")
 
     var problems: [String] = []
-    // A grndwrk that proves it knows a code this phone keeps comes first:
-    // another advert under the same project name cannot.
+    // A grndwrk that proves it holds this phone's key comes first:
+    // another advert under the same project name cannot (relaying its proof
+    // gets it nothing: requests are signed, never carry the key).
     var answering: [URL] = []
     for service in ordered {
       switch await Resolve.url(of: service.endpoint) {
@@ -94,15 +95,15 @@ enum Locator {
           problems.append("\u{201C}\(service.name)\u{201D} at \(url.host ?? ""): \(why)")
           continue
         }
-        if await Connection.knowsOurCode(url) {
-          gwLog.info("Using \(service.name, privacy: .public) at \(url.absoluteString, privacy: .public): it knows our code")
+        if await Connection.knowsUs(url) {
+          gwLog.info("Using \(service.name, privacy: .public) at \(url.absoluteString, privacy: .public): it knows this phone")
           return url
         }
         answering.append(url)
       }
     }
     if let url = answering.first {
-      gwLog.info("Using \(url.absoluteString, privacy: .public): none proved a code this phone keeps")
+      gwLog.info("Using \(url.absoluteString, privacy: .public): none proved it knows this phone")
       return url
     }
     problem = "Found grndwrk on the network, but none answered.\n" + problems.joined(separator: "\n")

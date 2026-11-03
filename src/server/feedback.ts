@@ -5,8 +5,6 @@ import type { GNode, Story } from '../shared/types.js'
 import { feedbackState } from '../shared/feedback.js'
 import { appendEntry, splitBody } from '../shared/thread.js'
 import { cleanText } from '../shared/text.js'
-import { writeFile } from '../store/fs.js'
-import { join } from 'node:path'
 
 /**
  * A comment left on the running product, from the web overlay or the iOS
@@ -158,9 +156,8 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
   const image = decodeImage(input.image)
   if (image) {
     try {
+      // Committed with the comment, so the team sees what it is about.
       const { markdown } = await saveImage(gwDir, node.id, image.type, image.data)
-      // A picture of the running app can show real data: kept on this Mac, out of git.
-      await writeFile(join(gwDir, 'files', node.id, '.gitignore'), '*\n').catch(() => {})
       node = (await store.update(node.id, { body: `${node.body.replace(/\n+$/, '')}\n\n${markdown}\n` })).upserted[0]
     } catch {
       // The comment matters more than the picture. Keep it without.
@@ -197,7 +194,7 @@ export async function feedbackStatus(
   const nodes = new Map((await store.list()).map((n) => [n.id, n]))
   return asks(body).map(({ id, key }) => {
     const n = nodes.get(id)
-    if (!n || n.extra?.key !== key) return { id, gone: true as const }
+    if (!n || n.extra?.source !== 'app' || n.extra?.key !== key) return { id, gone: true as const }
     // The phone shows any status but open as a word next to the comment.
     const state = feedbackState(n) ?? 'incoming'
     const { fix, test } = state === 'incoming' ? { fix: '', test: '' } : lastFix(n.body)
@@ -244,7 +241,8 @@ export async function testedOnDevice(store: NodeStore, body: unknown): Promise<{
   const done: { id: string; state: 'fixed' | 'incoming' }[] = []
   for (const { id, key } of asks(body)) {
     const n = nodes.get(id)
-    if (!n || n.extra?.source !== 'app' || n.extra?.key !== key) continue
+    // Only a built fix is tested, as on the web (webTestOf).
+    if (!n || n.extra?.source !== 'app' || n.extra?.key !== key || feedbackState(n) !== 'ready') continue
     done.push({ id, state: await settle(store, n, b.works, b.note, 'on the phone') })
   }
   return done

@@ -26,7 +26,7 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
     await mkdir(join(gw, dir), { recursive: true })
   }
   // What belongs to this machine stays out of git from the start, before anything writes it.
-  for (const entry of ['local.json', 'lan-code', 'shots/']) await keepOutOfGit(gw, entry)
+  for (const entry of ['local.json', 'lan-code', 'lan-devices.json', 'shots/']) await keepOutOfGit(gw, entry)
 
   // New or existing decides the steps grndwrk guides through. Ask once; keep the answer.
   const known = (await readProject(gw)).data.start

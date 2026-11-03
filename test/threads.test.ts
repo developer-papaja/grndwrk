@@ -53,6 +53,19 @@ describe('thread entries in files of their own', () => {
     expect(await entryFiles(n.id)).toEqual([])
   })
 
+  it('names an answer after a question an agent named later than the clock', async () => {
+    const n = (await store.create({ title: 'Fade' })).upserted[0]
+    await mkdir(join(gw, 'threads', n.id), { recursive: true })
+    // Ten minutes ahead: the agent guessed the time.
+    const ahead = Date.now() + 600_000
+    await writeFile(join(gw, 'threads', n.id, `${ahead}-f9.md`), '---\nwho: claude-asks\ndate: 2026-11-03\n---\nInto white or gray?\n')
+    const asked = await store.get(n.id)
+    const answered = (await store.update(n.id, { body: appendEntry(asked.body, 'you', 'White', '2026-11-03') })).upserted[0]
+    expect(splitBody(answered.body).entries.map((e) => e.text)).toEqual(['Into white or gray?', 'White'])
+    expect(questions(answered.body)[0].open).toBe(false)
+    expect((await entryFiles(n.id)).sort()[1]).toMatch(new RegExp(`^${ahead + 1}-`))
+  })
+
   it('does the same for a screen', async () => {
     await mkdir(join(gw, 'screens'), { recursive: true })
     await writeFile(join(gw, 'screens', 'p_home.md'), '---\nid: p_home\ntitle: Home\n---\nWhat is on it.\n\n## Thread\n\n**Claude asks** · 2026-10-14\nWho is it for?\n')

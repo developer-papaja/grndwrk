@@ -322,7 +322,7 @@ final class OverlayController: UIViewController {
       }
       pairing = false
       switch asked {
-      case .allowed(let code, let digits): confirmPairing(project: project, code: code, digits: digits)
+      case .allowed(let key, let digits): confirmPairing(project: project, key: key, digits: digits)
       case .denied: flash("Not allowed on the Mac. Long press the grndwrk button to ask again.")
       case .noBrowser: askForCode(message: "Open grndwrk in the browser on the Mac to allow this phone, or enter the code it shows in the terminal.")
       case .unanswered: askForCode(message: "Nobody answered on the Mac. Enter the code grndwrk shows in the terminal, or ask again.")
@@ -332,7 +332,7 @@ final class OverlayController: UIViewController {
 
   /// Something on the Wi-Fi could answer as grndwrk and allow at once.
   /// Only the person knows whether they clicked Allow on their own Mac.
-  private func confirmPairing(project: String, code: String, digits: String) {
+  private func confirmPairing(project: String, key: String, digits: String) {
     var host: UIViewController = self
     while let next = host.presentedViewController { host = next }
     let alert = UIAlertController(
@@ -340,11 +340,11 @@ final class OverlayController: UIViewController {
       message: "grndwrk on your Mac showed this phone with the digits \(digits). Pair only if you clicked Allow there yourself.",
       preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "No", style: .cancel) { [weak self] _ in
-      gwLog.error("Pairing answered without the person allowing it on their Mac; the code was dropped")
+      gwLog.error("Pairing answered without the person allowing it on their Mac; the key was dropped")
       self?.flash("Not paired. Something else on this Wi-Fi may be posing as grndwrk.")
     })
     alert.addAction(UIAlertAction(title: "Yes, I allowed \(digits)", style: .default) { _ in
-      Pairing.save(code, for: project)
+      Pairing.save(key, for: project)
       Task { await Connection.check() }
     })
     host.present(alert, animated: true)
@@ -370,8 +370,10 @@ final class OverlayController: UIViewController {
     alert.addAction(UIAlertAction(title: "Not now", style: .cancel))
     alert.addAction(UIAlertAction(title: "Ask the Mac", style: .default) { [weak self] _ in self?.pair() })
     alert.addAction(UIAlertAction(title: "Pair", style: .default) { [weak self] _ in
-      Pairing.save(alert.textFields?.first?.text ?? "", for: project)
+      let code = alert.textFields?.first?.text ?? ""
       Task {
+        // The code is sent once, for a key of this phone's own; wrong codes lock out for a while.
+        if let key = await Pairing.pair(code: code) { Pairing.save(key, for: project) }
         await Connection.check()
         if case .needsCode = Connection.state { self?.flash("That code did not work. Long press the grndwrk button to try again.") }
       }
