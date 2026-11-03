@@ -143,7 +143,8 @@ export async function listen(server: Server, port: number, attempts = 20, host =
 }
 
 /** Whether something on this Mac already answers on the port. */
-function answers(port: number): Promise<boolean> {
+/** Whether something on this Mac answers on the port. */
+export function answers(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = connect({ port, host: '127.0.0.1' })
     const done = (yes: boolean) => {

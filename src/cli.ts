@@ -22,7 +22,8 @@ const HELP = `Usage:
                          the path for DYLD_INSERT_LIBRARIES
 
 Options for start:
-  --port <n>   port to use (default: the one this project had last time, else 7777, or the next free one)
+  --port <n>   this project's port from now on (default: the one it had last time;
+               a new project gets the first one from 7777 no other project keeps)
   --no-open    do not open the browser
   --app <url>  your product's dev server, for example http://localhost:5173.
                Open the address grndwrk prints for it, and every page gets
@@ -111,9 +112,14 @@ async function main() {
     }
     // The port this project had last time, so a line in the product's layout
     // that loads the Comment button keeps pointing at the right grndwrk.
+    // A new project gets ports no other project on this Mac keeps, running or not.
+    const gwDir = join(root, GW_DIR)
     const { rememberedPort, rememberPort } = await import('./store/local.js')
-    const remembered = values.port ? undefined : await rememberedPort(join(root, GW_DIR))
-    const port = Number(values.port ?? remembered ?? 7777)
+    const { readPorts, keepPort, clashesWith, freePort } = await import('./store/ports.js')
+    const { answers } = await import('./server/index.js')
+    const kept = await readPorts()
+    const before = await rememberedPort(gwDir)
+    const port = values.port ? Number(values.port) : (before ?? (await freePort(kept, gwDir, answers)))
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
       console.error(`Not a valid port: ${values.port}`)
       process.exit(1)
@@ -131,10 +137,21 @@ async function main() {
     const lanPort = values['lan-port'] ? Number(values['lan-port']) : undefined
     const { url, appUrl, lanUrls, lanCode } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort, lan: values.lan, lanPort })
     const actual = Number(new URL(url).port)
-    console.log(`grndwrk is running at ${url}\nWatching ${join(root, GW_DIR)}`)
-    if (!values.port && remembered === undefined) await rememberPort(join(root, GW_DIR), actual)
-    if (remembered !== undefined && actual !== remembered) {
-      console.log(`  Port ${remembered}, this project's usual one, is taken (another grndwrk?), so this one runs on ${actual}. A Comment button loaded from localhost:${remembered} will not reach it until that one stops.`)
+    console.log(`grndwrk is running at ${url}\nWatching ${gwDir}`)
+    // --port moves the project for good; a new project keeps the port it got.
+    const own = values.port ? port : (before ?? actual)
+    if (own !== before) await rememberPort(gwDir, own)
+    await keepPort(gwDir, own)
+    if (values.port && before !== undefined && before !== port) {
+      console.log(`  This project uses port ${port} from now on (it was ${before}). A Comment button loaded from localhost:${before} needs the new port.`)
+    }
+    if (actual !== own) {
+      console.log(`  Port ${own}, this project's usual one, is taken (another grndwrk?), so this one runs on ${actual}. A Comment button loaded from localhost:${own} will not reach it until that one stops.`)
+    }
+    const clash = clashesWith(kept, gwDir, own)
+    if (clash.length) {
+      const free = await freePort({ ...kept, [gwDir]: own }, gwDir, answers)
+      console.log(`  Ports ${own} to ${own + 2} are also kept by ${clash.join(', ')}. Move this project with grndwrk --port ${free} (once; it is kept).`)
     }
     if (appUrl) {
       console.log(`Your product with the Comment button: ${appUrl} (passes through to ${app!.origin})`)

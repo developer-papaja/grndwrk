@@ -128,7 +128,7 @@ The iOS package sends a picture of each screen as you use the app.
 
 ## Several projects at once
 
-Each project runs its own grndwrk and its own map. Two people working on the same map in git: every new thing is a file of its own (cards, thread entries, gaps, each run of a command), so GitHub merges your changes without conflicts unless you both changed the same words. Comments always go to the project they were made in. The first project gets port 7777, the next a free one after it, and each project keeps its port from then on, so a line in a layout keeps working. Start with `--port` to choose one yourself.
+Each project runs its own grndwrk and its own map. Two people working on the same map in git: every new thing is a file of its own (cards, thread entries, gaps, each run of a command), so GitHub merges your changes without conflicts unless you both changed the same words. Comments always go to the project they were made in. Each project keeps three ports (the map, `--app` and `--lan`), and grndwrk remembers which project has which on your Mac, so a new project never takes ports another one keeps, even one that is not running. Each project keeps its port from then on, so a line in a layout keeps working. `grndwrk --port 7850` moves a project for good, and grndwrk tells you when two projects' ports overlap.
 
 ## What goes into git
 
