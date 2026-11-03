@@ -47,8 +47,11 @@ describe('ports kept by projects on this machine', () => {
     await keepPort(gone, 7780, file)
     await rm(join(dir, 'gone'), { recursive: true })
     expect(await readPorts(file)).toEqual({ [a]: 7777 })
-    const { stat } = await import('node:fs/promises')
-    expect((await stat(file)).mode & 0o777).toBe(0o600)
+    // Windows has no Unix permission bits.
+    if (process.platform !== 'win32') {
+      const { stat } = await import('node:fs/promises')
+      expect((await stat(file)).mode & 0o777).toBe(0o600)
+    }
   })
 
   it('reads a broken or odd file as keeping nothing', async () => {
