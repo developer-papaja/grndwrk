@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { firstAuthors, gitUser } from './authors.js'
 import { basename, dirname } from 'node:path'
 import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, KICKOFF_STEPS, writeFields, writeKickoff, writePages } from '../store/project.js'
@@ -386,11 +387,15 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       // folder: the project's folder name, shown when project.md has no name.
       return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
     }
+    if (url.pathname === '/api/authors' && method === 'GET') {
+      return send(res, 200, { me: await gitUser(ctx.gwDir), first: await firstAuthors(ctx.gwDir) })
+    }
     if (url.pathname === '/api/nodes' && method === 'GET') {
       return send(res, 200, await ctx.store.list())
     }
     if (url.pathname === '/api/nodes' && method === 'POST') {
-      const change = await ctx.store.create(await readBody(req))
+      const me = await gitUser(ctx.gwDir)
+      const change = await ctx.store.create(await readBody(req), me ? { by: me } : {})
       await ctx.nodes.sync()
       return send(res, 201, change.upserted[0])
     }

@@ -82,6 +82,7 @@ const handlers = {
     void state.loadPairRequests()
     void state.loadSiteRequests()
     void state.loadRelay()
+    void state.loadAuthors()
     void state.loadShots()
     void state.loadRuntime()
     if (state.view === 'docs') void state.loadDocs()
@@ -90,7 +91,14 @@ const handlers = {
     state.live = false
   },
   onEvent: (event: ServerEvent) => {
-    if (event.type === 'node:upsert') state.upsert(event.node)
+    if (event.type === 'node:upsert') {
+      state.upsert(event.node)
+      // Thoughts that came by git (a pull) have no `by:`: who committed them is read again shortly.
+      if (!state.authorOf(event.node)) {
+        clearTimeout(authorsTimer)
+        authorsTimer = setTimeout(() => void state.loadAuthors(), 5000)
+      }
+    }
     else if (event.type === 'node:delete') state.removeLocal(event.id)
     else if (event.type === 'node:open') {
       // The node may arrive a moment after the request to open it.
@@ -133,6 +141,7 @@ const handlers = {
  * A tab coming back into view reconnects and reloads everything.
  */
 let source: EventSource | null = null
+let authorsTimer: ReturnType<typeof setTimeout> | undefined
 function connect() {
   if (!source) source = subscribe(handlers)
 }

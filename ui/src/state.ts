@@ -2,7 +2,7 @@ import Alpine from 'alpinejs'
 import { cached } from './reactivity'
 import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, answerJoin, type RelayInfo } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, answerJoin, type RelayInfo, fetchAuthors } from './api'
 import { BOX, commentsForScreen, hiddenScreenIds, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
@@ -623,6 +623,27 @@ export const state = Alpine.reactive({
   allowedSites: [] as AllowedSite[],
   // Colleagues away from the Wi-Fi, through the team's relay: who joined, open invites, and a new invite with its QR code.
   relay: { connected: false } as RelayInfo,
+  // Who added each thought: `by:` when made in the map, the colleague for a comment through the relay, else whoever committed it first.
+  firstAuthors: {} as Record<string, string>,
+  async loadAuthors() {
+    this.firstAuthors = (await fetchAuthors()).first
+  },
+  /** Who added this thought, when known. A comment from the running product is the tester's, never the committer's. */
+  authorOf(n: GNode): string {
+    const by = typeof n.extra?.by === 'string' ? n.extra.by : typeof n.extra?.from === 'string' ? n.extra.from : ''
+    if (by || n.extra?.source === 'app') return by
+    return this.firstAuthors[n.id] ?? ''
+  },
+  /** Two letters for a name: first and last name's first letters, or the first letter of one name. */
+  initials(name: string): string {
+    const words = name.trim().split(/\s+/).filter(Boolean)
+    if (!words.length) return ''
+    return (words.length > 1 ? words[0][0] + words[words.length - 1][0] : words[0][0]).toUpperCase()
+  },
+  /** Initials show on the cards only once more than one person added thoughts: alone, they say nothing. */
+  get showAuthors(): boolean {
+    return cached('showAuthors', () => new Set(Object.values(this.nodes as Record<string, GNode>).map((n) => this.authorOf(n)).filter(Boolean)).size > 1)
+  },
   invited: null as { name: string; link: string; qr: string } | null,
   async loadRelay() {
     this.relay = await fetchRelay()
