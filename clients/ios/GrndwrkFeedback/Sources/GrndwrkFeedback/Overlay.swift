@@ -34,6 +34,12 @@ final class OverlayController: UIViewController {
   private let highlight = UIView()
   private let toast = PaddedLabel()
   private(set) var picking = false
+  /// Where the app's keyboard begins, in this view, while one is up. iOS keeps the keyboard above every window, this one too, so the button moves out of its way.
+  private var keyboardTop: CGFloat?
+  /// Where the button stood before a keyboard pushed it up, to go back to when it closes.
+  private var beforeKeyboard: CGFloat?
+  /// The lowest point anything of grndwrk's may reach: the safe area, or the top of the keyboard.
+  private var floorY: CGFloat { min(view.bounds.height - view.safeAreaInsets.bottom, keyboardTop ?? .greatestFiniteMagnitude) }
 
   // What is picked: everything under the finger, smallest first, and which one is chosen.
   private var candidates: [Inspector.Found] = []
@@ -156,6 +162,13 @@ final class OverlayController: UIViewController {
     buildTesting()
     buildTab()
     updateBadge()
+    for name in [UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardWillHideNotification] {
+      NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+        let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+        let hiding = note.name == UIResponder.keyboardWillHideNotification
+        MainActor.assumeIsolated { self?.keyboardMoved(hiding ? nil : end) }
+      }
+    }
     // Pictures of the screens as the app is used, for the sitemap.
     snapshotTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       MainActor.assumeIsolated {
@@ -204,7 +217,9 @@ final class OverlayController: UIViewController {
       let safe = view.safeAreaInsets
       var f = button.frame
       f.origin.x = max(8, min(f.origin.x, view.bounds.width - f.width - 8))
-      f.origin.y = max(safe.top + 8, min(f.origin.y, view.bounds.height - safe.bottom - f.height - 8))
+      f.origin.y = max(safe.top + 8, min(f.origin.y, floorY - f.height - 8))
+      // Put there by the person: where it stays when the keyboard closes.
+      beforeKeyboard = nil
       UIView.animate(withDuration: 0.2) {
         self.button.frame = f
         self.layoutTestPill()
@@ -249,7 +264,7 @@ final class OverlayController: UIViewController {
       // Thrown from off the screen: come back fully on it, on that side.
       beforeStash.origin.x = side == .right ? view.bounds.width - beforeStash.width - 16 : 16
     }
-    let y = min(max(button.frame.minY, view.safeAreaInsets.top + 8), view.bounds.height - view.safeAreaInsets.bottom - button.bounds.height - 8)
+    let y = min(max(button.frame.minY, view.safeAreaInsets.top + 8), floorY - button.bounds.height - 8)
     beforeStash.origin.y = y
     // A tab half off the edge, wide enough to grab: 44 points tall at least.
     let tabFrame = CGRect(x: side == .right ? view.bounds.width - 18 : -10, y: y + (button.bounds.height - 64) / 2, width: 28, height: 64)
@@ -287,6 +302,44 @@ final class OverlayController: UIViewController {
       pan.isEnabled = false
       pan.isEnabled = true
       unstash()
+    }
+  }
+
+  // MARK: The keyboard
+
+  /// A keyboard opened, moved or closed (nil). The button, its tab and the test card go above it, and the button back down after.
+  private func keyboardMoved(_ screenFrame: CGRect?) {
+    guard view.window != nil else { return }
+    var top: CGFloat?
+    if let screenFrame, let space = view.window?.screen.coordinateSpace {
+      let frame = view.convert(screenFrame, from: space)
+      // A keyboard off the screen, or a hardware one showing only a thin bar at the bottom, is no keyboard here.
+      if frame.minY < view.bounds.height - 1, frame.height > 0 { top = frame.minY }
+    }
+    keyboardTop = top
+    UIView.animate(withDuration: 0.25, delay: 0, options: .curveEaseOut) {
+      if let top {
+        let lowest = top - self.button.bounds.height - 8
+        if self.button.frame.minY > lowest {
+          if self.beforeKeyboard == nil { self.beforeKeyboard = self.stashed != nil ? self.beforeStash.minY : self.button.frame.minY }
+          self.button.frame.origin.y = lowest
+          if self.stashed != nil { self.beforeStash.origin.y = lowest }
+        }
+      } else if let y = self.beforeKeyboard {
+        self.button.frame.origin.y = y
+        if self.stashed != nil { self.beforeStash.origin.y = y }
+        self.beforeKeyboard = nil
+      }
+      if self.stashed != nil { self.edgeTab.frame.origin.y = self.button.frame.minY + (self.button.bounds.height - 64) / 2 }
+      self.layoutTestPill()
+      if !self.testCard.isHidden {
+        let room = self.floorY - self.view.safeAreaInsets.top - self.testCard.bounds.height - 8
+        self.cardTop?.constant = max(8, min(self.cardOffset, room))
+        self.view.layoutIfNeeded()
+      }
+      if !self.toast.isHidden, let top {
+        self.toast.frame.origin.y = min(self.toast.frame.minY, top - self.toast.bounds.height - 12)
+      }
     }
   }
 
@@ -694,7 +747,7 @@ final class OverlayController: UIViewController {
     view.bringSubviewToFront(testCard)
     // Folding or unfolding changes its height: keep it on the screen where it was put.
     view.layoutIfNeeded()
-    let room = view.bounds.height - view.safeAreaInsets.top - view.safeAreaInsets.bottom - testCard.bounds.height - 8
+    let room = floorY - view.safeAreaInsets.top - testCard.bounds.height - 8
     cardOffset = max(8, min(cardOffset, room))
     cardTop?.constant = cardOffset
   }
@@ -702,7 +755,7 @@ final class OverlayController: UIViewController {
   @objc private func moveCard(_ pan: UIPanGestureRecognizer) {
     let move = pan.translation(in: view).y
     pan.setTranslation(.zero, in: view)
-    let room = view.bounds.height - view.safeAreaInsets.top - view.safeAreaInsets.bottom - testCard.bounds.height - 8
+    let room = floorY - view.safeAreaInsets.top - testCard.bounds.height - 8
     cardOffset = max(8, min(cardOffset + move, room))
     cardTop?.constant = cardOffset
   }
@@ -1078,7 +1131,7 @@ final class OverlayController: UIViewController {
     toast.text = text
     let width = min(toast.intrinsicContentSize.width, view.bounds.width - 32)
     let height = toast.sizeThatFits(CGSize(width: width - 24, height: .greatestFiniteMagnitude)).height + 12
-    toast.frame = CGRect(x: (view.bounds.width - width) / 2, y: view.bounds.height - view.safeAreaInsets.bottom - height - 80, width: width, height: height)
+    toast.frame = CGRect(x: (view.bounds.width - width) / 2, y: (keyboardTop.map { $0 - height - 12 } ?? view.bounds.height - view.safeAreaInsets.bottom - height - 80), width: width, height: height)
     toast.isHidden = false
     view.bringSubviewToFront(toast)
     let shown = text
