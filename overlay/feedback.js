@@ -105,6 +105,21 @@
       button.mac svg { width: 14px; height: 14px; }
       .mark { position: fixed; pointer-events: none; border: 2px solid #14ae5c; background: rgba(20,174,92,.08); border-radius: 4px; display: none; }
       .tcard textarea { margin-top: 8px; }
+      .steps { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; overflow: hidden; }
+      .steps li { display: flex; gap: 8px; align-items: flex-start; padding: 7px 8px; font-size: 12.5px; }
+      .steps li + li { border-top: 1px solid rgba(255,255,255,.06); }
+      .steps li.bad { background: rgba(244,63,94,.08); }
+      .steps li.ok .s { color: rgba(232,230,227,.55); }
+      .steps .n { flex: none; width: 18px; height: 18px; border-radius: 9px; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; background: rgba(255,255,255,.08); color: rgba(232,230,227,.65); }
+      .steps li.ok .n { background: rgba(20,174,92,.25); color: #6ee7a8; }
+      .steps li.bad .n { background: rgba(244,63,94,.25); color: #fda4af; }
+      .steps .s { flex: 1; min-width: 0; white-space: pre-wrap; }
+      .steps .m { flex: none; display: flex; gap: 2px; }
+      .steps .m button { padding: 2px 6px; font-size: 11px; border-radius: 5px; background: none; color: rgba(232,230,227,.55); }
+      .steps .m button:hover { background: rgba(255,255,255,.08); color: #e8e6e3; }
+      .steps .m button.on.w { background: rgba(20,174,92,.25); color: #a7f3c9; }
+      .steps .m button.on.f { background: rgba(244,63,94,.25); color: #fecdd3; }
+      .t-count { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
       .toast { position: fixed; right: 16px; bottom: 64px; padding: 6px 12px; border-radius: 8px; background: #2c2c2c; border: 1px solid rgba(255,255,255,.12); display: none; }
     </style>
     <div class="box"></div><div class="tip"></div>
@@ -148,7 +163,7 @@
       <div class="head"><h3 class="t-title"></h3><button class="x t-close" title="Close, test later"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg></button></div>
       <div class="label">You wrote</div><div class="text quote t-said"></div>
       <div class="label">What changed</div><div class="text t-fix"></div>
-      <div class="t-test-wrap"><div class="label">To test</div><div class="text t-test"></div></div>
+      <div class="t-test-wrap"><div class="label">To test <span class="t-count"></span></div><div class="text t-test"></div><ol class="steps t-steps"></ol></div>
       <div class="t-reject" style="display:none"><textarea class="t-note" placeholder="What is still wrong?"></textarea></div>
       <div class="row">
         <button class="b mac t-show" title="Show this comment in grndwrk's map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>Map</button>
@@ -907,6 +922,11 @@
     $('.t-fix').textContent = t.fix || 'Your agent did not say.'
     $('.t-test').textContent = t.test
     $('.t-test-wrap').style.display = t.test ? 'block' : 'none'
+    // The steps as a checklist, each marked works or not; the plain text only for a grndwrk that sends no steps.
+    marks = {}
+    const steps = Array.isArray(t.steps) ? t.steps.filter((s) => typeof s === 'string') : []
+    $('.t-test').style.display = steps.length ? 'none' : 'block'
+    drawSteps(steps)
     rejecting(false)
     note.value = ''
     tcard.style.display = 'block'
@@ -918,6 +938,44 @@
     const left = r && r.left + r.width / 2 > window.innerWidth / 2
     Object.assign(tcard.style, left ? { left: '16px', right: 'auto', top: '16px' } : { left: 'auto', right: '16px', top: '16px' })
     placeMark()
+  }
+  let marks = {}
+  function drawSteps(steps) {
+    const list = $('.t-steps')
+    list.replaceChildren()
+    list.style.display = steps.length ? 'block' : 'none'
+    $('.t-count').textContent = steps.length ? `${steps.filter((_, i) => marks[i] === 'ok').length} of ${steps.length} work` : ''
+    steps.forEach((step, i) => {
+      const li = document.createElement('li')
+      li.className = marks[i] || ''
+      const n = document.createElement('span')
+      n.className = 'n'
+      n.textContent = marks[i] === 'ok' ? '✓' : marks[i] === 'bad' ? '✕' : String(i + 1)
+      const s = document.createElement('span')
+      s.className = 's'
+      s.textContent = step
+      const m = document.createElement('span')
+      m.className = 'm'
+      for (const [mark, label, cls] of [['ok', 'Works', 'w'], ['bad', 'No', 'f']]) {
+        const b = document.createElement('button')
+        b.textContent = label
+        b.className = `${cls}${marks[i] === mark ? ' on' : ''}`
+        b.title = mark === 'ok' ? 'This step works' : 'This step does not work'
+        b.addEventListener('click', () => {
+          marks[i] = marks[i] === mark ? undefined : mark
+          if (marks[i] === 'bad') {
+            // Start the note with the steps that do not work.
+            note.value = steps.map((x, j) => (marks[j] === 'bad' ? `Step ${j + 1} (${x.length > 60 ? x.slice(0, 57) + '...' : x}): ` : '')).filter(Boolean).join('\n')
+            rejecting(true)
+            note.focus()
+          }
+          drawSteps(steps)
+        })
+        m.append(b)
+      }
+      li.append(n, s, m)
+      list.append(li)
+    })
   }
   function placeMark() {
     if (!marked || !marked.isConnected || tcard.style.display !== 'block') return (mark.style.display = 'none')

@@ -2,7 +2,7 @@ import { BadInput, type NodeStore } from '../store/nodes.js'
 import { removeFiles, saveImage } from '../store/files.js'
 import { listStories } from '../store/stories.js'
 import type { GNode, Story } from '../shared/types.js'
-import { feedbackState } from '../shared/feedback.js'
+import { feedbackState, testSteps } from '../shared/feedback.js'
 import { appendEntry, splitBody } from '../shared/thread.js'
 import { cleanText } from '../shared/text.js'
 
@@ -205,7 +205,7 @@ export async function feedbackStatus(
     const state = feedbackState(n) ?? 'incoming'
     const { fix, test } = state === 'incoming' ? { fix: '', test: '' } : lastFix(n.body)
     const status = { fixed: 'fixed', ready: 'ready to test', proposed: 'fix proposed', incoming: n.status }[state]
-    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test } : {}) }
+    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test, steps: stepsOf(test) } : {}) }
   })
 }
 
@@ -221,6 +221,9 @@ export function lastFix(body: string): { fix: string; test: string } {
   if (!m) return { fix: cap(text.trim(), 1500), test: '' }
   return { fix: cap(text.slice(0, m.index).trim(), 1500), test: cap(text.slice(m.index + m[0].length).trim(), 1500) }
 }
+
+/** The steps to test, one each, for the phone's and the page's checklist; `test` stays for older ones. At most 20, each capped. */
+const stepsOf = (test: string) => testSteps(`To test:\n${test}`).steps.slice(0, 20).map((s) => (s.length > 400 ? s.slice(0, 397) + '...' : s))
 
 /** Ids of comments from the app whose key matches what the device sent. */
 export async function ownComments(store: NodeStore, body: unknown): Promise<string[]> {
@@ -313,6 +316,7 @@ export async function webTests(store: NodeStore, origin: string) {
         text: words.split('\n').map((l) => l.replace(/^>\s?/, '')).join('\n').trim() || n.title,
         fix,
         test,
+        steps: stepsOf(test),
         path: addressOf(n)!.pathname,
         selector: /^Selector: `(.+)`$/m.exec(n.body)?.[1] ?? '',
         label: seen[1] ?? '',

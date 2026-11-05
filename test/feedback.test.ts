@@ -669,7 +669,7 @@ describe('the Comment button loaded by the product itself', () => {
         await store.update(id, { built: '2026-10-14', body: appendEntry(node.body, 'claude', 'Fixed the sum.\n\nTo test:\n1. Add two items', '2026-10-14') } as never)
       }
       const list = (await (await tests('https://shop.test')).json()).tests
-      expect(list).toEqual([{ id: n.id, title: 'Cart total is wrong', text: 'Cart total is wrong', fix: 'Fixed the sum.', test: '1. Add two items', path: '/cart', selector: 'main > .total', label: 'Total' }])
+      expect(list).toEqual([{ id: n.id, title: 'Cart total is wrong', text: 'Cart total is wrong', fix: 'Fixed the sum.', test: '1. Add two items', steps: ['Add two items'], path: '/cart', selector: 'main > .total', label: 'Total' }])
       // A site not allowed gets nothing; an allowed one cannot touch another site's comment.
       expect((await tests('https://other.test')).status).toBe(403)
       expect((await post('tested', 'https://shop.test', { id: other.id, works: true })).status).toBe(404)
