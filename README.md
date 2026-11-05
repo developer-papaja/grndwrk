@@ -144,6 +144,17 @@ Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed 
 - **Review `.grndwrk/` in pull requests like code.** A colleague's change can add thoughts, answers or questions that look like your agent's; read them before you run commands on them.
 - **Websites ask before they send.** Each local site's first comment waits until you allow the site in the map. Allowed sites are kept in your user folder, never in the project, so a pull request cannot allow one.
 
+### What package scanners say
+
+grndwrk has three dependencies: `yaml`, `chokidar` (with its one dependency, `readdirp`) and `sirv`. None of them opens a network connection or starts a program. Scanners such as Socket list a few alerts for the package. They are informational, and this is what each one is:
+
+- **yaml: "potential code anomaly".** The flagged code calls a function the caller hands in (a reviver), only when one is given. grndwrk gives none: it reads frontmatter as plain data. Files made to attack the parser are refused or read as text: aliases that would blow up in memory, tags that ask for code, a `__proto__` key.
+- **chokidar: environment variables.** It reads `CHOKIDAR_USEPOLLING` and `CHOKIDAR_INTERVAL` to choose how to watch the disk, and nothing else.
+- **chokidar: filesystem access.** It watches `.grndwrk/` so the map follows changes made by your agent or by hand. It only reads, and is told never to follow links.
+- **grndwrk: URL strings.** Addresses written inside the bundled libraries of the map's page (DOMPurify, Alpine, marked). They are text: the page's Content Security Policy lets it load nothing from another server.
+
+`npm audit signatures` verifies that what you install is what was published.
+
 ## License
 
 [MIT](LICENSE)
