@@ -53,9 +53,12 @@ export async function writeKickoff(gwDir: string, changes: Partial<Record<Kickof
 }
 
 /** Set fields of project.md, such as `start: existing` or the purpose, keeping the rest. */
+/** Set fields in project.md. An empty value takes the field out. */
 export async function writeFields(gwDir: string, fields: Record<string, string>): Promise<void> {
   const { data, body } = await readProject(gwDir)
-  await writeProject(gwDir, { ...data, ...fields }, body)
+  const next: Record<string, unknown> = { ...data, ...fields }
+  for (const [k, v] of Object.entries(fields)) if (v === '') delete next[k]
+  await writeProject(gwDir, next, body)
 }
 
 async function writeProject(gwDir: string, next: Record<string, unknown>, body: string): Promise<void> {

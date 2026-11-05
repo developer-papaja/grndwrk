@@ -294,8 +294,23 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
     }
     if (url.pathname === '/api/project' && method === 'PATCH') {
-      const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown; start?: unknown; purpose?: unknown }
-      if (input.start !== undefined || input.purpose !== undefined) {
+      const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown; start?: unknown; purpose?: unknown; name?: unknown; initials?: unknown; color?: unknown }
+      if (input.name !== undefined || input.initials !== undefined || input.color !== undefined) {
+        // The project's badge on the rail: its name, up to three letters, and a color. Empty goes back to the default.
+        const fields: Record<string, string> = {}
+        const plain = (v: unknown, what: string, max: number) => {
+          if (typeof v !== 'string') throw new BadInput(`${what} must be text`)
+          return v.replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, max)
+        }
+        if (input.name !== undefined) fields.name = plain(input.name, 'name', 80)
+        if (input.initials !== undefined) fields.initials = [...plain(input.initials, 'initials', 12).replace(/\s/g, '')].slice(0, 3).join('')
+        if (input.color !== undefined) {
+          const color = plain(input.color, 'color', 7).toLowerCase()
+          if (color && !/^#[0-9a-f]{6}$/.test(color)) throw new BadInput('color must look like #3b82f6')
+          fields.color = color
+        }
+        await writeFields(ctx.gwDir, fields)
+      } else if (input.start !== undefined || input.purpose !== undefined) {
         const fields: Record<string, string> = {}
         if (input.start !== undefined) {
           if (input.start !== 'new' && input.start !== 'existing') throw new BadInput('start must be new or existing')

@@ -433,15 +433,70 @@
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
-      <!-- Which project this map is, on every view: several maps can be open at once -->
+      <!-- Which project this map is, on every view: several maps can be open at once. A click edits its name, letters and color. -->
       <div
         x-show="$store.gw.projectLabel"
-        id="rail-project"
-        class="mb-1 flex w-full flex-col items-center gap-1 border-b border-line px-1 pb-2.5"
-        :title="'Project: ' + $store.gw.projectLabel"
+        class="relative mb-1 w-full border-b border-line px-1 pb-2.5"
+        x-data="{ open: false, name: '', initials: '', color: '' }"
+        @keydown.escape.stop="open = false"
+        @click.outside="open = false"
       >
-        <span class="grid size-9 place-items-center rounded-lg text-[13px] font-semibold text-white" :style="{ background: $store.gw.projectColor }" x-text="$store.gw.projectInitials"></span>
-        <span class="line-clamp-2 w-full break-words text-center text-[10px] font-medium leading-tight text-fog/80" x-text="$store.gw.projectLabel"></span>
+        <button
+          id="rail-project"
+          class="flex w-full flex-col items-center gap-1 rounded-lg py-0.5 hover:bg-tint/5"
+          :title="'Project: ' + $store.gw.projectLabel + '. Click to change its name, letters or color'"
+          @click="open = !open; if (open) { name = String($store.gw.project.name ?? ''); initials = String($store.gw.project.initials ?? ''); color = String($store.gw.project.color ?? ''); $nextTick(() => $refs.badgeName.focus()) }"
+        >
+          <span class="grid size-9 place-items-center rounded-lg text-[13px] font-semibold text-white" :style="{ background: $store.gw.projectColor }" x-text="$store.gw.projectInitials"></span>
+          <span class="line-clamp-2 w-full break-words text-center text-[10px] font-medium leading-tight text-fog/80" x-text="$store.gw.projectLabel"></span>
+        </button>
+        <form
+          x-show="open"
+          x-transition.opacity
+          id="badge-editor"
+          class="absolute left-full top-0 z-30 ml-2 w-64 rounded-lg border border-line bg-panel p-3 text-[13px] shadow-lg shadow-shade/30"
+          @submit.prevent="$store.gw.saveBadge({ name, initials, color }).then((ok) => { if (ok) open = false })"
+        >
+          <div class="mb-3 flex items-center gap-2.5">
+            <span
+              class="grid size-9 shrink-0 place-items-center rounded-lg text-[13px] font-semibold text-white"
+              :style="{ background: color || $store.gw.autoColor(name.trim() || String($store.gw.project.folder ?? '')) }"
+              x-text="(initials.trim() || (name.trim() || String($store.gw.project.folder ?? '')).split(/[\s_.-]+/).filter(Boolean).reduce((a, w, i, all) => all.length > 1 ? (i < 2 ? a + w[0] : a) : w.slice(0, 2), '')).toUpperCase()"
+            ></span>
+            <span class="min-w-0 truncate font-medium text-fog" x-text="name.trim() || String($store.gw.project.folder ?? '')"></span>
+          </div>
+          <label class="label" for="badge-name">Name</label>
+          <input id="badge-name" x-ref="badgeName" x-model="name" maxlength="80" class="field mb-2.5 w-full" :placeholder="String($store.gw.project.folder ?? '')" />
+          <label class="label" for="badge-initials">Letters</label>
+          <input id="badge-initials" x-model="initials" maxlength="3" class="field mb-2.5 w-20 uppercase" placeholder="Auto" />
+          <span class="label">Color</span>
+          <div class="mb-3 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              class="grid size-6 place-items-center rounded-md border text-[9px] text-fog/70"
+              :class="color === '' ? 'border-accent ring-2 ring-accent/40' : 'border-line'"
+              title="Auto: a color from the name"
+              :style="{ background: $store.gw.autoColor(name.trim() || String($store.gw.project.folder ?? '')) }"
+              @click="color = ''"
+            ><span class="font-semibold text-white">A</span></button>
+            <template x-for="c in $store.gw.badgeColors" :key="c">
+              <button
+                type="button"
+                class="size-6 rounded-md border border-transparent"
+                :class="color === c && 'ring-2 ring-accent ring-offset-1 ring-offset-panel'"
+                :style="{ background: c }"
+                :title="c"
+                :aria-label="'Color ' + c"
+                @click="color = c"
+              ></button>
+            </template>
+          </div>
+          <div class="flex items-center justify-end gap-2">
+            <button type="button" class="rounded-md px-2.5 py-1 text-xs text-fog/60 hover:bg-tint/5 hover:text-fog" @click="open = false">Cancel</button>
+            <button type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90">Save</button>
+          </div>
+          <p class="mt-2 text-[11px] text-fog/45">Saved in project.md, so everyone on the project sees it.</p>
+        </form>
       </div>
       <template x-for="v in [['focus', 'Inbox: your agent\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['personas', 'Personas: who the product is for', 'i-users'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button

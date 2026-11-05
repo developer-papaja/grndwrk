@@ -785,17 +785,38 @@ export const state = Alpine.reactive({
     const name = typeof this.project.name === 'string' ? this.project.name.trim() : ''
     return name || (typeof this.project.folder === 'string' ? this.project.folder : '')
   },
-  /** Up to two letters for the project's badge: the first of each word, or the first two of one word. */
+  /** The badge's letters: as set in project.md (`initials:`), else the first of each word, or the first two of one word. */
   get projectInitials(): string {
+    const set = typeof this.project.initials === 'string' ? this.project.initials.trim() : ''
+    if (set) return set.toUpperCase()
     const words = this.projectLabel.split(/[\s_.-]+/).filter(Boolean)
     const letters = words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '').slice(0, 2)
     return letters.toUpperCase()
   },
-  /** A calm color of its own per project, so two maps side by side look different at a glance. */
+  /** The badge's color: as set in project.md (`color:`), else a calm one of its own per project, so two maps side by side look different at a glance. */
   get projectColor(): string {
+    const set = typeof this.project.color === 'string' ? this.project.color.trim() : ''
+    if (/^#[0-9a-f]{6}$/i.test(set)) return set
+    return this.autoColor(this.projectLabel)
+  },
+  /** The color a name gets when none is set. */
+  autoColor(name: string): string {
     let h = 0
-    for (const c of this.projectLabel) h = (h * 31 + c.charCodeAt(0)) >>> 0
+    for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
     return `hsl(${h % 360} 45% 42%)`
+  },
+  /** Colors to pick for the badge: calm, readable with white letters in light and dark. */
+  badgeColors: ['#64748b', '#2563eb', '#0891b2', '#0d9488', '#16a34a', '#ca8a04', '#ea580c', '#e11d48', '#db2777', '#7c3aed'],
+  /** Save the badge: name, initials and color in project.md. Empty initials or color go back to the default. */
+  async saveBadge(badge: { name: string; initials: string; color: string }) {
+    try {
+      this.project = await saveProjectFields(badge)
+      this.flash('Saved in project.md')
+      return true
+    } catch (err) {
+      this.flash(errorText(err))
+      return false
+    }
   },
   /** A thread entry split into its question and the options Claude gave. */
   options: questionOptions,
