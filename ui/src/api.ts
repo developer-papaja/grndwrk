@@ -80,6 +80,8 @@ export interface Shot {
   taken: string
   /** What the screen showed, from the app. */
   texts?: string[]
+  /** A picture pasted into a reply or an answer, not one of a screen. */
+  pasted?: boolean
 }
 export const fetchShots = () => request<Shot[]>('GET', '/api/shots').catch(() => [] as Shot[])
 /** Put a picture on a screen, taking it off any other; an empty screen only takes it off. */

@@ -538,6 +538,34 @@ export const state = Alpine.reactive({
     })
     return files.map((f) => this.shots.find((s) => s.file === f)).filter((s): s is Shot => !!s)
   },
+  /**
+   * Every picture an entry shows: pictures pasted into a reply or an answer
+   * (`../files/<id>/<name>`), and pictures of screens (`shots/...`). Shaped
+   * like a screen's picture, so they open large the same way.
+   */
+  entryPictures(text: string): Shot[] {
+    const pasted = [...text.matchAll(/!\[[^\]]*\]\((?:\.\.\/)+files\/([A-Za-z0-9_-]{1,64})\/([0-9]{10,16}(?:-[0-9]+)?\.(?:png|jpg|gif|webp))\)/g)].map(
+      (m): Shot => ({ platform: 'web', key: 'Picture', file: `files/${m[1]}/${m[2]}`, url: `/files/${m[1]}/${m[2]}`, taken: '', pasted: true }),
+    )
+    return [...pasted, ...this.entryShots(text)]
+  },
+  /** Upload pictures for a thought, screen or persona; returns the Markdown that shows them, one per line. */
+  async uploadPictures(owner: string, files: File[]): Promise<string> {
+    const lines: string[] = []
+    for (const file of files.filter((f) => f.type.startsWith('image/'))) {
+      try {
+        lines.push((await uploadImage(owner, file)).markdown)
+      } catch (err) {
+        this.flash(errorText(err))
+      }
+    }
+    return lines.join('\n')
+  },
+  /** Text with pictures added at its end, each on its own line. */
+  withPictures(text: string, markdown: string): string {
+    if (!markdown) return text
+    return text.trim() ? `${text.replace(/\s+$/, '')}\n${markdown}` : markdown
+  },
   /** The entry's words, without the pictures it shows. */
   entryWords(text: string): string {
     return text.replace(/\n?!\[[^\]]*\]\([^)]*\)\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
@@ -564,6 +592,7 @@ export const state = Alpine.reactive({
     this.viewing = set[(at + by + set.length) % set.length]
   },
   shotLabel(shot: Shot): string {
+    if (shot.pasted) return 'Picture'
     const when = new Date(shot.taken).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
     return shot.platform === 'web' ? `Web, ${when}` : `iOS, ${shot.key}, ${when}`
   },

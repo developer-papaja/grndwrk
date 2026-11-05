@@ -44,7 +44,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     // an image content type without asking first, which we never allow.
     if (filesMatch && method === 'POST') {
       const id = decodeURIComponent(filesMatch[1])
-      await ctx.store.get(id)
+      // A thought, a screen or a persona: pictures in notes, and in thread replies and answers.
+      const known = (await ctx.store.get(id).then(() => true, () => false)) ||
+        (await listScreens(ctx.gwDir)).some((s) => s.id === id) ||
+        (await listPersonas(ctx.gwDir)).some((p) => p.id === id)
+      if (!known) throw new NotFound(id)
       const type = (req.headers['content-type'] ?? '').split(';')[0].trim()
       const data = await readRaw(req, MAX_IMAGE_BYTES)
       try {
