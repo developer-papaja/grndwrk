@@ -63,7 +63,7 @@ async function deploy(name?: string) {
 
   console.log(`Setting up your relay on Cloudflare, as "${worker}". It takes three steps.\n`)
 
-  console.log('1. Getting Cloudflare\'s tool ready (wrangler, the exact version grndwrk was tested with). The first time this takes a minute...')
+  console.log('1. Getting wrangler ready: Cloudflare\'s own command-line tool for putting code on their servers. grndwrk uses it only for this, at the exact version it was tested with (ignore it if it says an update is available). The first time this takes a minute...')
   await run(['ci', '--no-audit', '--no-fund', '--loglevel=error'], dir, { tool: 'npm', quiet: true })
 
   console.log('\n2. Logging in to Cloudflare.')
@@ -77,7 +77,10 @@ async function deploy(name?: string) {
     if (!(await loggedIn(dir))) throw new Error('Not logged in to Cloudflare yet. Run grndwrk relay deploy again and finish the login in the browser.')
   }
 
-  console.log('\n3. Putting the relay on your account. The first time, Cloudflare may ask you to pick a workers.dev name: it becomes part of the relay\'s address, and anything short works.\n')
+  console.log('\n3. Putting the relay on your account.')
+  console.log('   The first time, Cloudflare asks "Would you like to register a workers.dev subdomain now?". Answer Y, then type a short name, such as')
+  console.log('   your company\'s or your own. It becomes part of the relay\'s address (https://' + worker + '.<the name>.workers.dev), is free, and is')
+  console.log('   your account\'s one name for everything you put on Cloudflare, so pick one you are happy to keep.\n')
   const report = join(dir, 'deploy-output.ndjson')
   await rm(report, { force: true })
   // Run as a normal command, so Cloudflare can ask what it needs; it writes where the relay runs to this file.
