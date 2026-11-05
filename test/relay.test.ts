@@ -1,0 +1,223 @@
+import { describe, expect, it } from 'vitest'
+import { Relay, LIMITS, fromBase64, toBase64, type Store } from '../relay/src/relay.js'
+import {
+  inviteId, open, phoneSealKey, phoneSignKey, randomKey, relayDeviceId, requestSignature, seal, teamAuthKey, teamSealKey,
+} from '../relay/src/crypto.js'
+import { requestSignature as lanSignature } from '../src/server/devices.js'
+
+class MemoryStore implements Store {
+  data = new Map<string, unknown>()
+  async get<T>(key: string) { return this.data.get(key) as T | undefined }
+  async put(key: string, value: unknown) { this.data.set(key, value) }
+  async delete(keys: string[]) { for (const k of keys) this.data.delete(k) }
+  async list<T>({ prefix, limit }: { prefix: string; limit?: number }) {
+    const keys = [...this.data.keys()].filter((k) => k.startsWith(prefix)).sort().slice(0, limit ?? Infinity)
+    return new Map(keys.map((k) => [k, this.data.get(k) as T]))
+  }
+}
+
+const BASE = 'https://relay.example.workers.dev'
+let nonceCount = 0
+
+async function setup() {
+  const team = randomKey()
+  const auth = await teamAuthKey(team)
+  const store = new MemoryStore()
+  let clock = Date.UTC(2026, 10, 5, 12)
+  const relay = new Relay(store, auth, () => clock)
+  const signed = async (who: string, key: string, method: string, path: string, body: Uint8Array | string = new Uint8Array(), headers: Record<string, string> = {}) => {
+    const b = typeof body === 'string' ? new TextEncoder().encode(body) : body
+    const time = String(clock)
+    const nonce = `nonce-${String(++nonceCount).padStart(12, '0')}`
+    const sig = await requestSignature(key, method, path, time, nonce, b)
+    return relay.handle(new Request(BASE + path, {
+      method,
+      body: method === 'GET' ? undefined : (b as BodyInit),
+      headers: { 'x-grndwrk-device': who, 'x-grndwrk-time': time, 'x-grndwrk-nonce': nonce, 'x-grndwrk-signature': sig, ...headers },
+    }))
+  }
+  const asTeam = (method: string, path: string, body?: Uint8Array | string) => signed('team', auth, method, path, body)
+  return { team, auth, store, relay, signed, asTeam, tick: (ms: number) => (clock += ms), now: () => clock }
+}
+
+/** A phone joins with an invite and the team lets it in, as grndwrk and the app will. */
+async function joined(t: Awaited<ReturnType<typeof setup>>) {
+  const secret = randomKey()
+  const inv = await inviteId(secret)
+  expect((await t.asTeam('POST', '/v1/invites', JSON.stringify({ id: inv }))).status).toBe(200)
+
+  const phoneKey = randomKey()
+  const sealedJoin = await seal(secret, `join:${inv}`, new TextEncoder().encode(JSON.stringify({ key: phoneKey, name: 'Anna’s iPhone' })))
+  expect((await t.relay.handle(new Request(`${BASE}/v1/join/${inv}`, { method: 'POST', body: sealedJoin as BodyInit }))).status).toBe(202)
+
+  const joins = await (await t.asTeam('GET', '/v1/joins')).json() as { invite: string; body: string }[]
+  const plain = await open(secret, `join:${inv}`, fromBase64(joins[0].body))
+  const { key } = JSON.parse(new TextDecoder().decode(plain))
+  const sign = await phoneSignKey(key)
+  const id = await relayDeviceId(sign)
+  const sealedKey = toBase64(await seal(await teamSealKey(t.team), `device:${id}`, new TextEncoder().encode(key)))
+  expect((await t.asTeam('PUT', `/v1/devices/${id}`, JSON.stringify({ sign, sealed: sealedKey }))).status).toBe(200)
+  expect((await t.asTeam('DELETE', `/v1/invites/${inv}`)).status).toBe(200)
+  return { id, sign, phoneKey, secret, inv, asPhone: (method: string, path: string, body?: Uint8Array | string) => t.signed(id, sign, method, path, body) }
+}
+
+describe('relay', () => {
+  it('signs requests exactly as --lan does', async () => {
+    const key = randomKey()
+    const body = new TextEncoder().encode('{"title":"x"}')
+    expect(await requestSignature(key, 'post', '/api/feedback', '123', 'abcdefghijklmnop', body))
+      .toBe(lanSignature(key, 'post', '/api/feedback', '123', 'abcdefghijklmnop', Buffer.from(body)))
+  })
+
+  it('carries a sealed comment from a phone to the team, and status back', async () => {
+    const t = await setup()
+    const p = await joined(t)
+    const seal1 = await phoneSealKey(p.phoneKey)
+    const comment = new TextEncoder().encode(JSON.stringify({ path: '/api/feedback', body: { title: 'The button is cut off' } }))
+    const left = await p.asPhone('POST', '/v1/inbox', await seal(seal1, `inbox:${p.id}`, comment))
+    expect(left.status).toBe(202)
+
+    const list = await (await t.asTeam('GET', '/v1/inbox')).json() as { id: string; device: string; size: number }[]
+    expect(list).toHaveLength(1)
+    expect(list[0].device).toBe(p.id)
+    const got = await t.asTeam('GET', `/v1/inbox/${list[0].id}`)
+    expect(got.headers.get('x-grndwrk-from')).toBe(p.id)
+    const plain = await open(seal1, `inbox:${p.id}`, new Uint8Array(await got.arrayBuffer()))
+    expect(JSON.parse(new TextDecoder().decode(plain)).body.title).toBe('The button is cut off')
+    expect((await t.asTeam('DELETE', `/v1/inbox/${list[0].id}`)).status).toBe(200)
+    expect(await (await t.asTeam('GET', '/v1/inbox')).json()).toEqual([])
+
+    expect((await p.asPhone('GET', '/v1/outbox')).status).toBe(204)
+    const status = await seal(seal1, `outbox:${p.id}`, new TextEncoder().encode('[{"key":"k","status":"ready"}]'))
+    expect((await t.asTeam('PUT', `/v1/outbox/${p.id}`, status)).status).toBe(200)
+    const back = await p.asPhone('GET', '/v1/outbox')
+    expect(new TextDecoder().decode(await open(seal1, `outbox:${p.id}`, new Uint8Array(await back.arrayBuffer())))).toContain('ready')
+  })
+
+  it('keeps large envelopes whole across chunks', async () => {
+    const t = await setup()
+    const p = await joined(t)
+    const big = crypto.getRandomValues(new Uint8Array(65536))
+    const body = new Uint8Array(LIMITS.chunk * 2 + 1000)
+    for (let i = 0; i < body.length; i += big.length) body.set(big.subarray(0, Math.min(big.length, body.length - i)), i)
+    expect((await p.asPhone('POST', '/v1/inbox', body)).status).toBe(202)
+    const [e] = await (await t.asTeam('GET', '/v1/inbox')).json() as { id: string }[]
+    const got = new Uint8Array(await (await t.asTeam('GET', `/v1/inbox/${e.id}`)).arrayBuffer())
+    expect(got).toEqual(body)
+    expect([...t.store.data.keys()].filter((k) => k.startsWith(`chunk/${e.id}/`))).toHaveLength(3)
+    await t.asTeam('DELETE', `/v1/inbox/${e.id}`)
+    expect([...t.store.data.keys()].filter((k) => k.startsWith('chunk/'))).toEqual([])
+  })
+
+  it('cannot open what it keeps: the envelope fails when sealed for another place or changed', async () => {
+    const key = await phoneSealKey(randomKey())
+    const sealed = await seal(key, 'inbox:a', new TextEncoder().encode('hello'))
+    expect(await open(key, 'inbox:b', sealed)).toBeUndefined()
+    const changed = sealed.slice()
+    changed[20] ^= 1
+    expect(await open(key, 'inbox:a', changed)).toBeUndefined()
+    expect(await open(await phoneSealKey(randomKey()), 'inbox:a', sealed)).toBeUndefined()
+    expect(new TextDecoder().decode(await open(key, 'inbox:a', sealed))).toBe('hello')
+  })
+
+  it('refuses strangers, wrong keys, old times and a nonce sent twice', async () => {
+    const t = await setup()
+    const p = await joined(t)
+    expect((await t.signed('team', randomKey(), 'GET', '/v1/inbox')).status).toBe(401)
+    expect((await t.signed(p.id, randomKey(), 'POST', '/v1/inbox', 'x'.repeat(40))).status).toBe(401)
+    expect((await t.signed('0'.repeat(32), p.sign, 'POST', '/v1/inbox', 'x'.repeat(40))).status).toBe(401)
+    // A phone's key is not the team's.
+    expect((await t.signed('team', p.sign, 'GET', '/v1/inbox')).status).toBe(401)
+    expect((await p.asPhone('GET', '/v1/inbox')).status).toBe(404)
+    expect((await p.asPhone('GET', '/v1/devices')).status).toBe(404)
+    expect((await t.relay.handle(new Request(`${BASE}/v1/inbox`))).status).toBe(401)
+
+    // A signed request replayed, or one signed six minutes ago.
+    const path = '/v1/outbox'
+    const time = String(t.now())
+    const sig = await requestSignature(p.sign, 'GET', path, time, 'replay-nonce-0001', new Uint8Array())
+    const req = () => new Request(BASE + path, { headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'replay-nonce-0001', 'x-grndwrk-signature': sig } })
+    expect((await t.relay.handle(req())).status).toBe(204)
+    expect((await t.relay.handle(req())).status).toBe(401)
+    t.tick(6 * 60_000)
+    const sig2 = await requestSignature(p.sign, 'GET', path, time, 'replay-nonce-0002', new Uint8Array())
+    expect((await t.relay.handle(new Request(BASE + path, { headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'replay-nonce-0002', 'x-grndwrk-signature': sig2 } }))).status).toBe(401)
+  })
+
+  it('signs the body: a changed body is refused', async () => {
+    const t = await setup()
+    const p = await joined(t)
+    const time = String(t.now())
+    const sig = await requestSignature(p.sign, 'POST', '/v1/inbox', time, 'body-nonce-000001', new TextEncoder().encode('a'.repeat(40)))
+    const res = await t.relay.handle(new Request(`${BASE}/v1/inbox`, { method: 'POST', body: 'b'.repeat(40), headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'body-nonce-000001', 'x-grndwrk-signature': sig } }))
+    expect(res.status).toBe(401)
+  })
+
+  it('lets an invite be used once, and not after it expires or is forgotten', async () => {
+    const t = await setup()
+    const inv = await inviteId(randomKey())
+    const join = (id = inv) => t.relay.handle(new Request(`${BASE}/v1/join/${id}`, { method: 'POST', body: 'x'.repeat(40) }))
+    expect((await join()).status).toBe(404)
+    await t.asTeam('POST', '/v1/invites', JSON.stringify({ id: inv }))
+    expect((await join()).status).toBe(202)
+    expect((await join()).status).toBe(409)
+    await t.asTeam('DELETE', `/v1/invites/${inv}`)
+    expect((await join()).status).toBe(404)
+
+    const inv2 = await inviteId(randomKey())
+    await t.asTeam('POST', '/v1/invites', JSON.stringify({ id: inv2 }))
+    t.tick(LIMITS.invite + 1)
+    expect((await join(inv2)).status).toBe(404)
+    expect((await t.relay.handle(new Request(`${BASE}/v1/join/${inv2}`, { method: 'POST', body: 'x'.repeat(LIMITS.join + 1) }))).status).toBe(413)
+  })
+
+  it('takes a phone out with everything it left', async () => {
+    const t = await setup()
+    const p = await joined(t)
+    await p.asPhone('POST', '/v1/inbox', 'x'.repeat(100))
+    await t.asTeam('PUT', `/v1/outbox/${p.id}`, 'y'.repeat(100))
+    const devices = await (await t.asTeam('GET', '/v1/devices')).json() as { id: string; sealed: string }[]
+    expect(devices.map((d) => d.id)).toEqual([p.id])
+    // A teammate's grndwrk opens the phone's key with the team key; the relay cannot.
+    const key = await open(await teamSealKey(t.team), `device:${p.id}`, fromBase64(devices[0].sealed))
+    expect(new TextDecoder().decode(key)).toBe(p.phoneKey)
+
+    expect((await t.asTeam('DELETE', `/v1/devices/${p.id}`)).status).toBe(200)
+    expect((await p.asPhone('POST', '/v1/inbox', 'x'.repeat(100))).status).toBe(401)
+    expect(await (await t.asTeam('GET', '/v1/inbox')).json()).toEqual([])
+    expect([...t.store.data.keys()].filter((k) => /^(chunk|env|out|dev)\//.test(k))).toEqual([])
+  })
+
+  it('limits what a phone leaves in an hour, and the size of one envelope', async () => {
+    const t = await setup()
+    const p = await joined(t)
+    expect((await p.asPhone('POST', '/v1/inbox', new Uint8Array(LIMITS.body + 1))).status).toBe(413)
+    for (let i = 0; i < LIMITS.perHour; i++) expect((await p.asPhone('POST', '/v1/inbox', 'x'.repeat(40))).status).toBe(202)
+    expect((await p.asPhone('POST', '/v1/inbox', 'x'.repeat(40))).status).toBe(429)
+    t.tick(60 * 60_000)
+    expect((await p.asPhone('POST', '/v1/inbox', 'x'.repeat(40))).status).toBe(202)
+  })
+
+  it('forgets envelopes nobody fetched in 30 days', async () => {
+    const t = await setup()
+    const p = await joined(t)
+    await p.asPhone('POST', '/v1/inbox', 'x'.repeat(100))
+    t.tick(LIMITS.keep + 60_000)
+    expect(await (await t.asTeam('GET', '/v1/inbox')).json()).toEqual([])
+    expect(await t.store.get('total')).toEqual({ n: 0, bytes: 0 })
+  })
+
+  it('says when it has no team key, and checks the input it is given', async () => {
+    const store = new MemoryStore()
+    const bare = new Relay(store, undefined)
+    expect((await bare.handle(new Request(`${BASE}/v1/hello`))).status).toBe(200)
+    expect((await bare.handle(new Request(`${BASE}/v1/inbox`))).status).toBe(503)
+
+    const t = await setup()
+    expect((await t.asTeam('POST', '/v1/invites', '{"id":"../dev/x"}')).status).toBe(400)
+    expect((await t.asTeam('POST', '/v1/invites', 'not json')).status).toBe(400)
+    expect((await t.asTeam('PUT', `/v1/devices/${'a'.repeat(32)}`, JSON.stringify({ sign: 'short', sealed: '' }))).status).toBe(400)
+    expect((await t.asTeam('PUT', `/v1/outbox/${'a'.repeat(32)}`, 'x')).status).toBe(404)
+    expect((await t.asTeam('GET', '/v1/inbox/..%2Fdev')).status).toBe(404)
+  })
+})
