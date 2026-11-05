@@ -3,7 +3,7 @@
  * a mailbox there, and connect a teammate's grndwrk to it.
  */
 import { spawn } from 'node:child_process'
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { PACKAGE_ROOT, stateDir } from '../root.js'
 import { RelayClient } from './client.js'
@@ -61,23 +61,38 @@ async function deploy(name?: string) {
   const toml = await readFile(join(PACKAGE_ROOT, 'relay', 'wrangler.toml'), 'utf8')
   await writeFile(join(dir, 'wrangler.toml'), toml.replace(/^name = ".*"$/m, `name = "${worker}"`))
 
-  console.log(`Putting the relay on your Cloudflare account as ${worker}, with ${WRANGLER}. The first time, Cloudflare asks you to log in in the browser.\n`)
-  console.log('Installing it, exactly as locked...')
-  await run(['ci', '--no-audit', '--no-fund'], dir, undefined, 'npm')
-  const out = await run(['--no-install', 'wrangler', 'deploy'], dir)
-  const found = /https:\/\/[a-z0-9.-]+\.workers\.dev/.exec(out)?.[0]
-  if (!found) throw new Error('Cloudflare did not say where the relay runs. If it asked you to pick a workers.dev subdomain, do that and run grndwrk relay deploy again.')
-  const url = relayOrigin(found)
+  console.log(`Setting up your relay on Cloudflare, as "${worker}". It takes three steps.\n`)
+
+  console.log('1. Getting Cloudflare\'s tool ready (wrangler, the exact version grndwrk was tested with). The first time this takes a minute...')
+  await run(['ci', '--no-audit', '--no-fund', '--loglevel=error'], dir, { tool: 'npm', quiet: true })
+
+  console.log('\n2. Logging in to Cloudflare.')
+  if (await loggedIn(dir)) console.log('   You are logged in already.')
+  else {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      throw new Error('Cloudflare needs you to log in, and this terminal cannot open a login. Run grndwrk relay deploy in a normal terminal window, or set CLOUDFLARE_API_TOKEN to an API token from your Cloudflare dashboard (My Profile, API Tokens, the "Edit Cloudflare Workers" template).')
+    }
+    console.log('   A browser window opens. Log in, or make a free account, then click Allow and come back here.\n')
+    await run(['--no-install', 'wrangler', 'login'], dir, { interactive: true })
+    if (!(await loggedIn(dir))) throw new Error('Not logged in to Cloudflare yet. Run grndwrk relay deploy again and finish the login in the browser.')
+  }
+
+  console.log('\n3. Putting the relay on your account. The first time, Cloudflare may ask you to pick a workers.dev name: it becomes part of the relay\'s address, and anything short works.\n')
+  const report = join(dir, 'deploy-output.ndjson')
+  await rm(report, { force: true })
+  // Run as a normal command, so Cloudflare can ask what it needs; it writes where the relay runs to this file.
+  await run(['--no-install', 'wrangler', 'deploy'], dir, { interactive: true, env: { WRANGLER_OUTPUT_FILE_PATH: report } })
+  const url = relayOrigin(await deployedAt(report))
 
   // The owner key stays on this Mac; the relay gets only a key made from it, to check that mailboxes are opened by you.
   const owner = had?.owner ?? randomKey()
-  console.log('\nGiving the relay its owner key...')
-  await run(['--no-install', 'wrangler', 'secret', 'put', 'OWNER_AUTH'], dir, ownerAuthKey(owner))
+  console.log('\nGiving the relay its owner key: only this Mac can open mailboxes on it...')
+  await run(['--no-install', 'wrangler', 'secret', 'put', 'OWNER_AUTH'], dir, { input: ownerAuthKey(owner), quiet: true })
   await saveOwnRelay({ url, owner, name: worker })
 
   const hello = await fetch(`${url}/v1/hello`).then((r) => r.json() as Promise<{ relay?: string }>).catch(() => ({ relay: undefined }))
-  console.log(hello.relay === 'grndwrk' ? `\nThe relay runs at ${url}.` : `\nThe relay is deployed at ${url}; it may take a minute to answer.`)
-  console.log('Next, in each project that should use it: grndwrk relay add')
+  console.log(hello.relay === 'grndwrk' ? `\nDone. Your relay runs at ${url}.` : `\nDone. Your relay is at ${url}; it may take a minute before it answers.`)
+  console.log('\nNext, in each project whose colleagues should send through it:\n  grndwrk relay add')
 }
 
 async function add(gwDir: string) {
@@ -120,17 +135,62 @@ function printTeamLink(r: { url: string; mailbox: string; team: string }) {
   console.log(`\nTeammates connect their grndwrk with (send it privately; it opens the project's comments):\n  grndwrk relay join ${teamLink(r)}`)
 }
 
-/** Runs npx; prints what it says and returns it. Input, when given, is written to it (a secret: never on the command line). */
-function run(args: string[], cwd: string, input?: string, tool: 'npx' | 'npm' = 'npx'): Promise<string> {
+/** Whether wrangler has a Cloudflare login (or an API token) to use. */
+async function loggedIn(dir: string): Promise<boolean> {
+  const said = await run(['--no-install', 'wrangler', 'whoami'], dir, { quiet: true }).catch(() => '')
+  return /You are logged in/.test(said)
+}
+
+/** Where wrangler says the relay runs: the workers.dev address in its report. */
+export async function deployedAt(report: string): Promise<string> {
+  const lines = (await readFile(report, 'utf8').catch(() => '')).split('\n').filter(Boolean)
+  for (const line of lines.reverse()) {
+    try {
+      const entry = JSON.parse(line) as { type?: string; targets?: unknown }
+      const targets = Array.isArray(entry.targets) ? entry.targets.filter((t): t is string => typeof t === 'string') : []
+      const found = targets.find((t) => /^https:\/\/[a-z0-9.-]+\.workers\.dev\/?$/.test(t)) ?? targets.find((t) => t.startsWith('https://'))
+      if (entry.type === 'deploy' && found) return found
+    } catch {}
+  }
+  throw new Error('Cloudflare did not say where the relay runs. If it stopped to ask something (a workers.dev name), answer it and run grndwrk relay deploy again: it picks up where it left off.')
+}
+
+interface RunOptions {
+  tool?: 'npx' | 'npm'
+  /** Its own terminal, so it can ask questions and open the browser. Nothing is captured. */
+  interactive?: boolean
+  /** Said only if it fails. */
+  quiet?: boolean
+  /** Written to it: a secret, never on the command line. */
+  input?: string
+  env?: Record<string, string>
+}
+
+/** Runs npx or npm in `cwd`; returns what it printed, unless interactive. */
+function run(args: string[], cwd: string, opts: RunOptions = {}): Promise<string> {
+  const tool = opts.tool ?? 'npx'
   return new Promise((resolve, reject) => {
-    const child = spawn(process.platform === 'win32' ? `${tool}.cmd` : tool, args, { cwd, stdio: [input === undefined ? 'inherit' : 'pipe', 'pipe', 'inherit'], shell: process.platform === 'win32' })
-    let out = ''
-    child.stdout!.on('data', (d: Buffer) => {
-      out += d.toString()
-      process.stdout.write(d)
+    const child = spawn(process.platform === 'win32' ? `${tool}.cmd` : tool, args, {
+      cwd,
+      env: { ...process.env, ...opts.env },
+      stdio: opts.interactive ? 'inherit' : [opts.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
     })
-    if (input !== undefined) child.stdin!.end(input + '\n')
+    let out = ''
+    child.stdout?.on('data', (d: Buffer) => {
+      out += d.toString()
+      if (!opts.quiet) process.stdout.write(d)
+    })
+    child.stderr?.on('data', (d: Buffer) => {
+      out += d.toString()
+      if (!opts.quiet) process.stderr.write(d)
+    })
+    if (opts.input !== undefined) child.stdin!.end(opts.input + '\n')
     child.on('error', reject)
-    child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(`${args.slice(1, 3).join(' ')} stopped (exit ${code}). See above.`))))
+    child.on('close', (code) => {
+      if (code === 0) return resolve(out)
+      if (opts.quiet && out.trim()) process.stderr.write(out)
+      reject(new Error(`${tool === 'npm' ? 'Installing wrangler' : `wrangler ${args.filter((a) => !a.startsWith('-'))[1] ?? ''}`.trim()} stopped (exit ${code}). What it said is above.`))
+    })
   })
 }
