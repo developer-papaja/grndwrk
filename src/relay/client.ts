@@ -43,8 +43,10 @@ export class RelayClient {
       signal: AbortSignal.timeout(30_000),
     })
     if (!res.ok && res.status !== 204) {
-      const said = await res.json().then((j: { error?: string }) => j.error, () => undefined)
-      throw new RelayError(res.status, said ?? `The relay answered ${res.status}`)
+      const said = await res.json().then((j: { error?: unknown }) => j.error, () => undefined)
+      // Printed in the terminal: never control characters from the relay (they could drive the terminal).
+      const clean = typeof said === 'string' ? said.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, ' ').slice(0, 200) : ''
+      throw new RelayError(res.status, clean || `The relay answered ${res.status}`)
     }
     return res
   }

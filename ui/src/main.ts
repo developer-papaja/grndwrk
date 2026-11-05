@@ -37,7 +37,7 @@ Alpine.start()
 const plainIcon = document.querySelector<HTMLLinkElement>('link[rel=icon]')?.href ?? ''
 const waitingIcon = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="#0d99ff"/><circle cx="12.5" cy="3.5" r="3.5" fill="#f24822"/></svg>')}`
 Alpine.effect(() => {
-  const waiting = state.pairRequests.length + state.siteRequests.length
+  const waiting = state.pairRequests.length + state.siteRequests.length + (state.relay.waiting?.length ?? 0)
   const name = typeof state.project.name === 'string' && state.project.name ? state.project.name : ''
   const base = name ? `${name} · grndwrk` : 'grndwrk'
   document.title = waiting ? `(${waiting}) Allow to send comments · ${name || 'grndwrk'}` : base
@@ -81,6 +81,7 @@ const handlers = {
     void state.loadPersonas()
     void state.loadPairRequests()
     void state.loadSiteRequests()
+    void state.loadRelay()
     void state.loadShots()
     void state.loadRuntime()
     if (state.view === 'docs') void state.loadDocs()
@@ -102,6 +103,7 @@ const handlers = {
     else if (event.type === 'pair:request') state.addPairRequest(event.request)
     else if (event.type === 'pair:done') state.dropPairRequest(event.id)
     else if (event.type === 'site:request') state.addSiteRequest(event.origin)
+    else if (event.type === 'relay:waiting') void state.loadRelay()
     else if (event.type === 'site:done') {
       state.dropSiteRequest(event.origin)
       void state.loadSiteRequests()

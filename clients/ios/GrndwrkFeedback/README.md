@@ -178,10 +178,10 @@ Comments are kept on the device and sent once grndwrk answers, oldest first. The
 A colleague who tests at home, or anywhere without your grndwrk on the Wi-Fi, sends through your team's relay: a small server you put on your own Cloudflare account with `grndwrk relay deploy` (see grndwrk's README). It only passes on sealed envelopes, and cannot read them.
 
 1. In the map, the globe at the bottom of the rail: **Colleagues**, type their name, **Invite**. It shows a link and a QR code. Send the link (or show the code). It works once, for seven days.
-2. In the app, they long press the grndwrk button, **Join with an invite**, and paste the link, or **Scan the QR code**.
-3. The next time a grndwrk on your team runs, it lets their phone in. From then on, when no grndwrk answers on their Wi-Fi, comments go to the relay. They reach the map when a grndwrk on the team runs, marked with their name. What became of them (fix proposed, ready to test, fixed, with the steps) comes back the same way, so they test fixes as you do.
+2. In the app, they long press the grndwrk button, **Join with an invite**, and paste the link (`grndwrk:invite/...`), or **Scan the QR code**. The phone shows four digits.
+3. A grndwrk on your team shows "A phone joined with Anna's invite" with four digits. Allow it when Anna's phone shows the same; until then her comments wait on her phone (long press, **Show the digits to be allowed**, shows them again). From then on, when no grndwrk answers on their Wi-Fi, comments go to the relay. They reach the map when a grndwrk on the team runs, marked with their name. What became of them (fix proposed, ready to test, fixed, with the steps) comes back the same way, so they test fixes as you do.
 
-The phone still tries the Wi-Fi first. **Leave the relay**, in the same menu, stops it; joining again needs a new invite. In the map, Colleagues lists who joined; Remove takes a phone out at once.
+Its key is kept in the Keychain, on this device only. The phone still tries the Wi-Fi first. **Leave the relay**, in the same menu, stops it; joining again needs a new invite. In the map, Colleagues lists who joined; Remove takes a phone out at once.
 
 **Scanning needs the camera,** so the app's Info.plist must say why: `NSCameraUsageDescription`, for example "To scan an invite from grndwrk". Put it in the Info.plist of the builds that have the package. Without it, the app offers only pasting the link.
 

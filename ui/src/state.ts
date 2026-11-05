@@ -2,7 +2,7 @@ import Alpine from 'alpinejs'
 import { cached } from './reactivity'
 import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, type RelayInfo } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, answerJoin, type RelayInfo } from './api'
 import { BOX, commentsForScreen, hiddenScreenIds, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
@@ -632,6 +632,15 @@ export const state = Alpine.reactive({
       const { name: who, link } = await inviteColleague(name)
       this.invited = { name: who, link, qr: await qrPath(link) }
       await this.loadRelay()
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** A colleague's phone joined with their invite: allowed only when it shows the same four digits. */
+  async answerJoin(invite: string, allow: boolean) {
+    try {
+      this.relay = await answerJoin(invite, allow)
+      this.flash(allow ? 'Allowed. Their comments come through the relay now.' : 'Not allowed. Send a new invite if it was them.')
     } catch (err) {
       this.flash(errorText(err))
     }

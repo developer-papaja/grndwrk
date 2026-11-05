@@ -1,0 +1,8 @@
+{
+  "name": "grndwrk-relay",
+  "private": true,
+  "description": "The grndwrk relay's Worker. grndwrk relay deploy installs exactly this lockfile in grndwrk's per-user folder and deploys from there.",
+  "devDependencies": {
+    "wrangler": "4.151.3"
+  }
+}

@@ -114,6 +114,17 @@ describe('relay', () => {
     expect(new TextDecoder().decode(await open(seal1, `outbox:${p.id}`, new Uint8Array(await back.arrayBuffer())))).toContain('ready')
   })
 
+  it('answers the team’s round in one request: joins, phones and what waits', async () => {
+    const t = await setup()
+    const p = await joined(t)
+    await p.asPhone('POST', `/v1/${MB}/inbox`, 'x'.repeat(100))
+    const sync = await (await t.asTeam('GET', `/v1/${MB}/sync`)).json() as { joins: unknown[]; devices: { id: string }[]; inbox: { device: string }[] }
+    expect(sync.joins).toEqual([])
+    expect(sync.devices.map((d) => d.id)).toEqual([p.id])
+    expect(sync.inbox.map((e) => e.device)).toEqual([p.id])
+    expect((await p.asPhone('GET', `/v1/${MB}/sync`)).status).toBe(404)
+  })
+
   it('keeps large envelopes whole across chunks', async () => {
     const t = await setup()
     const p = await joined(t)
@@ -152,16 +163,23 @@ describe('relay', () => {
     expect((await p.asPhone('GET', `/v1/${MB}/devices`)).status).toBe(404)
     expect((await t.relay.handle(new Request(`${BASE}/v1/${MB}/inbox`))).status).toBe(401)
 
-    // A signed request replayed, or one signed six minutes ago.
-    const path = `/v1/${MB}/outbox`
+    // A request that changes something, sent again, or one signed six minutes ago.
+    const path = `/v1/${MB}/inbox`
     const time = String(t.now())
-    const sig = await requestSignature(p.sign, 'GET', path, time, 'replay-nonce-0001', new Uint8Array())
-    const req = () => new Request(BASE + path, { headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'replay-nonce-0001', 'x-grndwrk-signature': sig } })
-    expect((await t.relay.handle(req())).status).toBe(204)
+    const env = new TextEncoder().encode('e'.repeat(40))
+    const sig = await requestSignature(p.sign, 'POST', path, time, 'replay-nonce-0001', env)
+    const req = () => new Request(BASE + path, { method: 'POST', body: env, headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'replay-nonce-0001', 'x-grndwrk-signature': sig } })
+    expect((await t.relay.handle(req())).status).toBe(202)
     expect((await t.relay.handle(req())).status).toBe(401)
+    // A read sent again only reads again, and stores nothing.
+    const get = await requestSignature(p.sign, 'GET', `/v1/${MB}/outbox`, time, 'read-nonce-000001', new Uint8Array())
+    const read = () => new Request(`${BASE}/v1/${MB}/outbox`, { headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'read-nonce-000001', 'x-grndwrk-signature': get } })
+    expect((await t.relay.handle(read())).status).toBe(204)
+    expect((await t.relay.handle(read())).status).toBe(204)
+    expect([...t.store.data.keys()].filter((k) => k.includes('read-nonce'))).toEqual([])
     t.tick(6 * 60_000)
-    const sig2 = await requestSignature(p.sign, 'GET', path, time, 'replay-nonce-0002', new Uint8Array())
-    expect((await t.relay.handle(new Request(BASE + path, { headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'replay-nonce-0002', 'x-grndwrk-signature': sig2 } }))).status).toBe(401)
+    const sig2 = await requestSignature(p.sign, 'GET', `/v1/${MB}/outbox`, time, 'replay-nonce-0002', new Uint8Array())
+    expect((await t.relay.handle(new Request(`${BASE}/v1/${MB}/outbox`, { headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'replay-nonce-0002', 'x-grndwrk-signature': sig2 } }))).status).toBe(401)
   })
 
   it('signs the body: a changed body is refused', async () => {
@@ -216,6 +234,15 @@ describe('relay', () => {
     expect((await p.asPhone('POST', `/v1/${MB}/inbox`, 'x'.repeat(40))).status).toBe(429)
     t.tick(60 * 60_000)
     expect((await p.asPhone('POST', `/v1/${MB}/inbox`, 'x'.repeat(40))).status).toBe(202)
+    // And a day's worth, however it is spread over the hours.
+    let sent = LIMITS.perHour + 1
+    while (sent < LIMITS.perDay) {
+      t.tick(60 * 60_000)
+      for (let i = 0; i < LIMITS.perHour && sent < LIMITS.perDay; i++, sent++) expect((await p.asPhone('POST', `/v1/${MB}/inbox`, 'x'.repeat(40))).status).toBe(202)
+    }
+    // The clock started at noon UTC, and these hours stay within that day.
+    t.tick(60 * 60_000)
+    expect((await p.asPhone('POST', `/v1/${MB}/inbox`, 'x'.repeat(40))).status).toBe(429)
   })
 
   it('forgets envelopes nobody fetched in 30 days', async () => {
@@ -245,14 +272,15 @@ describe('relay', () => {
 
     expect((await t.asTeam('POST', `/v1/${MB}/invites`, '{"id":"../dev/x","sealed":""}')).status).toBe(400)
     expect((await t.asTeam('POST', `/v1/${MB}/invites`, JSON.stringify({ id: 'a'.repeat(32), sealed: '<script>' }))).status).toBe(400)
-    const invitePage = await t.relay.handle(new Request(`${BASE}/v1/${MB}/invite`))
-    expect(invitePage.headers.get('content-security-policy')).toContain("default-src 'none'")
-    expect(await invitePage.text()).toContain('Join with an invite')
+    // A link opened in a browser gets nothing from the relay: links are not its pages.
+    expect((await t.relay.handle(new Request(`${BASE}/v1/${MB}/invite`))).status).toBe(401)
     expect((await t.asTeam('POST', `/v1/${MB}/invites`, 'not json')).status).toBe(400)
     expect((await t.asTeam('PUT', `/v1/${MB}/devices/${'a'.repeat(32)}`, JSON.stringify({ sign: 'short', sealed: '' }))).status).toBe(400)
     expect((await t.asTeam('PUT', `/v1/${MB}/outbox/${'a'.repeat(32)}`, 'x')).status).toBe(404)
     expect((await t.asTeam('GET', `/v1/${MB}/inbox/..%2Fdev`)).status).toBe(404)
 
+    // Closing a full mailbox goes page by page, never all of it in memory at once.
+    for (let i = 0; i < 300; i++) await t.store.put(`chunk/x${i}/0000`, new Uint8Array(10))
     expect((await t.asOwner('DELETE', `/v1/${MB}`)).status).toBe(200)
     expect(t.store.data.size).toBe(0)
     expect((await t.asTeam('GET', `/v1/${MB}/inbox`)).status).toBe(404)

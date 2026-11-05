@@ -20,6 +20,10 @@ enum Relay {
     var key: String
     /// When the relay last refused this phone: not let in yet, or taken out.
     var refused: Date?
+    /// When grndwrk made the last status read: an older one handed over again is ignored.
+    var statusAt: Double?
+    /// The four digits to tell whoever invited you; they allow this phone when the map shows the same.
+    var digits: String { Relay.digits(key) }
   }
 
   enum Problem: Error { case notALink, unreachable, expired, used, refused(Int) }
@@ -27,33 +31,59 @@ enum Relay {
   static let changed = Notification.Name("GrndwrkFeedback.relay")
   private static let storeKey = "GrndwrkFeedback.relay"
 
+  /// In the Keychain, on this device only: never in a backup.
   static var joined: Joined? {
-    get { UserDefaults.standard.data(forKey: storeKey).flatMap { try? JSONDecoder().decode(Joined.self, from: $0) } }
+    get { keychain().flatMap { try? JSONDecoder().decode(Joined.self, from: $0) } }
     set {
-      UserDefaults.standard.set(newValue.flatMap { try? JSONEncoder().encode($0) }, forKey: storeKey)
+      keychain(set: newValue.flatMap { try? JSONEncoder().encode($0) })
       NotificationCenter.default.post(name: changed, object: nil)
     }
+  }
+
+  private static func keychain() -> Data? {
+    let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: storeKey, kSecAttrAccount as String: "relay", kSecReturnData as String: true]
+    var out: AnyObject?
+    return SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess ? out as? Data : nil
+  }
+
+  private static func keychain(set data: Data?) {
+    let match: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: storeKey, kSecAttrAccount as String: "relay"]
+    SecItemDelete(match as CFDictionary)
+    guard let data else { return }
+    var add = match
+    add[kSecValueData as String] = data
+    add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    SecItemAdd(add as CFDictionary, nil)
+  }
+
+  /// The same four digits grndwrk shows next to this phone in the map (`joinDigits` in src/relay/sync.ts).
+  nonisolated static func digits(_ key: String) -> String {
+    let hash = hex(SHA256.hash(data: Data("grndwrk-join:\(key)".utf8)))
+    return String(format: "%04d", (UInt64(hash.prefix(8), radix: 16) ?? 0) % 10000)
   }
 
   /// Where comments go when the Wi-Fi has no grndwrk, in words for the list.
   static var status: String? {
     guard let j = joined else { return nil }
     let host = URL(string: j.url)?.host ?? j.url
-    return j.refused == nil ? "Through the relay at \(host) when no grndwrk is on the Wi-Fi" : "Joined the relay at \(host). Waiting for a grndwrk on the team to let this phone in"
+    return j.refused == nil ? "Through the relay at \(host) when no grndwrk is on the Wi-Fi" : "Joined the relay at \(host). Waiting to be allowed: tell whoever invited you the digits \(j.digits)"
   }
 
   // MARK: Joining
 
-  /// `https://<relay>/v1/<mailbox>/invite#<secret>`, as the map shows it.
+  /// `grndwrk:invite/<relay host>/<mailbox>/<secret>`, as the map shows it. Not a web address, so a browser never takes it to the relay.
+  /// The relay is reached over https; http only for localhost, to try it out.
   static func parse(_ link: String) -> (url: String, mailbox: String, secret: String)? {
-    guard let u = URL(string: link.trimmingCharacters(in: .whitespacesAndNewlines)), let scheme = u.scheme, let host = u.host,
-      let secret = u.fragment, isKey(secret) else { return nil }
-    let local = host == "localhost" || host == "127.0.0.1"
-    guard scheme == "https" || (scheme == "http" && local) else { return nil }
-    let parts = u.path.split(separator: "/")
-    guard parts.count == 3, parts[0] == "v1", parts[2] == "invite", parts[1].count == 32, parts[1].allSatisfy(isLowerHex) else { return nil }
-    let port = u.port.map { ":\($0)" } ?? ""
-    return ("\(scheme)://\(host)\(port)", String(parts[1]), secret)
+    let text = link.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard text.hasPrefix("grndwrk:invite/") else { return nil }
+    let parts = text.dropFirst("grndwrk:invite/".count).split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+    guard parts.count == 3, parts[1].count == 32, parts[1].allSatisfy(isLowerHex), isKey(parts[2]) else { return nil }
+    let host = parts[0]
+    let hostPart = host.split(separator: ":", maxSplits: 1).map(String.init)
+    guard let name = hostPart.first, !name.isEmpty, name.allSatisfy({ $0.isLetter && $0.isLowercase || $0.isNumber || $0 == "." || $0 == "-" }),
+      name.allSatisfy(\.isASCII), hostPart.count == 1 || (hostPart[1].count <= 5 && hostPart[1].allSatisfy(\.isNumber)) else { return nil }
+    let local = name == "localhost" || name == "127.0.0.1"
+    return ("\(local ? "http" : "https")://\(host)", parts[1], parts[2])
   }
 
   /// Join with an invite: leave a new key, sealed with the invite's secret. The invite works once.
@@ -61,7 +91,7 @@ enum Relay {
     guard let (url, mailbox, secret) = parse(link) else { throw Problem.notALink }
     let key = randomKey()
     let invite = String(hex(SHA256.hash(data: Data("grndwrk-invite:\(secret)".utf8))).prefix(32))
-    let plain = try JSONSerialization.data(withJSONObject: ["key": key, "device": UIDevice.current.name])
+    let plain = try JSONSerialization.data(withJSONObject: ["key": key])
     var request = URLRequest(url: URL(string: "\(url)/v1/\(mailbox)/join/\(invite)")!)
     request.httpMethod = "POST"
     request.httpBody = try seal(plain, key: secret, context: "join:\(invite)")
@@ -84,7 +114,8 @@ enum Relay {
   /// One request, as it would go to grndwrk on the Wi-Fi (`api/feedback`, `api/feedback/tested` ...), sealed and left at the relay.
   static func send(path: String, body: Data) async -> Sent {
     guard let j = joined, let object = try? JSONSerialization.jsonObject(with: body),
-      let plain = try? JSONSerialization.data(withJSONObject: ["path": "/" + path, "body": object]),
+      // An id and the time, sealed with it: grndwrk refuses one the relay hands over again.
+      let plain = try? JSONSerialization.data(withJSONObject: ["path": "/" + path, "body": object, "id": UUID().uuidString, "at": Int64(Date().timeIntervalSince1970 * 1000)]),
       let sealed = try? seal(plain, key: sealKey(j.key), context: "inbox:\(deviceId(j.key))") else { return .refused }
     let (status, _) = await call(j, "POST", "/inbox", body: sealed)
     return answer(status, ok: 202)
@@ -96,7 +127,15 @@ enum Relay {
     let (status, data) = await call(j, "GET", "/outbox")
     guard answer(status, ok: 200) == .left, let data,
       let plain = open(data, key: sealKey(j.key), context: "outbox:\(deviceId(j.key))"),
-      let list = ((try? JSONSerialization.jsonObject(with: plain)) as? [String: Any])?["comments"] as? [[String: Any]] else { return nil }
+      let answer = (try? JSONSerialization.jsonObject(with: plain)) as? [String: Any],
+      let list = answer["comments"] as? [[String: Any]] else { return nil }
+    // An older status than the last one read, handed over again by the relay: ignored.
+    let at = (answer["at"] as? NSNumber)?.doubleValue ?? 0
+    if var now = joined {
+      if let last = now.statusAt, at <= last { return nil }
+      now.statusAt = at
+      joined = now
+    }
     return list
   }
 
@@ -185,7 +224,7 @@ enum Relay {
     return out
   }
 
-  private static func hex<D: Sequence>(_ bytes: D) -> String where D.Element == UInt8 {
+  nonisolated private static func hex<D: Sequence>(_ bytes: D) -> String where D.Element == UInt8 {
     bytes.map { String(format: "%02x", $0) }.joined()
   }
 }

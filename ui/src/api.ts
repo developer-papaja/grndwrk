@@ -101,10 +101,12 @@ export interface RelayInfo {
   url?: string
   phones?: { id: string; name: string; joined: string }[]
   invites?: { id: string; name: string; expires: number }[]
+  waiting?: { invite: string; name: string; digits: string }[]
   error?: string
 }
 export const fetchRelay = () => request<RelayInfo>('GET', '/api/relay').catch(() => ({ connected: false }) as RelayInfo)
 export const inviteColleague = (name: string) => request<{ id: string; name: string; link: string }>('POST', '/api/relay/invites', { name })
+export const answerJoin = (invite: string, allow: boolean) => request<RelayInfo>('POST', `/api/relay/joins/${invite}`, { allow })
 export const removeFromRelay = (kind: 'phones' | 'invites', id: string) => request<RelayInfo>('DELETE', `/api/relay/${kind}/${id}`)
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
 

@@ -1,34 +1,52 @@
 /**
  * A project's grndwrk and its mailbox at the relay, while grndwrk runs: at
- * start and every 15 seconds it lets in phones that joined with an invite,
- * fetches what colleagues' phones left and handles each as if it came over
- * `--lan` (`via: relay`, `from:` their name), and leaves each phone the
- * status of its comments. Any teammate's grndwrk can do this: invites and
- * phones' keys are kept at the relay sealed with the team key.
+ * start and every 15 seconds, in one request, it sees phones that joined
+ * with an invite (each waits until someone allows it in the map, with four
+ * digits the phone shows too), fetches what colleagues' phones left and
+ * handles each as if it came over `--lan` (`via: relay`, `from:` their
+ * name), and leaves each phone the status of its comments. Any teammate's
+ * grndwrk can do this: invites and phones' keys are kept at the relay
+ * sealed with the team key.
+ *
+ * The relay cannot read or change an envelope, but it could hand an old one
+ * over again. Each carries an id and a time from the phone, sealed in it:
+ * one seen before, or older than the relay keeps anything, is refused.
  */
 import { createHash } from 'node:crypto'
+import { BadInput } from '../store/nodes.js'
 import { feedbackStatus } from '../server/feedback.js'
 import { COMMENT_PATHS, commentRequest, type CommentsCtx } from '../server/comments.js'
-import { inviteLink, type ProjectRelay } from './config.js'
+import { inviteLink, readSeen, saveSeen, type ProjectRelay } from './config.js'
 import { RelayClient } from './client.js'
 import { inviteId, open, openJson, phoneSealKey, phoneSignKey, randomKey, relayDeviceId, seal, sealJson, teamSealKey } from './keys.js'
 
 interface Phone { key: string; name: string; joined: string }
+interface Waiting { invite: string; name: string; digits: string; key: string }
 export interface RelaySummary {
   url: string
   phones: { id: string; name: string; joined: string }[]
   invites: { id: string; name: string; expires: number }[]
+  /** Phones that joined with an invite and wait to be allowed, with the digits they show. */
+  waiting: { invite: string; name: string; digits: string }[]
   error?: string
 }
 
 const KEY = /^[a-f0-9]{64}$/
 const EVERY = 15_000
+const DAY = 86_400_000
+/** As long as the relay keeps an envelope, and a day more. */
+const FRESH = 31 * DAY
+
+/** The four digits a phone shows after joining, worked out the same way on the phone from its key. */
+export const joinDigits = (key: string) => String(parseInt(createHash('sha256').update(`grndwrk-join:${key}`).digest('hex').slice(0, 8), 16) % 10000).padStart(4, '0')
 
 export class RelaySync {
   private client: RelayClient
   private teamSeal: string
   private phones = new Map<string, Phone>()
+  private waiting = new Map<string, Waiting>()
   private sent = new Map<string, string>()
+  private tries = new Map<string, number>()
   private timer?: NodeJS.Timeout
   private running?: Promise<void>
   error?: string
@@ -36,6 +54,8 @@ export class RelaySync {
   constructor(
     private relay: ProjectRelay,
     private ctx: CommentsCtx,
+    /** Told when a phone starts or stops waiting to be allowed, so the map can ask. */
+    private onWaiting: () => void = () => {},
     client?: RelayClient,
   ) {
     this.client = client ?? RelayClient.team(relay.url, relay.mailbox, relay.team)
@@ -69,32 +89,47 @@ export class RelaySync {
   }
 
   private async round() {
-    await this.letIn()
-    await this.loadPhones()
-    await this.fetchInbox()
+    const sync = await this.client.json<{
+      joins: { invite: string; sealed: string; body: string }[]
+      devices: { id: string; sealed: string }[]
+      inbox: { id: string; device: string }[]
+    }>('GET', '/sync')
+    this.readJoins(sync.joins)
+    this.readPhones(sync.devices)
+    await this.fetchInbox(sync.inbox)
     await this.sendStatus()
   }
 
-  /** Phones that joined with an invite: their key, sealed for the team, so every teammate's grndwrk can open their comments. */
-  private async letIn() {
-    const joins = await this.client.json<{ invite: string; sealed: string; body: string }[]>('GET', '/joins')
+  /** Phones that joined: each waits for the person to allow it, never let in by the link alone. */
+  private readJoins(joins: { invite: string; sealed: string; body: string }[]) {
+    const next = new Map<string, Waiting>()
     for (const j of joins) {
       const inv = openJson<{ secret: string; name: string }>(this.teamSeal, `invite:${j.invite}`, j.sealed)
       const sent = inv && KEY.test(inv.secret) ? openJson<{ key?: string }>(inv.secret, `join:${j.invite}`, j.body) : undefined
-      if (inv && sent?.key && KEY.test(sent.key)) {
-        const sign = phoneSignKey(sent.key)
-        const id = relayDeviceId(sign)
-        const phone = { key: sent.key, name: inv.name, joined: new Date().toISOString().slice(0, 10) }
-        await this.client.json('PUT', `/devices/${id}`, { sign, sealed: sealJson(this.teamSeal, `device:${id}`, phone) })
-        this.phones.set(id, phone)
-      }
-      // Used, or not ours to open: either way the invite is done.
-      await this.client.request('DELETE', `/invites/${j.invite}`)
+      if (inv && sent?.key && KEY.test(sent.key)) next.set(j.invite, { invite: j.invite, name: inv.name, digits: joinDigits(sent.key), key: sent.key })
     }
+    const changed = next.size !== this.waiting.size || [...next.keys()].some((k) => !this.waiting.has(k))
+    this.waiting = next
+    if (changed) this.onWaiting()
   }
 
-  private async loadPhones() {
-    const list = await this.client.json<{ id: string; sealed: string }[]>('GET', '/devices')
+  /** Allowed: the phone's key, sealed for the team, so every teammate's grndwrk can open its comments. Or not: the invite is gone. */
+  async answerJoin(invite: string, allow: boolean): Promise<void> {
+    const w = this.waiting.get(invite)
+    if (!w) throw new BadInput('That phone is no longer waiting')
+    if (allow) {
+      const sign = phoneSignKey(w.key)
+      const id = relayDeviceId(sign)
+      const phone = { key: w.key, name: w.name, joined: new Date().toISOString().slice(0, 10) }
+      await this.client.json('PUT', `/devices/${id}`, { sign, sealed: sealJson(this.teamSeal, `device:${id}`, phone) })
+      this.phones.set(id, phone)
+    }
+    await this.client.request('DELETE', `/invites/${invite}`)
+    this.waiting.delete(invite)
+    this.onWaiting()
+  }
+
+  private readPhones(list: { id: string; sealed: string }[]) {
     this.phones = new Map(
       list.flatMap(({ id, sealed }) => {
         const p = openJson<Phone>(this.teamSeal, `device:${id}`, sealed)
@@ -103,37 +138,66 @@ export class RelaySync {
     )
   }
 
-  private async fetchInbox() {
-    const list = await this.client.json<{ id: string; device: string }[]>('GET', '/inbox')
+  private async fetchInbox(list: { id: string; device: string }[]) {
+    if (!list.length) return
+    const seen = await readSeen(this.relay.mailbox)
+    const now = Date.now()
     for (const e of list) {
       const phone = this.phones.get(e.device)
+      let keep = false
       if (phone) {
         const raw = Buffer.from(await (await this.client.request('GET', `/inbox/${e.id}`)).arrayBuffer())
-        const plain = open(phoneSealKey(phone.key), `inbox:${e.device}`, raw)
-        await this.handle(plain, e.device, phone).catch((err) => console.error(`A comment from ${phone.name} through the relay: ${err instanceof Error ? err.message : err}`))
+        try {
+          await this.handle(open(phoneSealKey(phone.key), `inbox:${e.device}`, raw), e.device, phone, seen, now)
+        } catch (err) {
+          // Refused for good (changed, replayed, not a phone's request): dropped. Failed here (the disk?): tried again, five times.
+          const forGood = err instanceof BadInput || err instanceof SyntaxError
+          const tries = (this.tries.get(e.id) ?? 0) + 1
+          keep = !forGood && tries < 5
+          this.tries.set(e.id, tries)
+          console.error(`A comment from ${phone.name} through the relay${keep ? ', tried again shortly' : ''}: ${err instanceof Error ? err.message : err}`)
+        }
       }
-      // Handled, or from a phone taken out, or changed on the way: it does not stay.
-      await this.client.request('DELETE', `/inbox/${e.id}`)
+      // Handled, or from a phone taken out, or refused: it does not stay.
+      if (!keep) {
+        await this.client.request('DELETE', `/inbox/${e.id}`)
+        this.tries.delete(e.id)
+      }
     }
+    for (const [device, ids] of Object.entries(seen)) for (const [id, at] of Object.entries(ids)) if (now - at > FRESH) delete seen[device][id]
+    await saveSeen(this.relay.mailbox, seen)
   }
 
-  private async handle(plain: Buffer | undefined, device: string, phone: Phone) {
-    if (!plain) throw new Error('it was changed on the way, or sealed with another key, and is dropped')
-    const { path, body } = JSON.parse(plain.toString('utf8')) as { path?: unknown; body?: unknown }
-    if (typeof path !== 'string' || !COMMENT_PATHS.includes(path) || path === '/api/feedback/status') throw new Error('not something a phone sends')
-    await commentRequest(path, body, { ...this.ctx, via: 'relay', from: { name: phone.name, device } })
+  private async handle(plain: Buffer | undefined, device: string, phone: Phone, seen: Record<string, Record<string, number>>, now: number) {
+    if (!plain) throw new BadInput('it was changed on the way, or sealed with another key, and is dropped')
+    const { path, body, id, at } = JSON.parse(plain.toString('utf8')) as { path?: unknown; body?: unknown; id?: unknown; at?: unknown }
+    if (typeof path !== 'string' || !COMMENT_PATHS.includes(path) || path === '/api/feedback/status') throw new BadInput('not something a phone sends')
+    if (typeof id !== 'string' || !/^[A-Za-z0-9-]{16,64}$/.test(id) || typeof at !== 'number') throw new BadInput('it has no id and time from the phone')
+    if (seen[device]?.[id] || at < now - FRESH || at > now + 5 * 60_000) throw new BadInput('it was handled before, or is too old: the relay handed it over again')
+    ;(seen[device] ??= {})[id] = at
+    // A phone acts only on the comments it sent itself, whatever keys it knows.
+    const own = path === '/api/feedback' ? body : await this.onlyOwn(body, device)
+    await commentRequest(path, own, { ...this.ctx, via: 'relay', from: { name: phone.name, device } })
   }
 
-  /** Each phone gets the status of its own comments, sealed with its key, when it changed. */
+  private async onlyOwn(body: unknown, device: string): Promise<unknown> {
+    const list = (body as { comments?: unknown })?.comments
+    if (!Array.isArray(list)) return body
+    const mine = new Set((await this.ctx.store.list()).filter((n) => n.extra?.relay_device === device).map((n) => n.id))
+    return { ...(body as object), comments: list.filter((c) => mine.has((c as { id?: unknown })?.id as string)) }
+  }
+
+  /** Each phone gets the status of its own comments, sealed with its key, when it changed, with the time it was made so an older one is ignored. */
   private async sendStatus() {
     const nodes = await this.ctx.store.list()
     for (const [id, phone] of this.phones) {
       const own = nodes.filter((n) => n.extra?.relay_device === id && typeof n.extra?.key === 'string')
       const keys = new Map(own.map((n) => [n.id, String(n.extra.key)]))
       const status = await feedbackStatus(this.ctx.store, { comments: own.map((n) => ({ id: n.id, key: keys.get(n.id) })) })
-      const payload = JSON.stringify({ comments: status.map((s) => ({ ...s, key: keys.get(s.id) })) })
-      const hash = createHash('sha256').update(payload).digest('hex')
+      const comments = status.map((s) => ({ ...s, key: keys.get(s.id) }))
+      const hash = createHash('sha256').update(JSON.stringify(comments)).digest('hex')
       if (this.sent.get(id) === hash) continue
+      const payload = JSON.stringify({ comments, at: Date.now() })
       await this.client.request('PUT', `/outbox/${id}`, seal(phoneSealKey(phone.key), `outbox:${id}`, Buffer.from(payload)))
       this.sent.set(id, hash)
     }
@@ -142,7 +206,7 @@ export class RelaySync {
   /** A new invite for a colleague, by name: a link to send, or show as a QR code. Its secret and the name are sealed for the team. */
   async invite(name: string): Promise<{ id: string; name: string; link: string }> {
     const clean = name.replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g, '').trim().slice(0, 80)
-    if (!clean) throw new Error('Say who the invite is for')
+    if (!clean) throw new BadInput('Say who the invite is for')
     const secret = randomKey()
     const id = inviteId(secret)
     await this.client.json('POST', '/invites', { id, sealed: sealJson(this.teamSeal, `invite:${id}`, { secret, name: clean }) })
@@ -150,18 +214,18 @@ export class RelaySync {
   }
 
   async summary(): Promise<RelaySummary> {
-    const out: RelaySummary = { url: this.relay.url, phones: [], invites: [], ...(this.error ? { error: this.error } : {}) }
+    const out: RelaySummary = { url: this.relay.url, phones: [], invites: [], waiting: [], ...(this.error ? { error: this.error } : {}) }
     try {
-      await this.loadPhones()
       const invites = await this.client.json<{ id: string; sealed: string; expires: number }[]>('GET', '/invites')
       out.invites = invites.flatMap((i) => {
         const v = openJson<{ name: string }>(this.teamSeal, `invite:${i.id}`, i.sealed)
-        return v ? [{ id: i.id, name: v.name, expires: i.expires }] : []
+        return v && !this.waiting.has(i.id) ? [{ id: i.id, name: v.name, expires: i.expires }] : []
       })
     } catch (err) {
       out.error = err instanceof Error ? err.message : String(err)
     }
     out.phones = [...this.phones].map(([id, p]) => ({ id, name: p.name, joined: p.joined }))
+    out.waiting = [...this.waiting.values()].map(({ invite, name, digits }) => ({ invite, name, digits }))
     return out
   }
 
@@ -173,5 +237,6 @@ export class RelaySync {
 
   async removeInvite(id: string) {
     await this.client.request('DELETE', `/invites/${id}`)
+    this.waiting.delete(id)
   }
 }

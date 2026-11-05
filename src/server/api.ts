@@ -79,6 +79,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
         throw new BadInput(err instanceof Error ? err.message : String(err))
       }
     }
+    const joinMatch = url.pathname.match(/^\/api\/relay\/joins\/([a-f0-9]{32})$/)
+    if (joinMatch && method === 'POST') {
+      if (!ctx.relay) throw new NotFound(joinMatch[1])
+      const { allow } = (await readBody(req)) as { allow?: unknown }
+      if (typeof allow !== 'boolean') throw new BadInput('Say whether to allow it: { allow }')
+      await ctx.relay.answerJoin(joinMatch[1], allow)
+      return send(res, 200, { connected: true, ...(await ctx.relay.summary()) })
+    }
     const relayMatch = url.pathname.match(/^\/api\/relay\/(phones|invites)\/([a-f0-9]{32})$/)
     if (relayMatch && method === 'DELETE') {
       if (!ctx.relay) throw new NotFound(relayMatch[2])

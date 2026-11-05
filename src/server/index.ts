@@ -60,7 +60,9 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   // Colleagues' phones away from the Wi-Fi, through the team's relay, when this project has a mailbox there.
   const relayConfig = await projectRelay(gwDir)
   // Loaded only then: a project without a relay never runs any of it.
-  const relay: RelaySync | undefined = relayConfig ? new (await import('../relay/sync.js')).RelaySync(relayConfig, comments) : undefined
+  const relay: RelaySync | undefined = relayConfig ? new (await import('../relay/sync.js')).RelaySync(relayConfig, comments, () => {
+        broadcast({ type: 'relay:waiting' })
+      }) : undefined
 
   /** Where the product runs with the Comment button, once the proxy listens. */
   const runtime: { app?: string } = {}

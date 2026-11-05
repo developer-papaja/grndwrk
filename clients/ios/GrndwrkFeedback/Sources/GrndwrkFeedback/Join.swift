@@ -18,7 +18,7 @@ extension OverlayController {
       message: "Paste the invite link from grndwrk\(Self.canScan ? ", or scan its QR code" : ""). Comments then go through your team's relay when grndwrk is not on this Wi-Fi.",
       preferredStyle: .alert)
     alert.addTextField {
-      $0.placeholder = "https://.../invite#..."
+      $0.placeholder = "grndwrk:invite/..."
       $0.text = Relay.parse(copied) != nil ? copied : ""
       $0.autocapitalizationType = .none
       $0.autocorrectionType = .no
@@ -47,8 +47,8 @@ extension OverlayController {
     Task {
       do {
         try await Relay.join(link)
-        flash("Joined. Comments go through the relay once a grndwrk on your team lets this phone in")
         await Connection.check()
+        showDigits()
       } catch Relay.Problem.notALink {
         flash("That is not an invite link from grndwrk")
       } catch Relay.Problem.expired {
@@ -61,6 +61,17 @@ extension OverlayController {
         flash("The relay did not take it. Ask for a new invite")
       }
     }
+  }
+
+  /// Whoever invited you allows this phone in their map, when it shows the same four digits.
+  func showDigits() {
+    guard let digits = Relay.joined?.digits else { return }
+    let alert = UIAlertController(
+      title: digits,
+      message: "Tell whoever invited you these four digits. They allow this phone in grndwrk when their map shows the same. Until then, comments wait on the phone.",
+      preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "OK", style: .default))
+    present(alert, animated: true)
   }
 
   private func scanInvite() {

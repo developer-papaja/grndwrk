@@ -14,7 +14,8 @@ interface DurableObjectStorage {
   get<T>(key: string): Promise<T | undefined>
   put(key: string, value: unknown): Promise<void>
   delete(keys: string[]): Promise<number>
-  list<T>(options: { prefix: string; limit?: number }): Promise<Map<string, T>>
+  list<T>(options: { prefix: string; limit?: number; start?: string }): Promise<Map<string, T>>
+  deleteAll(): Promise<void>
 }
 
 export class RelayObject {

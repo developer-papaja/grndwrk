@@ -10,8 +10,12 @@ import { RelayClient } from './client.js'
 import { ownRelay, parseLink, projectRelay, relayOrigin, saveOwnRelay, saveProjectRelay, teamLink } from './config.js'
 import { ownerAuthKey, randomId, randomKey, teamAuthKey } from './keys.js'
 
-/** Cloudflare's own tool, run through npx at this exact version, never installed with grndwrk. */
-export const WRANGLER = 'wrangler@4.151.3'
+/**
+ * Cloudflare's own tool, never installed with grndwrk: `deploy` installs it
+ * in grndwrk's per-user folder from relay/package-lock.json, so it and
+ * every package under it are the versions that were reviewed, then runs it.
+ */
+export const WRANGLER = 'wrangler 4.151.3'
 
 export const RELAY_HELP = `Usage:
   grndwrk relay deploy [--name <name>]
@@ -22,6 +26,7 @@ export const RELAY_HELP = `Usage:
   grndwrk relay join <team link>
                        connect this project's grndwrk to the team's relay
   grndwrk relay        where this project's comments come through
+  grndwrk relay link   the team link for teammates (it opens the project's comments: send it privately)
   grndwrk relay leave  stop using the relay in this project, on this Mac
 `
 
@@ -36,6 +41,11 @@ export async function relayCommand(args: string[], gwDir: string | undefined, na
     return void console.log('This project no longer uses the relay on this Mac. Its mailbox stays for your teammates; grndwrk relay join brings it back.')
   }
   if (sub === 'status') return status(gwDir)
+  if (sub === 'link') {
+    const r = await projectRelay(gwDir)
+    if (!r) throw new Error('This project does not use a relay.')
+    return printTeamLink(r)
+  }
   throw new Error(`Unknown: grndwrk relay ${sub}\n\n${RELAY_HELP}`)
 }
 
@@ -47,11 +57,14 @@ async function deploy(name?: string) {
   const dir = join(stateDir(), 'relay-worker')
   await mkdir(dir, { recursive: true })
   await cp(join(PACKAGE_ROOT, 'relay', 'src'), join(dir, 'src'), { recursive: true, force: true })
+  for (const f of ['package.json', 'package-lock.json']) await cp(join(PACKAGE_ROOT, 'relay', f), join(dir, f), { force: true })
   const toml = await readFile(join(PACKAGE_ROOT, 'relay', 'wrangler.toml'), 'utf8')
   await writeFile(join(dir, 'wrangler.toml'), toml.replace(/^name = ".*"$/m, `name = "${worker}"`))
 
   console.log(`Putting the relay on your Cloudflare account as ${worker}, with ${WRANGLER}. The first time, Cloudflare asks you to log in in the browser.\n`)
-  const out = await run(['--yes', WRANGLER, 'deploy'], dir)
+  console.log('Installing it, exactly as locked...')
+  await run(['ci', '--no-audit', '--no-fund'], dir, undefined, 'npm')
+  const out = await run(['--no-install', 'wrangler', 'deploy'], dir)
   const found = /https:\/\/[a-z0-9.-]+\.workers\.dev/.exec(out)?.[0]
   if (!found) throw new Error('Cloudflare did not say where the relay runs. If it asked you to pick a workers.dev subdomain, do that and run grndwrk relay deploy again.')
   const url = relayOrigin(found)
@@ -59,7 +72,7 @@ async function deploy(name?: string) {
   // The owner key stays on this Mac; the relay gets only a key made from it, to check that mailboxes are opened by you.
   const owner = had?.owner ?? randomKey()
   console.log('\nGiving the relay its owner key...')
-  await run(['--yes', WRANGLER, 'secret', 'put', 'OWNER_AUTH'], dir, ownerAuthKey(owner))
+  await run(['--no-install', 'wrangler', 'secret', 'put', 'OWNER_AUTH'], dir, ownerAuthKey(owner))
   await saveOwnRelay({ url, owner, name: worker })
 
   const hello = await fetch(`${url}/v1/hello`).then((r) => r.json() as Promise<{ relay?: string }>).catch(() => ({ relay: undefined }))
@@ -100,8 +113,7 @@ async function status(gwDir: string) {
     if (!own) console.log(RELAY_HELP)
     return
   }
-  console.log(`Colleagues' comments come through ${r.url}, while grndwrk runs.`)
-  printTeamLink(r)
+  console.log(`Colleagues' comments come through ${r.url}, while grndwrk runs. Teammates connect with the team link: grndwrk relay link.`)
 }
 
 function printTeamLink(r: { url: string; mailbox: string; team: string }) {
@@ -109,9 +121,9 @@ function printTeamLink(r: { url: string; mailbox: string; team: string }) {
 }
 
 /** Runs npx; prints what it says and returns it. Input, when given, is written to it (a secret: never on the command line). */
-function run(args: string[], cwd: string, input?: string): Promise<string> {
+function run(args: string[], cwd: string, input?: string, tool: 'npx' | 'npm' = 'npx'): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx', args, { cwd, stdio: [input === undefined ? 'inherit' : 'pipe', 'pipe', 'inherit'], shell: process.platform === 'win32' })
+    const child = spawn(process.platform === 'win32' ? `${tool}.cmd` : tool, args, { cwd, stdio: [input === undefined ? 'inherit' : 'pipe', 'pipe', 'inherit'], shell: process.platform === 'win32' })
     let out = ''
     child.stdout!.on('data', (d: Buffer) => {
       out += d.toString()

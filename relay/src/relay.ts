@@ -26,9 +26,12 @@
  *   GET    /v1/inbox          the envelopes waiting, oldest first
  *   GET    /v1/inbox/<id>     one envelope; DELETE it once handled
  *   PUT    /v1/outbox/<device>  the sealed status for a phone
- * Anyone: GET /v1/hello, and GET /v1/<mailbox>/invite or /team: a page
- * saying what to do with an invite or a team link (the secret stays in
- * the link's #fragment, which a browser never sends).
+ *   GET    /v1/sync           joins, phones and the envelopes waiting, in one request
+ * Anyone: GET /v1/hello.
+ *
+ * A nonce is kept only for requests that change something: a GET sent again
+ * reads what its sender could read anyway, and storing a nonce for every
+ * poll would use up the free plan's writes.
  *
  * Kept separate from Cloudflare (worker.ts) so the tests run it on Node.
  */
@@ -38,13 +41,16 @@ export interface Store {
   get<T>(key: string): Promise<T | undefined>
   put(key: string, value: unknown): Promise<void>
   delete(keys: string[]): Promise<unknown>
-  list<T>(options: { prefix: string; limit?: number }): Promise<Map<string, T>>
+  list<T>(options: { prefix: string; limit?: number; start?: string }): Promise<Map<string, T>>
+  /** Everything, at once, without reading it (Durable Objects have it). */
+  deleteAll?(): Promise<unknown>
 }
 
 interface Device { sign: string; sealed: string; added: number }
 interface Envelope { device: string; at: number; size: number; chunks: number }
-interface Rate { hour: number; n: number; bytes: number }
+interface Rate { hour: number; n: number; bytes: number; day?: number; dayN?: number; dayBytes?: number }
 interface Invite { expires: number; sealed: string }
+interface Signer { id: string; key: string; time: number; nonce: string; signature: string; method: string }
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -56,8 +62,10 @@ export const LIMITS = {
   outbox: 512 * 1024,
   join: 16 * 1024,
   sealedKey: 4 * 1024,
-  perHour: 120,
-  bytesPerHour: 200 * 1024 * 1024,
+  perHour: 60,
+  bytesPerHour: 100 * 1024 * 1024,
+  perDay: 300,
+  bytesPerDay: 300 * 1024 * 1024,
   waiting: 1000,
   waitingBytes: 1024 * 1024 * 1024,
   keep: 30 * DAY,
@@ -109,12 +117,12 @@ export class Relay {
 
     if (!rest) {
       if (!this.ownerAuth || !KEY.test(this.ownerAuth)) return fail(503, 'The relay is not set up: it has no owner key')
+      const signer = await this.signer(req, method, { owner: this.ownerAuth })
+      if (!signer) return fail(401, 'Only whoever deployed the relay opens or closes a mailbox')
       const body = await this.body(req, LIMITS.join)
-      if ((await this.verify(req, method, path + url.search, body, { owner: this.ownerAuth })) !== 'owner') return fail(401, 'Only whoever deployed the relay opens or closes a mailbox')
+      if ((await this.verify(req, method, path + url.search, body, signer)) !== 'owner') return fail(401, 'Only whoever deployed the relay opens or closes a mailbox')
       return this.owner(method, body)
     }
-
-    if (method === 'GET' && (rest === 'invite' || rest === 'team')) return page(rest)
 
     const teamAuth = await this.store.get<string>('team')
     if (!teamAuth) return fail(404, 'No such mailbox')
@@ -125,8 +133,11 @@ export class Relay {
       return this.join(parts[2], body)
     }
 
+    // Who signed, before reading up to 4 MB of a body from anyone.
+    const signer = await this.signer(req, method, { team: teamAuth })
+    if (!signer) return fail(401, 'Not signed by a phone or a team this mailbox knows')
     const body = await this.body(req, LIMITS.body)
-    const who = await this.verify(req, method, path + url.search, body, { team: teamAuth })
+    const who = await this.verify(req, method, path + url.search, body, signer)
     if (!who) return fail(401, 'Not signed by a phone or a team this mailbox knows')
 
     if (who === 'team') return this.team(method, parts, body)
@@ -149,8 +160,15 @@ export class Relay {
       return json({ ok: true })
     }
     if (method === 'DELETE') {
-      const keys = [...(await this.store.list({ prefix: '' })).keys()]
-      for (let i = 0; i < keys.length; i += 128) await this.store.delete(keys.slice(i, i + 128))
+      if (this.store.deleteAll) await this.store.deleteAll()
+      else {
+        // Page by page, so a full mailbox never has to fit in memory at once.
+        for (;;) {
+          const keys = [...(await this.store.list({ prefix: '', limit: 128 })).keys()]
+          if (!keys.length) break
+          await this.store.delete(keys)
+        }
+      }
       return json({ ok: true })
     }
     return fail(404, 'Not found')
@@ -176,14 +194,9 @@ export class Relay {
       await this.store.delete([`inv/${id}`, `join/${id}`])
       return json({ ok: true })
     }
-    if (what === 'joins' && method === 'GET' && parts.length === 2) {
-      const joins = await this.store.list<Uint8Array>({ prefix: 'join/' })
-      const out = []
-      for (const [k, v] of joins) {
-        const inv = await this.store.get<Invite>(`inv/${k.slice(5)}`)
-        if (inv) out.push({ invite: k.slice(5), sealed: inv.sealed, body: toBase64(v) })
-      }
-      return json(out)
+    if (what === 'joins' && method === 'GET' && parts.length === 2) return json(await this.joins())
+    if (what === 'sync' && method === 'GET' && parts.length === 2) {
+      return json({ joins: await this.joins(), devices: await this.devices(), inbox: await this.inbox() })
     }
     if (what === 'devices' && method === 'PUT' && one && ID.test(id)) {
       const { sign, sealed } = this.parse(body)
@@ -194,19 +207,13 @@ export class Relay {
       await this.store.put(`dev/${id}`, { sign, sealed, added: old?.added ?? this.now() } satisfies Device)
       return json({ ok: true })
     }
-    if (what === 'devices' && method === 'GET' && parts.length === 2) {
-      const devs = await this.store.list<Device>({ prefix: 'dev/' })
-      return json([...devs].map(([k, d]) => ({ id: k.slice(4), sealed: d.sealed, added: d.added })))
-    }
+    if (what === 'devices' && method === 'GET' && parts.length === 2) return json(await this.devices())
     if (what === 'devices' && method === 'DELETE' && one && ID.test(id)) {
       await this.store.delete([`dev/${id}`, `out/${id}`, `rate/${id}`])
       for (const [k, e] of await this.store.list<Envelope>({ prefix: 'env/' })) if (e.device === id) await this.drop(k.slice(4), e)
       return json({ ok: true })
     }
-    if (what === 'inbox' && method === 'GET' && parts.length === 2) {
-      const envs = await this.store.list<Envelope>({ prefix: 'env/', limit: LIMITS.list })
-      return json([...envs].map(([k, e]) => ({ id: k.slice(4), device: e.device, at: e.at, size: e.size })))
-    }
+    if (what === 'inbox' && method === 'GET' && parts.length === 2) return json(await this.inbox())
     if (what === 'inbox' && one && ENVELOPE.test(id) && (method === 'GET' || method === 'DELETE')) {
       const e = await this.store.get<Envelope>(`env/${id}`)
       if (!e) return fail(404, 'No such envelope')
@@ -234,6 +241,26 @@ export class Relay {
     return fail(404, 'Not found')
   }
 
+  private async joins() {
+    const joins = await this.store.list<Uint8Array>({ prefix: 'join/' })
+    const out = []
+    for (const [k, v] of joins) {
+      const inv = await this.store.get<Invite>(`inv/${k.slice(5)}`)
+      if (inv) out.push({ invite: k.slice(5), sealed: inv.sealed, body: toBase64(v) })
+    }
+    return out
+  }
+
+  private async devices() {
+    const devs = await this.store.list<Device>({ prefix: 'dev/' })
+    return [...devs].map(([k, d]) => ({ id: k.slice(4), sealed: d.sealed, added: d.added }))
+  }
+
+  private async inbox() {
+    const envs = await this.store.list<Envelope>({ prefix: 'env/', limit: LIMITS.list })
+    return [...envs].map(([k, e]) => ({ id: k.slice(4), device: e.device, at: e.at, size: e.size }))
+  }
+
   /** A phone leaves its key, sealed with the invite's secret. The first one counts; the invite is then used. */
   private async join(invite: string, body: Uint8Array): Promise<Response> {
     if (!ID.test(invite)) return fail(404, 'No such invite')
@@ -250,9 +277,12 @@ export class Relay {
     if (body.length < 28) return fail(400, 'Empty')
     const now = this.now()
     const hour = Math.floor(now / HOUR)
+    const day = Math.floor(now / DAY)
     const rate = (await this.store.get<Rate>(`rate/${device}`)) ?? { hour, n: 0, bytes: 0 }
     if (rate.hour !== hour) Object.assign(rate, { hour, n: 0, bytes: 0 })
+    if (rate.day !== day) Object.assign(rate, { day, dayN: 0, dayBytes: 0 })
     if (rate.n >= LIMITS.perHour || rate.bytes + body.length > LIMITS.bytesPerHour) return fail(429, 'Too much from this phone this hour')
+    if ((rate.dayN ?? 0) >= LIMITS.perDay || (rate.dayBytes ?? 0) + body.length > LIMITS.bytesPerDay) return fail(429, 'Too much from this phone today')
     const total = (await this.store.get<{ n: number; bytes: number }>('total')) ?? { n: 0, bytes: 0 }
     if (total.n >= LIMITS.waiting || total.bytes + body.length > LIMITS.waitingBytes) return fail(507, 'The relay is full until the team fetches')
 
@@ -260,7 +290,7 @@ export class Relay {
     const chunks = Math.max(1, Math.ceil(body.length / LIMITS.chunk))
     for (let n = 0; n < chunks; n++) await this.store.put(`chunk/${id}/${String(n).padStart(4, '0')}`, body.slice(n * LIMITS.chunk, (n + 1) * LIMITS.chunk))
     await this.store.put(`env/${id}`, { device, at: now, size: body.length, chunks } satisfies Envelope)
-    await this.store.put(`rate/${device}`, { hour, n: rate.n + 1, bytes: rate.bytes + body.length } satisfies Rate)
+    await this.store.put(`rate/${device}`, { hour, n: rate.n + 1, bytes: rate.bytes + body.length, day, dayN: (rate.dayN ?? 0) + 1, dayBytes: (rate.dayBytes ?? 0) + body.length } satisfies Rate)
     await this.store.put('total', { n: total.n + 1, bytes: total.bytes + body.length })
     return json({ id }, 202)
   }
@@ -273,26 +303,34 @@ export class Relay {
     await this.store.put('total', { n: Math.max(0, total.n - 1), bytes: Math.max(0, total.bytes - e.size) })
   }
 
-  /** `owner`, `team`, a known phone's id, or undefined. A nonce counts once; the time must be within five minutes. */
-  private async verify(req: Request, method: string, path: string, body: Uint8Array, may: { owner?: string; team?: string }): Promise<string | undefined> {
+  /**
+   * Who claims to sign, and their key, from the headers alone: the time
+   * within five minutes, a well formed nonce and signature, and a signer this
+   * mailbox knows. Checked before the body is read.
+   */
+  private async signer(req: Request, method: string, may: { owner?: string; team?: string }): Promise<Signer | undefined> {
     const h = (name: string) => req.headers.get(name) ?? ''
     const id = h('x-grndwrk-device')
     const time = Number(h('x-grndwrk-time'))
     const nonce = h('x-grndwrk-nonce')
     const signature = h('x-grndwrk-signature')
-    const now = this.now()
-    if (!Number.isFinite(time) || Math.abs(now - time) > LIMITS.skew) return undefined
+    if (!Number.isFinite(time) || Math.abs(this.now() - time) > LIMITS.skew) return undefined
     if (!/^[A-Za-z0-9-]{16,64}$/.test(nonce) || !/^[a-f0-9]{64}$/.test(signature)) return undefined
     let key: string | undefined
     if (id === 'owner') key = may.owner
     else if (id === 'team') key = may.team
     else if (ID.test(id) && may.team) key = (await this.store.get<Device>(`dev/${id}`))?.sign
-    if (!key) return undefined
-    const want = await requestSignature(key, method, path, String(time), nonce, body)
-    if (!sameText(want, signature)) return undefined
-    if (await this.store.get(`nonce/${id}/${nonce}`)) return undefined
-    await this.store.put(`nonce/${id}/${nonce}`, now)
-    return id
+    return key ? { id, key, time, nonce, signature, method } : undefined
+  }
+
+  /** `owner`, `team`, a known phone's id, or undefined. A nonce counts once for a request that changes something. */
+  private async verify(_req: Request, method: string, path: string, body: Uint8Array, s: Signer): Promise<string | undefined> {
+    const want = await requestSignature(s.key, method, path, String(s.time), s.nonce, body)
+    if (!sameText(want, s.signature)) return undefined
+    if (method === 'GET') return s.id
+    if (await this.store.get(`nonce/${s.id}/${s.nonce}`)) return undefined
+    await this.store.put(`nonce/${s.id}/${s.nonce}`, this.now())
+    return s.id
   }
 
   private async body(req: Request, max: number): Promise<Uint8Array> {
@@ -316,9 +354,9 @@ export class Relay {
     const now = this.now()
     const last = (await this.store.get<number>('swept')) ?? 0
     if (now - last < 10 * MINUTE) return
-    await this.store.put('swept', now)
     const old: string[] = []
-    for (const [k, at] of await this.store.list<number>({ prefix: 'nonce/' })) if (now - at > 2 * LIMITS.skew) old.push(k)
+    // A thousand at a time: what is left goes at the next sweep.
+    for (const [k, at] of await this.store.list<number>({ prefix: 'nonce/', limit: 1000 })) if (now - at > 2 * LIMITS.skew) old.push(k)
     for (const [k, inv] of await this.store.list<{ expires: number }>({ prefix: 'inv/' })) if (inv.expires < now) old.push(k, `join/${k.slice(4)}`)
     for (let i = 0; i < old.length; i += 128) await this.store.delete(old.slice(i, i + 128))
     let n = 0
@@ -328,16 +366,8 @@ export class Relay {
       else (n++, (size += e.size))
     }
     await this.store.put('total', { n, bytes: size })
+    await this.store.put('swept', now)
   }
-}
-
-/** What a browser shows for an invite or a team link opened by mistake. No script, nothing from elsewhere. */
-function page(kind: 'invite' | 'team'): Response {
-  const say = kind === 'invite'
-    ? ['An invite to send comments with grndwrk', 'Open the app you test on your phone, long press the grndwrk button, choose Join with an invite, and paste this link. Or scan the QR code you were sent.']
-    : ['A team link for grndwrk', 'In the project, run <code>grndwrk relay join</code> followed by this whole link. It connects your grndwrk to the team\'s relay.']
-  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${say[0]}</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;color:#222}code{background:#eee;padding:0 .2em}</style><h1 style="font-size:1.3rem">${say[0]}</h1><p>${say[1]}</p>`
-  return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'", 'referrer-policy': 'no-referrer' } })
 }
 
 function sameText(a: string, b: string): boolean {

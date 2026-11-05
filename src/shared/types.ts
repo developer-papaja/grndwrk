@@ -70,6 +70,8 @@ export type ServerEvent =
   | { type: 'site:request'; origin: string }
   /** That site was answered. */
   | { type: 'site:done'; origin: string }
+  /** A phone joined through the relay and waits to be allowed, or no longer does: the map asks again. */
+  | { type: 'relay:waiting' }
 
 /** A phone asking to send comments, as the map shows it. */
 export interface PairRequest {

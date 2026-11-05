@@ -409,6 +409,9 @@ final class OverlayController: UIViewController {
     }
     if Relay.joined == nil {
       sheet.addAction(UIAlertAction(title: "Join with an invite", style: .default) { [weak self] _ in self?.joinRelay() })
+    } else if Relay.joined?.refused != nil {
+      sheet.addAction(UIAlertAction(title: "Show the digits to be allowed", style: .default) { [weak self] _ in self?.showDigits() })
+      sheet.addAction(UIAlertAction(title: "Leave the relay", style: .default) { [weak self] _ in self?.leaveRelay() })
     } else {
       sheet.addAction(UIAlertAction(title: "Leave the relay", style: .default) { [weak self] _ in self?.leaveRelay() })
     }

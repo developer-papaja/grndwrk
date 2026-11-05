@@ -61,19 +61,25 @@ export function relayOrigin(raw: string): string {
   return u.origin
 }
 
-/** An invite for a phone, or a team link for a teammate's grndwrk. The secret is in the #fragment, which browsers never send. */
-export const inviteLink = (r: ProjectRelay, secret: string) => `${r.url}/v1/${r.mailbox}/invite#${secret}`
-export const teamLink = (r: ProjectRelay) => `${r.url}/v1/${r.mailbox}/team#${r.team}`
+/**
+ * An invite for a phone, or a team link for a teammate's grndwrk:
+ * `grndwrk:invite/<relay host>/<mailbox>/<secret>`. Not a web address on
+ * purpose: opened in a browser it would go to the relay, and a relay that
+ * was tampered with could read the secret from the page. The relay is
+ * reached over https (http only for localhost, to try it out).
+ */
+export const inviteLink = (r: ProjectRelay, secret: string) => `grndwrk:invite/${new URL(r.url).host}/${r.mailbox}/${secret}`
+export const teamLink = (r: ProjectRelay) => `grndwrk:team/${new URL(r.url).host}/${r.mailbox}/${r.team}`
 
 export function parseLink(link: string, kind: 'invite' | 'team'): { url: string; mailbox: string; secret: string } {
-  let u: URL
-  try {
-    u = new URL(link.trim())
-  } catch {
-    throw new Error(`Not a ${kind} link`)
-  }
-  const m = new RegExp(`^/v1/([a-f0-9]{32})/${kind}$`).exec(u.pathname)
-  const secret = u.hash.slice(1)
-  if (!m || !KEY.test(secret)) throw new Error(`Not a ${kind} link: it looks like https://<relay>/v1/<mailbox>/${kind}#<64 characters>`)
-  return { url: relayOrigin(u.origin), mailbox: m[1], secret }
+  const m = new RegExp(`^grndwrk:${kind}/([a-z0-9.-]+(?::\\d{1,5})?)/([a-f0-9]{32})/([a-f0-9]{64})$`).exec(link.trim())
+  if (!m) throw new Error(`Not a ${kind} link: it looks like grndwrk:${kind}/<relay>/<32 characters>/<64 characters>`)
+  const local = /^(localhost|127\.0\.0\.1)(:|$)/.test(m[1])
+  return { url: relayOrigin(`${local ? 'http' : 'https'}://${m[1]}`), mailbox: m[2], secret: m[3] }
 }
+
+/** Envelopes handled per phone, by the id the phone gave each, with its time: one handed over again is refused. In the per-user folder. */
+export async function readSeen(mailbox: string): Promise<Record<string, Record<string, number>>> {
+  return readJson(join(dir(), 'relay-seen', `${mailbox}.json`), {})
+}
+export const saveSeen = (mailbox: string, seen: Record<string, Record<string, number>>) => writeJson(join(dir(), 'relay-seen', `${mailbox}.json`), seen)

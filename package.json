@@ -28,6 +28,8 @@
     "clients/ios/build-loader.sh",
     "relay/src",
     "relay/wrangler.toml",
+    "relay/package.json",
+    "relay/package-lock.json",
     "relay/README.md"
   ],
   "engines": {

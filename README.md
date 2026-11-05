@@ -117,9 +117,11 @@ grndwrk relay add        # in each project: a mailbox of its own, and a team lin
 grndwrk relay join <team link>   # a teammate's grndwrk, in the same project
 ```
 
-`deploy` runs Cloudflare's tool, `wrangler`, through npx at a fixed version; it is never installed with grndwrk. A project without a relay loads none of this.
+`deploy` installs Cloudflare's tool, `wrangler`, in grndwrk's user folder from a lockfile shipped with grndwrk, so it and everything under it are the reviewed versions; it is never installed with grndwrk itself. A project without a relay loads none of this. The links (`grndwrk:invite/...`, `grndwrk:team/...`) are not web addresses on purpose: paste them, do not open them. `grndwrk relay link` prints the team link again.
 
-Then, in the map, the globe at the bottom of the rail: **Colleagues**, a name, **Invite**. Send the link, or show the QR code. In the app they long press the grndwrk button, **Join with an invite**, and paste or scan it. Their comments wait at the relay until a grndwrk on the team runs, arrive with their name on them, and what becomes of them goes back to their phone, so they test fixes like you do. The iOS package README shows how to set up a Beta build for TestFlight.
+On Cloudflare's free plan, each running grndwrk asks the relay once every 15 seconds, and a phone with the app open about as often. That is a few thousand requests a day per person, well inside the free plan's daily requests; check Cloudflare's current limits if a large team shares one account.
+
+Then, in the map, the globe at the bottom of the rail: **Colleagues**, a name, **Invite**. Send the link, or show the QR code. In the app they long press the grndwrk button, **Join with an invite**, and paste or scan it. Their phone shows four digits; the map asks you to allow the phone, with the same digits. Allow it only when they match: a link someone else got hold of is worth nothing without that. Their comments wait at the relay until a grndwrk on the team runs, arrive with their name on them, and what becomes of them goes back to their phone, so they test fixes like you do. The iOS package README shows how to set up a Beta build for TestFlight.
 
 ### Testers without grndwrk
 
@@ -156,7 +158,7 @@ Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed 
 - **Nothing ships with your product.** The web button runs only on local addresses. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
 - **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine, and grndwrk never follows a symbolic link inside `.grndwrk/`, so a file in a pull request cannot point it at anything else on your machine.
 - **Review `.grndwrk/` in pull requests like code.** A colleague's change can add thoughts, answers or questions that look like your agent's; read them before you run commands on them.
-- **The relay cannot read what it carries.** Each phone makes its own key when it joins, and seals every comment with a key made from it, which the relay never gets; a changed or moved envelope is refused. The relay knows only enough to check that a request comes from a phone your team let in. The keys for your project's mailbox (the team key) and the relay's owner key stay in your user folder, never in the project. A team link opens the project's comments, so send it privately. Envelopes are deleted once fetched, or after 30 days.
+- **The relay cannot read what it carries.** Each phone makes its own key when it joins, and seals every comment with a key made from it, which the relay never gets; a changed or moved envelope is refused, and so is one the relay hands over a second time, or after 30 days. The relay knows only enough to check that a request comes from a phone your team let in. A phone is let in only when someone allows it in the map, with four digits it shows too, and acts only on its own comments. A phone can send at most 60 comments and 100 MB an hour, 300 and 300 MB a day. The keys for your project's mailbox (the team key) and the relay's owner key stay in your user folder, never in the project. A team link opens the project's comments, so send it privately. Envelopes are deleted once fetched, or after 30 days.
 - **Websites ask before they send.** Each local site's first comment waits until you allow the site in the map. Allowed sites are kept in your user folder, never in the project, so a pull request cannot allow one.
 
 ### What package scanners say
