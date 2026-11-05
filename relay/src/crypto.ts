@@ -43,6 +43,8 @@ export async function requestSignature(key: string, method: string, path: string
 /** Two keys from a phone's key: one the relay knows to check requests, one only the phone and the team know. */
 export const phoneSignKey = (key: string) => hmacHex(key, 'grndwrk-relay:sign')
 export const phoneSealKey = (key: string) => hmacHex(key, 'grndwrk-relay:seal')
+/** What whoever deployed the relay signs in with, to open and close mailboxes. */
+export const ownerAuthKey = (key: string) => hmacHex(key, 'grndwrk-relay:owner')
 /** Two keys from the team key: the relay knows the first, never the second. */
 export const teamAuthKey = (key: string) => hmacHex(key, 'grndwrk-relay:auth')
 export const teamSealKey = (key: string) => hmacHex(key, 'grndwrk-relay:team-seal')

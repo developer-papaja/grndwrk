@@ -1,14 +1,20 @@
 /**
- * The relay: a mailbox between colleagues' phones and the team's grndwrk.
- * It keeps sealed envelopes and checks who may leave and take them. It
- * cannot open them: the keys that seal them never reach it.
+ * The relay: a mailbox per project between colleagues' phones and the
+ * team's grndwrk. It keeps sealed envelopes and checks who may leave and
+ * take them. It cannot open them: the keys that seal them never reach it.
  *
+ * Every path below is under the project's mailbox, `/v1/<mailbox>`, 32 hex
+ * characters, and each mailbox has its own storage, keys and limits.
+ *
+ * Whoever deployed the relay (signed as `owner` with OWNER_AUTH):
+ *   PUT    /v1/<mailbox> {team}  open a mailbox for a project, with its team's auth key
+ *   DELETE /v1/<mailbox>         close it, with everything in it
  * The phone (signed with its signing key, which the team registered):
  *   POST /v1/inbox            leave an envelope (at most 4 MB)
  *   GET  /v1/outbox           the sealed status of its comments, or 204
  * A phone joining with an invite (not signed: it has no key here yet):
  *   POST /v1/join/<invite>    its key, sealed with the invite's secret, once
- * The team's grndwrk (signed as `team` with the auth key, TEAM_AUTH):
+ * The project's team (signed as `team` with the mailbox's auth key):
  *   POST   /v1/invites {id}   an invite a phone may join with, for 7 days
  *   DELETE /v1/invites/<id>   forget it, and what a phone left with it
  *   GET    /v1/joins          the phones waiting to be let in
@@ -69,8 +75,8 @@ const bytes = (data: Uint8Array, headers: Record<string, string> = {}) =>
 export class Relay {
   constructor(
     private store: Store,
-    /** The team's auth key (64 hex), set as a secret when the relay is deployed. */
-    private teamAuth: string | undefined,
+    /** The owner's auth key (64 hex), set as a secret when the relay is deployed. Only it opens mailboxes. */
+    private ownerAuth: string | undefined,
     private now: () => number = Date.now,
   ) {}
 
@@ -87,27 +93,58 @@ export class Relay {
     const url = new URL(req.url)
     const path = url.pathname
     const method = req.method.toUpperCase()
-    const parts = path.split('/').filter(Boolean)
-    if (parts[0] !== 'v1') return fail(404, 'Not found')
-    await this.sweep()
+    const all = path.split('/').filter(Boolean)
+    if (all[0] !== 'v1') return fail(404, 'Not found')
+    if (method === 'GET' && path === '/v1/hello') return json({ relay: 'grndwrk', version: 2 })
+    const mailbox = all[1] ?? ''
+    if (!ID.test(mailbox)) return fail(404, 'Not found')
+    // From here on as if the mailbox were the root: [mailbox, what, id].
+    const parts = all.slice(1)
+    const rest = parts.slice(1).join('/')
 
-    if (method === 'GET' && path === '/v1/hello') return json({ relay: 'grndwrk', version: 1 })
+    if (!rest) {
+      if (!this.ownerAuth || !KEY.test(this.ownerAuth)) return fail(503, 'The relay is not set up: it has no owner key')
+      const body = await this.body(req, LIMITS.join)
+      if ((await this.verify(req, method, path + url.search, body, { owner: this.ownerAuth })) !== 'owner') return fail(401, 'Only whoever deployed the relay opens or closes a mailbox')
+      return this.owner(method, body)
+    }
+
+    const teamAuth = await this.store.get<string>('team')
+    if (!teamAuth) return fail(404, 'No such mailbox')
+    await this.sweep()
 
     if (method === 'POST' && parts[1] === 'join' && parts.length === 3) {
       const body = await this.body(req, LIMITS.join)
       return this.join(parts[2], body)
     }
 
-    if (!this.teamAuth || !KEY.test(this.teamAuth)) return fail(503, 'The relay is not set up: it has no team key')
     const body = await this.body(req, LIMITS.body)
-    const who = await this.verify(req, method, path + url.search, body)
-    if (!who) return fail(401, 'Not signed by a phone or a team this relay knows')
+    const who = await this.verify(req, method, path + url.search, body, { team: teamAuth })
+    if (!who) return fail(401, 'Not signed by a phone or a team this mailbox knows')
 
     if (who === 'team') return this.team(method, parts, body)
-    if (method === 'POST' && path === '/v1/inbox') return this.leave(who, body)
-    if (method === 'GET' && path === '/v1/outbox') {
+    if (method === 'POST' && rest === 'inbox') return this.leave(who, body)
+    if (method === 'GET' && rest === 'outbox') {
       const out = await this.store.get<Uint8Array>(`out/${who}`)
       return out ? bytes(out) : new Response(null, { status: 204 })
+    }
+    return fail(404, 'Not found')
+  }
+
+  /** Open a mailbox with its team's auth key, once; or close it with everything in it. */
+  private async owner(method: string, body: Uint8Array): Promise<Response> {
+    if (method === 'PUT') {
+      const { team } = this.parse(body)
+      if (typeof team !== 'string' || !KEY.test(team)) return fail(400, 'A team key is 64 hex characters')
+      const had = await this.store.get<string>('team')
+      if (had && had !== team) return fail(409, 'This mailbox is open for another team')
+      await this.store.put('team', team)
+      return json({ ok: true })
+    }
+    if (method === 'DELETE') {
+      const keys = [...(await this.store.list({ prefix: '' })).keys()]
+      for (let i = 0; i < keys.length; i += 128) await this.store.delete(keys.slice(i, i + 128))
+      return json({ ok: true })
     }
     return fail(404, 'Not found')
   }
@@ -219,8 +256,8 @@ export class Relay {
     await this.store.put('total', { n: Math.max(0, total.n - 1), bytes: Math.max(0, total.bytes - e.size) })
   }
 
-  /** `team`, a known phone's id, or undefined. A nonce counts once; the time must be within five minutes. */
-  private async verify(req: Request, method: string, path: string, body: Uint8Array): Promise<string | undefined> {
+  /** `owner`, `team`, a known phone's id, or undefined. A nonce counts once; the time must be within five minutes. */
+  private async verify(req: Request, method: string, path: string, body: Uint8Array, may: { owner?: string; team?: string }): Promise<string | undefined> {
     const h = (name: string) => req.headers.get(name) ?? ''
     const id = h('x-grndwrk-device')
     const time = Number(h('x-grndwrk-time'))
@@ -230,8 +267,9 @@ export class Relay {
     if (!Number.isFinite(time) || Math.abs(now - time) > LIMITS.skew) return undefined
     if (!/^[A-Za-z0-9-]{16,64}$/.test(nonce) || !/^[a-f0-9]{64}$/.test(signature)) return undefined
     let key: string | undefined
-    if (id === 'team') key = this.teamAuth
-    else if (ID.test(id)) key = (await this.store.get<Device>(`dev/${id}`))?.sign
+    if (id === 'owner') key = may.owner
+    else if (id === 'team') key = may.team
+    else if (ID.test(id) && may.team) key = (await this.store.get<Device>(`dev/${id}`))?.sign
     if (!key) return undefined
     const want = await requestSignature(key, method, path, String(time), nonce, body)
     if (!sameText(want, signature)) return undefined

@@ -1,12 +1,12 @@
 /**
- * The Cloudflare side: every request goes to one Durable Object, which
- * keeps the envelopes in its own storage and handles one request at a time.
- * Everything else is in relay.ts.
+ * The Cloudflare side: each project's mailbox is a Durable Object of its
+ * own, with its own storage, handling one request at a time. Everything
+ * else is in relay.ts.
  */
 import { Relay, type Store } from './relay.js'
 
 interface Env {
-  TEAM_AUTH?: string
+  OWNER_AUTH?: string
   RELAY: { idFromName(name: string): unknown; get(id: unknown): { fetch(req: Request): Promise<Response> } }
 }
 
@@ -20,7 +20,7 @@ interface DurableObjectStorage {
 export class RelayObject {
   private relay: Relay
   constructor(state: { storage: DurableObjectStorage }, env: Env) {
-    this.relay = new Relay(state.storage as Store, env.TEAM_AUTH)
+    this.relay = new Relay(state.storage as Store, env.OWNER_AUTH)
   }
   fetch(req: Request): Promise<Response> {
     return this.relay.handle(req)
@@ -29,7 +29,11 @@ export class RelayObject {
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
-    if (new URL(req.url).protocol !== 'https:') return new Response('https only', { status: 400 })
-    return env.RELAY.get(env.RELAY.idFromName('team')).fetch(req)
+    const url = new URL(req.url)
+    if (url.protocol !== 'https:') return new Response('https only', { status: 400 })
+    if (url.pathname === '/v1/hello') return Response.json({ relay: 'grndwrk', version: 2 })
+    const mailbox = /^\/v1\/([a-f0-9]{32})(?:\/|$)/.exec(url.pathname)?.[1]
+    if (!mailbox) return new Response('Not found', { status: 404 })
+    return env.RELAY.get(env.RELAY.idFromName(mailbox)).fetch(req)
   },
 }

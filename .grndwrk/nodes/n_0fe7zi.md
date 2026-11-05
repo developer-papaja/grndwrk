@@ -35,7 +35,7 @@ Decided: a small relay that grndwrk ships and you host yourself, on Cloudflare. 
 
 **The relay**
 
-- **One small Cloudflare Worker** with a Durable Object for storage, set up with one command (`npx grndwrk relay deploy`, on your own Cloudflare account, free plan). Its code lives in this repo under `relay/`, about 300 lines, tested with Cloudflare's local runner.
+- **One small Cloudflare Worker, with a mailbox per project,** set up once with one command (`npx grndwrk relay deploy`, on your own Cloudflare account, free plan), then `grndwrk relay add` in each project that uses it. Each mailbox is a Durable Object of its own, so comments always reach the project they were made in. Only whoever deployed the relay opens a mailbox, with an owner key kept on their Mac. Someone else using grndwrk sets up their own relay; teammates and testers need no Cloudflare account. Its code lives in this repo under `relay/`, about 300 lines, tested with Cloudflare's local runner.
 - **It keeps only sealed envelopes,** each deleted once fetched, or after 30 days. Limits per phone and in all (like `--lan`: 4 MB a body, so many an hour), so a flood stays inside the free plan.
 - **Each teammate's grndwrk signs in to the relay with the team key,** kept in grndwrk's folder on their Mac (`stateDir`), never in the project. With it, grndwrk fetches, hands out invites and sends each phone the status of its comments. When two teammates' maps say different things about a comment, the newest change wins.
 

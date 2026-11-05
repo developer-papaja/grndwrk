@@ -1,5 +1,5 @@
 # The grndwrk relay, on your own Cloudflare account (the free plan is enough).
-# `grndwrk relay deploy` fills in the name and sets TEAM_AUTH as a secret.
+# `grndwrk relay deploy` fills in the name and sets OWNER_AUTH as a secret.
 name = "grndwrk-relay"
 main = "src/worker.ts"
 compatibility_date = "2026-10-01"
