@@ -25,7 +25,10 @@
     "clients/ios/GrndwrkFeedback/Sources",
     "clients/ios/GrndwrkFeedback/README.md",
     "clients/ios/Loader",
-    "clients/ios/build-loader.sh"
+    "clients/ios/build-loader.sh",
+    "relay/src",
+    "relay/wrangler.toml",
+    "relay/README.md"
   ],
   "engines": {
     "node": ">=20.16"
@@ -52,6 +55,7 @@
     "marked": "^18.1.1",
     "modern-screenshot": "4.7.0",
     "playwright-core": "1.64.0",
+    "qrcode-generator": "2.0.4",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

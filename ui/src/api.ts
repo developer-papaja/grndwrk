@@ -95,6 +95,17 @@ export const answerSiteRequest = (origin: string, allow: boolean) => request<{ a
 export const removeSite = (origin: string) => request<{ allowed: AllowedSite[] }>('POST', '/api/sites', { origin, remove: true })
 export const markTested = (id: string, works: boolean, note: string) =>
   request<{ state: 'fixed' | 'incoming'; node: GNode }>('POST', `/api/nodes/${encodeURIComponent(id)}/tested`, { works, note })
+export interface RelayInfo {
+  connected: boolean
+  deployed?: boolean
+  url?: string
+  phones?: { id: string; name: string; joined: string }[]
+  invites?: { id: string; name: string; expires: number }[]
+  error?: string
+}
+export const fetchRelay = () => request<RelayInfo>('GET', '/api/relay').catch(() => ({ connected: false }) as RelayInfo)
+export const inviteColleague = (name: string) => request<{ id: string; name: string; link: string }>('POST', '/api/relay/invites', { name })
+export const removeFromRelay = (kind: 'phones' | 'invites', id: string) => request<RelayInfo>('DELETE', `/api/relay/${kind}/${id}`)
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
 
 /** Subscribe to server events. EventSource reconnects on its own after a drop. */

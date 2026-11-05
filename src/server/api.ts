@@ -19,6 +19,8 @@ import type { Pairings } from './pairing.js'
 import type { Sites } from './sites.js'
 import { openTarget } from '../opener.js'
 import { testedInMap } from './feedback.js'
+import type { RelaySync } from '../relay/sync.js'
+import { ownRelay } from '../relay/config.js'
 
 interface Ctx {
   gwDir: string
@@ -30,6 +32,8 @@ interface Ctx {
   runtime?: { app?: string }
   /** Local sites asking to send comments from the Comment button they load. */
   sites?: Sites
+  /** This project's mailbox at the team's relay, when it has one. */
+  relay?: RelaySync
 }
 
 /** Handles /api/*. Returns false when the request is not an API route. */
@@ -60,6 +64,27 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
 
     if ((method === 'POST' || method === 'PATCH') && !isJson(req)) return send(res, 415, { error: 'Send JSON' })
+
+    // Colleagues through the relay: who has joined, open invites, and inviting someone by name.
+    if (url.pathname === '/api/relay' && method === 'GET') {
+      if (!ctx.relay) return send(res, 200, { connected: false, deployed: !!(await ownRelay()) })
+      return send(res, 200, { connected: true, ...(await ctx.relay.summary()) })
+    }
+    if (url.pathname === '/api/relay/invites' && method === 'POST') {
+      if (!ctx.relay) throw new BadInput('This project has no relay yet. Run grndwrk relay add, or relay join with a team link')
+      const { name } = (await readBody(req)) as { name?: unknown }
+      try {
+        return send(res, 201, await ctx.relay.invite(typeof name === 'string' ? name : ''))
+      } catch (err) {
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+    }
+    const relayMatch = url.pathname.match(/^\/api\/relay\/(phones|invites)\/([a-f0-9]{32})$/)
+    if (relayMatch && method === 'DELETE') {
+      if (!ctx.relay) throw new NotFound(relayMatch[2])
+      await (relayMatch[1] === 'phones' ? ctx.relay.removePhone(relayMatch[2]) : ctx.relay.removeInvite(relayMatch[2]))
+      return send(res, 200, { connected: true, ...(await ctx.relay.summary()) })
+    }
 
     const testedMatch = url.pathname.match(/^\/api\/nodes\/([^/]+)\/tested$/)
     if (testedMatch && method === 'POST') {

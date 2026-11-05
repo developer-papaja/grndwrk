@@ -2,12 +2,13 @@ import Alpine from 'alpinejs'
 import { cached } from './reactivity'
 import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, type RelayInfo } from './api'
 import { BOX, commentsForScreen, hiddenScreenIds, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { answerText, appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
+import qrcode from 'qrcode-generator'
 import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testSteps, type FeedbackState } from '../../src/shared/feedback'
 import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
 import { PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
@@ -621,6 +622,28 @@ export const state = Alpine.reactive({
   siteRequests: [] as string[],
   /** Sites that may send comments, shown in the Comments menu, where one can be removed. */
   allowedSites: [] as AllowedSite[],
+  // Colleagues away from the Wi-Fi, through the team's relay: who joined, open invites, and a new invite with its QR code.
+  relay: { connected: false } as RelayInfo,
+  invited: null as { name: string; link: string; qr: string } | null,
+  async loadRelay() {
+    this.relay = await fetchRelay()
+  },
+  async invite(name: string) {
+    try {
+      const { name: who, link } = await inviteColleague(name)
+      this.invited = { name: who, link, qr: qrPath(link) }
+      await this.loadRelay()
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async removeColleague(kind: 'phones' | 'invites', id: string) {
+    try {
+      this.relay = await removeFromRelay(kind, id)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
   async loadSiteRequests() {
     const { asking, allowed } = await fetchSites()
     this.siteRequests = asking
@@ -1770,7 +1793,10 @@ export const state = Alpine.reactive({
     if (source === 'docs') return 'From the docs'
     if (source === 'commit') return 'From a commit'
     if (source === 'inferred') return 'A guess. Check the thread.'
-    if (source === 'app') return 'Commented in the running product'
+    if (source === 'app') {
+      const from = typeof node?.extra?.from === 'string' ? node.extra.from : ''
+      return from ? `Commented in the running product by ${from}, through the relay` : 'Commented in the running product'
+    }
     return ''
   },
   seenIn(node: GNode | null): string[] {
@@ -3158,6 +3184,17 @@ function readTheme(): Theme {
 export function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle('light', theme === 'light')
   document.documentElement.classList.toggle('dark', theme === 'dark')
+}
+
+/** A QR code as one SVG path in a square of its module count, drawn by the map: no markup from elsewhere. */
+function qrPath(text: string): string {
+  const qr = qrcode(0, 'M')
+  qr.addData(text)
+  qr.make()
+  const n = qr.getModuleCount()
+  let d = ''
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`
+  return `${n}|${d}`
 }
 
 /** Layout choices are remembered per browser. Storage can be blocked, so fall back quietly. */

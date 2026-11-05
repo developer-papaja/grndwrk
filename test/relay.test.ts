@@ -62,13 +62,15 @@ async function setup() {
 async function joined(t: Awaited<ReturnType<typeof setup>>) {
   const secret = randomKey()
   const inv = await inviteId(secret)
-  expect((await t.asTeam('POST', `/v1/${MB}/invites`, JSON.stringify({ id: inv }))).status).toBe(200)
+  expect((await t.asTeam('POST', `/v1/${MB}/invites`, JSON.stringify({ id: inv, sealed: 'c2VhbGVk' }))).status).toBe(200)
 
   const phoneKey = randomKey()
   const sealedJoin = await seal(secret, `join:${inv}`, new TextEncoder().encode(JSON.stringify({ key: phoneKey, name: 'Anna’s iPhone' })))
   expect((await t.relay.handle(new Request(`${BASE}/v1/${MB}/join/${inv}`, { method: 'POST', body: sealedJoin as BodyInit }))).status).toBe(202)
 
-  const joins = await (await t.asTeam('GET', `/v1/${MB}/joins`)).json() as { invite: string; body: string }[]
+  const joins = await (await t.asTeam('GET', `/v1/${MB}/joins`)).json() as { invite: string; sealed: string; body: string }[]
+  expect(joins[0].sealed).toBe('c2VhbGVk')
+  expect(await (await t.asTeam('GET', `/v1/${MB}/invites`)).json()).toMatchObject([{ id: inv, sealed: 'c2VhbGVk' }])
   const plain = await open(secret, `join:${inv}`, fromBase64(joins[0].body))
   const { key } = JSON.parse(new TextDecoder().decode(plain))
   const sign = await phoneSignKey(key)
@@ -176,14 +178,14 @@ describe('relay', () => {
     const inv = await inviteId(randomKey())
     const join = (id = inv) => t.relay.handle(new Request(`${BASE}/v1/${MB}/join/${id}`, { method: 'POST', body: 'x'.repeat(40) }))
     expect((await join()).status).toBe(404)
-    await t.asTeam('POST', `/v1/${MB}/invites`, JSON.stringify({ id: inv }))
+    await t.asTeam('POST', `/v1/${MB}/invites`, JSON.stringify({ id: inv, sealed: 'c2VhbGVk' }))
     expect((await join()).status).toBe(202)
     expect((await join()).status).toBe(409)
     await t.asTeam('DELETE', `/v1/${MB}/invites/${inv}`)
     expect((await join()).status).toBe(404)
 
     const inv2 = await inviteId(randomKey())
-    await t.asTeam('POST', `/v1/${MB}/invites`, JSON.stringify({ id: inv2 }))
+    await t.asTeam('POST', `/v1/${MB}/invites`, JSON.stringify({ id: inv2, sealed: 'c2VhbGVk' }))
     t.tick(LIMITS.invite + 1)
     expect((await join(inv2)).status).toBe(404)
     expect((await t.relay.handle(new Request(`${BASE}/v1/${MB}/join/${inv2}`, { method: 'POST', body: 'x'.repeat(LIMITS.join + 1) }))).status).toBe(413)
@@ -241,7 +243,11 @@ describe('relay', () => {
     // The owner key opens no mailbox's contents.
     expect((await t.signed('owner', t.owner, 'GET', `/v1/${MB}/inbox`)).status).toBe(401)
 
-    expect((await t.asTeam('POST', `/v1/${MB}/invites`, '{"id":"../dev/x"}')).status).toBe(400)
+    expect((await t.asTeam('POST', `/v1/${MB}/invites`, '{"id":"../dev/x","sealed":""}')).status).toBe(400)
+    expect((await t.asTeam('POST', `/v1/${MB}/invites`, JSON.stringify({ id: 'a'.repeat(32), sealed: '<script>' }))).status).toBe(400)
+    const invitePage = await t.relay.handle(new Request(`${BASE}/v1/${MB}/invite`))
+    expect(invitePage.headers.get('content-security-policy')).toContain("default-src 'none'")
+    expect(await invitePage.text()).toContain('Join with an invite')
     expect((await t.asTeam('POST', `/v1/${MB}/invites`, 'not json')).status).toBe(400)
     expect((await t.asTeam('PUT', `/v1/${MB}/devices/${'a'.repeat(32)}`, JSON.stringify({ sign: 'short', sealed: '' }))).status).toBe(400)
     expect((await t.asTeam('PUT', `/v1/${MB}/outbox/${'a'.repeat(32)}`, 'x')).status).toBe(404)

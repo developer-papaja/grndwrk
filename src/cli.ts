@@ -16,6 +16,9 @@ const HELP = `Usage:
                          for the Sitemap view. Uses Chrome.
       --app <url>        where the product runs (default: the last --app)
       --login            log in once in a Chrome window; the session is kept
+  grndwrk relay [deploy | add | join <team link> | leave]
+                         comments from colleagues' phones away from your Wi-Fi,
+                         through a relay on your own Cloudflare account
   grndwrk build-ios-loader [path]
                          build GrndwrkFeedback for injecting into an app in
                          the iOS Simulator, without changing the app; prints
@@ -47,6 +50,7 @@ async function main() {
       open: { type: 'boolean', default: true },
       dev: { type: 'boolean', default: false },
       login: { type: 'boolean', default: false },
+      name: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
     },
   })
@@ -104,6 +108,13 @@ async function main() {
     return
   }
 
+  if (command === 'relay') {
+    const { relayCommand, RELAY_HELP } = await import('./relay/cli.js')
+    if (positionals[1] === 'help') return void console.log(RELAY_HELP)
+    const root = findProjectRoot(process.cwd())
+    return relayCommand(positionals.slice(1), root ? join(root, GW_DIR) : undefined, values.name)
+  }
+
   if (command === 'start') {
     const root = findProjectRoot(process.cwd())
     if (!root) {
@@ -135,7 +146,7 @@ async function main() {
     }
     const appPort = values['app-port'] ? Number(values['app-port']) : undefined
     const lanPort = values['lan-port'] ? Number(values['lan-port']) : undefined
-    const { url, appUrl, lanUrls, lanCode } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort, lan: values.lan, lanPort })
+    const { url, appUrl, lanUrls, lanCode, relayUrl } = await startServer({ gwDir: join(root, GW_DIR), port, dev: values.dev, app, appPort, lan: values.lan, lanPort })
     const actual = Number(new URL(url).port)
     console.log(`grndwrk is running at ${url}\nWatching ${gwDir}`)
     // --port moves the project for good; a new project keeps the port it got.
@@ -164,6 +175,7 @@ async function main() {
       console.log(`  Pairing code: ${lanCode}. Enter it once on a phone, or allow the phone in the map. Delete .grndwrk/lan-code for a new code, .grndwrk/lan-devices.json to unpair every phone.`)
       console.log('  Only comments can be sent from there. The map stays on this Mac.')
     }
+    if (relayUrl) console.log(`Colleagues' phones send comments through the relay at ${relayUrl}. Invite them in the map: the globe at the bottom of the rail.`)
     console.log('Press Ctrl+C to stop.')
     // Whether a map tab is open, kept for the next start: a tab in the
     // background reconnects only when it is looked at again, so it would not

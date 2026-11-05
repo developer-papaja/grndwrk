@@ -30,7 +30,8 @@ export class RelayObject {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
-    if (url.protocol !== 'https:') return new Response('https only', { status: 400 })
+    // https only; http just on this machine, for trying it with `wrangler dev`.
+    if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return new Response('https only', { status: 400 })
     if (url.pathname === '/v1/hello') return Response.json({ relay: 'grndwrk', version: 2 })
     const mailbox = /^\/v1\/([a-f0-9]{32})(?:\/|$)/.exec(url.pathname)?.[1]
     if (!mailbox) return new Response('Not found', { status: 404 })

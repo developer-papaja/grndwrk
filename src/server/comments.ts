@@ -12,8 +12,10 @@ export interface CommentsCtx {
   project: string
   /** The map in the browser, for opening a comment to write on the Mac. */
   uiUrl: string
-  /** Set for the LAN listener: comments are marked `via: lan`, and bodies are smaller. */
-  via?: 'lan'
+  /** Set for the LAN listener and the relay: comments are marked `via: lan` or `via: relay`. */
+  via?: 'lan' | 'relay'
+  /** From the relay: the colleague's name, from their invite, and their phone's id at the relay. */
+  from?: { name: string; device: string }
   /** The largest body accepted, in bytes. */
   limit?: number
 }
@@ -35,47 +37,56 @@ export async function handleComments(req: IncomingMessage, res: ServerResponse, 
   if (path === '/api/hello' && method === 'GET') {
     return json(res, 200, { grndwrk: true, project: ctx.project, browser: clientCount() > 0 })
   }
-  if (!['/api/feedback', '/api/feedback/status', '/api/feedback/remove', '/api/feedback/tested', '/api/feedback/show', '/api/screenshot'].includes(path) || method !== 'POST') return false
+  if (!COMMENT_PATHS.includes(path) || method !== 'POST') return false
   if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return json(res, 415, { error: 'Send JSON' })
   try {
     // The LAN listener has read the body already, to check its signature.
     const body = JSON.parse((read ?? (await readAll(req, ctx.limit ?? 14_000_000))).toString('utf8'))
-    if (path === '/api/feedback/status') return json(res, 200, { comments: await feedbackStatus(ctx.store, body) })
-    if (path === '/api/screenshot') {
-      const { about, data } = parseScreenshot(body)
-      const key = await saveIosShot(ctx.gwDir, about, data)
-      return json(res, 201, { saved: key })
-    }
-    if (path === '/api/feedback/show') {
-      // Open a comment the device sent in the map on the Mac, to see what changed. Only by its key.
-      const own = await ownComments(ctx.store, body)
-      if (!own.length) return json(res, 404, { error: 'No comment of yours by that id' })
-      return json(res, 200, { opened: await openOnMac(own[0], ctx.uiUrl) })
-    }
-    if (path === '/api/feedback/tested') {
-      const tested = await testedOnDevice(ctx.store, body)
-      await ctx.nodes.sync()
-      // Rejected, to say what is still wrong on the Mac: open it there with the reply box ready.
-      const onMac = (body as { works?: unknown; on_mac?: unknown }).works === false && (body as { on_mac?: unknown }).on_mac === true
-      const opened = onMac && tested[0] ? await openOnMac(tested[0].id, ctx.uiUrl, 'reply') : undefined
-      return json(res, 200, { tested, ...(opened ? { opened } : {}) })
-    }
-    if (path === '/api/feedback/remove') {
-      const removed = await removeFeedback(ctx.gwDir, ctx.store, body)
-      await ctx.nodes.sync()
-      return json(res, 200, { removed })
-    }
-    const input = parseFeedback(body)
-    const node = await createFeedback(ctx.gwDir, ctx.store, input, ctx.via)
-    await ctx.nodes.sync()
-    let opened: 'browser' | 'new tab' | undefined
-    if (input.onMac) opened = await openOnMac(node.id, ctx.uiUrl)
-    return json(res, 201, { id: node.id, title: node.title, project: ctx.project, ...(opened ? { opened } : {}) })
+    const out = await commentRequest(path, body, ctx)
+    return json(res, out.status, out.body)
   } catch (err) {
     const bad = err instanceof BadInput || err instanceof SyntaxError
     if (!bad) console.error(err)
     return json(res, bad ? 400 : 500, { error: err instanceof Error ? err.message : String(err) })
   }
+}
+
+export const COMMENT_PATHS = ['/api/feedback', '/api/feedback/status', '/api/feedback/remove', '/api/feedback/tested', '/api/feedback/show', '/api/screenshot']
+
+/** One request from a device, already read and checked: the same over localhost, `--lan` and the relay. */
+export async function commentRequest(path: string, body: unknown, ctx: CommentsCtx): Promise<{ status: number; body: Record<string, unknown> }> {
+  if (path === '/api/feedback/status') return { status: 200, body: { comments: await feedbackStatus(ctx.store, body) } }
+  if (path === '/api/screenshot') {
+    const { about, data } = parseScreenshot(body)
+    const key = await saveIosShot(ctx.gwDir, about, data)
+    return { status: 201, body: { saved: key } }
+  }
+  if (path === '/api/feedback/show') {
+    // Open a comment the device sent in the map on the Mac, to see what changed. Only by its key.
+    const own = await ownComments(ctx.store, body)
+    if (!own.length) return { status: 404, body: { error: 'No comment of yours by that id' } }
+    return { status: 200, body: { opened: await openOnMac(own[0], ctx.uiUrl) } }
+  }
+  if (path === '/api/feedback/tested') {
+    const tested = await testedOnDevice(ctx.store, body)
+    await ctx.nodes.sync()
+    // Rejected, to say what is still wrong on the Mac: open it there with the reply box ready.
+    const onMac = (body as { works?: unknown; on_mac?: unknown }).works === false && (body as { on_mac?: unknown }).on_mac === true
+    const opened = onMac && tested[0] ? await openOnMac(tested[0].id, ctx.uiUrl, 'reply') : undefined
+    return { status: 200, body: { tested, ...(opened ? { opened } : {}) } }
+  }
+  if (path === '/api/feedback/remove') {
+    const removed = await removeFeedback(ctx.gwDir, ctx.store, body)
+    await ctx.nodes.sync()
+    return { status: 200, body: { removed } }
+  }
+  if (path !== '/api/feedback') return { status: 404, body: { error: 'Not found' } }
+  const input = parseFeedback(body)
+  const node = await createFeedback(ctx.gwDir, ctx.store, input, ctx.via, ctx.from)
+  await ctx.nodes.sync()
+  let opened: 'browser' | 'new tab' | undefined
+  if (input.onMac) opened = await openOnMac(node.id, ctx.uiUrl)
+  return { status: 201, body: { id: node.id, title: node.title, project: ctx.project, ...(opened ? { opened } : {}) } }
 }
 
 /**

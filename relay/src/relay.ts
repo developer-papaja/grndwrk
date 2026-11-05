@@ -15,16 +15,20 @@
  * A phone joining with an invite (not signed: it has no key here yet):
  *   POST /v1/join/<invite>    its key, sealed with the invite's secret, once
  * The project's team (signed as `team` with the mailbox's auth key):
- *   POST   /v1/invites {id}   an invite a phone may join with, for 7 days
+ *   POST   /v1/invites {id, sealed}  an invite a phone may join with, for 7 days;
+ *                             `sealed` (its secret and the colleague's name) only the team opens
+ *   GET    /v1/invites        the open invites
  *   DELETE /v1/invites/<id>   forget it, and what a phone left with it
- *   GET    /v1/joins          the phones waiting to be let in
+ *   GET    /v1/joins          the phones waiting to be let in, with their invite's sealed part
  *   PUT    /v1/devices/<id> {sign, sealed}   let a phone in
  *   GET    /v1/devices        the phones, with their keys sealed for the team
  *   DELETE /v1/devices/<id>   take a phone out, with all it left
  *   GET    /v1/inbox          the envelopes waiting, oldest first
  *   GET    /v1/inbox/<id>     one envelope; DELETE it once handled
  *   PUT    /v1/outbox/<device>  the sealed status for a phone
- * Anyone: GET /v1/hello.
+ * Anyone: GET /v1/hello, and GET /v1/<mailbox>/invite or /team: a page
+ * saying what to do with an invite or a team link (the secret stays in
+ * the link's #fragment, which a browser never sends).
  *
  * Kept separate from Cloudflare (worker.ts) so the tests run it on Node.
  */
@@ -40,6 +44,7 @@ export interface Store {
 interface Device { sign: string; sealed: string; added: number }
 interface Envelope { device: string; at: number; size: number; chunks: number }
 interface Rate { hour: number; n: number; bytes: number }
+interface Invite { expires: number; sealed: string }
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -109,6 +114,8 @@ export class Relay {
       return this.owner(method, body)
     }
 
+    if (method === 'GET' && (rest === 'invite' || rest === 'team')) return page(rest)
+
     const teamAuth = await this.store.get<string>('team')
     if (!teamAuth) return fail(404, 'No such mailbox')
     await this.sweep()
@@ -153,12 +160,17 @@ export class Relay {
     const [, what, id] = parts
     const one = parts.length === 3
     if (what === 'invites' && method === 'POST' && parts.length === 2) {
-      const { id: inv } = this.parse(body)
+      const { id: inv, sealed } = this.parse(body)
       if (typeof inv !== 'string' || !ID.test(inv)) return fail(400, 'An invite id is 32 hex characters')
+      if (typeof sealed !== 'string' || !B64.test(sealed) || sealed.length > LIMITS.sealedKey) return fail(400, 'The sealed part is base64, at most 4 KB')
       const open = await this.store.list({ prefix: 'inv/' })
       if (open.size >= LIMITS.invites && !open.has(`inv/${inv}`)) return fail(429, 'Too many open invites')
-      await this.store.put(`inv/${inv}`, { expires: this.now() + LIMITS.invite })
+      await this.store.put(`inv/${inv}`, { expires: this.now() + LIMITS.invite, sealed } satisfies Invite)
       return json({ ok: true })
+    }
+    if (what === 'invites' && method === 'GET' && parts.length === 2) {
+      const invs = await this.store.list<Invite>({ prefix: 'inv/' })
+      return json([...invs].filter(([, v]) => v.expires >= this.now()).map(([k, v]) => ({ id: k.slice(4), sealed: v.sealed, expires: v.expires })))
     }
     if (what === 'invites' && method === 'DELETE' && one && ID.test(id)) {
       await this.store.delete([`inv/${id}`, `join/${id}`])
@@ -166,7 +178,12 @@ export class Relay {
     }
     if (what === 'joins' && method === 'GET' && parts.length === 2) {
       const joins = await this.store.list<Uint8Array>({ prefix: 'join/' })
-      return json([...joins].map(([k, v]) => ({ invite: k.slice(5), body: toBase64(v) })))
+      const out = []
+      for (const [k, v] of joins) {
+        const inv = await this.store.get<Invite>(`inv/${k.slice(5)}`)
+        if (inv) out.push({ invite: k.slice(5), sealed: inv.sealed, body: toBase64(v) })
+      }
+      return json(out)
     }
     if (what === 'devices' && method === 'PUT' && one && ID.test(id)) {
       const { sign, sealed } = this.parse(body)
@@ -220,7 +237,7 @@ export class Relay {
   /** A phone leaves its key, sealed with the invite's secret. The first one counts; the invite is then used. */
   private async join(invite: string, body: Uint8Array): Promise<Response> {
     if (!ID.test(invite)) return fail(404, 'No such invite')
-    const inv = await this.store.get<{ expires: number }>(`inv/${invite}`)
+    const inv = await this.store.get<Invite>(`inv/${invite}`)
     if (!inv || inv.expires < this.now()) return fail(404, 'No such invite, or it has expired')
     if (await this.store.get(`join/${invite}`)) return fail(409, 'This invite has been used')
     if (body.length < 28) return fail(400, 'Empty')
@@ -312,6 +329,15 @@ export class Relay {
     }
     await this.store.put('total', { n, bytes: size })
   }
+}
+
+/** What a browser shows for an invite or a team link opened by mistake. No script, nothing from elsewhere. */
+function page(kind: 'invite' | 'team'): Response {
+  const say = kind === 'invite'
+    ? ['An invite to send comments with grndwrk', 'Open the app you test on your phone, long press the grndwrk button, choose Join with an invite, and paste this link. Or scan the QR code you were sent.']
+    : ['A team link for grndwrk', 'In the project, run <code>grndwrk relay join</code> followed by this whole link. It connects your grndwrk to the team\'s relay.']
+  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${say[0]}</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;color:#222}code{background:#eee;padding:0 .2em}</style><h1 style="font-size:1.3rem">${say[0]}</h1><p>${say[1]}</p>`
+  return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'", 'referrer-policy': 'no-referrer' } })
 }
 
 function sameText(a: string, b: string): boolean {

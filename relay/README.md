@@ -1,6 +1,6 @@
 # grndwrk relay
 
-Mailboxes between colleagues' phones and your team's grndwrk, for testers who are not on your Wi-Fi. You host it yourself, on your own Cloudflare account (the free plan is enough): one relay, with a mailbox per project. Someone else using grndwrk sets up their own. Not wired into grndwrk yet: `grndwrk relay deploy` and joining come next.
+Mailboxes between colleagues' phones and your team's grndwrk, for testers who are not on your Wi-Fi. You host it yourself, on your own Cloudflare account (the free plan is enough): one relay, with a mailbox per project. Someone else using grndwrk sets up their own. grndwrk's side is in `src/relay/` (`grndwrk relay deploy`, `add`, `join`); the iOS package joins and sends through it next.
 
 ## Mailboxes
 

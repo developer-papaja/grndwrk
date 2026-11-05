@@ -15,6 +15,8 @@ import { broadcast, NodeSync } from './events.js'
 import { Pairings } from './pairing.js'
 import { handleComments, type CommentsCtx } from './comments.js'
 import { watchgrndwrk } from './watcher.js'
+import { projectRelay } from '../relay/config.js'
+import { RelaySync } from '../relay/sync.js'
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
@@ -30,7 +32,7 @@ export interface StartOptions {
   lanPort?: number
 }
 
-export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort }: StartOptions): Promise<{ server: Server; url: string; appUrl?: string; lanUrls?: string[]; lanCode?: string }> {
+export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort }: StartOptions): Promise<{ server: Server; url: string; appUrl?: string; lanUrls?: string[]; lanCode?: string; relayUrl?: string }> {
   const store = new NodeStore(gwDir)
   const nodes = new NodeSync(() => store.list())
   await nodes.prime()
@@ -55,6 +57,10 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   )
   const overlay: OverlayCtx = { gwDir, store, nodes, sites, uiUrl: () => comments.uiUrl }
 
+  // Colleagues' phones away from the Wi-Fi, through the team's relay, when this project has a mailbox there.
+  const relayConfig = await projectRelay(gwDir)
+  const relay = relayConfig ? new RelaySync(relayConfig, comments) : undefined
+
   /** Where the product runs with the Comment button, once the proxy listens. */
   const runtime: { app?: string } = {}
 
@@ -66,7 +72,7 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
     if (await handleComments(req, res, comments)) return
     // The Comment button for a product page that loads it itself, on the product's own address.
     if (await handleOverlay(req, res, overlay)) return
-    if (await handleApi(req, res, { gwDir, store, nodes, pairings, runtime, sites })) return
+    if (await handleApi(req, res, { gwDir, store, nodes, pairings, runtime, sites, relay })) return
     if (await handleFiles(req, res, gwDir)) return
     ui(req, res, () => res.writeHead(404).end())
   })
@@ -109,7 +115,8 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
     advertise(p, project)
     lanUrls = lanAddresses().map((a) => `http://${a}:${p}`)
   }
-  return { server, url: `http://localhost:${actualPort}`, appUrl, lanUrls, lanCode }
+  relay?.start()
+  return { server, url: `http://localhost:${actualPort}`, appUrl, lanUrls, lanCode, relayUrl: relayConfig?.url }
 }
 
 function isLocalHost(host: string | undefined): boolean {
