@@ -93,6 +93,8 @@ export interface AllowedSite { origin: string; kept: boolean }
 export const fetchSites = () => request<{ asking: string[]; allowed: AllowedSite[] }>('GET', '/api/sites').catch(() => ({ asking: [] as string[], allowed: [] as AllowedSite[] }))
 export const answerSiteRequest = (origin: string, allow: boolean) => request<{ allowed: AllowedSite[] }>('POST', '/api/sites', { origin, allow })
 export const removeSite = (origin: string) => request<{ allowed: AllowedSite[] }>('POST', '/api/sites', { origin, remove: true })
+export const markTested = (id: string, works: boolean, note: string) =>
+  request<{ state: 'fixed' | 'incoming'; node: GNode }>('POST', `/api/nodes/${encodeURIComponent(id)}/tested`, { works, note })
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
 
 /** Subscribe to server events. EventSource reconnects on its own after a drop. */

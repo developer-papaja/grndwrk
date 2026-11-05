@@ -225,6 +225,23 @@ describe('comments a device can follow up on', () => {
     ])
   })
 
+  it('is tested in the map too: only a built fix, fixed or sent back with the note', async () => {
+    const { testedInMap } = await import('../src/server/feedback.js')
+    const node = await createFeedback(gw, store, parseFeedback({ text: 'The ring is too small', key }))
+    await store.update(node.id, { proposed: '2026-10-13' })
+    await expect(testedInMap(store, node.id, { works: true })).rejects.toThrow(/built fix/)
+    await store.update(node.id, { built: '2026-10-13' })
+    await expect(testedInMap(store, node.id, {})).rejects.toThrow(/works/)
+    expect(await testedInMap(store, node.id, { works: false, note: 'Step 2 (Tap Book): nothing opens' })).toBe('incoming')
+    const back = (await store.get(node.id))!
+    expect(back.extra.built).toBeUndefined()
+    expect(back.body).toContain('Tested on the Mac: rejected, not fixed yet.')
+    expect(back.body).toContain('> Step 2 (Tap Book): nothing opens')
+    await store.update(node.id, { proposed: '2026-10-14', built: '2026-10-14' })
+    expect(await testedInMap(store, node.id, { works: true })).toBe('fixed')
+    expect((await store.get(node.id))!.body).toContain('Tested on the Mac: approved. Marked fixed.')
+  })
+
   it('shows the proposed fix, and lets the key holder mark it fixed or send it back', async () => {
     const { feedbackStatus, testedOnDevice } = await import('../src/server/feedback.js')
     const { appendEntry, splitBody } = await import('../src/shared/thread.js')

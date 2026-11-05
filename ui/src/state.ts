@@ -2,13 +2,13 @@ import Alpine from 'alpinejs'
 import { cached } from './reactivity'
 import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested } from './api'
 import { BOX, commentsForScreen, hiddenScreenIds, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { answerText, appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
-import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, type FeedbackState } from '../../src/shared/feedback'
+import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testSteps, type FeedbackState } from '../../src/shared/feedback'
 import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
 import { PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
@@ -683,6 +683,54 @@ export const state = Alpine.reactive({
     } catch (err) {
       this.flash(errorText(err))
     }
+  },
+  // Testing a built fix in the map: Claude's "To test:" steps as a checklist.
+  /** What changed and the steps to test it, from a Claude entry. */
+  testSteps(text: string): { fix: string; steps: string[] } {
+    return testSteps(this.entryWords(text))
+  },
+  /** The entry whose steps can be tested now: Claude's last word on a comment that is ready to test. */
+  get testableEntry(): number {
+    if (!this.selected || feedbackState(this.selected) !== 'ready') return -1
+    const t = this.thread
+    for (let i = t.length - 1; i >= 0; i--) if (t[i].who === 'claude') return testSteps(t[i].text).steps.length ? i : -1
+    return -1
+  },
+  /** Each step marked works or not, per comment and entry, kept in this browser until the comment is settled. */
+  testChecks: readStored<Record<string, Record<number, 'ok' | 'bad'>>>('grndwrk.testChecks', {}),
+  stepMark(entry: number, step: number): 'ok' | 'bad' | undefined {
+    return this.testChecks[`${this.selectedId}:${entry}`]?.[step]
+  },
+  markStep(entry: number, step: number, mark: 'ok' | 'bad') {
+    const key = `${this.selectedId}:${entry}`
+    const marks = { ...(this.testChecks[key] ?? {}) }
+    if (marks[step] === mark) delete marks[step]
+    else marks[step] = mark
+    this.testChecks = { ...this.testChecks, [key]: marks }
+    store('grndwrk.testChecks', this.testChecks)
+  },
+  /** What to say when it does not work: the steps marked as not working, to add to. */
+  failedStepsNote(entry: number, steps: string[]): string {
+    const bad = steps.map((s, n) => (this.stepMark(entry, n) === 'bad' ? `Step ${n + 1} (${s.length > 60 ? s.slice(0, 57) + '...' : s}): ` : '')).filter(Boolean)
+    return bad.join('\n')
+  },
+  /** The person tested the fix here: fixed, or back to the agent with what is still wrong. */
+  async testedHere(works: boolean, note = '') {
+    const node = this.selected
+    if (!node) return
+    try {
+      const { node: changed } = await markTested(node.id, works, note)
+      const key = `${node.id}:`
+      this.testChecks = Object.fromEntries(Object.entries(this.testChecks).filter(([k]) => !k.startsWith(key)))
+      store('grndwrk.testChecks', this.testChecks)
+      this.upsert(changed)
+    } catch (err) {
+      return this.flash(errorText(err))
+    }
+    if (works && !showsProgress(this.progressFilter, 'done')) {
+      this.select(null)
+      this.flash('Works: marked fixed. Show: Done in the toolbar lists what is finished.')
+    } else if (!works) this.flash('Back to your agent, with what is still wrong. The next /feedback picks it up.')
   },
   // Working on one part: the whole map stays one map, a screen is a filter on it.
   /** The screen being worked on, or null for the whole product. */

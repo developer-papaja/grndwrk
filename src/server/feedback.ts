@@ -273,6 +273,15 @@ function addressOf(n: GNode): URL | null {
   }
 }
 
+/** The person tested a built fix and says so in the map: `{ works, note? }`. Only a comment that is ready to test. */
+export async function testedInMap(store: NodeStore, id: string, body: unknown): Promise<'fixed' | 'incoming'> {
+  const b = (body ?? {}) as Record<string, unknown>
+  if (typeof b.works !== 'boolean') throw new BadInput('Say whether the fix works: { works, note }')
+  const n = await store.get(id)
+  if (feedbackState(n) !== 'ready') throw new BadInput('Only a built fix, ready to test, is tested')
+  return settle(store, n, b.works, b.note, 'on the Mac')
+}
+
 /** A built fix on a comment made on this site, which the site may show and settle. */
 function webTestOf(n: GNode | undefined, origin: string): GNode | null {
   const at = n && addressOf(n)

@@ -26,3 +26,21 @@ export function feedbackState(n: GNode): FeedbackState | null {
 }
 
 export const isFixed = (n: GNode): boolean => feedbackState(n) === 'fixed'
+
+/**
+ * A Claude entry split at its "To test:" line: what changed, and the steps,
+ * one per numbered (or `- `) line, with the lines under a step joined to it.
+ * Steps is empty when the entry has no "To test:" line.
+ */
+export function testSteps(text: string): { fix: string; steps: string[] } {
+  const m = /^[ \t]*(?:to test|how to test)[ \t]*:[ \t]*/im.exec(text)
+  if (!m) return { fix: text.trim(), steps: [] }
+  const steps: string[] = []
+  for (const line of text.slice(m.index + m[0].length).split('\n')) {
+    const start = /^\s*(?:\d+[.)]|[-*])\s+(.*)$/.exec(line)
+    if (start) steps.push(start[1].trim())
+    else if (line.trim() && steps.length) steps[steps.length - 1] += ` ${line.trim()}`
+    else if (line.trim()) steps.push(line.trim())
+  }
+  return { fix: text.slice(0, m.index).trim(), steps }
+}

@@ -3067,9 +3067,44 @@
                       </div>
                     </template>
                     <template x-if="e.who !== 'claude-asks'">
-                      <div>
+                      <div x-data="{ get steps() { return e.who === 'claude' ? $store.gw.testSteps(e.text) : { fix: '', steps: [] } } }">
                         <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
-                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
+                        <p class="whitespace-pre-wrap text-fog/85" x-text="steps.steps.length ? steps.fix : $store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
+                        <!-- Claude's "To test:" steps as a section of their own: a checklist, then Works or Doesn't work -->
+                        <div x-show="steps.steps.length" class="test-steps mt-2.5 overflow-hidden rounded-md border" :class="$store.gw.testableEntry === i ? 'border-violet-400/40 bg-violet-400/[0.06]' : 'border-line bg-shade/20'" x-data="{ failing: false, note: '' }">
+                          <div class="flex items-center gap-1.5 border-b border-tint/8 px-2.5 py-1.5 text-[11px]">
+                            <svg class="size-3.5" :class="$store.gw.testableEntry === i ? 'text-violet-300' : 'text-fog/40'"><use href="#i-check" /></svg>
+                            <span class="font-medium" :class="$store.gw.testableEntry === i ? 'text-violet-200' : 'text-fog/60'">To test</span>
+                            <span class="ml-auto text-fog/45" x-show="$store.gw.testableEntry === i" x-text="steps.steps.filter((_, n) => $store.gw.stepMark(i, n) === 'ok').length + ' of ' + steps.steps.length + ' work'"></span>
+                          </div>
+                          <ol class="divide-y divide-tint/6">
+                            <template x-for="(step, n) in steps.steps" :key="n">
+                              <li class="flex items-start gap-2 px-2.5 py-2" :class="$store.gw.stepMark(i, n) === 'bad' && 'bg-rose-400/[0.07]'">
+                                <span class="mt-px grid size-[18px] shrink-0 place-items-center rounded-full text-[10.5px] font-semibold"
+                                  :class="{ ok: 'bg-emerald-400/20 text-emerald-300', bad: 'bg-rose-400/20 text-rose-300' }[$store.gw.stepMark(i, n)] ?? 'bg-tint/8 text-fog/60'"
+                                  x-text="{ ok: '✓', bad: '✕' }[$store.gw.stepMark(i, n)] ?? n + 1"></span>
+                                <span class="min-w-0 flex-1 text-[12.5px] leading-snug" :class="$store.gw.stepMark(i, n) === 'ok' ? 'text-fog/55' : 'text-fog/85'" x-text="step"></span>
+                                <span x-show="$store.gw.testableEntry === i" class="flex shrink-0 gap-0.5">
+                                  <button type="button" class="rounded px-1.5 py-0.5 text-[11px]" :class="$store.gw.stepMark(i, n) === 'ok' ? 'bg-emerald-400/20 text-emerald-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'ok'" title="This step works" @click="$store.gw.markStep(i, n, 'ok')">Works</button>
+                                  <button type="button" class="rounded px-1.5 py-0.5 text-[11px]" :class="$store.gw.stepMark(i, n) === 'bad' ? 'bg-rose-400/20 text-rose-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'bad'" title="This step does not work" @click="$store.gw.markStep(i, n, 'bad'); if ($store.gw.stepMark(i, n) === 'bad') { failing = true; note = $store.gw.failedStepsNote(i, steps.steps) }">No</button>
+                                </span>
+                              </li>
+                            </template>
+                          </ol>
+                          <div x-show="$store.gw.testableEntry === i" class="border-t border-tint/8 px-2.5 py-2">
+                            <div x-show="failing" class="mb-2">
+                              <textarea x-model="note" rows="3" class="field w-full resize-y text-xs" placeholder="What is still wrong? Your agent reads this next"
+                                x-effect="if (failing) $nextTick(() => { $el.focus(); $el.setSelectionRange($el.value.length, $el.value.length) })"></textarea>
+                            </div>
+                            <div class="flex items-center justify-end gap-1.5">
+                              <span x-show="!failing" class="mr-auto text-[11px] text-fog/45" x-text="steps.steps.every((_, n) => $store.gw.stepMark(i, n) === 'ok') ? 'Every step works.' : 'Go through the steps in the app.'"></span>
+                              <button type="button" x-show="!failing" class="rounded-md px-2.5 py-1 text-xs text-fog/70 hover:bg-tint/8 hover:text-fog" @click="failing = true; note = $store.gw.failedStepsNote(i, steps.steps)">Doesn't work</button>
+                              <button type="button" x-show="failing" class="rounded-md px-2.5 py-1 text-xs text-fog/70 hover:bg-tint/8 hover:text-fog" title="Back, without sending" @click="failing = false">Back</button>
+                              <button type="button" x-show="failing" class="rounded-md bg-rose-500/80 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-40" :disabled="!note.trim()" @click="$store.gw.testedHere(false, note)">Send back to the agent</button>
+                              <button type="button" x-show="!failing" class="rounded-md px-2.5 py-1 text-xs font-medium" :class="steps.steps.every((_, n) => $store.gw.stepMark(i, n) === 'ok') ? 'bg-emerald-500/85 text-white hover:bg-emerald-500' : 'bg-tint/10 text-fog/85 hover:bg-tint/15'" @click="$store.gw.testedHere(true)">Works, mark fixed</button>
+                            </div>
+                          </div>
+                        </div>
                         <div x-show="$store.gw.entryPictures(e.text).length" class="mt-2 flex flex-wrap gap-2">
                           <template x-for="pic in $store.gw.entryPictures(e.text)" :key="pic.url">
                             <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(e.text))">

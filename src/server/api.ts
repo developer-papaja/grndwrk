@@ -18,6 +18,7 @@ import { noteTab, subscribe, type NodeSync } from './events.js'
 import type { Pairings } from './pairing.js'
 import type { Sites } from './sites.js'
 import { openTarget } from '../opener.js'
+import { testedInMap } from './feedback.js'
 
 interface Ctx {
   gwDir: string
@@ -59,6 +60,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
 
     if ((method === 'POST' || method === 'PATCH') && !isJson(req)) return send(res, 415, { error: 'Send JSON' })
+
+    const testedMatch = url.pathname.match(/^\/api\/nodes\/([^/]+)\/tested$/)
+    if (testedMatch && method === 'POST') {
+      const id = decodeURIComponent(testedMatch[1])
+      const state = await testedInMap(ctx.store, id, await readBody(req))
+      return send(res, 200, { state, node: await ctx.store.get(id) })
+    }
 
     // A map tab in the background, saying it is still open.
     if (url.pathname === '/api/tab' && method === 'POST') {
