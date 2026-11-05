@@ -640,6 +640,17 @@ export const state = Alpine.reactive({
     if (!words.length) return ''
     return (words.length > 1 ? words[0][0] + words[words.length - 1][0] : words[0][0]).toUpperCase()
   },
+  /** The initials to show on a card: always for a comment from a named colleague, for other thoughts once more than one person added some. */
+  cardInitials(n: GNode): string {
+    const who = this.authorOf(n)
+    if (!who) return ''
+    return n.extra?.source === 'app' || this.showAuthors ? this.initials(who) : ''
+  },
+  /** For a card's tooltip: who added it, or who commented. */
+  authorLine(n: GNode): string {
+    const who = this.authorOf(n)
+    return who ? (n.extra?.source === 'app' ? `commented by ${who}` : `added by ${who}`) : ''
+  },
   /** Initials show on the cards only once more than one person added thoughts: alone, they say nothing. */
   get showAuthors(): boolean {
     return cached('showAuthors', () => new Set(Object.values(this.nodes as Record<string, GNode>).map((n) => this.authorOf(n)).filter(Boolean)).size > 1)

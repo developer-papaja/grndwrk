@@ -138,7 +138,7 @@
                             'cursor-copy': $store.gw.mode === 'link'
                           }"
                           :style="{ '--type': $store.gw.typeColors[it.node.type] }"
-                          :title="it.node.type + (it.node.status !== 'open' ? ', ' + it.node.status : '') + ($store.gw.authorOf(it.node) ? ', added by ' + $store.gw.authorOf(it.node) : '')"
+                          :title="it.node.type + (it.node.status !== 'open' ? ', ' + it.node.status : '') + ($store.gw.authorLine(it.node) ? ', ' + $store.gw.authorLine(it.node) : '')"
                           @click="$store.gw.clickCard(it.id)"
                           @dragstart="$store.gw.dragId = it.id; $event.dataTransfer.setData('text/plain', it.id); $event.dataTransfer.effectAllowed = 'move'"
                           @dragend="$store.gw.dragId = null; $store.gw.dropCell = ''"
@@ -146,7 +146,7 @@
                           <span class="mb-0.5 flex gap-1.5 text-[10px] tracking-wide">
                             <span class="text-fog/40" :title="'Level ' + it.altitude + ': ' + $store.gw.altitudeWords[it.altitude]" x-text="$store.gw.label($store.gw.altitudeWords[it.altitude])"></span>
                             <span x-show="['proposed', 'ready', 'fixed'].includes($store.gw.feedbackState(it.node))" :class="{ fixed: 'text-emerald-300/80', ready: 'text-violet-300', proposed: 'text-accent' }[$store.gw.feedbackState(it.node)]" x-text="{ fixed: 'Fixed', ready: 'Ready to test', proposed: 'Fix proposed' }[$store.gw.feedbackState(it.node)]"></span>
-                            <span x-show="$store.gw.showAuthors && $store.gw.authorOf(it.node)" class="ml-auto font-medium text-fog/45" :class="$store.gw.hasQuestion(it.id) && 'mr-2'" x-text="$store.gw.initials($store.gw.authorOf(it.node))"></span>
+                            <span x-show="$store.gw.cardInitials(it.node)" class="ml-auto font-medium text-fog/45" :class="$store.gw.hasQuestion(it.id) && 'mr-2'" x-text="$store.gw.cardInitials(it.node)"></span>
                           </span>
                           <span class="line-clamp-3" x-text="it.node.title"></span>
                           <span x-show="$store.gw.hasQuestion(it.id)" class="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-question" title="Your agent asked something"></span>
@@ -1252,6 +1252,7 @@
                     <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-tint/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
                       <span class="size-1.5 shrink-0 rounded-full" :class="n.status === 'settled' ? 'bg-emerald-400' : 'bg-question'"></span>
                       <span class="truncate" x-text="n.title"></span>
+                      <span x-show="$store.gw.authorOf(n)" class="ml-auto shrink-0 text-[11px] font-medium text-fog/45" :title="$store.gw.authorLine(n)" x-text="$store.gw.initials($store.gw.authorOf(n))"></span>
                     </button>
                   </template>
                 </div>
@@ -3232,7 +3233,7 @@
               </ul>
             </div>
 
-            <p class="text-xs text-fog/35" x-text="$store.gw.selected.id + ' · ' + $store.gw.selected.created + ($store.gw.authorOf($store.gw.selected) ? ' · added by ' + $store.gw.authorOf($store.gw.selected) : '')"></p>
+            <p class="text-xs text-fog/35" x-text="$store.gw.selected.id + ' · ' + $store.gw.selected.created + ($store.gw.authorOf($store.gw.selected) && $store.gw.selected.extra.source !== 'app' ? ' · added by ' + $store.gw.authorOf($store.gw.selected) : '')"></p>
           </div>
         </template>
       </div>
