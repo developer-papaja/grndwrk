@@ -107,6 +107,22 @@ enum Relay {
 
   static func leave() { joined = nil }
 
+  /// Whether the relay answered the last time it was asked. Comments go there only then; otherwise they wait on the phone.
+  private(set) static var reachable = true {
+    didSet { if reachable != oldValue { NotificationCenter.default.post(name: changed, object: nil) } }
+  }
+
+  /// Joined, allowed in, and the relay answers: comments go through it.
+  static var usable: Bool { joined != nil && joined?.refused == nil && reachable }
+
+  /// Asks the relay whether it lets this phone in, without taking anything: so "waiting to be allowed"
+  /// ends as soon as someone allows it in the map, not only at the next comment.
+  static func check() async {
+    guard let j = joined else { return }
+    let (status, _) = await call(j, "GET", "/outbox")
+    _ = answer(status, ok: 200)
+  }
+
   // MARK: Sending
 
   enum Sent { case left, notLetIn, unreachable, refused }
@@ -142,6 +158,7 @@ enum Relay {
   /// 401: the team's grndwrk has not let this phone in yet, or took it out. Kept until it answers again.
   private static func answer(_ status: Int, ok: Int) -> Sent {
     guard var j = joined else { return .refused }
+    reachable = !(status == 0 || status == 429 || status >= 500)
     if status == ok || (ok == 200 && status == 204) {
       if j.refused != nil {
         j.refused = nil

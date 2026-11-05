@@ -141,8 +141,10 @@ final class OverlayController: UIViewController {
       let before = note.userInfo?["before"] as? Connection.State
       MainActor.assumeIsolated { self?.connectionChanged(from: before) }
     }
-    NotificationCenter.default.addObserver(forName: Outbox.changed, object: nil, queue: .main) { [weak self] _ in
-      MainActor.assumeIsolated { self?.updateBadge() }
+    for name in [Outbox.changed, Relay.changed] {
+      NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+        MainActor.assumeIsolated { self?.updateBadge() }
+      }
     }
     NotificationCenter.default.addObserver(forName: Outbox.newFixes, object: nil, queue: .main) { [weak self] note in
       let count = note.userInfo?["count"] as? Int ?? 0
@@ -298,7 +300,9 @@ final class OverlayController: UIViewController {
       flash(project.isEmpty ? "Connected to grndwrk" : "Connected to grndwrk \u{201C}\(project)\u{201D}")
     case .offline:
       // Only say it when it was there a moment ago. The dot says the rest.
-      if case .connected = before { flash("Lost grndwrk. Comments wait on the phone.") }
+      if case .connected = before {
+        flash(Relay.usable ? "Away from grndwrk's Wi-Fi. Comments go through your team's relay." : "Lost grndwrk. Comments wait on the phone.")
+      }
     case .needsCode:
       // Ask once when it starts wanting the code, not every time it checks.
       if case .needsCode = before { return }
@@ -387,7 +391,7 @@ final class OverlayController: UIViewController {
   @objc private func menu(_ press: UILongPressGestureRecognizer) {
     guard press.state == .began else { return }
     let count = Outbox.count
-    var lines = [status(), Relay.status.map { "\($0)." } ?? "", Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
+    var lines = [status(), Connection.viaRelay ? "" : Relay.status.map { "\($0)." } ?? "", Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
     if count > 0 { lines.append("\(count) \(count == 1 ? "comment waits" : "comments wait") to be sent.") }
     let sheet = UIAlertController(title: "grndwrk", message: lines.joined(separator: "\n"), preferredStyle: .actionSheet)
     if case .needsCode = Connection.state {
@@ -426,7 +430,11 @@ final class OverlayController: UIViewController {
     switch Connection.state {
     case .connected(let project, let host): return "Connected to \(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)."
     case .needsCode(let project, let host): return "\(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host) needs the pairing code. Comments wait on the phone."
-    case .offline(let why): return "Not connected. \(why) Comments wait on the phone."
+    case .offline(let why):
+      if Connection.viaRelay, let host = Relay.joined.flatMap({ URL(string: $0.url)?.host }) {
+        return "Through your team's relay at \(host). No grndwrk on this Wi-Fi, so comments go to the relay and reach grndwrk when someone on the team runs it."
+      }
+      return "Not connected. \(why) Comments wait on the phone."
     case .unknown: return "Looking for grndwrk..."
     }
   }
@@ -1040,18 +1048,20 @@ final class OverlayController: UIViewController {
   func updateBadge() {
     var config = button.configuration
     // Offline, the button says so in words, so nobody wonders where comments went.
+    // Through the relay it is not offline: comments still go, only another way.
+    let relay = Connection.viaRelay
     let offline: Bool
-    if case .offline = Connection.state { offline = true } else { offline = false }
+    if case .offline = Connection.state { offline = !relay } else { offline = false }
     let name = offline ? "Offline" : "grndwrk"
     config?.title = Outbox.count > 0 ? "\(name) · \(Outbox.count)" : name
-    config?.image = UIImage(systemName: offline ? "wifi.slash" : "text.bubble")
+    config?.image = UIImage(systemName: offline ? "wifi.slash" : relay ? "globe" : "text.bubble")
     config?.titleLineBreakMode = .byClipping
     config?.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16 + testRoom)
     button.configuration = config
     switch Connection.state {
     case .connected: dot.backgroundColor = .systemGreen
     case .needsCode: dot.backgroundColor = .systemYellow
-    case .offline: dot.backgroundColor = .systemOrange
+    case .offline: dot.backgroundColor = relay ? .systemBlue : .systemOrange
     case .unknown: dot.backgroundColor = .systemGray
     }
     button.accessibilityValue = status()

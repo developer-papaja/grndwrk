@@ -23,6 +23,12 @@ enum Connection {
   private static var timer: Timer?
   private static var checking = false
 
+  /// No grndwrk on this Wi-Fi, but the team's relay takes comments: not offline, as far as the person is concerned.
+  static var viaRelay: Bool {
+    if case .offline = state { return Relay.usable }
+    return false
+  }
+
   static var project: String? {
     if case .connected(let project, _) = state { return project }
     return nil
@@ -87,6 +93,7 @@ enum Connection {
   /// Away from grndwrk's Wi-Fi, with the team's relay joined: what waits goes there, and the status of what went comes back.
   private static func throughRelay() async {
     guard Relay.joined != nil else { return }
+    await Relay.check()
     await Outbox.flush()
     await Outbox.sync()
   }

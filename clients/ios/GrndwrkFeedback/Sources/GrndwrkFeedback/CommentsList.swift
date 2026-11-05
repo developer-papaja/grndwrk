@@ -116,6 +116,7 @@ final class CommentsController: UITableViewController {
         return "Tap to pair: allow this phone in grndwrk on the Mac, or enter the code it shows in the terminal. Comments are kept on the phone until then."
       }
       if section == 0, case .offline(let why) = Connection.state {
+        if Connection.viaRelay { return "\(why)\n\nComments go through your team's relay instead, and reach grndwrk when someone on the team runs it. What became of them comes back the same way." }
         if let relay = Relay.status { return "\(why)\n\n\(relay)." }
         return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again. Away from this Wi-Fi? Join your team's relay with an invite: long press the grndwrk button."
       }
@@ -138,7 +139,7 @@ final class CommentsController: UITableViewController {
         switch Connection.state {
         case .connected: return (.systemGreen, "Connected")
         case .needsCode: return (.systemYellow, "Needs the pairing code")
-        case .offline: return (.systemOrange, "Not connected")
+        case .offline: return Connection.viaRelay ? (.systemBlue, "Through the relay") : (.systemOrange, "Not connected")
         case .unknown: return (.systemGray, "Looking for grndwrk")
         }
       }()
@@ -148,7 +149,7 @@ final class CommentsController: UITableViewController {
       content.text = text
       switch Connection.state {
       case .connected(let project, let host), .needsCode(let project, let host): content.secondaryText = "\(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)"
-      case .offline: content.secondaryText = "Comments wait on the phone"
+      case .offline: content.secondaryText = Connection.viaRelay ? Relay.joined.flatMap { URL(string: $0.url)?.host } : "Comments wait on the phone"
       case .unknown: content.secondaryText = nil
       }
       if case .needsCode = Connection.state {} else { cell.selectionStyle = .none }
