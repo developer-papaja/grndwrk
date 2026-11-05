@@ -53,6 +53,7 @@ export const fetchDraft = (name: string) => request<{ text: string | null }>('GE
 export const fetchReadiness = () => request<Readiness>('GET', '/api/readiness')
 export const markGapAnswered = (gapId: string, nodeId: string, enough = false) =>
   request<Readiness>('PATCH', `/api/gaps/${encodeURIComponent(gapId)}`, { answered_by: nodeId, ...(enough ? { enough } : {}) })
+export const setFocusLater = (id: string, later: boolean) => request<Readiness>('PATCH', `/api/focus/${encodeURIComponent(id)}`, { later })
 export const saveKickoff = (changes: Record<string, string | null>) => request<Record<string, unknown>>('PATCH', '/api/project', { kickoff: changes })
 export const saveProjectFields = (fields: { start?: 'new' | 'existing'; purpose?: string }) => request<Record<string, unknown>>('PATCH', '/api/project', fields)
 export const savePages = (pages: string[]) => request<Record<string, unknown>>('PATCH', '/api/project', { pages })

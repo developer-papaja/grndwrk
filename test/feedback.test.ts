@@ -248,6 +248,11 @@ describe('comments a device can follow up on', () => {
     expect(now.body).toContain('> **You** · 2026-10-13')
     expect(splitBody(now.body).entries.map((e) => e.who)).toEqual(['claude', 'you'])
 
+    // Rejected to write the note on the Mac: the entry says it follows.
+    await store.update(node.id, { proposed: '2026-10-14', built: '2026-10-14' })
+    expect(await testedOnDevice(store, { comments: [{ id: node.id, key }], works: false, on_mac: true })).toEqual([{ id: node.id, state: 'incoming' }])
+    expect((await store.get(node.id))!.body).toContain('rejected, not fixed yet. What is still wrong is written on the Mac, in the next entry.')
+
     // Built again, and it works: fixed today.
     await store.update(node.id, { proposed: '2026-10-14', built: '2026-10-14' })
     expect(await testedOnDevice(store, { comments: [{ id: node.id, key }], works: true })).toEqual([{ id: node.id, state: 'fixed' }])

@@ -55,7 +55,10 @@ export async function handleComments(req: IncomingMessage, res: ServerResponse, 
     if (path === '/api/feedback/tested') {
       const tested = await testedOnDevice(ctx.store, body)
       await ctx.nodes.sync()
-      return json(res, 200, { tested })
+      // Rejected, to say what is still wrong on the Mac: open it there with the reply box ready.
+      const onMac = (body as { works?: unknown; on_mac?: unknown }).works === false && (body as { on_mac?: unknown }).on_mac === true
+      const opened = onMac && tested[0] ? await openOnMac(tested[0].id, ctx.uiUrl, 'reply') : undefined
+      return json(res, 200, { tested, ...(opened ? { opened } : {}) })
     }
     if (path === '/api/feedback/remove') {
       const removed = await removeFeedback(ctx.gwDir, ctx.store, body)
@@ -98,15 +101,15 @@ export function parseScreenshot(body: unknown): { about: ShotAbout; data: Buffer
 let lastTab = 0
 
 /** Open a comment in the map with its title ready to type: in an open tab, or a new one. */
-export async function openOnMac(id: string, uiUrl: string): Promise<'browser' | 'new tab'> {
+export async function openOnMac(id: string, uiUrl: string, to: 'write' | 'reply' = 'write'): Promise<'browser' | 'new tab'> {
   if (clientCount() > 0) {
-    broadcast({ type: 'node:open', id })
+    broadcast(to === 'reply' ? { type: 'node:open', id, reply: true } : { type: 'node:open', id })
     return 'browser'
   }
   // Someone on the network could ask over and over. One new tab every few seconds at most.
   if (Date.now() - lastTab < 5000) return 'new tab'
   lastTab = Date.now()
-  await openTarget(`${uiUrl}/#write=${id}`).catch(() => {})
+  await openTarget(`${uiUrl}/#${to}=${id}`).catch(() => {})
   return 'new tab'
 }
 

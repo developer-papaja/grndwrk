@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { markAnswered, parseDesign, parseGaps, readReadiness } from '../src/store/readiness.js'
+import { markAnswered, parseDesign, parseFocus, parseGaps, readReadiness, setFocusLater } from '../src/store/readiness.js'
 
 let root: string
 beforeEach(async () => {
@@ -13,7 +13,7 @@ afterEach(() => rm(root, { recursive: true, force: true }))
 
 describe('readiness', () => {
   it('reads nothing gracefully before the first run', async () => {
-    expect(await readReadiness(root)).toEqual({ report: null, gaps: [], design: [], foundations: [] })
+    expect(await readReadiness(root)).toEqual({ report: null, gaps: [], design: [], foundations: [], focus: [] })
   })
 
   it('reads the verdict and checked date from the report', async () => {
@@ -101,5 +101,42 @@ describe('readiness', () => {
     const { report } = await readReadiness(root)
     expect(report?.closed).toEqual(['Type scale and spacing', 'Lint, and format'])
     expect(report?.added).toEqual(['Spacing scale'])
+  })
+})
+
+describe('focus', () => {
+  it('reads the newest focus list, most important first, and drops broken items', () => {
+    const { checked, items } = parseFocus(JSON.stringify({
+      checked: '2026-11-05',
+      items: [
+        { id: 'design_system', title: 'Your design system is not complete', why: 'Every screen invents its own spacing.', prompt: 'Write DESIGN.md' },
+        { id: 'design_system', title: 'Duplicate' },
+        { id: 'Bad Id', title: 'Bad id' },
+        { id: 'tests', title: '' },
+        { id: 'tests', title: 'No tests', why: 3 },
+      ],
+    }))
+    expect(checked).toBe('2026-11-05')
+    expect(items).toEqual([
+      { id: 'design_system', title: 'Your design system is not complete', why: 'Every screen invents its own spacing.', prompt: 'Write DESIGN.md' },
+      { id: 'tests', title: 'No tests', why: '', prompt: '' },
+    ])
+    expect(parseFocus('[{"id":"a","title":"A"}]').items).toHaveLength(1)
+  })
+
+  it('keeps Not now in a file of its own, across runs, until it is taken back', async () => {
+    await mkdir(join(root, 'readiness', 'focus'))
+    await writeFile(join(root, 'readiness', 'focus', '1793876000000-ab.json'), JSON.stringify({ checked: '2026-11-05', items: [{ id: 'tests', title: 'No tests' }, { id: 'a11y', title: 'Accessibility' }] }))
+    await setFocusLater(root, 'tests', true)
+    let r = await readReadiness(root)
+    expect(r.focusChecked).toBe('2026-11-05')
+    expect(r.focus.map((f) => [f.id, !!f.later])).toEqual([['tests', true], ['a11y', false]])
+    // A newer run still lists it: it stays set aside.
+    await writeFile(join(root, 'readiness', 'focus', '1793877000000-cd.json'), JSON.stringify({ items: [{ id: 'tests', title: 'Still no tests' }] }))
+    r = await readReadiness(root)
+    expect(r.focus.map((f) => [f.title, !!f.later])).toEqual([['Still no tests', true]])
+    await setFocusLater(root, 'tests', false)
+    expect((await readReadiness(root)).focus[0].later).toBeUndefined()
+    await expect(setFocusLater(root, '../x', true)).rejects.toThrow()
   })
 })

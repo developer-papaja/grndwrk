@@ -61,7 +61,7 @@ export type ServerEvent =
   | { type: 'node:delete'; id: string }
   | { type: 'file:change'; path: string }
   /** A comment pointed out on the phone, to be written in the browser. */
-  | { type: 'node:open'; id: string }
+  | { type: 'node:open'; id: string; reply?: boolean }
   /** A phone on the network asks to send comments; the map asks the person to allow it. */
   | { type: 'pair:request'; request: PairRequest }
   /** That request was answered, or ran out. */
@@ -178,6 +178,24 @@ export interface Foundation {
   file?: string
 }
 
+/**
+ * One thing to focus on next, written by /readiness, the most important
+ * first: a foundation, the design system, tests, accessibility, anything
+ * that matters most for this project now. It stays until it is done or the
+ * person says Not now.
+ */
+export interface FocusItem {
+  /** Stable across runs, so Not now sticks: `design_system`, `tests`. */
+  id: string
+  title: string
+  /** Why it matters for this project, in a sentence or two. */
+  why: string
+  /** An instruction to paste into the agent in the product's repo. */
+  prompt: string
+  /** The day the person set it aside with Not now. */
+  later?: string
+}
+
 export interface Readiness {
   report: {
     verdict: Verdict | null
@@ -192,6 +210,10 @@ export interface Readiness {
   design: DesignCheck[]
   /** What the project has and lacks, empty until /readiness or /survey writes it. */
   foundations: Foundation[]
+  /** What to focus on next, the most important first, empty until /readiness writes it. */
+  focus: FocusItem[]
+  /** When /readiness wrote the focus list. */
+  focusChecked?: string
   /** Set when gaps.json could not be read, so the UI can say so. */
   error?: string
 }

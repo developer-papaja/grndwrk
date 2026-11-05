@@ -368,20 +368,24 @@ final class CommentController: UIViewController {
   private func reject() {
     let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to grndwrk with the comment, for the next /feedback.", preferredStyle: .alert)
     alert.addTextField { $0.placeholder = "Optional" }
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     alert.addAction(UIAlertAction(title: "Send", style: .default) { [weak self] _ in
       self?.tested(works: false, note: alert.textFields?.first?.text ?? "")
     })
+    // Rejects it now, and opens it in the map on the Mac to write what is still wrong there.
+    alert.addAction(UIAlertAction(title: "Send and write on the Mac", style: .default) { [weak self] _ in
+      self?.tested(works: false, note: alert.textFields?.first?.text ?? "", onMac: true)
+    })
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     present(alert, animated: true)
   }
 
-  private func tested(works: Bool, note: String = "") {
+  private func tested(works: Bool, note: String = "", onMac: Bool = false) {
     guard let node = item.node else { return }
     Task {
-      let ok = await Outbox.tested(node: node, works: works, note: note)
+      let ok = await Outbox.tested(node: node, works: works, note: note, onMac: onMac)
       guard ok else { return say("grndwrk is not reachable. Try again when connected.") }
       if let updated = Outbox.sent.first(where: { $0.node == node }) { item = updated }
-      say(works ? "Approved, fixed in grndwrk" : "Rejected, back in grndwrk")
+      say(works ? "Approved, fixed in grndwrk" : onMac ? "Rejected. Write what is still wrong on your Mac" : "Rejected, back in grndwrk")
       build()
     }
   }

@@ -231,11 +231,14 @@ enum Outbox {
   static var toTest: [Item] { sent.filter { $0.state == "ready" } }
 
   /// The person tested a fix here: it works (fixed), or not yet (back to
-  /// grndwrk with a note). Needs grndwrk to answer; true when it did.
-  static func tested(node: String, works: Bool, note: String = "") async -> Bool {
+  /// grndwrk with a note). With onMac, a reject opens the comment in the map
+  /// on the Mac, to write there what is still wrong. Needs grndwrk to answer;
+  /// true when it did.
+  static func tested(node: String, works: Bool, note: String = "", onMac: Bool = false) async -> Bool {
     guard let entry = read(sentFile).first(where: { $0["node"] as? String == node }), let key = entry["key"] as? String else { return false }
     var body: [String: Any] = ["comments": [["id": node, "key": key]], "works": works]
     if !note.isEmpty { body["note"] = note }
+    if onMac && !works { body["on_mac"] = true }
     guard let data = try? JSONSerialization.data(withJSONObject: body), case .sent = await post(data, to: "api/feedback/tested") else { return false }
     await sync()
     NotificationCenter.default.post(name: changed, object: nil)

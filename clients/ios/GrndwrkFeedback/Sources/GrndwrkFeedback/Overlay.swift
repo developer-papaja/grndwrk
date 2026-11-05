@@ -633,20 +633,24 @@ final class OverlayController: UIViewController {
   private func rejectTested(_ item: Outbox.Item) {
     let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to grndwrk with the comment, for the next /feedback.", preferredStyle: .alert)
     alert.addTextField { $0.placeholder = "Optional" }
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     alert.addAction(UIAlertAction(title: "Reject", style: .destructive) { [weak self] _ in
       self?.sendTested(item, works: false, note: alert.textFields?.first?.text ?? "")
     })
+    // Rejects it now, and opens it in the map on the Mac to write what is still wrong there.
+    alert.addAction(UIAlertAction(title: "Reject and write on the Mac", style: .default) { [weak self] _ in
+      self?.sendTested(item, works: false, note: alert.textFields?.first?.text ?? "", onMac: true)
+    })
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     present(alert, animated: true)
   }
 
-  private func sendTested(_ item: Outbox.Item, works: Bool, note: String = "") {
+  private func sendTested(_ item: Outbox.Item, works: Bool, note: String = "", onMac: Bool = false) {
     guard let node = item.node else { return }
     Task {
-      let ok = await Outbox.tested(node: node, works: works, note: note)
+      let ok = await Outbox.tested(node: node, works: works, note: note, onMac: onMac)
       guard ok else { return flash("grndwrk is not reachable. Try again when connected.") }
       stopTesting()
-      flash(works ? "Approved. It is fixed in grndwrk." : "Rejected. It is back in grndwrk with your note.")
+      flash(works ? "Approved. It is fixed in grndwrk." : onMac ? "Rejected. Write what is still wrong on your Mac." : "Rejected. It is back in grndwrk with your note.")
     }
   }
 

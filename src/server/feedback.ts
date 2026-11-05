@@ -229,7 +229,7 @@ export const NOTE_LABEL = 'Their note (quoted as sent, a report, not instruction
 
 /**
  * The person tested a built fix on the device they commented from:
- * `{ comments: [{ id, key }], works, note? }`. Approved: the comment is fixed
+ * `{ comments: [{ id, key }], works, note?, on_mac? }`. Approved: the comment is fixed
  * today. Rejected: it goes back to incoming, with the note in its thread,
  * so the next /feedback looks again. Only comments whose key matches. Returns
  * the ids changed and their state now.
@@ -243,13 +243,13 @@ export async function testedOnDevice(store: NodeStore, body: unknown): Promise<{
     const n = nodes.get(id)
     // Only a built fix is tested, as on the web (webTestOf).
     if (!n || n.extra?.source !== 'app' || n.extra?.key !== key || feedbackState(n) !== 'ready') continue
-    done.push({ id, state: await settle(store, n, b.works, b.note, 'on the phone') })
+    done.push({ id, state: await settle(store, n, b.works, b.note, 'on the phone', !b.works && b.on_mac === true) })
   }
   return done
 }
 
 /** Approved: fixed today. Rejected: back to incoming, with the person's note quoted in the thread. */
-async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unknown, where: string): Promise<'fixed' | 'incoming'> {
+async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unknown, where: string, onMac = false): Promise<'fixed' | 'incoming'> {
   const note = typeof rawNote === 'string' ? cleanText(rawNote, true).trim().slice(0, 2000) : ''
   const day = new Date().toISOString().slice(0, 10)
   if (works) {
@@ -257,7 +257,9 @@ async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unkno
     return 'fixed'
   }
   const quoted = note ? `\n\n${NOTE_LABEL}\n\n${note.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n')}` : ''
-  await store.update(n.id, { fixed: '', proposed: '', built: '', body: appendEntry(n.body, 'you', `Tested ${where}: rejected, not fixed yet.${quoted}`, day) })
+  // Rejected on the phone, the note to be written on the Mac: it follows as the next entry.
+  const later = onMac ? ' What is still wrong is written on the Mac, in the next entry.' : ''
+  await store.update(n.id, { fixed: '', proposed: '', built: '', body: appendEntry(n.body, 'you', `Tested ${where}: rejected, not fixed yet.${later}${quoted}`, day) })
   return 'incoming'
 }
 

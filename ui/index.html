@@ -433,6 +433,16 @@
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
+      <!-- Which project this map is, on every view: several maps can be open at once -->
+      <div
+        x-show="$store.gw.projectLabel"
+        id="rail-project"
+        class="mb-1 flex w-full flex-col items-center gap-1 border-b border-line px-1 pb-2.5"
+        :title="'Project: ' + $store.gw.projectLabel"
+      >
+        <span class="grid size-9 place-items-center rounded-lg text-[13px] font-semibold text-white" :style="{ background: $store.gw.projectColor }" x-text="$store.gw.projectInitials"></span>
+        <span class="line-clamp-2 w-full break-words text-center text-[10px] font-medium leading-tight text-fog/80" x-text="$store.gw.projectLabel"></span>
+      </div>
       <template x-for="v in [['focus', 'Inbox: your agent\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['personas', 'Personas: who the product is for', 'i-users'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
@@ -1167,18 +1177,34 @@
                                     </button>
                                   </template>
                                 </div>
-                                <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
-                                  <template x-for="(o, j) in q.options" :key="j">
-                                    <button
-                                      x-show="q.open"
-                                      class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
-                                      title="Answer this question with it"
-                                      @click="$store.gw.answerScreenQuestion(q, o)"
-                                      x-text="o"
-                                    ></button>
-                                  </template>
+                                <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }">
+                                  <div x-show="q.options.length" class="flex flex-col gap-1">
+                                    <template x-for="(o, j) in q.options" :key="j">
+                                      <button
+                                        type="button"
+                                        role="checkbox"
+                                        :aria-checked="picked.includes(o)"
+                                        class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs"
+                                        :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
+                                        title="Pick it; pick more than one if they all hold"
+                                        @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                      >
+                                        <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
+                                        <span x-text="o"></span>
+                                      </button>
+                                    </template>
+                                  </div>
+                                  <form class="mt-1.5 flex items-end gap-2" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerScreenQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                                    <textarea
+                                      rows="1"
+                                      x-model="words"
+                                      @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                      :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
+                                      class="field min-h-[30px] flex-1 resize-y text-xs"
+                                    ></textarea>
+                                    <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
+                                  </form>
                                 </div>
-                                <button x-show="q.open" class="mt-1.5 text-[11px] text-fog/55 hover:text-fog" @click="$store.gw.replyToQuestion(q, 'screen-reply')">Answer in words</button>
                                 <p x-show="!q.open && q.answer" class="mt-1 text-xs text-fog/50" x-text="'Answered: ' + (q.answer ?? '')"></p>
                               </div>
                             </template>
@@ -1194,16 +1220,12 @@
                     </template>
                   </ol>
                   <form class="mt-2" @submit.prevent="$store.gw.sendScreenReply()">
-                    <div x-show="$store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo)" class="mb-1.5 flex items-center gap-2 rounded-md bg-question/10 px-2 py-1 text-[11px] text-question">
-                      <span class="min-w-0 flex-1 truncate" x-text="'Answering: ' + ($store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo)?.question.split('\n').find((l) => l.trim()) ?? '')"></span>
-                      <button class="shrink-0 hover:text-fog" title="Answer all of them instead" @click.prevent="$store.gw.screenReplyTo = null">×</button>
-                    </div>
                     <textarea
                       id="screen-reply"
                       rows="2"
                       x-model="$store.gw.screenReply"
                       @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendScreenReply() }"
-                      :placeholder="$store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo) ? 'Your answer to this question' : $store.gw.screenThread.some((e) => e.open) ? 'Your answer' : 'Add a comment for the next /sitemap run'"
+                      :placeholder="$store.gw.screenThread.some((e) => e.open) ? 'A remark: it answers no question, answer those above' : 'Add a comment for the next /sitemap run'"
                       class="field w-full resize-none"
                     ></textarea>
                     <div class="mt-1.5 flex items-center justify-between gap-2">
@@ -1635,12 +1657,34 @@
                         <template x-for="q in $store.gw.entryQuestions($store.gw.persona.body, i)" :key="q.index">
                           <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
                             <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
-                            <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
-                              <template x-for="(o, j) in q.options" :key="j">
-                                <button x-show="q.open" class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Answer this question with it" @click="$store.gw.answerPersonaQuestion(q, o)" x-text="o"></button>
-                              </template>
+                            <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }">
+                              <div x-show="q.options.length" class="flex flex-col gap-1">
+                                <template x-for="(o, j) in q.options" :key="j">
+                                  <button
+                                    type="button"
+                                    role="checkbox"
+                                    :aria-checked="picked.includes(o)"
+                                    class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs"
+                                    :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
+                                    title="Pick it; pick more than one if they all hold"
+                                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                  >
+                                    <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
+                                    <span x-text="o"></span>
+                                  </button>
+                                </template>
+                              </div>
+                              <form class="mt-1.5 flex items-end gap-2" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerPersonaQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                                <textarea
+                                  rows="1"
+                                  x-model="words"
+                                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                  :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
+                                  class="field min-h-[30px] flex-1 resize-y text-xs"
+                                ></textarea>
+                                <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
+                              </form>
                             </div>
-                            <button x-show="q.open" class="mt-1.5 text-[11px] text-fog/55 hover:text-fog" @click="$store.gw.replyToQuestion(q, 'persona-reply')">Answer in words</button>
                             <p x-show="!q.open && q.answer" class="mt-1 text-xs text-fog/50" x-text="'Answered: ' + (q.answer ?? '')"></p>
                           </div>
                         </template>
@@ -1656,16 +1700,12 @@
                 </template>
               </ol>
               <form class="mt-2" @submit.prevent="$store.gw.sendPersonaReply()" x-show="!$store.gw.persona.error">
-                <div x-show="$store.gw.replyQuestion($store.gw.persona.body, $store.gw.personaReplyTo)" class="mb-1.5 flex items-center gap-2 rounded-md bg-question/10 px-2 py-1 text-[11px] text-question">
-                  <span class="min-w-0 flex-1 truncate" x-text="'Answering: ' + ($store.gw.replyQuestion($store.gw.persona.body, $store.gw.personaReplyTo)?.question.split('\n').find((l) => l.trim()) ?? '')"></span>
-                  <button class="shrink-0 hover:text-fog" title="Answer all of them instead" @click.prevent="$store.gw.personaReplyTo = null">×</button>
-                </div>
                 <textarea
                   id="persona-reply"
                   rows="2"
                   x-model="$store.gw.personaReply"
                   @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendPersonaReply() }"
-                  :placeholder="$store.gw.replyQuestion($store.gw.persona.body, $store.gw.personaReplyTo) ? 'Your answer to this question' : $store.gw.personaThread.some((e) => e.open) ? 'Your answer' : 'Add a comment for the next /personas run'"
+                  :placeholder="$store.gw.personaThread.some((e) => e.open) ? 'A remark: it answers no question, answer those above' : 'Add a comment for the next /personas run'"
                   class="field w-full resize-none"
                 ></textarea>
                 <div class="mt-1.5 flex items-center justify-between gap-2">
@@ -1798,6 +1838,44 @@
           <h1 class="text-xl font-semibold text-fog">Status</h1>
           <span class="text-xs text-fog/40" x-show="$store.gw.readiness?.report" x-text="'Checked ' + ($store.gw.readiness?.report?.checked ?? '')"></span>
         </div>
+
+        <!-- What to focus on next, above everything: written by /readiness, kept until done or Not now -->
+        <section
+          x-show="$store.gw.readiness?.focus?.length"
+          id="focus-box"
+          class="mt-6 rounded-lg border border-accent/40 bg-accent/5 p-4"
+          x-data="{ showAside: false }"
+        >
+          <h2 class="text-[15px] font-semibold text-fog">Focus on this next</h2>
+          <p class="mt-1 text-fog/60" x-text="'What matters most for this project now, the most important first. From /readiness' + ($store.gw.readiness?.focusChecked ? ' on ' + $store.gw.readiness.focusChecked : '') + '. Each stays until it is done or you say Not now.'"></p>
+          <ol class="mt-3 space-y-2">
+            <template x-for="(f, i) in $store.gw.focusItems" :key="f.id">
+              <li class="flex items-start gap-3 rounded-md border border-line bg-panel px-3 py-2.5">
+                <span class="w-4 shrink-0 text-right tabular-nums text-fog/40" x-text="i + 1"></span>
+                <div class="min-w-0 flex-1">
+                  <p class="font-medium text-fog" x-text="f.title"></p>
+                  <p x-show="f.why" class="mt-0.5 text-fog/65" x-text="f.why"></p>
+                </div>
+                <div class="flex shrink-0 items-center gap-1">
+                  <button x-show="f.prompt" class="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" title="See the instruction for your agent, change it if you like, and copy it" @click="$store.gw.showPrompt(f.title, f.prompt)">Copy prompt</button>
+                  <button class="rounded-md px-2.5 py-1 text-xs text-fog/60 hover:bg-tint/5 hover:text-fog" title="Set it aside: it leaves this box until you bring it back" @click="$store.gw.focusLater(f.id, true)">Not now</button>
+                </div>
+              </li>
+            </template>
+          </ol>
+          <p x-show="!$store.gw.focusItems.length" class="mt-3 text-fog/55">Everything here is set aside for now.</p>
+          <div x-show="$store.gw.focusSetAside.length" class="mt-2.5 text-xs">
+            <button class="text-fog/55 hover:text-fog" @click="showAside = !showAside" x-text="(showAside ? 'Hide' : 'Show') + ' ' + $store.gw.focusSetAside.length + ' set aside'"></button>
+            <ul x-show="showAside" class="mt-1.5 space-y-1">
+              <template x-for="f in $store.gw.focusSetAside" :key="f.id">
+                <li class="flex items-center gap-2 text-fog/55">
+                  <span class="min-w-0 flex-1 truncate" x-text="f.title + ' · since ' + f.later"></span>
+                  <button class="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-accent/10" @click="$store.gw.focusLater(f.id, false)">Bring back</button>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </section>
 
         <!-- What blocks building, first: the red number on the rail counts these -->
         <section x-show="$store.gw.blockingCount" id="blocking" class="mt-6 rounded-lg border border-rose-400/40 bg-rose-400/5 p-4">
@@ -2325,21 +2403,34 @@
                   <p x-show="!d.notesHtml && !d.earlier.length && !d.purpose && !d.links.length" class="text-fog/45">Nothing more is written about it yet.</p>
                 </div>
               </template>
-              <div x-show="item.options.length" class="mt-3 flex flex-wrap gap-1.5">
+              <div x-data="{ picked: [] }">
+              <div x-show="item.options.length" class="mt-3 flex flex-col gap-1">
                 <template x-for="(o, j) in item.options" :key="j">
-                  <button class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Answer with this" :disabled="$store.gw.inboxSending === item.key" @click="$store.gw.answerInbox(item, o)" x-text="o"></button>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    :aria-checked="picked.includes(o)"
+                    class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs"
+                    :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
+                    title="Pick it; pick more than one if they all hold"
+                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                  >
+                    <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
+                    <span x-text="o"></span>
+                  </button>
                 </template>
               </div>
-              <form class="mt-3 flex items-end gap-2" @submit.prevent="$store.gw.answerInbox(item)">
+              <form class="mt-2 flex items-end gap-2" @submit.prevent="$store.gw.answerInbox(item, $store.gw.answerText(item.options, picked, $store.gw.inboxDrafts[item.key] ?? '')).then(() => (picked = []))">
                 <textarea
                   rows="1"
                   x-model="$store.gw.inboxDrafts[item.key]"
                   @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerInbox(item) }"
-                  :placeholder="item.kind === 'guess' ? 'Not quite: ...' : item.options.length ? 'Or write your own' : 'A sentence is enough'"
+                  :placeholder="item.kind === 'guess' ? 'Not quite: ...' : item.options.length ? 'Your own answer, alone or with what you picked' : 'A sentence is enough'"
                   class="field min-h-[34px] flex-1 resize-y"
                 ></textarea>
-                <button type="submit" class="h-[34px] rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!($store.gw.inboxDrafts[item.key] ?? '').trim() || $store.gw.inboxSending === item.key">Answer</button>
+                <button type="submit" class="h-[34px] rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="(!picked.length && !($store.gw.inboxDrafts[item.key] ?? '').trim()) || $store.gw.inboxSending === item.key">Answer</button>
               </form>
+              </div>
               <div class="mt-2 flex items-center gap-3 text-xs">
                 <button class="text-accent hover:underline" @click="$store.gw.viewInMap(item)" x-text="item.kind === 'screen' ? 'View in the sitemap' : item.kind === 'persona' ? 'View in Personas' : 'View on the map'"></button>
                 <span class="flex-1"></span>
@@ -2754,18 +2845,34 @@
                         <template x-for="q in $store.gw.entryQuestions($store.gw.draft.body, i)" :key="q.index">
                           <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
                             <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
-                            <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
-                              <template x-for="(o, j) in q.options" :key="j">
-                                <button
-                                  x-show="q.open"
-                                  class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
-                                  title="Answer this question with it"
-                                  @click="$store.gw.answerQuestion(q, o)"
-                                  x-text="o"
-                                ></button>
-                              </template>
+                            <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }">
+                              <div x-show="q.options.length" class="flex flex-col gap-1">
+                                <template x-for="(o, j) in q.options" :key="j">
+                                  <button
+                                    type="button"
+                                    role="checkbox"
+                                    :aria-checked="picked.includes(o)"
+                                    class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs"
+                                    :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
+                                    title="Pick it; pick more than one if they all hold"
+                                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                  >
+                                    <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
+                                    <span x-text="o"></span>
+                                  </button>
+                                </template>
+                              </div>
+                              <form class="mt-1.5 flex items-end gap-2" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                                <textarea
+                                  rows="1"
+                                  x-model="words"
+                                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                  :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
+                                  class="field min-h-[30px] flex-1 resize-y text-xs"
+                                ></textarea>
+                                <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
+                              </form>
                             </div>
-                            <button x-show="q.open" class="mt-1.5 text-[11px] text-fog/55 hover:text-fog" @click="$store.gw.replyToQuestion(q, 'reply')">Answer in words</button>
                             <p x-show="!q.open && q.answer" class="mt-1 text-xs text-fog/50" x-text="'Answered: ' + (q.answer ?? '')"></p>
                           </div>
                         </template>
@@ -2781,16 +2888,12 @@
                 </template>
               </ol>
               <form class="mt-2" @submit.prevent="$store.gw.sendReply()">
-                <div x-show="$store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo)" class="mb-1.5 flex items-center gap-2 rounded-md bg-question/10 px-2 py-1 text-[11px] text-question">
-                  <span class="min-w-0 flex-1 truncate" x-text="'Answering: ' + ($store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo)?.question.split('\n').find((l) => l.trim()) ?? '')"></span>
-                  <button class="shrink-0 hover:text-fog" title="Answer all of them instead" @click.prevent="$store.gw.replyTo = null">×</button>
-                </div>
                 <textarea
                   id="reply"
                   rows="2"
                   x-model="$store.gw.reply"
                   @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendReply() }"
-                  :placeholder="$store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo) ? 'Your answer to this question' : $store.gw.openCount($store.gw.draft.body) > 1 ? 'Answer all of them at once, or pick one above' : $store.gw.openCount($store.gw.draft.body) ? 'Your answer' : 'Add a comment'"
+                  :placeholder="$store.gw.openCount($store.gw.draft.body) ? 'A remark: it answers no question, answer those above' : 'Add a comment'"
                   class="field w-full resize-none"
                 ></textarea>
                 <div class="mt-1.5 flex items-center justify-between gap-2">

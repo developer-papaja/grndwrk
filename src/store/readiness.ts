@@ -1,8 +1,8 @@
-import { readdir, readFile, rename, writeFile } from './fs.js'
+import { mkdir, readdir, readFile, rename, rm, writeFile } from './fs.js'
 import { readRun } from './runs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
-import { DESIGN_ITEMS, FOUNDATION_STATUSES, FOUNDATIONS, SEVERITIES, type DesignCheck, type DesignStatus, type Foundation, type FoundationStatus, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
+import { DESIGN_ITEMS, FOUNDATION_STATUSES, FOUNDATIONS, SEVERITIES, type DesignCheck, type DesignStatus, type FocusItem, type Foundation, type FoundationStatus, type Gap, type Readiness, type Severity, type Verdict } from '../shared/types.js'
 
 const VERDICTS: Verdict[] = ['ready to build', 'ready to prototype', 'not ready']
 
@@ -10,7 +10,7 @@ const dir = (gwDir: string) => join(gwDir, 'readiness')
 
 /** Read the report and the gaps. Missing or broken files never throw. */
 export async function readReadiness(gwDir: string): Promise<Readiness> {
-  const out: Readiness = { report: null, gaps: [], design: [], foundations: [] }
+  const out: Readiness = { report: null, gaps: [], design: [], foundations: [], focus: [] }
   try {
     const raw = await readRun(join(dir(gwDir), 'report'), join(dir(gwDir), 'report.md'))
     if (raw === null) throw new Error('No report yet')
@@ -57,7 +57,54 @@ export async function readReadiness(gwDir: string): Promise<Readiness> {
   } catch {
     // Not checked yet, or broken: the Status page says to run /readiness.
   }
+  try {
+    const raw = await readRun(join(dir(gwDir), 'focus'), join(dir(gwDir), 'focus.json'))
+    if (raw !== null) {
+      const { checked, items } = parseFocus(raw)
+      out.focus = items
+      if (checked) out.focusChecked = checked
+    }
+  } catch {
+    // Not written yet, or broken: no Focus box.
+  }
+  for (const item of out.focus) {
+    const later = await readFile(laterFile(gwDir, item.id), 'utf8').catch(() => '')
+    const day = /"later"\s*:\s*"(\d{4}-\d{2}-\d{2})"/.exec(later)?.[1]
+    if (day) item.later = day
+  }
   return out
+}
+
+/**
+ * The focus list: `readiness/focus/<run>.json`, `{ checked, items: [{ id,
+ * title, why, prompt }] }` (a bare list reads too), the most important first.
+ * At most eight; a duplicate or bad id is left out.
+ */
+export function parseFocus(raw: string): { checked: string; items: FocusItem[] } {
+  const data = JSON.parse(raw)
+  const list: unknown[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
+  const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+  const items: FocusItem[] = []
+  for (const f of list as Record<string, unknown>[]) {
+    if (!f || typeof f.id !== 'string' || !/^[a-z0-9_]{1,40}$/.test(f.id) || items.some((i) => i.id === f.id)) continue
+    const title = text(f.title, 200)
+    if (!title) continue
+    items.push({ id: f.id, title, why: text(f.why, 1000), prompt: text(f.prompt, 4000) })
+    if (items.length === 8) break
+  }
+  const checked = !Array.isArray(data) && typeof data?.checked === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.checked) ? data.checked : ''
+  return { checked, items }
+}
+
+/** Not now is one file per item, `readiness/focus-later/<id>.json`, so it merges and outlives the runs. */
+const laterFile = (gwDir: string, id: string) => join(dir(gwDir), 'focus-later', `${id}.json`)
+
+/** Set a focus item aside (Not now), or bring it back. */
+export async function setFocusLater(gwDir: string, id: string, later: boolean): Promise<void> {
+  if (!/^[a-z0-9_]{1,40}$/.test(id)) throw new Error('Not a focus id')
+  if (!later) return void (await rm(laterFile(gwDir, id), { force: true }))
+  await mkdir(join(dir(gwDir), 'focus-later'), { recursive: true })
+  await writeFile(laterFile(gwDir, id), `${JSON.stringify({ later: new Date().toISOString().slice(0, 10) })}\n`, 'utf8')
 }
 
 /**

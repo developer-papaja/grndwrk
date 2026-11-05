@@ -45,16 +45,23 @@ Alpine.effect(() => {
   if (icon) icon.href = waiting ? waitingIcon : plainIcon
 })
 
-/** A comment to open once nodes are loaded: from a node:open event, or #write=<id> when grndwrk opened this tab. */
-let writeWhenLoaded = /^#write=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1] ?? ''
+/**
+ * A comment to open once nodes are loaded: from a node:open event, or
+ * #write=<id> (its title, to write it) or #reply=<id> (its reply box, to say
+ * what is still wrong after a reject) when grndwrk opened this tab.
+ */
+const opening = /^#(write|reply)=([A-Za-z0-9_-]+)$/.exec(location.hash)
+let writeWhenLoaded = opening?.[2] ?? ''
+let replyWhenLoaded = opening?.[1] === 'reply'
 if (writeWhenLoaded) history.replaceState(null, '', location.pathname + location.search)
 
 async function reload() {
   try {
     state.replaceAll(await fetchNodes())
     if (writeWhenLoaded && state.nodes[writeWhenLoaded]) {
-      state.writeComment(writeWhenLoaded)
+      state.writeComment(writeWhenLoaded, replyWhenLoaded)
       writeWhenLoaded = ''
+      replyWhenLoaded = false
     }
   } catch (err) {
     state.flash(err instanceof Error ? err.message : String(err))
@@ -86,8 +93,11 @@ const handlers = {
     else if (event.type === 'node:delete') state.removeLocal(event.id)
     else if (event.type === 'node:open') {
       // The node may arrive a moment after the request to open it.
-      if (state.nodes[event.id]) state.writeComment(event.id)
-      else writeWhenLoaded = event.id
+      if (state.nodes[event.id]) state.writeComment(event.id, event.reply === true)
+      else {
+        writeWhenLoaded = event.id
+        replyWhenLoaded = event.reply === true
+      }
     }
     else if (event.type === 'pair:request') state.addPairRequest(event.request)
     else if (event.type === 'pair:done') state.dropPairRequest(event.id)

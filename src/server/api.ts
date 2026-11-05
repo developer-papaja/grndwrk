@@ -1,8 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { basename, dirname } from 'node:path'
 import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, KICKOFF_STEPS, writeFields, writeKickoff, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
-import { markAnswered, readReadiness } from '../store/readiness.js'
+import { markAnswered, readReadiness, setFocusLater } from '../store/readiness.js'
 import { createStory, listStories, readDraft, readOutput, updateStory } from '../store/stories.js'
 import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
 import { createPersona, deletePersona, listPersonas, settleAudienceName, updatePersona } from '../store/personas.js'
@@ -272,6 +273,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (url.pathname === '/api/readiness' && method === 'GET') {
       return send(res, 200, await readReadiness(ctx.gwDir))
     }
+    const focusMatch = url.pathname.match(/^\/api\/focus\/([a-z0-9_]{1,40})$/)
+    if (focusMatch && method === 'PATCH') {
+      const input = (await readBody(req)) as { later?: unknown }
+      if (typeof input.later !== 'boolean') throw new BadInput('later must be true or false')
+      await setFocusLater(ctx.gwDir, focusMatch[1], input.later)
+      return send(res, 200, await readReadiness(ctx.gwDir))
+    }
     const gapMatch = url.pathname.match(/^\/api\/gaps\/([A-Za-z0-9_-]{1,64})$/)
     if (gapMatch && method === 'PATCH') {
       const input = (await readBody(req)) as { answered_by?: unknown; enough?: unknown }
@@ -282,7 +290,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     if (url.pathname === '/api/project' && method === 'GET') {
       const { data, body, pages } = await readProject(ctx.gwDir)
-      return send(res, 200, { ...data, body, pages })
+      // folder: the project's folder name, shown when project.md has no name.
+      return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
     }
     if (url.pathname === '/api/project' && method === 'PATCH') {
       const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown; start?: unknown; purpose?: unknown }
@@ -314,7 +323,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
         await writePages(ctx.gwDir, input.pages)
       }
       const { data, body, pages } = await readProject(ctx.gwDir)
-      return send(res, 200, { ...data, body, pages })
+      // folder: the project's folder name, shown when project.md has no name.
+      return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
     }
     if (url.pathname === '/api/nodes' && method === 'GET') {
       return send(res, 200, await ctx.store.list())
