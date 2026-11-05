@@ -107,6 +107,20 @@ When your agent builds a fix for a comment, it writes what changed and how to te
 
 `grndwrk init` puts these rules in `.grndwrk/`: as `CLAUDE.md` for Claude Code, `AGENTS.md` for Cursor, and the `grndwrk-map` skill for Codex. Your agent reads them whenever it works on the map's files, so a fix you ask for in plain words ("go through the feedback") is still marked ready to test. `/feedback` also catches up comments that were fixed without being marked. Codex reads `AGENTS.md` only from the project's root down, so if your project has an `AGENTS.md`, `init` suggests one line to add to it that points Codex at the rules.
 
+### Colleagues away from your Wi-Fi
+
+A colleague testing from TestFlight at home sends comments through a relay: a small server grndwrk puts on **your own Cloudflare account** (the free plan is enough). It passes on sealed envelopes and cannot read them. Nobody else's relay is involved, and other people using grndwrk set up their own.
+
+```
+grndwrk relay deploy     # once: puts the relay on your Cloudflare account (opens Cloudflare's login the first time)
+grndwrk relay add        # in each project: a mailbox of its own, and a team link for teammates
+grndwrk relay join <team link>   # a teammate's grndwrk, in the same project
+```
+
+`deploy` runs Cloudflare's tool, `wrangler`, through npx at a fixed version; it is never installed with grndwrk. A project without a relay loads none of this.
+
+Then, in the map, the globe at the bottom of the rail: **Colleagues**, a name, **Invite**. Send the link, or show the QR code. In the app they long press the grndwrk button, **Join with an invite**, and paste or scan it. Their comments wait at the relay until a grndwrk on the team runs, arrive with their name on them, and what becomes of them goes back to their phone, so they test fixes like you do. The iOS package README shows how to set up a Beta build for TestFlight.
+
 ### Testers without grndwrk
 
 Comments wait on the device while grndwrk is not running. A tester can share them as a file, and you add them with:
@@ -142,6 +156,7 @@ Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed 
 - **Nothing ships with your product.** The web button runs only on local addresses. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
 - **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine, and grndwrk never follows a symbolic link inside `.grndwrk/`, so a file in a pull request cannot point it at anything else on your machine.
 - **Review `.grndwrk/` in pull requests like code.** A colleague's change can add thoughts, answers or questions that look like your agent's; read them before you run commands on them.
+- **The relay cannot read what it carries.** Each phone makes its own key when it joins, and seals every comment with a key made from it, which the relay never gets; a changed or moved envelope is refused. The relay knows only enough to check that a request comes from a phone your team let in. The keys for your project's mailbox (the team key) and the relay's owner key stay in your user folder, never in the project. A team link opens the project's comments, so send it privately. Envelopes are deleted once fetched, or after 30 days.
 - **Websites ask before they send.** Each local site's first comment waits until you allow the site in the map. Allowed sites are kept in your user folder, never in the project, so a pull request cannot allow one.
 
 ### What package scanners say

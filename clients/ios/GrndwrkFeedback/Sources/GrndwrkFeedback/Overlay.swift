@@ -387,7 +387,7 @@ final class OverlayController: UIViewController {
   @objc private func menu(_ press: UILongPressGestureRecognizer) {
     guard press.state == .began else { return }
     let count = Outbox.count
-    var lines = [status(), Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
+    var lines = [status(), Relay.status.map { "\($0)." } ?? "", Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
     if count > 0 { lines.append("\(count) \(count == 1 ? "comment waits" : "comments wait") to be sent.") }
     let sheet = UIAlertController(title: "grndwrk", message: lines.joined(separator: "\n"), preferredStyle: .actionSheet)
     if case .needsCode = Connection.state {
@@ -406,6 +406,11 @@ final class OverlayController: UIViewController {
     }
     if count > 0 {
       sheet.addAction(UIAlertAction(title: "Share \(count) \(count == 1 ? "comment" : "comments") as a file", style: .default) { [weak self] _ in self?.share() })
+    }
+    if Relay.joined == nil {
+      sheet.addAction(UIAlertAction(title: "Join with an invite", style: .default) { [weak self] _ in self?.joinRelay() })
+    } else {
+      sheet.addAction(UIAlertAction(title: "Leave the relay", style: .default) { [weak self] _ in self?.leaveRelay() })
     }
     sheet.addAction(UIAlertAction(title: "Hide the grndwrk button", style: .destructive) { [weak self] _ in self?.confirmHide() })
     sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -526,6 +531,7 @@ final class OverlayController: UIViewController {
   /// and a card stays on top with what changed, the steps, Approve and Reject.
   func startTesting(_ item: Outbox.Item) {
     testing = item
+    stepMarks = [:]
     dismiss(animated: true)
     var opened = false
     if let name = item.screen, let open = GrndwrkFeedback.openScreen { opened = open(name) }
@@ -540,6 +546,59 @@ final class OverlayController: UIViewController {
   }
 
   private var cardOpen = true
+  /// Each step of the fix being tested, marked works (true) or not (false) by the person.
+  private var stepMarks: [Int: Bool] = [:]
+
+  /// What to say when it does not work: the steps marked as not working, to add to.
+  private func failedSteps(_ item: Outbox.Item) -> String {
+    item.steps.enumerated().compactMap { i, s in
+      stepMarks[i] == false ? "Step \(i + 1) (\(s.count > 60 ? s.prefix(57) + "..." : s)): " : nil
+    }.joined(separator: "\n")
+  }
+
+  /// One step: its number (or a tick or a cross), the words, and Works and No.
+  private func stepRow(_ i: Int, _ step: String, item: Outbox.Item, opened: Bool, light: UIColor) -> UIView {
+    let mark = stepMarks[i]
+    let badge = UILabel()
+    badge.text = mark == true ? "✓" : mark == false ? "✕" : "\(i + 1)"
+    badge.font = .systemFont(ofSize: 12, weight: .semibold)
+    badge.textAlignment = .center
+    badge.textColor = mark == true ? .systemGreen : mark == false ? .systemRed : light.withAlphaComponent(0.7)
+    badge.backgroundColor = (mark == true ? UIColor.systemGreen : mark == false ? .systemRed : light).withAlphaComponent(0.18)
+    badge.layer.cornerRadius = 11
+    badge.clipsToBounds = true
+    badge.widthAnchor.constraint(equalToConstant: 22).isActive = true
+    badge.heightAnchor.constraint(equalToConstant: 22).isActive = true
+    let words = UILabel()
+    words.text = step
+    words.font = .systemFont(ofSize: 14)
+    words.textColor = mark == true ? light.withAlphaComponent(0.55) : light
+    words.numberOfLines = 0
+    words.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    func toggle(_ title: String, _ value: Bool, _ color: UIColor) -> UIButton {
+      var c: UIButton.Configuration = mark == value ? .filled() : .gray()
+      c.title = title
+      c.cornerStyle = .capsule
+      c.buttonSize = .small
+      c.baseBackgroundColor = mark == value ? color : nil
+      c.baseForegroundColor = mark == value ? .white : light
+      let b = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in
+        guard let self else { return }
+        self.stepMarks[i] = self.stepMarks[i] == value ? nil : value
+        self.buildCard(item, opened: opened)
+      })
+      b.accessibilityLabel = "Step \(i + 1) \(value ? "works" : "does not work")"
+      b.heightAnchor.constraint(greaterThanOrEqualToConstant: 32).isActive = true
+      return b
+    }
+    let buttons = UIStackView(arrangedSubviews: [toggle("Works", true, .systemGreen), toggle("No", false, .systemRed)])
+    buttons.spacing = 4
+    buttons.setContentHuggingPriority(.required, for: .horizontal)
+    let row = UIStackView(arrangedSubviews: [badge, words, buttons])
+    row.spacing = 8
+    row.alignment = .top
+    return row
+  }
 
   private func buildCard(_ item: Outbox.Item, opened: Bool) {
     testStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -590,8 +649,14 @@ final class OverlayController: UIViewController {
         testStack.addArrangedSubview(text("What changed", 11, .semibold, light.withAlphaComponent(0.55)))
         testStack.addArrangedSubview(text(fix, 14, .regular, light))
       }
-      testStack.addArrangedSubview(text("To test", 11, .semibold, light.withAlphaComponent(0.55)))
-      testStack.addArrangedSubview(text(item.test?.isEmpty == false ? item.test! : "Try what the comment was about, and see whether it is right now.", 14, .regular, light))
+      if item.steps.isEmpty {
+        testStack.addArrangedSubview(text("To test", 11, .semibold, light.withAlphaComponent(0.55)))
+        testStack.addArrangedSubview(text(item.test?.isEmpty == false ? item.test! : "Try what the comment was about, and see whether it is right now.", 14, .regular, light))
+      } else {
+        let works = item.steps.indices.filter { stepMarks[$0] == true }.count
+        testStack.addArrangedSubview(text("To test · \(works) of \(item.steps.count) work", 11, .semibold, light.withAlphaComponent(0.55)))
+        for (i, step) in item.steps.enumerated() { testStack.addArrangedSubview(stepRow(i, step, item: item, opened: opened, light: light)) }
+      }
     }
 
     func action(_ title: String, _ color: UIColor, filled: Bool, _ run: @escaping () -> Void) -> UIButton {
@@ -605,8 +670,9 @@ final class OverlayController: UIViewController {
       b.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
       return b
     }
-    let reject = action("Reject", .systemRed, filled: false) { [weak self] in self?.rejectTested(item) }
-    let approve = action("Approve: it works", .systemGreen, filled: true) { [weak self] in self?.sendTested(item, works: true) }
+    let failing = stepMarks.values.contains(false)
+    let reject = action(failing ? "Reject: send back" : "Reject", .systemRed, filled: failing) { [weak self] in self?.rejectTested(item) }
+    let approve = action("Approve: it works", .systemGreen, filled: !failing) { [weak self] in self?.sendTested(item, works: true) }
     let row = UIStackView(arrangedSubviews: [reject, UIView(), approve])
     row.alignment = .center
     row.spacing = 8
@@ -632,7 +698,8 @@ final class OverlayController: UIViewController {
 
   private func rejectTested(_ item: Outbox.Item) {
     let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to grndwrk with the comment, for the next /feedback.", preferredStyle: .alert)
-    alert.addTextField { $0.placeholder = "Optional" }
+    let start = failedSteps(item)
+    alert.addTextField { $0.placeholder = "Optional"; $0.text = start }
     alert.addAction(UIAlertAction(title: "Reject", style: .destructive) { [weak self] _ in
       self?.sendTested(item, works: false, note: alert.textFields?.first?.text ?? "")
     })
@@ -911,6 +978,10 @@ final class OverlayController: UIViewController {
         Outbox.remember(data, id: id, project: project)
         self?.flash("Opened on your Mac. Write it there.")
         return nil
+      case .relayed:
+        Outbox.remember(data, id: "", project: nil, relayed: true)
+        self?.flash("Sent through the relay. Write it in the map when you are at your Mac.")
+        return nil
       case .rejected(let status): return "grndwrk did not take it (\(status))."
       case .blockedByATS: return "Blocked by App Transport Security. See the GrndwrkFeedback README."
       case .unreachable: return "grndwrk is not reachable. Write it here instead, and it goes once it is."
@@ -940,6 +1011,10 @@ final class OverlayController: UIViewController {
     case .sent(let id, let project):
       Outbox.remember(data, id: id, project: project)
       flash("Sent to grndwrk")
+      await Outbox.flush()
+    case .relayed:
+      Outbox.remember(data, id: "", project: nil, relayed: true)
+      flash("Sent through the relay. It reaches grndwrk when one on your team runs")
       await Outbox.flush()
     case .rejected(let status):
       flash("grndwrk did not take it (\(status))")

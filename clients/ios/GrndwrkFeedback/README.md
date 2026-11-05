@@ -140,7 +140,7 @@ With `--lan`, paired devices can only add comments, and ask about or delete thei
 
 Long press the grndwrk button, then **Show comments**. It opens on an overview: the connection, and how many fixes are ready to test, comments wait to be sent, and comments were sent. Each opens its list, and each comment its own page, with the picture taken when it was made.
 
-**Testing fixes.** A fix is ready to test once Claude has built it (`/feedback` when you ask it to fix, `/decisions` after a commit, or the product's own Claude Code); a fix that is only proposed never shows up here. Claude writes what changed and, after **To test:**, the steps. When fixes are ready, the grndwrk button gets a second part after a thin line: the test icon and how many, **💬 grndwrk │ ✓ 2**. Tap that part (with one fix it starts testing it right away), or tap **Test** next to one in the list. The rest of the button is for commenting, as always. The list closes, the app goes to the screen when it can, and a card stays on top with what changed and the steps. Try it, then **Approve: it works** (fixed in grndwrk) or **Reject** (it goes back with what is still wrong, for the next `/feedback`). Drag the card up or down to see what is under it (it stays there for the next test); the computer icon opens the comment in grndwrk on the Mac, with its whole thread; the arrow folds it to one line; the cross stops testing. **Show on my Mac** on a comment's page opens it in grndwrk with its thread.
+**Testing fixes.** A fix is ready to test once Claude has built it (`/feedback` when you ask it to fix, `/decisions` after a commit, or the product's own Claude Code); a fix that is only proposed never shows up here. Claude writes what changed and, after **To test:**, the steps. When fixes are ready, the grndwrk button gets a second part after a thin line: the test icon and how many, **💬 grndwrk │ ✓ 2**. Tap that part (with one fix it starts testing it right away), or tap **Test** next to one in the list. The rest of the button is for commenting, as always. The list closes, the app goes to the screen when it can, and a card stays on top with what changed and the steps. The steps are a checklist: mark each **Works** or **No** as you go. Try it, then **Approve: it works** (fixed in grndwrk) or **Reject** (it goes back with what is still wrong, for the next `/feedback`; the note starts with the steps you marked No). Drag the card up or down to see what is under it (it stays there for the next test); the computer icon opens the comment in grndwrk on the Mac, with its whole thread; the arrow folds it to one line; the cross stops testing. **Show on my Mac** on a comment's page opens it in grndwrk with its thread.
 
 To go to the screen by itself, tell the package how the app opens screens by name:
 
@@ -172,6 +172,38 @@ Giving important elements an `.accessibilityIdentifier("book-button")` makes com
 ## Without grndwrk running
 
 Comments are kept on the device and sent once grndwrk answers, oldest first. They are also sent when the app comes back to the foreground. The button shows how many wait: **Offline · 2**.
+
+## Colleagues away from your Wi-Fi
+
+A colleague who tests at home, or anywhere without your grndwrk on the Wi-Fi, sends through your team's relay: a small server you put on your own Cloudflare account with `grndwrk relay deploy` (see grndwrk's README). It only passes on sealed envelopes, and cannot read them.
+
+1. In the map, the globe at the bottom of the rail: **Colleagues**, type their name, **Invite**. It shows a link and a QR code. Send the link (or show the code). It works once, for seven days.
+2. In the app, they long press the grndwrk button, **Join with an invite**, and paste the link, or **Scan the QR code**.
+3. The next time a grndwrk on your team runs, it lets their phone in. From then on, when no grndwrk answers on their Wi-Fi, comments go to the relay. They reach the map when a grndwrk on the team runs, marked with their name. What became of them (fix proposed, ready to test, fixed, with the steps) comes back the same way, so they test fixes as you do.
+
+The phone still tries the Wi-Fi first. **Leave the relay**, in the same menu, stops it; joining again needs a new invite. In the map, Colleagues lists who joined; Remove takes a phone out at once.
+
+**Scanning needs the camera,** so the app's Info.plist must say why: `NSCameraUsageDescription`, for example "To scan an invite from grndwrk". Put it in the Info.plist of the builds that have the package. Without it, the app offers only pasting the link.
+
+### A Beta build for TestFlight
+
+Colleagues usually get the app from TestFlight. A TestFlight build is a Release build, where the package does nothing, and the same build can later be sent to the App Store. So give testers a build configuration of their own:
+
+1. In Xcode, the project's **Info** tab, **Configurations**: duplicate **Release** and name it **Beta**.
+2. In the target's **Build Settings**, for **Beta** only: **Active Compilation Conditions** add `BETA`; point **Info.plist File** at a Beta Info.plist that has the keys the package needs (local network, Bonjour, `NSAllowsLocalNetworking`, the camera).
+3. Start the package only in Debug and Beta:
+
+   ```swift
+   #if DEBUG
+   GrndwrkFeedback.start()
+   #elseif BETA
+   GrndwrkFeedback.start(allowOutsideDebug: true)
+   #endif
+   ```
+
+4. Make a scheme **MyApp Beta** whose **Archive** uses **Beta**, and archive with it for TestFlight. Archive the App Store build with the usual scheme (Release).
+
+The Release build has no call to the package, so nothing of it runs there, and in an App Store build it refuses to run anyway. Keep the package out of the Release build entirely if you can (a separate target, or linking it only for Debug and Beta), so App Review never sees it.
 
 ## Testers
 

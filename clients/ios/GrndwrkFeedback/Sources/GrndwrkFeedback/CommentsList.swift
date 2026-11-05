@@ -35,7 +35,7 @@ final class CommentsController: UITableViewController {
     }
     refreshControl = UIRefreshControl()
     refreshControl?.addAction(UIAction { [weak self] _ in self?.refresh() }, for: .valueChanged)
-    for name in [Connection.changed, Outbox.changed] {
+    for name in [Connection.changed, Outbox.changed, Relay.changed] {
       NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
         MainActor.assumeIsolated { self?.reload() }
       }
@@ -116,8 +116,10 @@ final class CommentsController: UITableViewController {
         return "Tap to pair: allow this phone in grndwrk on the Mac, or enter the code it shows in the terminal. Comments are kept on the phone until then."
       }
       if section == 0, case .offline(let why) = Connection.state {
-        return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again."
+        if let relay = Relay.status { return "\(why)\n\n\(relay)." }
+        return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again. Away from this Wi-Fi? Join your team's relay with an invite: long press the grndwrk button."
       }
+      if section == 0, let relay = Relay.status { return "Also joined: \(relay.prefix(1).lowercased() + relay.dropFirst())." }
       return section == 1 ? "Ready to test: comments of yours whose fix your agent has built. Tap Test on one: it shows what to do, over the app, with Approve and Reject." : nil
     case .toTest: return items.isEmpty ? "Nothing to test right now. A fix shows up here once it is built." : "Test opens the app where it can be tested, with the steps on top. Tap a row to read more first."
     case .waiting: return items.isEmpty ? "Nothing waits." : "They go by themselves once grndwrk is reachable. Or share them as a file."
