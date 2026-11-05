@@ -16,7 +16,7 @@ import { Pairings } from './pairing.js'
 import { handleComments, type CommentsCtx } from './comments.js'
 import { watchgrndwrk } from './watcher.js'
 import { projectRelay } from '../relay/config.js'
-import { RelaySync } from '../relay/sync.js'
+import type { RelaySync } from '../relay/sync.js'
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
@@ -59,7 +59,8 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
 
   // Colleagues' phones away from the Wi-Fi, through the team's relay, when this project has a mailbox there.
   const relayConfig = await projectRelay(gwDir)
-  const relay = relayConfig ? new RelaySync(relayConfig, comments) : undefined
+  // Loaded only then: a project without a relay never runs any of it.
+  const relay: RelaySync | undefined = relayConfig ? new (await import('../relay/sync.js')).RelaySync(relayConfig, comments) : undefined
 
   /** Where the product runs with the Comment button, once the proxy listens. */
   const runtime: { app?: string } = {}

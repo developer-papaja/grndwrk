@@ -8,7 +8,6 @@ import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/share
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { answerText, appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
-import qrcode from 'qrcode-generator'
 import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testSteps, type FeedbackState } from '../../src/shared/feedback'
 import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
 import { PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
@@ -631,7 +630,7 @@ export const state = Alpine.reactive({
   async invite(name: string) {
     try {
       const { name: who, link } = await inviteColleague(name)
-      this.invited = { name: who, link, qr: qrPath(link) }
+      this.invited = { name: who, link, qr: await qrPath(link) }
       await this.loadRelay()
     } catch (err) {
       this.flash(errorText(err))
@@ -3186,8 +3185,12 @@ export function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle('dark', theme === 'dark')
 }
 
-/** A QR code as one SVG path in a square of its module count, drawn by the map: no markup from elsewhere. */
-function qrPath(text: string): string {
+/**
+ * A QR code as one SVG path in a square of its module count, drawn by the map:
+ * no markup from elsewhere. The encoder loads only when someone is invited.
+ */
+async function qrPath(text: string): Promise<string> {
+  const { default: qrcode } = await import('qrcode-generator')
   const qr = qrcode(0, 'M')
   qr.addData(text)
   qr.make()
