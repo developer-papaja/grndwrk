@@ -25,7 +25,7 @@ Install it once, so the `grndwrk` command is on your path:
 npm install -g grndwrk
 ```
 
-Run the same command again to update. Or skip installing and put `npx` in front of every command below (`npx grndwrk init`, `npx grndwrk`), which always runs the newest version.
+Run the same command again to update. Or skip installing and put `npx grndwrk@latest` in place of `grndwrk` in every command below (`npx grndwrk@latest init`), which always runs the newest version.
 
 **Working on grndwrk itself?** Clone the repository, then `npm install`, `npm run build` and `npm link` in it: the `grndwrk` command then runs your copy.
 
@@ -148,7 +148,7 @@ Each project runs its own grndwrk and its own map. Two people working on the sam
 
 ## What goes into git
 
-Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed like code: thoughts, screens, stories, the brief. Pictures attached to comments are committed with them, so the whole team sees what a comment is about. They show what is on the screen around the spot (the web button draws form fields empty); add `files/` to `.grndwrk/.gitignore` to keep them on your Mac instead. These stay out of git, through `.grndwrk/.gitignore`: the pairing code for phones, pictures of screens, and this machine's port. A login for `grndwrk screenshots` is kept outside the project, in your user folder.
+Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed like code: thoughts, screens, stories, the brief. Pictures attached to comments are committed with them, so the whole team sees what a comment is about. They show what is on the screen around the spot (the web button draws form fields empty); add `files/` to `.grndwrk/.gitignore` to keep them on your Mac instead. These stay out of git, through `.grndwrk/.gitignore`: the pairing code and the keys of paired phones, pictures of screens, and this machine's port. A login for `grndwrk screenshots` is kept outside the project, in your user folder.
 
 ## How it is kept safe
 
