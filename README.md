@@ -107,6 +107,22 @@ When your agent builds a fix for a comment, it writes what changed and how to te
 
 `grndwrk init` puts these rules in `.grndwrk/`: as `CLAUDE.md` for Claude Code, `AGENTS.md` for Cursor, and the `grndwrk-map` skill for Codex. Your agent reads them whenever it works on the map's files, so a fix you ask for in plain words ("go through the feedback") is still marked ready to test. `/feedback` also catches up comments that were fixed without being marked. Codex reads `AGENTS.md` only from the project's root down, so if your project has an `AGENTS.md`, `init` suggests one line to add to it that points Codex at the rules.
 
+### Colleagues away from your Wi-Fi
+
+A colleague testing from TestFlight at home sends comments through a relay: a small server grndwrk puts on **your own Cloudflare account** (the free plan is enough). It passes on sealed envelopes and cannot read them. Nobody else's relay is involved, and other people using grndwrk set up their own.
+
+```
+grndwrk relay deploy     # once: puts the relay on your Cloudflare account (opens Cloudflare's login the first time)
+grndwrk relay add        # in each project: a mailbox of its own, and a team link for teammates
+grndwrk relay join <team link>   # a teammate's grndwrk, in the same project
+```
+
+`deploy` installs Cloudflare's tool, `wrangler`, in grndwrk's user folder from a lockfile shipped with grndwrk, so it and everything under it are the reviewed versions; it is never installed with grndwrk itself. A project without a relay loads none of this. The links (`grndwrk:invite/...`, `grndwrk:team/...`) are not web addresses on purpose: paste them, do not open them. `grndwrk relay link` prints the team link again.
+
+On Cloudflare's free plan, each running grndwrk asks the relay once every 15 seconds, and a phone with the app open about as often. That is a few thousand requests a day per person, well inside the free plan's daily requests; check Cloudflare's current limits if a large team shares one account.
+
+Then, in the map, the globe at the bottom of the rail: **Colleagues**, a name, **Invite**. Send the link, or show the QR code. In the app they long press the grndwrk button, **Join with an invite**, and paste or scan it. Their phone shows four digits; the map asks you to allow the phone, with the same digits. Allow it only when they match: a link someone else got hold of is worth nothing without that. Their comments wait at the relay until a grndwrk on the team runs, arrive with their name on them, and what becomes of them goes back to their phone, so they test fixes like you do. The iOS package README shows how to set up a Beta build for TestFlight.
+
 ### Testers without grndwrk
 
 Comments wait on the device while grndwrk is not running. A tester can share them as a file, and you add them with:
@@ -142,7 +158,19 @@ Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed 
 - **Nothing ships with your product.** The web button runs only on local addresses. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
 - **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine, and grndwrk never follows a symbolic link inside `.grndwrk/`, so a file in a pull request cannot point it at anything else on your machine.
 - **Review `.grndwrk/` in pull requests like code.** A colleague's change can add thoughts, answers or questions that look like your agent's; read them before you run commands on them.
+- **The relay cannot read what it carries.** Each phone makes its own key when it joins, and seals every comment with a key made from it, which the relay never gets; a changed or moved envelope is refused, and so is one the relay hands over a second time, or after 30 days. The relay knows only enough to check that a request comes from a phone your team let in. A phone is let in only when someone allows it in the map, with four digits it shows too, and acts only on its own comments. A phone can send at most 60 comments and 100 MB an hour, 300 and 300 MB a day. The keys for your project's mailbox (the team key) and the relay's owner key stay in your user folder, never in the project. A team link opens the project's comments, so send it privately. Envelopes are deleted once fetched, or after 30 days.
 - **Websites ask before they send.** Each local site's first comment waits until you allow the site in the map. Allowed sites are kept in your user folder, never in the project, so a pull request cannot allow one.
+
+### What package scanners say
+
+grndwrk has three dependencies: `yaml`, `chokidar` (with its one dependency, `readdirp`) and `sirv`. None of them opens a network connection or starts a program. Scanners such as Socket list a few alerts for the package. They are informational, and this is what each one is:
+
+- **yaml: "potential code anomaly".** The flagged code calls a function the caller hands in (a reviver), only when one is given. grndwrk gives none: it reads frontmatter as plain data. Files made to attack the parser are refused or read as text: aliases that would blow up in memory, tags that ask for code, a `__proto__` key.
+- **chokidar: environment variables.** It reads `CHOKIDAR_USEPOLLING` and `CHOKIDAR_INTERVAL` to choose how to watch the disk, and nothing else.
+- **chokidar: filesystem access.** It watches `.grndwrk/` so the map follows changes made by your agent or by hand. It only reads, and is told never to follow links.
+- **grndwrk: URL strings.** Addresses written inside the bundled libraries of the map's page (DOMPurify, Alpine, marked). They are text: the page's Content Security Policy lets it load nothing from another server.
+
+`npm audit signatures` verifies that what you install is what was published.
 
 ## License
 

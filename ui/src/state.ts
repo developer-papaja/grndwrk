@@ -1,14 +1,14 @@
 import Alpine from 'alpinejs'
 import { cached } from './reactivity'
-import type { DesignCheck, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
+import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, answerJoin, type RelayInfo, fetchAuthors } from './api'
 import { BOX, commentsForScreen, hiddenScreenIds, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
-import { appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
+import { answerText, appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, splitBody, type Entry, type Question } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
-import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, type FeedbackState } from '../../src/shared/feedback'
+import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testSteps, type FeedbackState } from '../../src/shared/feedback'
 import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
 import { PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
@@ -131,8 +131,6 @@ export const state = Alpine.reactive({
   /** The list shows only topics that are thin or have missing pieces. */
   onlyAttention: false,
   reply: '',
-  /** The question the reply box answers, when Claude asked several: entry and index. */
-  replyTo: null as { entry: number; index: number } | null,
   sending: false,
   readiness: null as Readiness | null,
   /** Which view the rail shows: focus, the map, readiness, or deliverables. */
@@ -158,7 +156,6 @@ export const state = Alpine.reactive({
   /** The screen open in the Sitemap view. */
   screenId: readStored<string | null>('grndwrk.screen', null),
   screenReply: '',
-  screenReplyTo: null as { entry: number; index: number } | null,
   screenStatus: '',
   /** The sitemap drawn as boxes and lines, or as a list. */
   sitemapLayout: readStored<'drawn' | 'list'>('grndwrk.sitemapLayout', 'drawn'),
@@ -541,6 +538,34 @@ export const state = Alpine.reactive({
     })
     return files.map((f) => this.shots.find((s) => s.file === f)).filter((s): s is Shot => !!s)
   },
+  /**
+   * Every picture an entry shows: pictures pasted into a reply or an answer
+   * (`../files/<id>/<name>`), and pictures of screens (`shots/...`). Shaped
+   * like a screen's picture, so they open large the same way.
+   */
+  entryPictures(text: string): Shot[] {
+    const pasted = [...text.matchAll(/!\[[^\]]*\]\((?:\.\.\/)+files\/([A-Za-z0-9_-]{1,64})\/([0-9]{10,16}(?:-[0-9]+)?\.(?:png|jpg|gif|webp))\)/g)].map(
+      (m): Shot => ({ platform: 'web', key: 'Picture', file: `files/${m[1]}/${m[2]}`, url: `/files/${m[1]}/${m[2]}`, taken: '', pasted: true }),
+    )
+    return [...pasted, ...this.entryShots(text)]
+  },
+  /** Upload pictures for a thought, screen or persona; returns the Markdown that shows them, one per line. */
+  async uploadPictures(owner: string, files: File[]): Promise<string> {
+    const lines: string[] = []
+    for (const file of files.filter((f) => f.type.startsWith('image/'))) {
+      try {
+        lines.push((await uploadImage(owner, file)).markdown)
+      } catch (err) {
+        this.flash(errorText(err))
+      }
+    }
+    return lines.join('\n')
+  },
+  /** Text with pictures added at its end, each on its own line. */
+  withPictures(text: string, markdown: string): string {
+    if (!markdown) return text
+    return text.trim() ? `${text.replace(/\s+$/, '')}\n${markdown}` : markdown
+  },
   /** The entry's words, without the pictures it shows. */
   entryWords(text: string): string {
     return text.replace(/\n?!\[[^\]]*\]\([^)]*\)\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
@@ -567,6 +592,7 @@ export const state = Alpine.reactive({
     this.viewing = set[(at + by + set.length) % set.length]
   },
   shotLabel(shot: Shot): string {
+    if (shot.pasted) return 'Picture'
     const when = new Date(shot.taken).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
     return shot.platform === 'web' ? `Web, ${when}` : `iOS, ${shot.key}, ${when}`
   },
@@ -595,6 +621,69 @@ export const state = Alpine.reactive({
   siteRequests: [] as string[],
   /** Sites that may send comments, shown in the Comments menu, where one can be removed. */
   allowedSites: [] as AllowedSite[],
+  // Colleagues away from the Wi-Fi, through the team's relay: who joined, open invites, and a new invite with its QR code.
+  relay: { connected: false } as RelayInfo,
+  // Who added each thought: `by:` when made in the map, the colleague for a comment through the relay, else whoever committed it first.
+  firstAuthors: {} as Record<string, string>,
+  async loadAuthors() {
+    this.firstAuthors = (await fetchAuthors()).first
+  },
+  /** Who added this thought, when known. A comment from the running product is the tester's, never the committer's. */
+  authorOf(n: GNode): string {
+    const by = typeof n.extra?.by === 'string' ? n.extra.by : typeof n.extra?.from === 'string' ? n.extra.from : ''
+    if (by || n.extra?.source === 'app') return by
+    return this.firstAuthors[n.id] ?? ''
+  },
+  /** Two letters for a name: first and last name's first letters, or the first letter of one name. */
+  initials(name: string): string {
+    const words = name.trim().split(/\s+/).filter(Boolean)
+    if (!words.length) return ''
+    return (words.length > 1 ? words[0][0] + words[words.length - 1][0] : words[0][0]).toUpperCase()
+  },
+  /** The initials to show on a card: always for a comment from a named colleague, for other thoughts once more than one person added some. */
+  cardInitials(n: GNode): string {
+    const who = this.authorOf(n)
+    if (!who) return ''
+    return n.extra?.source === 'app' || this.showAuthors ? this.initials(who) : ''
+  },
+  /** For a card's tooltip: who added it, or who commented. */
+  authorLine(n: GNode): string {
+    const who = this.authorOf(n)
+    return who ? (n.extra?.source === 'app' ? `commented by ${who}` : `added by ${who}`) : ''
+  },
+  /** Initials show on the cards only once more than one person added thoughts: alone, they say nothing. */
+  get showAuthors(): boolean {
+    return cached('showAuthors', () => new Set(Object.values(this.nodes as Record<string, GNode>).map((n) => this.authorOf(n)).filter(Boolean)).size > 1)
+  },
+  invited: null as { name: string; link: string; qr: string } | null,
+  async loadRelay() {
+    this.relay = await fetchRelay()
+  },
+  async invite(name: string) {
+    try {
+      const { name: who, link } = await inviteColleague(name)
+      this.invited = { name: who, link, qr: await qrPath(link) }
+      await this.loadRelay()
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** A colleague's phone joined with their invite: allowed only when it shows the same four digits. */
+  async answerJoin(invite: string, allow: boolean) {
+    try {
+      this.relay = await answerJoin(invite, allow)
+      this.flash(allow ? 'Allowed. Their comments come through the relay now.' : 'Not allowed. Send a new invite if it was them.')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async removeColleague(kind: 'phones' | 'invites', id: string) {
+    try {
+      this.relay = await removeFromRelay(kind, id)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
   async loadSiteRequests() {
     const { asking, allowed } = await fetchSites()
     this.siteRequests = asking
@@ -657,6 +746,54 @@ export const state = Alpine.reactive({
     } catch (err) {
       this.flash(errorText(err))
     }
+  },
+  // Testing a built fix in the map: Claude's "To test:" steps as a checklist.
+  /** What changed and the steps to test it, from a Claude entry. */
+  testSteps(text: string): { fix: string; steps: string[] } {
+    return testSteps(this.entryWords(text))
+  },
+  /** The entry whose steps can be tested now: Claude's last word on a comment that is ready to test. */
+  get testableEntry(): number {
+    if (!this.selected || feedbackState(this.selected) !== 'ready') return -1
+    const t = this.thread
+    for (let i = t.length - 1; i >= 0; i--) if (t[i].who === 'claude') return testSteps(t[i].text).steps.length ? i : -1
+    return -1
+  },
+  /** Each step marked works or not, per comment and entry, kept in this browser until the comment is settled. */
+  testChecks: readStored<Record<string, Record<number, 'ok' | 'bad'>>>('grndwrk.testChecks', {}),
+  stepMark(entry: number, step: number): 'ok' | 'bad' | undefined {
+    return this.testChecks[`${this.selectedId}:${entry}`]?.[step]
+  },
+  markStep(entry: number, step: number, mark: 'ok' | 'bad') {
+    const key = `${this.selectedId}:${entry}`
+    const marks = { ...(this.testChecks[key] ?? {}) }
+    if (marks[step] === mark) delete marks[step]
+    else marks[step] = mark
+    this.testChecks = { ...this.testChecks, [key]: marks }
+    store('grndwrk.testChecks', this.testChecks)
+  },
+  /** What to say when it does not work: the steps marked as not working, to add to. */
+  failedStepsNote(entry: number, steps: string[]): string {
+    const bad = steps.map((s, n) => (this.stepMark(entry, n) === 'bad' ? `Step ${n + 1} (${s.length > 60 ? s.slice(0, 57) + '...' : s}): ` : '')).filter(Boolean)
+    return bad.join('\n')
+  },
+  /** The person tested the fix here: fixed, or back to the agent with what is still wrong. */
+  async testedHere(works: boolean, note = '') {
+    const node = this.selected
+    if (!node) return
+    try {
+      const { node: changed } = await markTested(node.id, works, note)
+      const key = `${node.id}:`
+      this.testChecks = Object.fromEntries(Object.entries(this.testChecks).filter(([k]) => !k.startsWith(key)))
+      store('grndwrk.testChecks', this.testChecks)
+      this.upsert(changed)
+    } catch (err) {
+      return this.flash(errorText(err))
+    }
+    if (works && !showsProgress(this.progressFilter, 'done')) {
+      this.select(null)
+      this.flash('Works: marked fixed. Show: Done in the toolbar lists what is finished.')
+    } else if (!works) this.flash('Back to your agent, with what is still wrong. The next /feedback picks it up.')
   },
   // Working on one part: the whole map stays one map, a screen is a filter on it.
   /** The screen being worked on, or null for the whole product. */
@@ -761,28 +898,15 @@ export const state = Alpine.reactive({
     while (n < lines.length && /^\s*>/.test(lines[n])) n++
     return { quote: lines.slice(0, n).map((l) => l.replace(/^\s*>\s?/, '')).join(' ').trim(), rest: lines.slice(n).join('\n').trim() }
   },
-  /** Answer one of Claude's questions on the open screen straight away, with an option it gave. */
+  /** Answer one of Claude's questions on the open screen: the options picked and the words, quoting it. */
   async answerScreenQuestion(q: Question, text: string) {
-    this.screenReply = text
-    this.screenReplyTo = { entry: q.entry, index: q.index }
-    await this.sendScreenReply()
+    await this.sendScreenReply({ q, text })
   },
-  /** Answer one of Claude's questions on the open card straight away, with an option it gave. */
+  /** Answer one of Claude's questions on the open card: the options picked and the words, quoting it. */
   async answerQuestion(q: Question, text: string) {
-    const id = this.selectedId
-    if (!id || this.sending) return
-    this.reply = text
-    this.replyTo = { entry: q.entry, index: q.index }
-    await this.sendReply()
+    await this.sendReply({ q, text })
   },
-  /** Point the reply box at one question, to answer it in words. */
-  replyToQuestion(q: Question, field = 'reply') {
-    if (field === 'screen-reply') this.screenReplyTo = { entry: q.entry, index: q.index }
-    else if (field === 'persona-reply') this.personaReplyTo = { entry: q.entry, index: q.index }
-    else this.replyTo = { entry: q.entry, index: q.index }
-    focusWhenVisible(field)
-  },
-  /** The question the reply box answers now, or null for all of them. */
+  /** The open question at this place in the thread, or null when it is answered or gone. */
   replyQuestion(body: string, to: { entry: number; index: number } | null): Question | null {
     if (!to) return null
     return questions(body).find((q) => q.entry === to.entry && q.index === to.index && q.open) ?? null
@@ -796,8 +920,47 @@ export const state = Alpine.reactive({
         .map((n) => n.id)
     })
   },
+  /** The project's name for the rail: project.md's name, or the folder's. */
+  get projectLabel(): string {
+    const name = typeof this.project.name === 'string' ? this.project.name.trim() : ''
+    return name || (typeof this.project.folder === 'string' ? this.project.folder : '')
+  },
+  /** The badge's letters: as set in project.md (`initials:`), else the first of each word, or the first two of one word. */
+  get projectInitials(): string {
+    const set = typeof this.project.initials === 'string' ? this.project.initials.trim() : ''
+    if (set) return set.toUpperCase()
+    const words = this.projectLabel.split(/[\s_.-]+/).filter(Boolean)
+    const letters = words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '').slice(0, 2)
+    return letters.toUpperCase()
+  },
+  /** The badge's color: as set in project.md (`color:`), else a calm one of its own per project, so two maps side by side look different at a glance. */
+  get projectColor(): string {
+    const set = typeof this.project.color === 'string' ? this.project.color.trim() : ''
+    if (/^#[0-9a-f]{6}$/i.test(set)) return set
+    return this.autoColor(this.projectLabel)
+  },
+  /** The color a name gets when none is set. */
+  autoColor(name: string): string {
+    let h = 0
+    for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
+    return `hsl(${h % 360} 45% 42%)`
+  },
+  /** Colors to pick for the badge: calm, readable with white letters in light and dark. */
+  badgeColors: ['#64748b', '#2563eb', '#0891b2', '#0d9488', '#16a34a', '#ca8a04', '#ea580c', '#e11d48', '#db2777', '#7c3aed'],
+  /** Save the badge: name, initials and color in project.md. Empty initials or color go back to the default. */
+  async saveBadge(badge: { name: string; initials: string; color: string }) {
+    try {
+      this.project = await saveProjectFields(badge)
+      this.flash('Saved in project.md')
+      return true
+    } catch (err) {
+      this.flash(errorText(err))
+      return false
+    }
+  },
   /** A thread entry split into its question and the options Claude gave. */
   options: questionOptions,
+  answerText,
   hasQuestion(id: string): boolean {
     const n = this.nodes[id]
     return !!n && openQuestions(n.body) > 0
@@ -1155,17 +1318,17 @@ export const state = Alpine.reactive({
       this.flash(errorText(err))
     }
   },
-  async sendScreenReply() {
+  async sendScreenReply(answer?: { q: Question; text: string }) {
     const s = this.screen
-    const text = this.screenReply.trim()
+    const text = (answer ? answer.text : this.screenReply).trim()
     if (!s || !text || this.sending) return
     this.sending = true
     this.screenStatus = 'Saving...'
     try {
-      const target = this.replyQuestion(s.body, this.screenReplyTo)
-      this.screenReplyTo = null
+      const target = answer && this.replyQuestion(s.body, { entry: answer.q.entry, index: answer.q.index })
+      if (answer && !target) return
       this.putScreen(await updateScreen(s.id, { body: target ? appendAnswer(s.body, target, text, today()) : appendEntry(s.body, 'you', text, today()) }))
-      this.screenReply = ''
+      if (!answer) this.screenReply = ''
       this.screenStatus = ''
     } catch (err) {
       this.screenStatus = `Not saved: ${errorText(err)}`
@@ -1182,7 +1345,6 @@ export const state = Alpine.reactive({
   personas: [] as Persona[],
   personaId: readStored<string | null>('grndwrk.persona', null),
   personaReply: '',
-  personaReplyTo: null as { entry: number; index: number } | null,
   personaStatus: '',
   newPersona: '',
   /** The persona whose Delete was pressed once; a second press deletes it. */
@@ -1365,7 +1527,6 @@ export const state = Alpine.reactive({
     this.personaEditing = ''
     this.personaId = id
     this.personaReply = ''
-    this.personaReplyTo = null
     this.personaStatus = ''
     this.deletingPersona = ''
     store('grndwrk.persona', id)
@@ -1534,21 +1695,19 @@ export const state = Alpine.reactive({
     await this.saveScreen('audience', s.audience.filter((a) => a !== name).join(', '))
   },
   async answerPersonaQuestion(q: Question, text: string) {
-    this.personaReply = text
-    this.personaReplyTo = { entry: q.entry, index: q.index }
-    await this.sendPersonaReply()
+    await this.sendPersonaReply({ q, text })
   },
-  async sendPersonaReply() {
+  async sendPersonaReply(answer?: { q: Question; text: string }) {
     const p = this.persona
-    const text = this.personaReply.trim()
+    const text = (answer ? answer.text : this.personaReply).trim()
     if (!p || !text || this.sending) return
     this.sending = true
     this.personaStatus = 'Saving...'
     try {
-      const target = this.replyQuestion(p.body, this.personaReplyTo)
-      this.personaReplyTo = null
+      const target = answer && this.replyQuestion(p.body, { entry: answer.q.entry, index: answer.q.index })
+      if (answer && !target) return
       this.putPersona(await updatePersona(p.id, { body: target ? appendAnswer(p.body, target, text, today()) : appendEntry(p.body, 'you', text, today()) }))
-      this.personaReply = ''
+      if (!answer) this.personaReply = ''
       this.personaStatus = ''
     } catch (err) {
       this.personaStatus = `Not saved: ${errorText(err)}`
@@ -1674,7 +1833,10 @@ export const state = Alpine.reactive({
     if (source === 'docs') return 'From the docs'
     if (source === 'commit') return 'From a commit'
     if (source === 'inferred') return 'A guess. Check the thread.'
-    if (source === 'app') return 'Commented in the running product'
+    if (source === 'app') {
+      const from = typeof node?.extra?.from === 'string' ? node.extra.from : ''
+      return from ? `Commented in the running product by ${from}, through the relay` : 'Commented in the running product'
+    }
     return ''
   },
   seenIn(node: GNode | null): string[] {
@@ -2096,7 +2258,10 @@ export const state = Alpine.reactive({
   async confirmGuess(id: string) {
     const n = this.nodes[id]
     if (!n) return
-    const body = openQuestions(n.body) > 0 ? appendEntry(n.body, 'you', 'Yes, that is right.', today()) : n.body
+    // Each open question is answered on its own: a reply without a quote would be a remark.
+    const body = questions(n.body)
+      .filter((q) => q.open)
+      .reduce((b, q) => appendAnswer(b, q, 'Yes, that is right.', today()), n.body)
     try {
       this.upsert(await updateNode(n.id, { status: 'settled', body }))
       this.flash('Confirmed and settled.')
@@ -2290,12 +2455,14 @@ export const state = Alpine.reactive({
    * A comment pointed out on the phone, to be written here: open it with the
    * title selected, so typing replaces the placeholder.
    */
-  writeComment(id: string) {
+  writeComment(id: string, reply = false) {
     if (!this.nodes[id]) return
     this.goToNode(id)
+    window.focus()
+    // Rejected on the phone: what is still wrong goes in the thread, below the reject.
+    if (reply) return focusWhenVisible('reply')
     this.selectTitle = true
     this.editingTitle = true
-    window.focus()
   },
   /** Open a thought in the map, from any view. */
   goToNode(id: string) {
@@ -2532,6 +2699,23 @@ export const state = Alpine.reactive({
     }
   },
 
+  /** What to focus on next, the most important first, without what was set aside. */
+  get focusItems(): FocusItem[] {
+    return (this.readiness?.focus ?? []).filter((f) => !f.later)
+  },
+  /** Focus items set aside with Not now. */
+  get focusSetAside(): FocusItem[] {
+    return (this.readiness?.focus ?? []).filter((f) => f.later)
+  },
+  /** Not now, or bring one back. */
+  async focusLater(id: string, later: boolean) {
+    try {
+      this.readiness = await setFocusLater(id, later)
+      this.flash(later ? 'Set aside. Bring it back under the Focus box.' : 'Back in the Focus box.')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
   async loadReadiness() {
     try {
       this.readiness = await fetchReadiness()
@@ -2789,13 +2973,14 @@ export const state = Alpine.reactive({
     return true
   },
   /** Add a reply to the thread. The text stays in the box until it is saved. */
-  async sendReply() {
-    const text = this.reply.trim()
+  async sendReply(answer?: { q: Question; text: string }) {
+    const text = (answer ? answer.text : this.reply).trim()
     const id = this.selectedId
     if (!text || !id || this.sending) return
-    const target = this.replyQuestion(this.draft.body, this.replyTo)
+    // An answer quotes its question; the reply box writes a remark, which answers nothing.
+    const target = answer && this.replyQuestion(this.draft.body, { entry: answer.q.entry, index: answer.q.index })
+    if (answer && !target) return
     const body = target ? appendAnswer(this.draft.body, target, text, today()) : appendEntry(this.draft.body, 'you', text, today())
-    this.replyTo = null
     this.sending = true
     this.replyStatus = 'Saving...'
     try {
@@ -2803,10 +2988,10 @@ export const state = Alpine.reactive({
       timers.delete('body')
       const node = await updateNode(id, { body })
       pending.delete('body')
-      replyDrafts.delete(id)
+      if (!answer) replyDrafts.delete(id)
       if (this.selectedId === id) {
         this.draft.body = body
-        this.reply = ''
+        if (!answer) this.reply = ''
       }
       this.replyStatus = ''
       this.upsert(node)
@@ -3039,6 +3224,21 @@ function readTheme(): Theme {
 export function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle('light', theme === 'light')
   document.documentElement.classList.toggle('dark', theme === 'dark')
+}
+
+/**
+ * A QR code as one SVG path in a square of its module count, drawn by the map:
+ * no markup from elsewhere. The encoder loads only when someone is invited.
+ */
+async function qrPath(text: string): Promise<string> {
+  const { default: qrcode } = await import('qrcode-generator')
+  const qr = qrcode(0, 'M')
+  qr.addData(text)
+  qr.make()
+  const n = qr.getModuleCount()
+  let d = ''
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`
+  return `${n}|${d}`
 }
 
 /** Layout choices are remembered per browser. Storage can be blocked, so fall back quietly. */

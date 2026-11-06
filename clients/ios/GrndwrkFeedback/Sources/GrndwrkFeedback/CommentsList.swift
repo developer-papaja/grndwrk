@@ -35,7 +35,7 @@ final class CommentsController: UITableViewController {
     }
     refreshControl = UIRefreshControl()
     refreshControl?.addAction(UIAction { [weak self] _ in self?.refresh() }, for: .valueChanged)
-    for name in [Connection.changed, Outbox.changed] {
+    for name in [Connection.changed, Outbox.changed, Relay.changed] {
       NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
         MainActor.assumeIsolated { self?.reload() }
       }
@@ -116,8 +116,11 @@ final class CommentsController: UITableViewController {
         return "Tap to pair: allow this phone in grndwrk on the Mac, or enter the code it shows in the terminal. Comments are kept on the phone until then."
       }
       if section == 0, case .offline(let why) = Connection.state {
-        return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again."
+        if Connection.viaRelay { return "\(why)\n\nComments go through your team's relay instead, and reach grndwrk when someone on the team runs it. What became of them comes back the same way." }
+        if let relay = Relay.status { return "\(why)\n\n\(relay)." }
+        return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again. Away from this Wi-Fi? Join your team's relay with an invite: long press the grndwrk button."
       }
+      if section == 0, let relay = Relay.status { return "Also joined: \(relay.prefix(1).lowercased() + relay.dropFirst())." }
       return section == 1 ? "Ready to test: comments of yours whose fix your agent has built. Tap Test on one: it shows what to do, over the app, with Approve and Reject." : nil
     case .toTest: return items.isEmpty ? "Nothing to test right now. A fix shows up here once it is built." : "Test opens the app where it can be tested, with the steps on top. Tap a row to read more first."
     case .waiting: return items.isEmpty ? "Nothing waits." : "They go by themselves once grndwrk is reachable. Or share them as a file."
@@ -136,7 +139,7 @@ final class CommentsController: UITableViewController {
         switch Connection.state {
         case .connected: return (.systemGreen, "Connected")
         case .needsCode: return (.systemYellow, "Needs the pairing code")
-        case .offline: return (.systemOrange, "Not connected")
+        case .offline: return Connection.viaRelay ? (.systemBlue, "Through the relay") : (.systemOrange, "Not connected")
         case .unknown: return (.systemGray, "Looking for grndwrk")
         }
       }()
@@ -146,7 +149,7 @@ final class CommentsController: UITableViewController {
       content.text = text
       switch Connection.state {
       case .connected(let project, let host), .needsCode(let project, let host): content.secondaryText = "\(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)"
-      case .offline: content.secondaryText = "Comments wait on the phone"
+      case .offline: content.secondaryText = Connection.viaRelay ? Relay.joined.flatMap { URL(string: $0.url)?.host } : "Comments wait on the phone"
       case .unknown: content.secondaryText = nil
       }
       if case .needsCode = Connection.state {} else { cell.selectionStyle = .none }
@@ -368,20 +371,24 @@ final class CommentController: UIViewController {
   private func reject() {
     let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to grndwrk with the comment, for the next /feedback.", preferredStyle: .alert)
     alert.addTextField { $0.placeholder = "Optional" }
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     alert.addAction(UIAlertAction(title: "Send", style: .default) { [weak self] _ in
       self?.tested(works: false, note: alert.textFields?.first?.text ?? "")
     })
+    // Rejects it now, and opens it in the map on the Mac to write what is still wrong there.
+    alert.addAction(UIAlertAction(title: "Send and write on the Mac", style: .default) { [weak self] _ in
+      self?.tested(works: false, note: alert.textFields?.first?.text ?? "", onMac: true)
+    })
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     present(alert, animated: true)
   }
 
-  private func tested(works: Bool, note: String = "") {
+  private func tested(works: Bool, note: String = "", onMac: Bool = false) {
     guard let node = item.node else { return }
     Task {
-      let ok = await Outbox.tested(node: node, works: works, note: note)
+      let ok = await Outbox.tested(node: node, works: works, note: note, onMac: onMac)
       guard ok else { return say("grndwrk is not reachable. Try again when connected.") }
       if let updated = Outbox.sent.first(where: { $0.node == node }) { item = updated }
-      say(works ? "Approved, fixed in grndwrk" : "Rejected, back in grndwrk")
+      say(works ? "Approved, fixed in grndwrk" : onMac ? "Rejected. Write what is still wrong on your Mac" : "Rejected, back in grndwrk")
       build()
     }
   }

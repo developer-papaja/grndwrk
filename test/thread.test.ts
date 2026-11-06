@@ -121,15 +121,55 @@ Answer one at a time if that is easier.`
     let qs = questions(once)
     expect(qs.map((q) => q.open)).toEqual([true, false])
     expect(qs[1].answer).toBe('Admins')
-    // The last open one needs no quote.
+    // The last open one is quoted too: without a quote it would be a remark.
     const both = appendAnswer(once, first, 'Community', '2026-10-14')
-    expect(both.trimEnd().endsWith('**You** · 2026-10-14\nCommunity')).toBe(true)
+    expect(both.trimEnd().endsWith('**You** · 2026-10-14\n> Which screen is this about?\n\nCommunity')).toBe(true)
     qs = questions(both)
     expect(qs.map((q) => [q.open, q.answer])).toEqual([[false, 'Community'], [false, 'Admins']])
     expect(openQuestions(both)).toBe(0)
   })
 
-  it('takes an answer without a quote as the answer to everything before it', () => {
+  it('reads a reply without a quote as a remark that answers nothing', async () => {
+    const { questions } = await import('../src/shared/thread.js')
+    const remark = appendEntry(two, 'you', 'Something else I noticed: the list is slow.', '2026-11-06')
+    expect(openQuestions(remark)).toBe(2)
+    expect(questions(remark).map((q) => q.answer)).toEqual([undefined, undefined])
+    // Answering after the remark still works, one question at a time.
+    const [first] = questions(remark)
+    const { appendAnswer } = await import('../src/shared/thread.js')
+    expect(openQuestions(appendAnswer(remark, first, 'Community', '2026-11-06'))).toBe(1)
+  })
+
+  it('reads a remark the same in a thread with one open question', () => {
+    const one = appendEntry('Notes.', 'claude-asks', 'Which screen?\n\nOptions:\n- A\n- B', '2026-11-06')
+    expect(openQuestions(appendEntry(one, 'you', 'Unrelated: rename the card.', '2026-11-06'))).toBe(1)
+  })
+
+  it('keeps answers written before remarks existed, so old questions stay answered', () => {
     expect(openQuestions(appendEntry(two, 'you', 'Community, and only admins.', '2026-10-14'))).toBe(0)
+  })
+
+  it('leaves a question open when the quote names no open question', () => {
+    expect(openQuestions(appendEntry(two, 'you', '> Something never asked\n\nYes', '2026-11-06'))).toBe(2)
+  })
+
+  it('a plain Claude entry still closes what came before', () => {
+    expect(openQuestions(appendEntry(two, 'claude', 'Moving on.', '2026-11-05'))).toBe(0)
+  })
+})
+
+describe('answers from options', () => {
+  it('joins the picks in the order given, and the words after them', async () => {
+    const { answerText, questions, appendAnswer } = await import('../src/shared/thread.js')
+    const opts = ['Today', 'The last day booked', 'Tomorrow']
+    expect(answerText(opts, ['Today'], '')).toBe('Today')
+    expect(answerText(opts, ['Tomorrow', 'Today'], '')).toBe('- Today\n- Tomorrow')
+    expect(answerText(opts, ['Today', 'Tomorrow'], ' Whichever is later. ')).toBe('- Today\n- Tomorrow\n\nWhichever is later.')
+    expect(answerText(opts, [], 'Neither')).toBe('Neither')
+    // A list answer still reads as the answer to that question only.
+    const body = appendEntry(appendEntry('N', 'claude-asks', 'Which day?\n\nOptions:\n- Today\n- Tomorrow', '2026-11-05'), 'claude-asks', 'Who?', '2026-11-05')
+    const [q] = questions(body)
+    const after = questions(appendAnswer(body, q, answerText(['Today', 'Tomorrow'], ['Today', 'Tomorrow'], 'Both work.'), '2026-11-05'))
+    expect(after.map((x) => [x.open, x.answer])).toEqual([[false, '- Today\n- Tomorrow\n\nBoth work.'], [true, undefined]])
   })
 })

@@ -12,6 +12,7 @@
   <body class="bg-ink text-fog antialiased" x-data>
     <!-- Icons: Heroicons 24 outline (MIT), plus a panel toggle drawn to match. -->
     <svg class="hidden" aria-hidden="true">
+      <symbol id="i-photo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></symbol>
       <!-- Appearance: a circle half filled, drawn to match. -->
@@ -137,7 +138,7 @@
                             'cursor-copy': $store.gw.mode === 'link'
                           }"
                           :style="{ '--type': $store.gw.typeColors[it.node.type] }"
-                          :title="it.node.type + (it.node.status !== 'open' ? ', ' + it.node.status : '')"
+                          :title="it.node.type + (it.node.status !== 'open' ? ', ' + it.node.status : '') + ($store.gw.authorLine(it.node) ? ', ' + $store.gw.authorLine(it.node) : '')"
                           @click="$store.gw.clickCard(it.id)"
                           @dragstart="$store.gw.dragId = it.id; $event.dataTransfer.setData('text/plain', it.id); $event.dataTransfer.effectAllowed = 'move'"
                           @dragend="$store.gw.dragId = null; $store.gw.dropCell = ''"
@@ -145,6 +146,7 @@
                           <span class="mb-0.5 flex gap-1.5 text-[10px] tracking-wide">
                             <span class="text-fog/40" :title="'Level ' + it.altitude + ': ' + $store.gw.altitudeWords[it.altitude]" x-text="$store.gw.label($store.gw.altitudeWords[it.altitude])"></span>
                             <span x-show="['proposed', 'ready', 'fixed'].includes($store.gw.feedbackState(it.node))" :class="{ fixed: 'text-emerald-300/80', ready: 'text-violet-300', proposed: 'text-accent' }[$store.gw.feedbackState(it.node)]" x-text="{ fixed: 'Fixed', ready: 'Ready to test', proposed: 'Fix proposed' }[$store.gw.feedbackState(it.node)]"></span>
+                            <span x-show="$store.gw.cardInitials(it.node)" class="ml-auto font-medium text-fog/45" :class="$store.gw.hasQuestion(it.id) && 'mr-2'" x-text="$store.gw.cardInitials(it.node)"></span>
                           </span>
                           <span class="line-clamp-3" x-text="it.node.title"></span>
                           <span x-show="$store.gw.hasQuestion(it.id)" class="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-question" title="Your agent asked something"></span>
@@ -381,7 +383,7 @@
     </div>
 
     <!-- A phone on the network asks to send comments: allow it here, and it gets the pairing code -->
-    <div x-cloak x-show="$store.gw.pairRequests.length || $store.gw.siteRequests.length" id="pair-requests" class="pointer-events-none fixed inset-x-0 top-16 z-40 flex flex-col items-center gap-2 px-4">
+    <div x-cloak x-show="$store.gw.pairRequests.length || $store.gw.siteRequests.length || $store.gw.relay.waiting?.length" id="pair-requests" class="pointer-events-none fixed inset-x-0 top-16 z-40 flex flex-col items-center gap-2 px-4">
       <template x-for="p in $store.gw.pairRequests" :key="p.id">
         <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-[13px] shadow-xl shadow-shade/40" x-transition.opacity>
           <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
@@ -391,6 +393,18 @@
           </span>
           <button class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-tint/8 hover:text-fog" @click="$store.gw.answerPair(p.id, false)">Not allowed</button>
           <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/85" :id="'allow-' + p.id" @click="$store.gw.answerPair(p.id, true)">Allow</button>
+        </div>
+      </template>
+      <!-- A colleague's phone joined with their invite, through the relay: allow it when it shows the same digits -->
+      <template x-for="w in $store.gw.relay.waiting ?? []" :key="w.invite">
+        <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-[13px] shadow-xl shadow-shade/40" x-transition.opacity>
+          <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
+          <span class="min-w-0 flex-1">
+            <span class="block text-fog">A phone joined with <span class="font-medium" x-text="w.name"></span>’s invite</span>
+            <span class="block text-xs text-fog/50">Allow only if <span x-text="w.name"></span> says their phone shows <span class="font-mono font-semibold tracking-wider text-fog" x-text="w.digits"></span>.</span>
+          </span>
+          <button class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-tint/8 hover:text-fog" @click="$store.gw.answerJoin(w.invite, false)">Not allowed</button>
+          <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/85" @click="$store.gw.answerJoin(w.invite, true)">Allow</button>
         </div>
       </template>
       <!-- A local site's Comment button sent a comment: allow the site here, and its comment arrives -->
@@ -433,6 +447,71 @@
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
+      <!-- Which project this map is, on every view: several maps can be open at once. A click edits its name, letters and color. -->
+      <div
+        x-show="$store.gw.projectLabel"
+        class="relative mb-1 w-full border-b border-line px-1 pb-2.5"
+        x-data="{ open: false, name: '', initials: '', color: '' }"
+        @keydown.escape.stop="open = false"
+        @click.outside="open = false"
+      >
+        <button
+          id="rail-project"
+          class="flex w-full flex-col items-center gap-1 rounded-lg py-0.5 hover:bg-tint/5"
+          :title="'Project: ' + $store.gw.projectLabel + '. Click to change its name, letters or color'"
+          @click="open = !open; if (open) { name = String($store.gw.project.name ?? ''); initials = String($store.gw.project.initials ?? ''); color = String($store.gw.project.color ?? ''); $nextTick(() => $refs.badgeName.focus()) }"
+        >
+          <span class="grid size-9 place-items-center rounded-lg text-[13px] font-semibold text-white" :style="{ background: $store.gw.projectColor }" x-text="$store.gw.projectInitials"></span>
+          <span class="line-clamp-2 w-full break-words text-center text-[10px] font-medium leading-tight text-fog/80" x-text="$store.gw.projectLabel"></span>
+        </button>
+        <form
+          x-show="open"
+          x-transition.opacity
+          id="badge-editor"
+          class="absolute left-full top-0 z-30 ml-2 w-64 rounded-lg border border-line bg-panel p-3 text-[13px] shadow-lg shadow-shade/30"
+          @submit.prevent="$store.gw.saveBadge({ name, initials, color }).then((ok) => { if (ok) open = false })"
+        >
+          <div class="mb-3 flex items-center gap-2.5">
+            <span
+              class="grid size-9 shrink-0 place-items-center rounded-lg text-[13px] font-semibold text-white"
+              :style="{ background: color || $store.gw.autoColor(name.trim() || String($store.gw.project.folder ?? '')) }"
+              x-text="(initials.trim() || (name.trim() || String($store.gw.project.folder ?? '')).split(/[\s_.-]+/).filter(Boolean).reduce((a, w, i, all) => all.length > 1 ? (i < 2 ? a + w[0] : a) : w.slice(0, 2), '')).toUpperCase()"
+            ></span>
+            <span class="min-w-0 truncate font-medium text-fog" x-text="name.trim() || String($store.gw.project.folder ?? '')"></span>
+          </div>
+          <label class="label" for="badge-name">Name</label>
+          <input id="badge-name" x-ref="badgeName" x-model="name" maxlength="80" class="field mb-2.5 w-full" :placeholder="String($store.gw.project.folder ?? '')" />
+          <label class="label" for="badge-initials">Letters</label>
+          <input id="badge-initials" x-model="initials" maxlength="3" class="field mb-2.5 w-20 uppercase" placeholder="Auto" />
+          <span class="label">Color</span>
+          <div class="mb-3 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              class="grid size-6 place-items-center rounded-md border text-[9px] text-fog/70"
+              :class="color === '' ? 'border-accent ring-2 ring-accent/40' : 'border-line'"
+              title="Auto: a color from the name"
+              :style="{ background: $store.gw.autoColor(name.trim() || String($store.gw.project.folder ?? '')) }"
+              @click="color = ''"
+            ><span class="font-semibold text-white">A</span></button>
+            <template x-for="c in $store.gw.badgeColors" :key="c">
+              <button
+                type="button"
+                class="size-6 rounded-md border border-transparent"
+                :class="color === c && 'ring-2 ring-accent ring-offset-1 ring-offset-panel'"
+                :style="{ background: c }"
+                :title="c"
+                :aria-label="'Color ' + c"
+                @click="color = c"
+              ></button>
+            </template>
+          </div>
+          <div class="flex items-center justify-end gap-2">
+            <button type="button" class="rounded-md px-2.5 py-1 text-xs text-fog/60 hover:bg-tint/5 hover:text-fog" @click="open = false">Cancel</button>
+            <button type="submit" class="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90">Save</button>
+          </div>
+          <p class="mt-2 text-[11px] text-fog/45">Saved in project.md, so everyone on the project sees it.</p>
+        </form>
+      </div>
       <template x-for="v in [['focus', 'Inbox: your agent\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['personas', 'Personas: who the product is for', 'i-users'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
@@ -492,7 +571,7 @@
           title="Sites: which sites can send comments"
           aria-label="Sites: which sites can send comments"
           :aria-expanded="open"
-          @click="open = !open; open && $store.gw.loadSiteRequests()"
+          @click="open = !open; open && ($store.gw.loadSiteRequests(), $store.gw.loadRelay())"
         >
           <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" /></svg>
           <span
@@ -501,7 +580,7 @@
             x-text="$store.gw.siteRequests.length"
           ></span>
         </button>
-        <div id="sites" x-cloak x-show="open" x-transition.opacity.duration.100ms class="menu-pop bottom-0 left-12 top-auto w-72 px-3 py-2.5">
+        <div id="sites" x-cloak x-show="open" x-transition.opacity.duration.100ms class="menu-pop bottom-0 left-12 top-auto max-h-[90vh] w-72 overflow-y-auto px-3 py-2.5">
           <div class="text-[13px] font-medium text-fog">Sites that can send comments</div>
           <template x-for="s in $store.gw.allowedSites" :key="s.origin">
             <div class="group mt-1.5 flex items-center gap-2 text-[12px]">
@@ -514,6 +593,53 @@
           </template>
           <div x-show="!$store.gw.allowedSites.length" class="mt-1.5 text-[11px] text-fog/45">None yet.</div>
           <p class="mt-2.5 border-t border-tint/8 pt-2 text-[11px] leading-snug text-fog/45">A site asks in the map the first time its Comment button sends something. Removed, its next comment asks again. Kept on this Mac, not in the project.</p>
+
+          <!-- Colleagues: phones away from the Wi-Fi, through the team's relay -->
+          <div id="colleagues" class="mt-3 border-t border-line pt-2.5" x-data="{ name: '' }">
+            <div class="text-[13px] font-medium text-fog">Colleagues</div>
+            <template x-if="!$store.gw.relay.connected">
+              <p class="mt-1 text-[11px] leading-snug text-fog/50">Colleagues away from your Wi-Fi send comments through a relay on your Cloudflare account. In your terminal, in this project: <code class="rounded bg-tint/8 px-1 text-fog/75" x-text="$store.gw.relay.deployed ? 'grndwrk relay add' : 'grndwrk relay deploy'"></code><span x-show="!$store.gw.relay.deployed">, then <code class="rounded bg-tint/8 px-1 text-fog/75">grndwrk relay add</code></span>. A teammate already has one? <code class="rounded bg-tint/8 px-1 text-fog/75">grndwrk relay join</code> with their team link.</p>
+            </template>
+            <template x-if="$store.gw.relay.connected">
+              <div>
+                <p x-show="$store.gw.relay.error" class="mt-1 text-[11px] text-rose-300" x-text="'The relay: ' + $store.gw.relay.error"></p>
+                <template x-for="p in $store.gw.relay.phones ?? []" :key="p.id">
+                  <div class="mt-1.5 flex items-center gap-2 text-[12px]">
+                    <span class="min-w-0 flex-1 truncate text-fog/85" x-text="p.name"></span>
+                    <span class="shrink-0 text-[11px] text-fog/40" x-text="'joined ' + p.joined"></span>
+                    <button class="shrink-0 rounded p-0.5 text-fog/40 hover:bg-tint/8 hover:text-fog" :title="'Take ' + p.name + ' out: their phone can no longer send'" :aria-label="'Remove ' + p.name" @click.stop="$store.gw.removeColleague('phones', p.id)">
+                      <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                </template>
+                <template x-for="v in $store.gw.relay.invites ?? []" :key="v.id">
+                  <div class="mt-1.5 flex items-center gap-2 text-[12px]">
+                    <span class="min-w-0 flex-1 truncate text-fog/60" x-text="v.name"></span>
+                    <span class="shrink-0 text-[11px] text-fog/40">invited, not joined</span>
+                    <button class="shrink-0 rounded p-0.5 text-fog/40 hover:bg-tint/8 hover:text-fog" :title="'Withdraw the invite for ' + v.name" :aria-label="'Withdraw the invite for ' + v.name" @click.stop="$store.gw.removeColleague('invites', v.id)">
+                      <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                </template>
+                <div x-show="!($store.gw.relay.phones ?? []).length && !($store.gw.relay.invites ?? []).length" class="mt-1 text-[11px] text-fog/45">Nobody yet.</div>
+                <form class="mt-2 flex gap-1.5" @submit.prevent="name.trim() && $store.gw.invite(name).then(() => { name = '' })">
+                  <input x-model="name" class="field min-w-0 flex-1 py-1 text-xs" placeholder="Their name" aria-label="Who the invite is for" maxlength="80" />
+                  <button type="submit" class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!name.trim()">Invite</button>
+                </form>
+                <template x-if="$store.gw.invited">
+                  <div id="invite" class="mt-2 rounded-md border border-line bg-shade/20 p-2">
+                    <div class="text-[11px] text-fog/70">For <span class="font-medium text-fog" x-text="$store.gw.invited.name"></span>: in the app, long press the grndwrk button, Join with an invite, then scan this or paste the link. Their phone then shows four digits: you allow it here when they match. Works once, for 7 days.</div>
+                    <svg class="mx-auto mt-2 size-40 rounded bg-white p-2" :view-box.camel="'0 0 ' + $store.gw.invited.qr.split('|')[0] + ' ' + $store.gw.invited.qr.split('|')[0]" shape-rendering="crispEdges" role="img" :aria-label="'QR code with the invite for ' + $store.gw.invited.name"><path fill="#000" :d="$store.gw.invited.qr.split('|')[1]" /></svg>
+                    <div class="mt-2 flex gap-1.5">
+                      <button class="flex-1 rounded-md bg-tint/10 px-2 py-1 text-xs text-fog hover:bg-tint/15" @click="$store.gw.copyText($store.gw.invited.link)">Copy link</button>
+                      <button class="rounded-md px-2 py-1 text-xs text-fog/60 hover:bg-tint/8 hover:text-fog" @click="$store.gw.invited = null">Done</button>
+                    </div>
+                  </div>
+                </template>
+                <p class="mt-2 text-[11px] leading-snug text-fog/45">Their comments wait at the relay until a grndwrk on the team runs, and say who sent them.</p>
+              </div>
+            </template>
+          </div>
         </div>
       </div>
     </nav>
@@ -526,8 +652,7 @@
     >
       <div class="flex items-start justify-between gap-3 px-4 pb-3 pt-4">
         <div class="min-w-0">
-          <div class="truncate text-[15px] font-semibold text-fog" x-text="$store.gw.project.name || 'grndwrk'"></div>
-          <div class="mt-1 flex items-center gap-1.5 text-xs text-fog/55">
+          <div class="flex items-center gap-1.5 text-xs text-fog/55">
             <span class="size-1.5 rounded-full" :class="$store.gw.live ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'"></span>
             <span x-text="$store.gw.live ? 'Live' : 'Offline, start grndwrk in your terminal'"></span>
             <span class="text-fog/30">·</span>
@@ -1048,7 +1173,7 @@
                         <input
                           id="screen-new-persona"
                           class="field w-44 py-0.5 text-[12px]"
-                          placeholder="New persona, like Receptionist"
+                          placeholder="New persona, like Clinic coordinator"
                           x-model="$store.gw.screenPersona"
                           x-init="$nextTick(() => $el.focus())"
                           @keydown.enter.prevent="$store.gw.addPersonaFromScreen()"
@@ -1127,6 +1252,7 @@
                     <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-tint/5 hover:text-fog" @click="$store.gw.goToNode(n.id)">
                       <span class="size-1.5 shrink-0 rounded-full" :class="n.status === 'settled' ? 'bg-emerald-400' : 'bg-question'"></span>
                       <span class="truncate" x-text="n.title"></span>
+                      <span x-show="$store.gw.authorOf(n)" class="ml-auto shrink-0 text-[11px] font-medium text-fog/45" :title="$store.gw.authorLine(n)" x-text="$store.gw.initials($store.gw.authorOf(n))"></span>
                     </button>
                   </template>
                 </div>
@@ -1160,26 +1286,60 @@
                             <template x-for="q in $store.gw.entryQuestions($store.gw.screen.body, i)" :key="q.index">
                               <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
                                 <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
-                                <div x-show="$store.gw.entryShots(q.question).length" class="mt-2 flex gap-2">
-                                  <template x-for="shot in $store.gw.entryShots(q.question)" :key="shot.url">
-                                    <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryShots(q.question))">
+                                <div x-show="$store.gw.entryPictures(q.question).length" class="mt-2 flex gap-2">
+                                  <template x-for="shot in $store.gw.entryPictures(q.question)" :key="shot.url">
+                                    <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryPictures(q.question))">
                                       <img :src="shot.url" alt="" class="h-40 w-auto rounded-md border border-line object-cover object-top hover:border-tint/30" />
                                     </button>
                                   </template>
                                 </div>
-                                <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
-                                  <template x-for="(o, j) in q.options" :key="j">
-                                    <button
-                                      x-show="q.open"
-                                      class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
-                                      title="Answer this question with it"
-                                      @click="$store.gw.answerScreenQuestion(q, o)"
-                                      x-text="o"
-                                    ></button>
+                                <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }">
+                                  <div x-show="q.options.length" class="flex flex-col gap-1">
+                                    <template x-for="(o, j) in q.options" :key="j">
+                                      <button
+                                        type="button"
+                                        role="checkbox"
+                                        :aria-checked="picked.includes(o)"
+                                        class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs"
+                                        :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
+                                        title="Pick it; pick more than one if they all hold"
+                                        @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                      >
+                                        <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
+                                        <span x-text="o"></span>
+                                      </button>
+                                    </template>
+                                  </div>
+                                  <form class="mt-1.5 flex items-end gap-2" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerScreenQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                                    <textarea
+                                      @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.screen.id, f).then((md) => { words = $store.gw.withPictures(words, md) }) }"
+                                      @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.screen.id, [...$event.dataTransfer.files]).then((md) => { words = $store.gw.withPictures(words, md) })"
+                                      rows="1"
+                                      x-model="words"
+                                      @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                      :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
+                                      class="field min-h-[30px] flex-1 resize-y text-xs"
+                                    ></textarea>
+                                    <label class="grid h-[30px] w-[30px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
+                                      <svg class="size-4"><use href="#i-photo" /></svg>
+                                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.screen.id, [...$event.target.files]).then((md) => { words = $store.gw.withPictures(words, md) }); $event.target.value = ''" />
+                                    </label>
+                                    <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
+                                  </form>
+                                  <div x-show="$store.gw.entryPictures(words ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                                    <template x-for="pic in $store.gw.entryPictures(words ?? '')" :key="pic.url">
+                                      <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
+                                    </template>
+                                  </div>
+                                </div>
+                                <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-xs text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer ?? '')"></p>
+                                <div x-show="$store.gw.entryPictures(q.answer ?? '').length" class="mt-2 flex flex-wrap gap-2">
+                                  <template x-for="pic in $store.gw.entryPictures(q.answer ?? '')" :key="pic.url">
+                                    <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer ?? ''))">
+                                      <img :src="pic.url" alt="" class="h-14 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                                    </button>
                                   </template>
                                 </div>
-                                <button x-show="q.open" class="mt-1.5 text-[11px] text-fog/55 hover:text-fog" @click="$store.gw.replyToQuestion(q, 'screen-reply')">Answer in words</button>
-                                <p x-show="!q.open && q.answer" class="mt-1 text-xs text-fog/50" x-text="'Answered: ' + (q.answer ?? '')"></p>
                               </div>
                             </template>
                           </div>
@@ -1187,28 +1347,44 @@
                         <template x-if="e.who !== 'claude-asks'">
                           <div>
                             <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
-                            <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text"></p>
+                            <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
+                            <div x-show="$store.gw.entryPictures(e.text).length" class="mt-2 flex flex-wrap gap-2">
+                              <template x-for="pic in $store.gw.entryPictures(e.text)" :key="pic.url">
+                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(e.text))">
+                                  <img :src="pic.url" alt="" class="h-24 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                                </button>
+                              </template>
+                            </div>
                           </div>
                         </template>
                       </li>
                     </template>
                   </ol>
                   <form class="mt-2" @submit.prevent="$store.gw.sendScreenReply()">
-                    <div x-show="$store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo)" class="mb-1.5 flex items-center gap-2 rounded-md bg-question/10 px-2 py-1 text-[11px] text-question">
-                      <span class="min-w-0 flex-1 truncate" x-text="'Answering: ' + ($store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo)?.question.split('\n').find((l) => l.trim()) ?? '')"></span>
-                      <button class="shrink-0 hover:text-fog" title="Answer all of them instead" @click.prevent="$store.gw.screenReplyTo = null">×</button>
-                    </div>
                     <textarea
+                      @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.screen.id, f).then((md) => { $store.gw.screenReply = $store.gw.withPictures($store.gw.screenReply, md) }) }"
+                      @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.screen.id, [...$event.dataTransfer.files]).then((md) => { $store.gw.screenReply = $store.gw.withPictures($store.gw.screenReply, md) })"
                       id="screen-reply"
                       rows="2"
                       x-model="$store.gw.screenReply"
                       @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendScreenReply() }"
-                      :placeholder="$store.gw.replyQuestion($store.gw.screen.body, $store.gw.screenReplyTo) ? 'Your answer to this question' : $store.gw.screenThread.some((e) => e.open) ? 'Your answer' : 'Add a comment for the next /sitemap run'"
+                      :placeholder="$store.gw.screenThread.some((e) => e.open) ? 'A remark: it answers no question, answer those above' : 'Add a comment for the next /sitemap run'"
                       class="field w-full resize-none"
                     ></textarea>
+                    <div x-show="$store.gw.entryPictures($store.gw.screenReply ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                      <template x-for="pic in $store.gw.entryPictures($store.gw.screenReply ?? '')" :key="pic.url">
+                        <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
+                      </template>
+                    </div>
                     <div class="mt-1.5 flex items-center justify-between gap-2">
                       <span class="min-w-0 text-[11px]" :class="$store.gw.screenStatus.startsWith('Not saved') ? 'text-rose-300' : 'text-fog/45'" x-text="$store.gw.screenStatus || 'Enter sends, Shift Enter for a new line'"></span>
-                      <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.screenReply.trim() || $store.gw.sending">Send</button>
+                      <div class="flex shrink-0 items-center gap-1">
+                        <label class="grid h-[26px] w-[26px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
+                          <svg class="size-4"><use href="#i-photo" /></svg>
+                          <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.screen.id, [...$event.target.files]).then((md) => { $store.gw.screenReply = $store.gw.withPictures($store.gw.screenReply, md) }); $event.target.value = ''" />
+                        </label>
+                        <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.screenReply.trim() || $store.gw.sending">Send</button>
+                      </div>
                     </div>
                   </form>
                 </div>
@@ -1259,7 +1435,7 @@
           <li x-show="!$store.gw.personas.length" class="px-2 py-2 text-xs text-fog/45">No personas yet. Add one below, or run /personas in your agent.</li>
         </ul>
         <form class="border-t border-line p-3" @submit.prevent="$store.gw.addPersona()">
-          <input id="new-persona" class="field w-full" placeholder="New persona, like Receptionist" x-model="$store.gw.newPersona" />
+          <input id="new-persona" class="field w-full" placeholder="New persona, like Clinic coordinator" x-model="$store.gw.newPersona" />
         </form>
       </aside>
       <section class="min-w-0 flex-1 overflow-y-auto">
@@ -1396,7 +1572,7 @@
                     <span class="label">Kind of customer</span>
                     <select class="field w-full" @change="$store.gw.editSegment(sg.id, { type: $event.target.value })">
                       <option value="">Not said</option>
-                      <template x-for="t in $store.gw.segmentTypes" :key="t"><option :value="t" :selected="t === sg.type" x-text="t[0].toUpperCase() + t.slice(1)"></option></template>
+                      <template x-for="t in $store.gw.segmentTypes.includes(sg.type) || !sg.type ? $store.gw.segmentTypes : [...$store.gw.segmentTypes, sg.type]" :key="t"><option :value="t" :selected="t === sg.type" x-text="t[0].toUpperCase() + t.slice(1)"></option></template>
                     </select>
                   </label>
                   <label class="block">
@@ -1413,7 +1589,7 @@
                   </div>
                   <label class="block">
                     <span class="label">Who is admin</span>
-                    <input class="field w-full" :value="sg.admins.join(', ')" placeholder="Reception, Office manager" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.editSegment(sg.id, { admins: $store.gw.words($event.target.value) })" />
+                    <input class="field w-full" :value="sg.admins.join(', ')" placeholder="Practice manager, Head nurse" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.editSegment(sg.id, { admins: $store.gw.words($event.target.value) })" />
                   </label>
                 </div>
                 <div x-show="$store.gw.personaList.some((p) => p.segments[sg.id] && p.segments[sg.id].how !== 'none')" class="mt-3 flex flex-wrap gap-1.5 text-xs">
@@ -1492,7 +1668,7 @@
                 <div>
                   <span class="label">Employed by</span>
                   <div class="flex flex-wrap gap-1">
-                    <template x-for="e in $store.gw.employers" :key="e">
+                    <template x-for="e in [...new Set([...$store.gw.employers, ...$store.gw.persona.employer])]" :key="e">
                       <button class="chip" :class="$store.gw.persona.employer.includes(e) && 'chip-on'" @click="$store.gw.togglePersona('employer', e)" x-text="$store.gw.valueLabel(e)"></button>
                     </template>
                   </div>
@@ -1515,7 +1691,7 @@
                     </select>
                   </label>
                 </template>
-                <template x-for="f in [['lives_in', 'Lives in', 'Bookings, Users'], ['visits', 'Visits', 'Insights'], ['themes', 'Asks about', 'hardware, login, scope']]" :key="f[0]">
+                <template x-for="f in [['lives_in', 'Lives in', 'Bookings, Users'], ['visits', 'Visits', 'Insights'], ['themes', 'Asks about', 'scheduling, login, payments']]" :key="f[0]">
                   <label class="block">
                     <span class="label" x-text="f[1]"></span>
                     <input class="field w-full" :placeholder="f[2]" :value="$store.gw.persona[f[0]].join(', ')" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.savePersonaList(f[0], $event.target.value)" />
@@ -1635,13 +1811,60 @@
                         <template x-for="q in $store.gw.entryQuestions($store.gw.persona.body, i)" :key="q.index">
                           <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
                             <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
-                            <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
-                              <template x-for="(o, j) in q.options" :key="j">
-                                <button x-show="q.open" class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Answer this question with it" @click="$store.gw.answerPersonaQuestion(q, o)" x-text="o"></button>
+                            <div x-show="$store.gw.entryPictures(q.question).length" class="mt-2 flex flex-wrap gap-2">
+                              <template x-for="pic in $store.gw.entryPictures(q.question)" :key="pic.url">
+                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.question))">
+                                  <img :src="pic.url" alt="" class="h-24 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                                </button>
                               </template>
                             </div>
-                            <button x-show="q.open" class="mt-1.5 text-[11px] text-fog/55 hover:text-fog" @click="$store.gw.replyToQuestion(q, 'persona-reply')">Answer in words</button>
-                            <p x-show="!q.open && q.answer" class="mt-1 text-xs text-fog/50" x-text="'Answered: ' + (q.answer ?? '')"></p>
+                            <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }">
+                              <div x-show="q.options.length" class="flex flex-col gap-1">
+                                <template x-for="(o, j) in q.options" :key="j">
+                                  <button
+                                    type="button"
+                                    role="checkbox"
+                                    :aria-checked="picked.includes(o)"
+                                    class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs"
+                                    :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
+                                    title="Pick it; pick more than one if they all hold"
+                                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                  >
+                                    <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
+                                    <span x-text="o"></span>
+                                  </button>
+                                </template>
+                              </div>
+                              <form class="mt-1.5 flex items-end gap-2" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerPersonaQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                                <textarea
+                                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.persona.id, f).then((md) => { words = $store.gw.withPictures(words, md) }) }"
+                                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.persona.id, [...$event.dataTransfer.files]).then((md) => { words = $store.gw.withPictures(words, md) })"
+                                  rows="1"
+                                  x-model="words"
+                                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                  :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
+                                  class="field min-h-[30px] flex-1 resize-y text-xs"
+                                ></textarea>
+                                <label class="grid h-[30px] w-[30px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
+                                  <svg class="size-4"><use href="#i-photo" /></svg>
+                                  <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.persona.id, [...$event.target.files]).then((md) => { words = $store.gw.withPictures(words, md) }); $event.target.value = ''" />
+                                </label>
+                                <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
+                              </form>
+                              <div x-show="$store.gw.entryPictures(words ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                                <template x-for="pic in $store.gw.entryPictures(words ?? '')" :key="pic.url">
+                                  <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
+                                </template>
+                              </div>
+                            </div>
+                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-xs text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer ?? '')"></p>
+                            <div x-show="$store.gw.entryPictures(q.answer ?? '').length" class="mt-2 flex flex-wrap gap-2">
+                              <template x-for="pic in $store.gw.entryPictures(q.answer ?? '')" :key="pic.url">
+                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer ?? ''))">
+                                  <img :src="pic.url" alt="" class="h-14 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                                </button>
+                              </template>
+                            </div>
                           </div>
                         </template>
                       </div>
@@ -1649,28 +1872,44 @@
                     <template x-if="e.who !== 'claude-asks'">
                       <div>
                         <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
-                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text"></p>
+                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
+                        <div x-show="$store.gw.entryPictures(e.text).length" class="mt-2 flex flex-wrap gap-2">
+                          <template x-for="pic in $store.gw.entryPictures(e.text)" :key="pic.url">
+                            <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(e.text))">
+                              <img :src="pic.url" alt="" class="h-24 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                            </button>
+                          </template>
+                        </div>
                       </div>
                     </template>
                   </li>
                 </template>
               </ol>
               <form class="mt-2" @submit.prevent="$store.gw.sendPersonaReply()" x-show="!$store.gw.persona.error">
-                <div x-show="$store.gw.replyQuestion($store.gw.persona.body, $store.gw.personaReplyTo)" class="mb-1.5 flex items-center gap-2 rounded-md bg-question/10 px-2 py-1 text-[11px] text-question">
-                  <span class="min-w-0 flex-1 truncate" x-text="'Answering: ' + ($store.gw.replyQuestion($store.gw.persona.body, $store.gw.personaReplyTo)?.question.split('\n').find((l) => l.trim()) ?? '')"></span>
-                  <button class="shrink-0 hover:text-fog" title="Answer all of them instead" @click.prevent="$store.gw.personaReplyTo = null">×</button>
-                </div>
                 <textarea
+                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.persona.id, f).then((md) => { $store.gw.personaReply = $store.gw.withPictures($store.gw.personaReply, md) }) }"
+                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.persona.id, [...$event.dataTransfer.files]).then((md) => { $store.gw.personaReply = $store.gw.withPictures($store.gw.personaReply, md) })"
                   id="persona-reply"
                   rows="2"
                   x-model="$store.gw.personaReply"
                   @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendPersonaReply() }"
-                  :placeholder="$store.gw.replyQuestion($store.gw.persona.body, $store.gw.personaReplyTo) ? 'Your answer to this question' : $store.gw.personaThread.some((e) => e.open) ? 'Your answer' : 'Add a comment for the next /personas run'"
+                  :placeholder="$store.gw.personaThread.some((e) => e.open) ? 'A remark: it answers no question, answer those above' : 'Add a comment for the next /personas run'"
                   class="field w-full resize-none"
                 ></textarea>
+                <div x-show="$store.gw.entryPictures($store.gw.personaReply ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                  <template x-for="pic in $store.gw.entryPictures($store.gw.personaReply ?? '')" :key="pic.url">
+                    <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
+                  </template>
+                </div>
                 <div class="mt-1.5 flex items-center justify-between gap-2">
                   <span class="min-w-0 text-[11px]" :class="$store.gw.personaStatus.startsWith('Not saved') ? 'text-rose-300' : 'text-fog/45'" x-text="$store.gw.personaStatus || 'Enter sends, Shift Enter for a new line'"></span>
-                  <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.personaReply.trim() || $store.gw.sending">Send</button>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <label class="grid h-[26px] w-[26px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
+                      <svg class="size-4"><use href="#i-photo" /></svg>
+                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.persona.id, [...$event.target.files]).then((md) => { $store.gw.personaReply = $store.gw.withPictures($store.gw.personaReply, md) }); $event.target.value = ''" />
+                    </label>
+                    <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.personaReply.trim() || $store.gw.sending">Send</button>
+                  </div>
                 </div>
               </form>
             </div>
@@ -1798,6 +2037,44 @@
           <h1 class="text-xl font-semibold text-fog">Status</h1>
           <span class="text-xs text-fog/40" x-show="$store.gw.readiness?.report" x-text="'Checked ' + ($store.gw.readiness?.report?.checked ?? '')"></span>
         </div>
+
+        <!-- What to focus on next, above everything: written by /readiness, kept until done or Not now -->
+        <section
+          x-show="$store.gw.readiness?.focus?.length"
+          id="focus-box"
+          class="mt-6 rounded-lg border border-accent/40 bg-accent/5 p-4"
+          x-data="{ showAside: false }"
+        >
+          <h2 class="text-[15px] font-semibold text-fog">Focus on this next</h2>
+          <p class="mt-1 text-fog/60" x-text="'What matters most for this project now, the most important first. From /readiness' + ($store.gw.readiness?.focusChecked ? ' on ' + $store.gw.readiness.focusChecked : '') + '. Each stays until it is done or you say Not now.'"></p>
+          <ol class="mt-3 space-y-2">
+            <template x-for="(f, i) in $store.gw.focusItems" :key="f.id">
+              <li class="flex items-start gap-3 rounded-md border border-line bg-panel px-3 py-2.5">
+                <span class="w-4 shrink-0 text-right tabular-nums text-fog/40" x-text="i + 1"></span>
+                <div class="min-w-0 flex-1">
+                  <p class="font-medium text-fog" x-text="f.title"></p>
+                  <p x-show="f.why" class="mt-0.5 text-fog/65" x-text="f.why"></p>
+                </div>
+                <div class="flex shrink-0 items-center gap-1">
+                  <button x-show="f.prompt" class="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90" title="See the instruction for your agent, change it if you like, and copy it" @click="$store.gw.showPrompt(f.title, f.prompt)">Copy prompt</button>
+                  <button class="rounded-md px-2.5 py-1 text-xs text-fog/60 hover:bg-tint/5 hover:text-fog" title="Set it aside: it leaves this box until you bring it back" @click="$store.gw.focusLater(f.id, true)">Not now</button>
+                </div>
+              </li>
+            </template>
+          </ol>
+          <p x-show="!$store.gw.focusItems.length" class="mt-3 text-fog/55">Everything here is set aside for now.</p>
+          <div x-show="$store.gw.focusSetAside.length" class="mt-2.5 text-xs">
+            <button class="text-fog/55 hover:text-fog" @click="showAside = !showAside" x-text="(showAside ? 'Hide' : 'Show') + ' ' + $store.gw.focusSetAside.length + ' set aside'"></button>
+            <ul x-show="showAside" class="mt-1.5 space-y-1">
+              <template x-for="f in $store.gw.focusSetAside" :key="f.id">
+                <li class="flex items-center gap-2 text-fog/55">
+                  <span class="min-w-0 flex-1 truncate" x-text="f.title + ' · since ' + f.later"></span>
+                  <button class="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-accent/10" @click="$store.gw.focusLater(f.id, false)">Bring back</button>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </section>
 
         <!-- What blocks building, first: the red number on the rail counts these -->
         <section x-show="$store.gw.blockingCount" id="blocking" class="mt-6 rounded-lg border border-rose-400/40 bg-rose-400/5 p-4">
@@ -2286,6 +2563,13 @@
               </div>
               <h2 class="mt-2 text-[15px] font-medium leading-snug text-fog" x-text="item.kind === 'guess' ? item.about : item.question || item.about"></h2>
               <p x-show="item.kind === 'guess' && item.question" class="mt-1.5 text-fog/70" x-text="item.question"></p>
+              <div x-show="$store.gw.entryPictures(item.text ?? '').length" class="mt-2 flex flex-wrap gap-2">
+                <template x-for="pic in $store.gw.entryPictures(item.text ?? '')" :key="pic.url">
+                  <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(item.text ?? ''))">
+                    <img :src="pic.url" alt="" class="h-24 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                  </button>
+                </template>
+              </div>
               <p x-show="item.kind === 'guess' && $store.gw.notesOf(item.id)" class="mt-1.5 line-clamp-3 whitespace-pre-line text-xs text-fog/55" x-text="$store.gw.notesOf(item.id)"></p>
               <div x-show="$store.gw.entryShots(item.text).length" class="mt-3 flex gap-2">
                 <template x-for="shot in $store.gw.entryShots(item.text)" :key="shot.url">
@@ -2316,6 +2600,13 @@
                       <div class="mb-1.5">
                         <span class="text-[11px]" :class="e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="(e.who === 'you' ? 'You' : 'Agent') + ' · ' + e.date"></span>
                         <p class="whitespace-pre-wrap text-fog/75" x-text="$store.gw.entryWords(e.text)"></p>
+                        <div x-show="$store.gw.entryPictures(e.text).length" class="mt-2 flex flex-wrap gap-2">
+                          <template x-for="pic in $store.gw.entryPictures(e.text)" :key="pic.url">
+                            <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(e.text))">
+                              <img :src="pic.url" alt="" class="h-24 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                            </button>
+                          </template>
+                        </div>
                       </div>
                     </template>
                   </div>
@@ -2325,21 +2616,45 @@
                   <p x-show="!d.notesHtml && !d.earlier.length && !d.purpose && !d.links.length" class="text-fog/45">Nothing more is written about it yet.</p>
                 </div>
               </template>
-              <div x-show="item.options.length" class="mt-3 flex flex-wrap gap-1.5">
+              <div x-data="{ picked: [] }">
+              <div x-show="item.options.length" class="mt-3 flex flex-col gap-1">
                 <template x-for="(o, j) in item.options" :key="j">
-                  <button class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10" title="Answer with this" :disabled="$store.gw.inboxSending === item.key" @click="$store.gw.answerInbox(item, o)" x-text="o"></button>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    :aria-checked="picked.includes(o)"
+                    class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs"
+                    :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
+                    title="Pick it; pick more than one if they all hold"
+                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                  >
+                    <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
+                    <span x-text="o"></span>
+                  </button>
                 </template>
               </div>
-              <form class="mt-3 flex items-end gap-2" @submit.prevent="$store.gw.answerInbox(item)">
+              <form class="mt-2 flex items-end gap-2" @submit.prevent="$store.gw.answerInbox(item, $store.gw.answerText(item.options, picked, $store.gw.inboxDrafts[item.key] ?? '')).then(() => (picked = []))">
                 <textarea
+                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures(item.id, f).then((md) => { $store.gw.inboxDrafts[item.key] = $store.gw.withPictures($store.gw.inboxDrafts[item.key], md) }) }"
+                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures(item.id, [...$event.dataTransfer.files]).then((md) => { $store.gw.inboxDrafts[item.key] = $store.gw.withPictures($store.gw.inboxDrafts[item.key], md) })"
                   rows="1"
                   x-model="$store.gw.inboxDrafts[item.key]"
                   @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerInbox(item) }"
-                  :placeholder="item.kind === 'guess' ? 'Not quite: ...' : item.options.length ? 'Or write your own' : 'A sentence is enough'"
+                  :placeholder="item.kind === 'guess' ? 'Not quite: ...' : item.options.length ? 'Your own answer, alone or with what you picked' : 'A sentence is enough'"
                   class="field min-h-[34px] flex-1 resize-y"
                 ></textarea>
-                <button type="submit" class="h-[34px] rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!($store.gw.inboxDrafts[item.key] ?? '').trim() || $store.gw.inboxSending === item.key">Answer</button>
+                <label class="grid h-[34px] w-[34px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
+                  <svg class="size-4"><use href="#i-photo" /></svg>
+                  <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures(item.id, [...$event.target.files]).then((md) => { $store.gw.inboxDrafts[item.key] = $store.gw.withPictures($store.gw.inboxDrafts[item.key], md) }); $event.target.value = ''" />
+                </label>
+                <button type="submit" class="h-[34px] rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="(!picked.length && !($store.gw.inboxDrafts[item.key] ?? '').trim()) || $store.gw.inboxSending === item.key">Answer</button>
               </form>
+              <div x-show="$store.gw.entryPictures($store.gw.inboxDrafts[item.key] ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                <template x-for="pic in $store.gw.entryPictures($store.gw.inboxDrafts[item.key] ?? '')" :key="pic.url">
+                  <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
+                </template>
+              </div>
+              </div>
               <div class="mt-2 flex items-center gap-3 text-xs">
                 <button class="text-accent hover:underline" @click="$store.gw.viewInMap(item)" x-text="item.kind === 'screen' ? 'View in the sitemap' : item.kind === 'persona' ? 'View in Personas' : 'View on the map'"></button>
                 <span class="flex-1"></span>
@@ -2754,45 +3069,131 @@
                         <template x-for="q in $store.gw.entryQuestions($store.gw.draft.body, i)" :key="q.index">
                           <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
                             <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
-                            <div x-show="q.options.length" class="mt-2 flex flex-col gap-1">
-                              <template x-for="(o, j) in q.options" :key="j">
-                                <button
-                                  x-show="q.open"
-                                  class="rounded-md border border-line bg-shade/20 px-2.5 py-1.5 text-left text-xs text-fog/85 hover:border-accent/60 hover:bg-accent/10"
-                                  title="Answer this question with it"
-                                  @click="$store.gw.answerQuestion(q, o)"
-                                  x-text="o"
-                                ></button>
+                            <div x-show="$store.gw.entryPictures(q.question).length" class="mt-2 flex flex-wrap gap-2">
+                              <template x-for="pic in $store.gw.entryPictures(q.question)" :key="pic.url">
+                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.question))">
+                                  <img :src="pic.url" alt="" class="h-24 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                                </button>
                               </template>
                             </div>
-                            <button x-show="q.open" class="mt-1.5 text-[11px] text-fog/55 hover:text-fog" @click="$store.gw.replyToQuestion(q, 'reply')">Answer in words</button>
-                            <p x-show="!q.open && q.answer" class="mt-1 text-xs text-fog/50" x-text="'Answered: ' + (q.answer ?? '')"></p>
+                            <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }">
+                              <div x-show="q.options.length" class="flex flex-col gap-1">
+                                <template x-for="(o, j) in q.options" :key="j">
+                                  <button
+                                    type="button"
+                                    role="checkbox"
+                                    :aria-checked="picked.includes(o)"
+                                    class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs"
+                                    :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
+                                    title="Pick it; pick more than one if they all hold"
+                                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                  >
+                                    <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
+                                    <span x-text="o"></span>
+                                  </button>
+                                </template>
+                              </div>
+                              <form class="mt-1.5 flex items-end gap-2" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                                <textarea
+                                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.selectedId, f).then((md) => { words = $store.gw.withPictures(words, md) }) }"
+                                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.selectedId, [...$event.dataTransfer.files]).then((md) => { words = $store.gw.withPictures(words, md) })"
+                                  rows="1"
+                                  x-model="words"
+                                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                  :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
+                                  class="field min-h-[30px] flex-1 resize-y text-xs"
+                                ></textarea>
+                                <label class="grid h-[30px] w-[30px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
+                                  <svg class="size-4"><use href="#i-photo" /></svg>
+                                  <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.selectedId, [...$event.target.files]).then((md) => { words = $store.gw.withPictures(words, md) }); $event.target.value = ''" />
+                                </label>
+                                <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
+                              </form>
+                              <div x-show="$store.gw.entryPictures(words ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                                <template x-for="pic in $store.gw.entryPictures(words ?? '')" :key="pic.url">
+                                  <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
+                                </template>
+                              </div>
+                            </div>
+                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-xs text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer ?? '')"></p>
+                            <div x-show="$store.gw.entryPictures(q.answer ?? '').length" class="mt-2 flex flex-wrap gap-2">
+                              <template x-for="pic in $store.gw.entryPictures(q.answer ?? '')" :key="pic.url">
+                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer ?? ''))">
+                                  <img :src="pic.url" alt="" class="h-14 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                                </button>
+                              </template>
+                            </div>
                           </div>
                         </template>
                       </div>
                     </template>
                     <template x-if="e.who !== 'claude-asks'">
-                      <div>
+                      <div x-data="{ get steps() { return e.who === 'claude' ? $store.gw.testSteps(e.text) : { fix: '', steps: [] } } }">
                         <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-[11px] text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
-                        <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text"></p>
+                        <p class="whitespace-pre-wrap text-fog/85" x-text="steps.steps.length ? steps.fix : $store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
+                        <!-- Claude's "To test:" steps as a section of their own: a checklist, then Works or Doesn't work -->
+                        <div x-show="steps.steps.length" class="test-steps mt-2.5 overflow-hidden rounded-md border" :class="$store.gw.testableEntry === i ? 'border-violet-400/40 bg-violet-400/[0.06]' : 'border-line bg-shade/20'" x-data="{ failing: false, note: '' }">
+                          <div class="flex items-center gap-1.5 border-b border-tint/8 px-2.5 py-1.5 text-[11px]">
+                            <svg class="size-3.5" :class="$store.gw.testableEntry === i ? 'text-violet-300' : 'text-fog/40'"><use href="#i-check" /></svg>
+                            <span class="font-medium" :class="$store.gw.testableEntry === i ? 'text-violet-200' : 'text-fog/60'">To test</span>
+                            <span class="ml-auto text-fog/45" x-show="$store.gw.testableEntry === i" x-text="steps.steps.filter((_, n) => $store.gw.stepMark(i, n) === 'ok').length + ' of ' + steps.steps.length + ' work'"></span>
+                          </div>
+                          <ol class="divide-y divide-tint/6">
+                            <template x-for="(step, n) in steps.steps" :key="n">
+                              <li class="flex items-start gap-2 px-2.5 py-2" :class="$store.gw.stepMark(i, n) === 'bad' && 'bg-rose-400/[0.07]'">
+                                <span class="mt-px grid size-[18px] shrink-0 place-items-center rounded-full text-[10.5px] font-semibold"
+                                  :class="{ ok: 'bg-emerald-400/20 text-emerald-300', bad: 'bg-rose-400/20 text-rose-300' }[$store.gw.stepMark(i, n)] ?? 'bg-tint/8 text-fog/60'"
+                                  x-text="{ ok: '✓', bad: '✕' }[$store.gw.stepMark(i, n)] ?? n + 1"></span>
+                                <span class="min-w-0 flex-1 text-[12.5px] leading-snug" :class="$store.gw.stepMark(i, n) === 'ok' ? 'text-fog/55' : 'text-fog/85'" x-text="step"></span>
+                                <span x-show="$store.gw.testableEntry === i" class="flex shrink-0 gap-0.5">
+                                  <button type="button" class="rounded px-1.5 py-0.5 text-[11px]" :class="$store.gw.stepMark(i, n) === 'ok' ? 'bg-emerald-400/20 text-emerald-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'ok'" title="This step works" @click="$store.gw.markStep(i, n, 'ok')">Works</button>
+                                  <button type="button" class="rounded px-1.5 py-0.5 text-[11px]" :class="$store.gw.stepMark(i, n) === 'bad' ? 'bg-rose-400/20 text-rose-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'bad'" title="This step does not work" @click="$store.gw.markStep(i, n, 'bad'); if ($store.gw.stepMark(i, n) === 'bad') { failing = true; note = $store.gw.failedStepsNote(i, steps.steps) }">No</button>
+                                </span>
+                              </li>
+                            </template>
+                          </ol>
+                          <div x-show="$store.gw.testableEntry === i" class="border-t border-tint/8 px-2.5 py-2">
+                            <div x-show="failing" class="mb-2">
+                              <textarea x-model="note" rows="3" class="field w-full resize-y text-xs" placeholder="What is still wrong? Your agent reads this next"
+                                x-effect="if (failing) $nextTick(() => { $el.focus(); $el.setSelectionRange($el.value.length, $el.value.length) })"></textarea>
+                            </div>
+                            <div class="flex items-center justify-end gap-1.5">
+                              <span x-show="!failing" class="mr-auto text-[11px] text-fog/45" x-text="steps.steps.every((_, n) => $store.gw.stepMark(i, n) === 'ok') ? 'Every step works.' : 'Go through the steps in the app.'"></span>
+                              <button type="button" x-show="!failing" class="rounded-md px-2.5 py-1 text-xs text-fog/70 hover:bg-tint/8 hover:text-fog" @click="failing = true; note = $store.gw.failedStepsNote(i, steps.steps)">Doesn't work</button>
+                              <button type="button" x-show="failing" class="rounded-md px-2.5 py-1 text-xs text-fog/70 hover:bg-tint/8 hover:text-fog" title="Back, without sending" @click="failing = false">Back</button>
+                              <button type="button" x-show="failing" class="rounded-md bg-rose-500/80 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-40" :disabled="!note.trim()" @click="$store.gw.testedHere(false, note)">Send back to the agent</button>
+                              <button type="button" x-show="!failing" class="rounded-md px-2.5 py-1 text-xs font-medium" :class="steps.steps.every((_, n) => $store.gw.stepMark(i, n) === 'ok') ? 'bg-emerald-500/85 text-white hover:bg-emerald-500' : 'bg-tint/10 text-fog/85 hover:bg-tint/15'" @click="$store.gw.testedHere(true)">Works, mark fixed</button>
+                            </div>
+                          </div>
+                        </div>
+                        <div x-show="$store.gw.entryPictures(e.text).length" class="mt-2 flex flex-wrap gap-2">
+                          <template x-for="pic in $store.gw.entryPictures(e.text)" :key="pic.url">
+                            <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(e.text))">
+                              <img :src="pic.url" alt="" class="h-24 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
+                            </button>
+                          </template>
+                        </div>
                       </div>
                     </template>
                   </li>
                 </template>
               </ol>
               <form class="mt-2" @submit.prevent="$store.gw.sendReply()">
-                <div x-show="$store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo)" class="mb-1.5 flex items-center gap-2 rounded-md bg-question/10 px-2 py-1 text-[11px] text-question">
-                  <span class="min-w-0 flex-1 truncate" x-text="'Answering: ' + ($store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo)?.question.split('\n').find((l) => l.trim()) ?? '')"></span>
-                  <button class="shrink-0 hover:text-fog" title="Answer all of them instead" @click.prevent="$store.gw.replyTo = null">×</button>
-                </div>
                 <textarea
+                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.selectedId, f).then((md) => { $store.gw.reply = $store.gw.withPictures($store.gw.reply, md) }) }"
+                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.selectedId, [...$event.dataTransfer.files]).then((md) => { $store.gw.reply = $store.gw.withPictures($store.gw.reply, md) })"
                   id="reply"
                   rows="2"
                   x-model="$store.gw.reply"
                   @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendReply() }"
-                  :placeholder="$store.gw.replyQuestion($store.gw.draft.body, $store.gw.replyTo) ? 'Your answer to this question' : $store.gw.openCount($store.gw.draft.body) > 1 ? 'Answer all of them at once, or pick one above' : $store.gw.openCount($store.gw.draft.body) ? 'Your answer' : 'Add a comment'"
+                  :placeholder="$store.gw.openCount($store.gw.draft.body) ? 'A remark: it answers no question, answer those above' : 'Add a comment'"
                   class="field w-full resize-none"
                 ></textarea>
+                <div x-show="$store.gw.entryPictures($store.gw.reply ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                  <template x-for="pic in $store.gw.entryPictures($store.gw.reply ?? '')" :key="pic.url">
+                    <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
+                  </template>
+                </div>
                 <div class="mt-1.5 flex items-center justify-between gap-2">
                   <span
                     id="reply-status"
@@ -2800,12 +3201,18 @@
                     :class="$store.gw.replyStatus.startsWith('Not saved') ? 'text-rose-300' : 'text-fog/45'"
                     x-text="$store.gw.replyStatus || 'Enter sends, Shift Enter for a new line'"
                   ></span>
-                  <button
+                  <div class="flex shrink-0 items-center gap-1">
+                    <label class="grid h-[26px] w-[26px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
+                      <svg class="size-4"><use href="#i-photo" /></svg>
+                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.selectedId, [...$event.target.files]).then((md) => { $store.gw.reply = $store.gw.withPictures($store.gw.reply, md) }); $event.target.value = ''" />
+                    </label>
+                    <button
                     id="reply-send"
                     type="submit"
                     class="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40"
                     :disabled="!$store.gw.reply.trim() || $store.gw.sending"
                   >Send</button>
+                  </div>
                 </div>
               </form>
             </div>
@@ -2826,7 +3233,7 @@
               </ul>
             </div>
 
-            <p class="text-xs text-fog/35" x-text="$store.gw.selected.id + ' · ' + $store.gw.selected.created"></p>
+            <p class="text-xs text-fog/35" x-text="$store.gw.selected.id + ' · ' + $store.gw.selected.created + ($store.gw.authorOf($store.gw.selected) && $store.gw.selected.extra.source !== 'app' ? ' · added by ' + $store.gw.authorOf($store.gw.selected) : '')"></p>
           </div>
         </template>
       </div>

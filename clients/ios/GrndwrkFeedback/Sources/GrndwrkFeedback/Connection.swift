@@ -23,6 +23,12 @@ enum Connection {
   private static var timer: Timer?
   private static var checking = false
 
+  /// No grndwrk on this Wi-Fi, but the team's relay takes comments: not offline, as far as the person is concerned.
+  static var viaRelay: Bool {
+    if case .offline = state { return Relay.usable }
+    return false
+  }
+
   static var project: String? {
     if case .connected(let project, _) = state { return project }
     return nil
@@ -57,7 +63,8 @@ enum Connection {
     checking = true
     defer { checking = false }
     guard let server = await Locator.url() else {
-      return set(.offline(Locator.problem ?? "No grndwrk found on this Wi-Fi."))
+      set(.offline(Locator.problem ?? "No grndwrk found on this Wi-Fi."))
+      return await throughRelay()
     }
     let host = server.host ?? ""
     let first: [String: Any]
@@ -66,7 +73,8 @@ enum Connection {
     case .failed(let why):
       gwLog.error("Hello to \(server.absoluteString, privacy: .public) failed: \(why, privacy: .public)")
       Locator.forget()
-      return set(.offline("grndwrk at \(host) did not answer: \(why)."))
+      set(.offline("grndwrk at \(host) did not answer: \(why)."))
+      return await throughRelay()
     }
     let project = first["project"] as? String ?? ""
     // This Mac, from the Simulator: nothing travels over the network, no key needed.
@@ -80,6 +88,14 @@ enum Connection {
     }
     Pairing.current = nil
     set(.needsCode(project: project, host: host))
+  }
+
+  /// Away from grndwrk's Wi-Fi, with the team's relay joined: what waits goes there, and the status of what went comes back.
+  private static func throughRelay() async {
+    guard Relay.joined != nil else { return }
+    await Relay.check()
+    await Outbox.flush()
+    await Outbox.sync()
   }
 
   /// The key this phone keeps for the project, if the grndwrk at this address proves it holds it too.

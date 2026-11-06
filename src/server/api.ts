@@ -1,8 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { firstAuthors, gitUser } from './authors.js'
+import { basename, dirname } from 'node:path'
 import { BadInput, NotFound, ReadOnly, type NodeStore } from '../store/nodes.js'
 import { readProject, KICKOFF_STEPS, writeFields, writeKickoff, writePages } from '../store/project.js'
 import { MAX_IMAGE_BYTES, readImage, removeFiles, saveImage } from '../store/files.js'
-import { markAnswered, readReadiness } from '../store/readiness.js'
+import { markAnswered, readReadiness, setFocusLater } from '../store/readiness.js'
 import { createStory, listStories, readDraft, readOutput, updateStory } from '../store/stories.js'
 import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
 import { createPersona, deletePersona, listPersonas, settleAudienceName, updatePersona } from '../store/personas.js'
@@ -17,6 +19,9 @@ import { noteTab, subscribe, type NodeSync } from './events.js'
 import type { Pairings } from './pairing.js'
 import type { Sites } from './sites.js'
 import { openTarget } from '../opener.js'
+import { testedInMap } from './feedback.js'
+import type { RelaySync } from '../relay/sync.js'
+import { ownRelay } from '../relay/config.js'
 
 interface Ctx {
   gwDir: string
@@ -28,6 +33,8 @@ interface Ctx {
   runtime?: { app?: string }
   /** Local sites asking to send comments from the Comment button they load. */
   sites?: Sites
+  /** This project's mailbox at the team's relay, when it has one. */
+  relay?: RelaySync
 }
 
 /** Handles /api/*. Returns false when the request is not an API route. */
@@ -43,7 +50,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     // an image content type without asking first, which we never allow.
     if (filesMatch && method === 'POST') {
       const id = decodeURIComponent(filesMatch[1])
-      await ctx.store.get(id)
+      // A thought, a screen or a persona: pictures in notes, and in thread replies and answers.
+      const known = (await ctx.store.get(id).then(() => true, () => false)) ||
+        (await listScreens(ctx.gwDir)).some((s) => s.id === id) ||
+        (await listPersonas(ctx.gwDir)).some((p) => p.id === id)
+      if (!known) throw new NotFound(id)
       const type = (req.headers['content-type'] ?? '').split(';')[0].trim()
       const data = await readRaw(req, MAX_IMAGE_BYTES)
       try {
@@ -54,6 +65,42 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
 
     if ((method === 'POST' || method === 'PATCH') && !isJson(req)) return send(res, 415, { error: 'Send JSON' })
+
+    // Colleagues through the relay: who has joined, open invites, and inviting someone by name.
+    if (url.pathname === '/api/relay' && method === 'GET') {
+      if (!ctx.relay) return send(res, 200, { connected: false, deployed: !!(await ownRelay()) })
+      return send(res, 200, { connected: true, ...(await ctx.relay.summary()) })
+    }
+    if (url.pathname === '/api/relay/invites' && method === 'POST') {
+      if (!ctx.relay) throw new BadInput('This project has no relay yet. Run grndwrk relay add, or relay join with a team link')
+      const { name } = (await readBody(req)) as { name?: unknown }
+      try {
+        return send(res, 201, await ctx.relay.invite(typeof name === 'string' ? name : ''))
+      } catch (err) {
+        throw new BadInput(err instanceof Error ? err.message : String(err))
+      }
+    }
+    const joinMatch = url.pathname.match(/^\/api\/relay\/joins\/([a-f0-9]{32})$/)
+    if (joinMatch && method === 'POST') {
+      if (!ctx.relay) throw new NotFound(joinMatch[1])
+      const { allow } = (await readBody(req)) as { allow?: unknown }
+      if (typeof allow !== 'boolean') throw new BadInput('Say whether to allow it: { allow }')
+      await ctx.relay.answerJoin(joinMatch[1], allow)
+      return send(res, 200, { connected: true, ...(await ctx.relay.summary()) })
+    }
+    const relayMatch = url.pathname.match(/^\/api\/relay\/(phones|invites)\/([a-f0-9]{32})$/)
+    if (relayMatch && method === 'DELETE') {
+      if (!ctx.relay) throw new NotFound(relayMatch[2])
+      await (relayMatch[1] === 'phones' ? ctx.relay.removePhone(relayMatch[2]) : ctx.relay.removeInvite(relayMatch[2]))
+      return send(res, 200, { connected: true, ...(await ctx.relay.summary()) })
+    }
+
+    const testedMatch = url.pathname.match(/^\/api\/nodes\/([^/]+)\/tested$/)
+    if (testedMatch && method === 'POST') {
+      const id = decodeURIComponent(testedMatch[1])
+      const state = await testedInMap(ctx.store, id, await readBody(req))
+      return send(res, 200, { state, node: await ctx.store.get(id) })
+    }
 
     // A map tab in the background, saying it is still open.
     if (url.pathname === '/api/tab' && method === 'POST') {
@@ -272,6 +319,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (url.pathname === '/api/readiness' && method === 'GET') {
       return send(res, 200, await readReadiness(ctx.gwDir))
     }
+    const focusMatch = url.pathname.match(/^\/api\/focus\/([a-z0-9_]{1,40})$/)
+    if (focusMatch && method === 'PATCH') {
+      const input = (await readBody(req)) as { later?: unknown }
+      if (typeof input.later !== 'boolean') throw new BadInput('later must be true or false')
+      await setFocusLater(ctx.gwDir, focusMatch[1], input.later)
+      return send(res, 200, await readReadiness(ctx.gwDir))
+    }
     const gapMatch = url.pathname.match(/^\/api\/gaps\/([A-Za-z0-9_-]{1,64})$/)
     if (gapMatch && method === 'PATCH') {
       const input = (await readBody(req)) as { answered_by?: unknown; enough?: unknown }
@@ -282,11 +336,27 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     if (url.pathname === '/api/project' && method === 'GET') {
       const { data, body, pages } = await readProject(ctx.gwDir)
-      return send(res, 200, { ...data, body, pages })
+      // folder: the project's folder name, shown when project.md has no name.
+      return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
     }
     if (url.pathname === '/api/project' && method === 'PATCH') {
-      const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown; start?: unknown; purpose?: unknown }
-      if (input.start !== undefined || input.purpose !== undefined) {
+      const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown; start?: unknown; purpose?: unknown; name?: unknown; initials?: unknown; color?: unknown }
+      if (input.name !== undefined || input.initials !== undefined || input.color !== undefined) {
+        // The project's badge on the rail: its name, up to three letters, and a color. Empty goes back to the default.
+        const fields: Record<string, string> = {}
+        const plain = (v: unknown, what: string, max: number) => {
+          if (typeof v !== 'string') throw new BadInput(`${what} must be text`)
+          return v.replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, max)
+        }
+        if (input.name !== undefined) fields.name = plain(input.name, 'name', 80)
+        if (input.initials !== undefined) fields.initials = [...plain(input.initials, 'initials', 12).replace(/\s/g, '')].slice(0, 3).join('')
+        if (input.color !== undefined) {
+          const color = plain(input.color, 'color', 7).toLowerCase()
+          if (color && !/^#[0-9a-f]{6}$/.test(color)) throw new BadInput('color must look like #3b82f6')
+          fields.color = color
+        }
+        await writeFields(ctx.gwDir, fields)
+      } else if (input.start !== undefined || input.purpose !== undefined) {
         const fields: Record<string, string> = {}
         if (input.start !== undefined) {
           if (input.start !== 'new' && input.start !== 'existing') throw new BadInput('start must be new or existing')
@@ -314,13 +384,18 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
         await writePages(ctx.gwDir, input.pages)
       }
       const { data, body, pages } = await readProject(ctx.gwDir)
-      return send(res, 200, { ...data, body, pages })
+      // folder: the project's folder name, shown when project.md has no name.
+      return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
+    }
+    if (url.pathname === '/api/authors' && method === 'GET') {
+      return send(res, 200, { me: await gitUser(ctx.gwDir), first: await firstAuthors(ctx.gwDir) })
     }
     if (url.pathname === '/api/nodes' && method === 'GET') {
       return send(res, 200, await ctx.store.list())
     }
     if (url.pathname === '/api/nodes' && method === 'POST') {
-      const change = await ctx.store.create(await readBody(req))
+      const me = await gitUser(ctx.gwDir)
+      const change = await ctx.store.create(await readBody(req), me ? { by: me } : {})
       await ctx.nodes.sync()
       return send(res, 201, change.upserted[0])
     }

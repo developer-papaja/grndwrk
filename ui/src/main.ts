@@ -37,7 +37,7 @@ Alpine.start()
 const plainIcon = document.querySelector<HTMLLinkElement>('link[rel=icon]')?.href ?? ''
 const waitingIcon = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="#0d99ff"/><circle cx="12.5" cy="3.5" r="3.5" fill="#f24822"/></svg>')}`
 Alpine.effect(() => {
-  const waiting = state.pairRequests.length + state.siteRequests.length
+  const waiting = state.pairRequests.length + state.siteRequests.length + (state.relay.waiting?.length ?? 0)
   const name = typeof state.project.name === 'string' && state.project.name ? state.project.name : ''
   const base = name ? `${name} · grndwrk` : 'grndwrk'
   document.title = waiting ? `(${waiting}) Allow to send comments · ${name || 'grndwrk'}` : base
@@ -45,16 +45,23 @@ Alpine.effect(() => {
   if (icon) icon.href = waiting ? waitingIcon : plainIcon
 })
 
-/** A comment to open once nodes are loaded: from a node:open event, or #write=<id> when grndwrk opened this tab. */
-let writeWhenLoaded = /^#write=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1] ?? ''
+/**
+ * A comment to open once nodes are loaded: from a node:open event, or
+ * #write=<id> (its title, to write it) or #reply=<id> (its reply box, to say
+ * what is still wrong after a reject) when grndwrk opened this tab.
+ */
+const opening = /^#(write|reply)=([A-Za-z0-9_-]+)$/.exec(location.hash)
+let writeWhenLoaded = opening?.[2] ?? ''
+let replyWhenLoaded = opening?.[1] === 'reply'
 if (writeWhenLoaded) history.replaceState(null, '', location.pathname + location.search)
 
 async function reload() {
   try {
     state.replaceAll(await fetchNodes())
     if (writeWhenLoaded && state.nodes[writeWhenLoaded]) {
-      state.writeComment(writeWhenLoaded)
+      state.writeComment(writeWhenLoaded, replyWhenLoaded)
       writeWhenLoaded = ''
+      replyWhenLoaded = false
     }
   } catch (err) {
     state.flash(err instanceof Error ? err.message : String(err))
@@ -74,6 +81,8 @@ const handlers = {
     void state.loadPersonas()
     void state.loadPairRequests()
     void state.loadSiteRequests()
+    void state.loadRelay()
+    void state.loadAuthors()
     void state.loadShots()
     void state.loadRuntime()
     if (state.view === 'docs') void state.loadDocs()
@@ -82,16 +91,27 @@ const handlers = {
     state.live = false
   },
   onEvent: (event: ServerEvent) => {
-    if (event.type === 'node:upsert') state.upsert(event.node)
+    if (event.type === 'node:upsert') {
+      state.upsert(event.node)
+      // Thoughts that came by git (a pull) have no `by:`: who committed them is read again shortly.
+      if (!state.authorOf(event.node)) {
+        clearTimeout(authorsTimer)
+        authorsTimer = setTimeout(() => void state.loadAuthors(), 5000)
+      }
+    }
     else if (event.type === 'node:delete') state.removeLocal(event.id)
     else if (event.type === 'node:open') {
       // The node may arrive a moment after the request to open it.
-      if (state.nodes[event.id]) state.writeComment(event.id)
-      else writeWhenLoaded = event.id
+      if (state.nodes[event.id]) state.writeComment(event.id, event.reply === true)
+      else {
+        writeWhenLoaded = event.id
+        replyWhenLoaded = event.reply === true
+      }
     }
     else if (event.type === 'pair:request') state.addPairRequest(event.request)
     else if (event.type === 'pair:done') state.dropPairRequest(event.id)
     else if (event.type === 'site:request') state.addSiteRequest(event.origin)
+    else if (event.type === 'relay:waiting') void state.loadRelay()
     else if (event.type === 'site:done') {
       state.dropSiteRequest(event.origin)
       void state.loadSiteRequests()
@@ -121,6 +141,7 @@ const handlers = {
  * A tab coming back into view reconnects and reloads everything.
  */
 let source: EventSource | null = null
+let authorsTimer: ReturnType<typeof setTimeout> | undefined
 function connect() {
   if (!source) source = subscribe(handlers)
 }

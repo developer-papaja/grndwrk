@@ -225,6 +225,23 @@ describe('comments a device can follow up on', () => {
     ])
   })
 
+  it('is tested in the map too: only a built fix, fixed or sent back with the note', async () => {
+    const { testedInMap } = await import('../src/server/feedback.js')
+    const node = await createFeedback(gw, store, parseFeedback({ text: 'The ring is too small', key }))
+    await store.update(node.id, { proposed: '2026-10-13' })
+    await expect(testedInMap(store, node.id, { works: true })).rejects.toThrow(/built fix/)
+    await store.update(node.id, { built: '2026-10-13' })
+    await expect(testedInMap(store, node.id, {})).rejects.toThrow(/works/)
+    expect(await testedInMap(store, node.id, { works: false, note: 'Step 2 (Tap Book): nothing opens' })).toBe('incoming')
+    const back = (await store.get(node.id))!
+    expect(back.extra.built).toBeUndefined()
+    expect(back.body).toContain('Tested on the Mac: rejected, not fixed yet.')
+    expect(back.body).toContain('> Step 2 (Tap Book): nothing opens')
+    await store.update(node.id, { proposed: '2026-10-14', built: '2026-10-14' })
+    expect(await testedInMap(store, node.id, { works: true })).toBe('fixed')
+    expect((await store.get(node.id))!.body).toContain('Tested on the Mac: approved. Marked fixed.')
+  })
+
   it('shows the proposed fix, and lets the key holder mark it fixed or send it back', async () => {
     const { feedbackStatus, testedOnDevice } = await import('../src/server/feedback.js')
     const { appendEntry, splitBody } = await import('../src/shared/thread.js')
@@ -247,6 +264,11 @@ describe('comments a device can follow up on', () => {
     expect(now.extra.proposed).toBeUndefined()
     expect(now.body).toContain('> **You** · 2026-10-13')
     expect(splitBody(now.body).entries.map((e) => e.who)).toEqual(['claude', 'you'])
+
+    // Rejected to write the note on the Mac: the entry says it follows.
+    await store.update(node.id, { proposed: '2026-10-14', built: '2026-10-14' })
+    expect(await testedOnDevice(store, { comments: [{ id: node.id, key }], works: false, on_mac: true })).toEqual([{ id: node.id, state: 'incoming' }])
+    expect((await store.get(node.id))!.body).toContain('rejected, not fixed yet. What is still wrong is written on the Mac, in the next entry.')
 
     // Built again, and it works: fixed today.
     await store.update(node.id, { proposed: '2026-10-14', built: '2026-10-14' })
@@ -647,7 +669,7 @@ describe('the Comment button loaded by the product itself', () => {
         await store.update(id, { built: '2026-10-14', body: appendEntry(node.body, 'claude', 'Fixed the sum.\n\nTo test:\n1. Add two items', '2026-10-14') } as never)
       }
       const list = (await (await tests('https://shop.test')).json()).tests
-      expect(list).toEqual([{ id: n.id, title: 'Cart total is wrong', text: 'Cart total is wrong', fix: 'Fixed the sum.', test: '1. Add two items', path: '/cart', selector: 'main > .total', label: 'Total' }])
+      expect(list).toEqual([{ id: n.id, title: 'Cart total is wrong', text: 'Cart total is wrong', fix: 'Fixed the sum.', test: '1. Add two items', steps: ['Add two items'], path: '/cart', selector: 'main > .total', label: 'Total' }])
       // A site not allowed gets nothing; an allowed one cannot touch another site's comment.
       expect((await tests('https://other.test')).status).toBe(403)
       expect((await post('tested', 'https://shop.test', { id: other.id, works: true })).status).toBe(404)

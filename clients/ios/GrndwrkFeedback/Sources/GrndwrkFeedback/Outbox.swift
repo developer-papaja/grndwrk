@@ -10,7 +10,16 @@ import UIKit
 /// that holds the key can ask about the comment or delete it.
 @MainActor
 enum Outbox {
-  enum Result { case sent(id: String, project: String?), rejected(Int), blockedByATS, unreachable, needsCode }
+  /// relayed: left at the team's relay, for a grndwrk on the team to fetch; its id in grndwrk comes later, with its status.
+  enum Result { case sent(id: String, project: String?), relayed, rejected(Int), blockedByATS, unreachable, needsCode }
+
+  /// Taken: by grndwrk, or by the relay for it.
+  static func taken(_ r: Result) -> Bool {
+    switch r {
+    case .sent, .relayed: return true
+    default: return false
+    }
+  }
 
   /// A comment as the list shows it.
   struct Item {
@@ -28,6 +37,8 @@ enum Outbox {
     var screen: String?
     /// How to test the fix, as Claude wrote it after "To test:".
     var test: String?
+    /// The same, one step each, from a grndwrk that sends them.
+    var steps: [String] = []
   }
 
   static let changed = Notification.Name("GrndwrkFeedback.outbox")
@@ -67,9 +78,11 @@ enum Outbox {
   }
 
   static func post(_ data: Data, to path: String = "api/feedback") async -> Result {
+    // No grndwrk on this Wi-Fi, and the phone joined the team's relay: it goes there.
+    if case .offline = Connection.state, Relay.joined != nil { return await viaRelay(data, path) }
     guard let server = await Locator.url() else {
       Connection.reached(false, why: Locator.problem)
-      return .unreachable
+      return Relay.joined != nil ? await viaRelay(data, path) : .unreachable
     }
     var request = URLRequest(url: server.appendingPathComponent(path))
     request.httpMethod = "POST"
@@ -111,6 +124,14 @@ enum Outbox {
     }
   }
 
+  private static func viaRelay(_ data: Data, _ path: String) async -> Result {
+    switch await Relay.send(path: path, body: data) {
+    case .left: return .relayed
+    case .notLetIn, .unreachable: return .unreachable
+    case .refused: return .rejected(400)
+    }
+  }
+
   // MARK: Sent
 
   private static var sentFile: URL { base.appendingPathComponent("sent.json") }
@@ -141,21 +162,24 @@ enum Outbox {
     return UIImage(data: bytes)
   }
 
-  static func remember(_ data: Data, id: String, project: String?) {
+  /// Through the relay the id in grndwrk is not known yet: the comment is kept by its key until its status names it.
+  static func remember(_ data: Data, id: String, project: String?, relayed: Bool = false) {
     guard var entry = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
     // The picture stays on the phone, beside the list, to show when testing a fix.
-    if let image = entry["image"] as? String, let comma = image.firstIndex(of: ","), let bytes = Data(base64Encoded: String(image[image.index(after: comma)...])), !id.isEmpty {
+    let name = id.isEmpty ? (entry["key"] as? String).map { "key-\($0)" } : id
+    if let image = entry["image"] as? String, let comma = image.firstIndex(of: ","), let bytes = Data(base64Encoded: String(image[image.index(after: comma)...])), let name {
       try? FileManager.default.createDirectory(at: pictures, withIntermediateDirectories: true)
-      try? bytes.write(to: pictures.appendingPathComponent("\(id).png"))
+      try? bytes.write(to: pictures.appendingPathComponent("\(name).png"))
     }
     entry["image"] = nil
-    entry["node"] = id
-    entry["project"] = project ?? Connection.project
+    entry["node"] = id.isEmpty ? nil : id
+    if relayed { entry["relay"] = true }
+    entry["project"] = relayed ? nil : project ?? Connection.project
     entry["sent"] = ISO8601DateFormatter().string(from: Date())
     let kept = Array((read(sentFile) + [entry]).suffix(200))
     write(kept, to: sentFile)
     // Pictures of comments that fell off the list go too.
-    let ids = Set(kept.compactMap { $0["node"] as? String })
+    let ids = Set(kept.compactMap { $0["node"] as? String } + kept.compactMap { ($0["key"] as? String).map { "key-\($0)" } })
     for file in (try? FileManager.default.contentsOfDirectory(at: pictures, includingPropertiesForKeys: nil)) ?? [] where !ids.contains(file.deletingPathExtension().lastPathComponent) {
       try? FileManager.default.removeItem(at: file)
     }
@@ -180,13 +204,15 @@ enum Outbox {
     // What it is called in grndwrk now, when the person edited it there.
     var text = c["title"] as? String ?? c["text"] as? String ?? ""
     if text.isEmpty, c["on_mac"] as? Bool == true { text = "Written on the Mac" }
-    return Item(file: file, node: node, text: text, detail: parts.joined(separator: " · "), written: written, state: c["state"] as? String, fix: c["fix"] as? String, screen: c["screen"] as? String, test: c["test"] as? String)
+    if node == nil, c["relay"] as? Bool == true, file == nil { parts.append("at the relay") }
+    return Item(file: file, node: node, text: text, detail: parts.joined(separator: " · "), written: written, state: c["state"] as? String, fix: c["fix"] as? String, screen: c["screen"] as? String, test: c["test"] as? String, steps: (c["steps"] as? [String]) ?? [])
   }
 
   /// Ask grndwrk what became of the sent comments: their title and status
   /// now. Comments deleted there are dropped here too. Only comments sent to
   /// the project that answers are asked about.
   static func sync() async {
+    await syncRelay()
     guard let project = Connection.project else { return }
     let list = read(sentFile)
     let ask = list.compactMap { c -> [String: String]? in
@@ -218,25 +244,57 @@ enum Outbox {
       c["state"] = a["state"]
       c["fix"] = a["fix"]
       c["test"] = a["test"]
+      c["steps"] = a["steps"]
       next.append(c)
     }
     write(next, to: sentFile)
+    tellNewFixes(next, before: before)
+  }
+
+  private static func tellNewFixes(_ next: [[String: Any]], before: Set<String>) {
     let ready = next.filter { $0["state"] as? String == "ready" }.compactMap { $0["node"] as? String }
     if !Set(ready).subtracting(before).isEmpty {
       NotificationCenter.default.post(name: newFixes, object: nil, userInfo: ["count": ready.count])
     }
   }
 
+  /// The status of comments sent through the relay, by their key: their id in grndwrk once a grndwrk on the team took them, and what became of them.
+  private static func syncRelay() async {
+    guard Relay.joined != nil, read(sentFile).contains(where: { $0["relay"] as? Bool == true }), let list = await Relay.statuses() else { return }
+    let now = Dictionary(list.compactMap { a in (a["key"] as? String).map { ($0, a) } }, uniquingKeysWith: { a, _ in a })
+    let before = Set(read(sentFile).filter { $0["state"] as? String == "ready" }.compactMap { $0["node"] as? String })
+    var next: [[String: Any]] = []
+    for var c in read(sentFile) {
+      guard c["relay"] as? Bool == true, let key = c["key"] as? String, let a = now[key], let id = a["id"] as? String, !id.isEmpty else {
+        next.append(c)
+        continue
+      }
+      if c["node"] == nil {
+        // Its picture was kept by its key until now.
+        let from = pictures.appendingPathComponent("key-\(key).png")
+        try? FileManager.default.moveItem(at: from, to: pictures.appendingPathComponent("\(id).png"))
+      }
+      c["node"] = id
+      for field in ["title", "status", "state", "fix", "test", "steps"] { c[field] = a[field] }
+      next.append(c)
+    }
+    write(next, to: sentFile)
+    tellNewFixes(next, before: before)
+  }
+
   /// Sent comments whose fix is built: the ones to test in the app. A fix only proposed is not tested.
   static var toTest: [Item] { sent.filter { $0.state == "ready" } }
 
   /// The person tested a fix here: it works (fixed), or not yet (back to
-  /// grndwrk with a note). Needs grndwrk to answer; true when it did.
-  static func tested(node: String, works: Bool, note: String = "") async -> Bool {
+  /// grndwrk with a note). With onMac, a reject opens the comment in the map
+  /// on the Mac, to write there what is still wrong. Needs grndwrk to answer;
+  /// true when it did.
+  static func tested(node: String, works: Bool, note: String = "", onMac: Bool = false) async -> Bool {
     guard let entry = read(sentFile).first(where: { $0["node"] as? String == node }), let key = entry["key"] as? String else { return false }
     var body: [String: Any] = ["comments": [["id": node, "key": key]], "works": works]
     if !note.isEmpty { body["note"] = note }
-    guard let data = try? JSONSerialization.data(withJSONObject: body), case .sent = await post(data, to: "api/feedback/tested") else { return false }
+    if onMac && !works { body["on_mac"] = true }
+    guard let data = try? JSONSerialization.data(withJSONObject: body), taken(await post(data, to: "api/feedback/tested")) else { return false }
     await sync()
     NotificationCenter.default.post(name: changed, object: nil)
     return true
@@ -246,8 +304,7 @@ enum Outbox {
   static func showOnMac(node: String) async -> Bool {
     guard let entry = read(sentFile).first(where: { $0["node"] as? String == node }), let key = entry["key"] as? String,
       let data = try? JSONSerialization.data(withJSONObject: ["comments": [["id": node, "key": key]]]) else { return false }
-    if case .sent = await post(data, to: "api/feedback/show") { return true }
-    return false
+    return taken(await post(data, to: "api/feedback/show"))
   }
 
   enum Deleted { case everywhere, later, onlyHere }
@@ -262,7 +319,7 @@ enum Outbox {
     // Sent before comments had keys: grndwrk would not know it is ours.
     guard let key = entry["key"] as? String else { return .onlyHere }
     var deletes = read(deletesFile)
-    deletes.append(["id": node, "key": key, "project": entry["project"] as? String ?? ""])
+    deletes.append(["id": node, "key": key, "project": entry["project"] as? String ?? "", "relay": entry["relay"] as? Bool == true])
     write(deletes, to: deletesFile)
     return await flushDeletes() ? .everywhere : .later
   }
@@ -272,10 +329,15 @@ enum Outbox {
   private static func flushDeletes() async -> Bool {
     let deletes = read(deletesFile)
     guard !deletes.isEmpty else { return true }
-    guard let project = Connection.project else { return false }
-    let mine = deletes.filter { ($0["project"] as? String ?? "").isEmpty || $0["project"] as? String == project }
-    guard !mine.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["comments": mine]) else { return false }
-    guard case .sent = await post(data, to: "api/feedback/remove") else { return false }
+    let project = Connection.project
+    // To the grndwrk on the Wi-Fi, its own; without one, the ones sent through the relay go there.
+    let mine = deletes.filter { d in
+      if let project { return (d["project"] as? String ?? "").isEmpty || d["project"] as? String == project }
+      return d["relay"] as? Bool == true && Relay.joined != nil
+    }
+    let ask = mine.map { ["id": $0["id"] as? String ?? "", "key": $0["key"] as? String ?? ""] }
+    guard !mine.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["comments": ask]) else { return false }
+    guard taken(await post(data, to: "api/feedback/remove")) else { return false }
     let done = Set(mine.compactMap { $0["id"] as? String })
     let left = read(deletesFile).filter { !done.contains($0["id"] as? String ?? "") }
     write(left, to: deletesFile)
@@ -311,6 +373,10 @@ enum Outbox {
       switch await post(data) {
       case .sent(let id, let project):
         remember(data, id: id, project: project)
+        try? FileManager.default.removeItem(at: file)
+        sent += 1
+      case .relayed:
+        remember(data, id: "", project: nil, relayed: true)
         try? FileManager.default.removeItem(at: file)
         sent += 1
       case .rejected:

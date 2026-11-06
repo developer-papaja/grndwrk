@@ -53,8 +53,9 @@ export const fetchDraft = (name: string) => request<{ text: string | null }>('GE
 export const fetchReadiness = () => request<Readiness>('GET', '/api/readiness')
 export const markGapAnswered = (gapId: string, nodeId: string, enough = false) =>
   request<Readiness>('PATCH', `/api/gaps/${encodeURIComponent(gapId)}`, { answered_by: nodeId, ...(enough ? { enough } : {}) })
+export const setFocusLater = (id: string, later: boolean) => request<Readiness>('PATCH', `/api/focus/${encodeURIComponent(id)}`, { later })
 export const saveKickoff = (changes: Record<string, string | null>) => request<Record<string, unknown>>('PATCH', '/api/project', { kickoff: changes })
-export const saveProjectFields = (fields: { start?: 'new' | 'existing'; purpose?: string }) => request<Record<string, unknown>>('PATCH', '/api/project', fields)
+export const saveProjectFields = (fields: { start?: 'new' | 'existing'; purpose?: string; name?: string; initials?: string; color?: string }) => request<Record<string, unknown>>('PATCH', '/api/project', fields)
 export const savePages = (pages: string[]) => request<Record<string, unknown>>('PATCH', '/api/project', { pages })
 export const createNode = (input: NodeInput) => request<GNode>('POST', '/api/nodes', input)
 export const updateNode = (id: string, input: NodeInput) =>
@@ -79,6 +80,8 @@ export interface Shot {
   taken: string
   /** What the screen showed, from the app. */
   texts?: string[]
+  /** A picture pasted into a reply or an answer, not one of a screen. */
+  pasted?: boolean
 }
 export const fetchShots = () => request<Shot[]>('GET', '/api/shots').catch(() => [] as Shot[])
 /** Put a picture on a screen, taking it off any other; an empty screen only takes it off. */
@@ -90,6 +93,23 @@ export interface AllowedSite { origin: string; kept: boolean }
 export const fetchSites = () => request<{ asking: string[]; allowed: AllowedSite[] }>('GET', '/api/sites').catch(() => ({ asking: [] as string[], allowed: [] as AllowedSite[] }))
 export const answerSiteRequest = (origin: string, allow: boolean) => request<{ allowed: AllowedSite[] }>('POST', '/api/sites', { origin, allow })
 export const removeSite = (origin: string) => request<{ allowed: AllowedSite[] }>('POST', '/api/sites', { origin, remove: true })
+export const markTested = (id: string, works: boolean, note: string) =>
+  request<{ state: 'fixed' | 'incoming'; node: GNode }>('POST', `/api/nodes/${encodeURIComponent(id)}/tested`, { works, note })
+export interface RelayInfo {
+  connected: boolean
+  deployed?: boolean
+  url?: string
+  phones?: { id: string; name: string; joined: string }[]
+  invites?: { id: string; name: string; expires: number }[]
+  waiting?: { invite: string; name: string; digits: string }[]
+  error?: string
+}
+/** Who is on this Mac (git's user.name), and each thought's first author in git, by id. */
+export const fetchAuthors = () => request<{ me: string; first: Record<string, string> }>('GET', '/api/authors').catch(() => ({ me: '', first: {} }))
+export const fetchRelay = () => request<RelayInfo>('GET', '/api/relay').catch(() => ({ connected: false }) as RelayInfo)
+export const inviteColleague = (name: string) => request<{ id: string; name: string; link: string }>('POST', '/api/relay/invites', { name })
+export const answerJoin = (invite: string, allow: boolean) => request<RelayInfo>('POST', `/api/relay/joins/${invite}`, { allow })
+export const removeFromRelay = (kind: 'phones' | 'invites', id: string) => request<RelayInfo>('DELETE', `/api/relay/${kind}/${id}`)
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
 
 /** Subscribe to server events. EventSource reconnects on its own after a drop. */

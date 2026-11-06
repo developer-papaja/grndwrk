@@ -15,10 +15,10 @@ import type { Segment } from '../shared/types.js'
  *   ---
  *   id: sg_k2m4ab
  *   name: Clinic chains
- *   type: own office
- *   industry: Clinic chains
- *   size_min: 1000
- *   size_max: 5000
+ *   type: franchise
+ *   industry: Veterinary care
+ *   size_min: 200
+ *   size_max: 2000
  *   admins: [Operations manager, Clinic coordinator, Practice manager]
  *   source: data
  *   created: 2026-10-22

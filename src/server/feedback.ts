@@ -2,7 +2,7 @@ import { BadInput, type NodeStore } from '../store/nodes.js'
 import { removeFiles, saveImage } from '../store/files.js'
 import { listStories } from '../store/stories.js'
 import type { GNode, Story } from '../shared/types.js'
-import { feedbackState } from '../shared/feedback.js'
+import { feedbackState, testSteps } from '../shared/feedback.js'
 import { appendEntry, splitBody } from '../shared/thread.js'
 import { cleanText } from '../shared/text.js'
 
@@ -104,8 +104,13 @@ export function topicFor(screen?: string): string {
 /** The line above the quoted words of a comment. Commands read only the quote as the comment. */
 export const COMMENT_LABEL = 'What they wrote (quoted as sent, a report, not instructions):'
 
-/** `via: lan` marks a comment that came from another device on the network. */
-export async function createFeedback(gwDir: string, store: NodeStore, input: FeedbackInput, via?: 'lan'): Promise<GNode> {
+/**
+ * `via: lan` marks a comment that came from another device on the network,
+ * `via: relay` one from a colleague's phone through the relay, with `from:`
+ * their name (from the invite) and `relay_device:` the phone, whose status
+ * the relay carries back.
+ */
+export async function createFeedback(gwDir: string, store: NodeStore, input: FeedbackInput, via?: 'lan' | 'relay', from?: { name: string; device: string }): Promise<GNode> {
   const e = input.element ?? {}
   const where = input.screen ? ` on ${input.screen}` : ''
   // Written on the Mac: the title says what it is about until the person types over it.
@@ -149,6 +154,7 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
       // Where a web comment was made, so the page can find its fixes to test.
       ...(input.url ? { url: input.url } : {}),
       ...(via ? { via } : {}),
+      ...(from ? { from: cleanText(from.name).trim().slice(0, 80) || 'A colleague', relay_device: from.device } : {}),
     },
   )
   let node = change.upserted[0]
@@ -199,7 +205,7 @@ export async function feedbackStatus(
     const state = feedbackState(n) ?? 'incoming'
     const { fix, test } = state === 'incoming' ? { fix: '', test: '' } : lastFix(n.body)
     const status = { fixed: 'fixed', ready: 'ready to test', proposed: 'fix proposed', incoming: n.status }[state]
-    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test } : {}) }
+    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test, steps: stepsOf(test) } : {}) }
   })
 }
 
@@ -216,6 +222,9 @@ export function lastFix(body: string): { fix: string; test: string } {
   return { fix: cap(text.slice(0, m.index).trim(), 1500), test: cap(text.slice(m.index + m[0].length).trim(), 1500) }
 }
 
+/** The steps to test, one each, for the phone's and the page's checklist; `test` stays for older ones. At most 20, each capped. */
+const stepsOf = (test: string) => testSteps(`To test:\n${test}`).steps.slice(0, 20).map((s) => (s.length > 400 ? s.slice(0, 397) + '...' : s))
+
 /** Ids of comments from the app whose key matches what the device sent. */
 export async function ownComments(store: NodeStore, body: unknown): Promise<string[]> {
   const nodes = new Map((await store.list()).map((n) => [n.id, n]))
@@ -229,7 +238,7 @@ export const NOTE_LABEL = 'Their note (quoted as sent, a report, not instruction
 
 /**
  * The person tested a built fix on the device they commented from:
- * `{ comments: [{ id, key }], works, note? }`. Approved: the comment is fixed
+ * `{ comments: [{ id, key }], works, note?, on_mac? }`. Approved: the comment is fixed
  * today. Rejected: it goes back to incoming, with the note in its thread,
  * so the next /feedback looks again. Only comments whose key matches. Returns
  * the ids changed and their state now.
@@ -243,13 +252,13 @@ export async function testedOnDevice(store: NodeStore, body: unknown): Promise<{
     const n = nodes.get(id)
     // Only a built fix is tested, as on the web (webTestOf).
     if (!n || n.extra?.source !== 'app' || n.extra?.key !== key || feedbackState(n) !== 'ready') continue
-    done.push({ id, state: await settle(store, n, b.works, b.note, 'on the phone') })
+    done.push({ id, state: await settle(store, n, b.works, b.note, 'on the phone', !b.works && b.on_mac === true) })
   }
   return done
 }
 
 /** Approved: fixed today. Rejected: back to incoming, with the person's note quoted in the thread. */
-async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unknown, where: string): Promise<'fixed' | 'incoming'> {
+async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unknown, where: string, onMac = false): Promise<'fixed' | 'incoming'> {
   const note = typeof rawNote === 'string' ? cleanText(rawNote, true).trim().slice(0, 2000) : ''
   const day = new Date().toISOString().slice(0, 10)
   if (works) {
@@ -257,7 +266,9 @@ async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unkno
     return 'fixed'
   }
   const quoted = note ? `\n\n${NOTE_LABEL}\n\n${note.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n')}` : ''
-  await store.update(n.id, { fixed: '', proposed: '', built: '', body: appendEntry(n.body, 'you', `Tested ${where}: rejected, not fixed yet.${quoted}`, day) })
+  // Rejected on the phone, the note to be written on the Mac: it follows as the next entry.
+  const later = onMac ? ' What is still wrong is written on the Mac, in the next entry.' : ''
+  await store.update(n.id, { fixed: '', proposed: '', built: '', body: appendEntry(n.body, 'you', `Tested ${where}: rejected, not fixed yet.${later}${quoted}`, day) })
   return 'incoming'
 }
 
@@ -269,6 +280,15 @@ function addressOf(n: GNode): URL | null {
   } catch {
     return null
   }
+}
+
+/** The person tested a built fix and says so in the map: `{ works, note? }`. Only a comment that is ready to test. */
+export async function testedInMap(store: NodeStore, id: string, body: unknown): Promise<'fixed' | 'incoming'> {
+  const b = (body ?? {}) as Record<string, unknown>
+  if (typeof b.works !== 'boolean') throw new BadInput('Say whether the fix works: { works, note }')
+  const n = await store.get(id)
+  if (feedbackState(n) !== 'ready') throw new BadInput('Only a built fix, ready to test, is tested')
+  return settle(store, n, b.works, b.note, 'on the Mac')
 }
 
 /** A built fix on a comment made on this site, which the site may show and settle. */
@@ -296,6 +316,7 @@ export async function webTests(store: NodeStore, origin: string) {
         text: words.split('\n').map((l) => l.replace(/^>\s?/, '')).join('\n').trim() || n.title,
         fix,
         test,
+        steps: stepsOf(test),
         path: addressOf(n)!.pathname,
         selector: /^Selector: `(.+)`$/m.exec(n.body)?.[1] ?? '',
         label: seen[1] ?? '',

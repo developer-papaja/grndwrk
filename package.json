@@ -25,7 +25,12 @@
     "clients/ios/GrndwrkFeedback/Sources",
     "clients/ios/GrndwrkFeedback/README.md",
     "clients/ios/Loader",
-    "clients/ios/build-loader.sh"
+    "clients/ios/build-loader.sh",
+    "relay/src",
+    "relay/wrangler.toml",
+    "relay/package.json",
+    "relay/package-lock.json",
+    "relay/README.md"
   ],
   "engines": {
     "node": ">=20.16"
@@ -34,7 +39,7 @@
     "build": "tsc -p tsconfig.json && vite build && node scripts/vendor.mjs",
     "dev": "mkdir -p playground && cd playground && tsx ../src/cli.ts init >/dev/null && tsx watch --clear-screen=false --exclude \"../node_modules/**\" --exclude \"../ui/**\" ../src/cli.ts start --dev --no-open",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit && tsc -p relay/tsconfig.json",
     "prepack": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
@@ -52,6 +57,7 @@
     "marked": "^18.1.1",
     "modern-screenshot": "4.7.0",
     "playwright-core": "1.64.0",
+    "qrcode-generator": "2.0.4",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

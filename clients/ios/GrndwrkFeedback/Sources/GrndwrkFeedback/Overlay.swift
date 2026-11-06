@@ -34,6 +34,12 @@ final class OverlayController: UIViewController {
   private let highlight = UIView()
   private let toast = PaddedLabel()
   private(set) var picking = false
+  /// Where the app's keyboard begins, in this view, while one is up. iOS keeps the keyboard above every window, this one too, so the button moves out of its way.
+  private var keyboardTop: CGFloat?
+  /// Where the button stood before a keyboard pushed it up, to go back to when it closes.
+  private var beforeKeyboard: CGFloat?
+  /// The lowest point anything of grndwrk's may reach: the safe area, or the top of the keyboard.
+  private var floorY: CGFloat { min(view.bounds.height - view.safeAreaInsets.bottom, keyboardTop ?? .greatestFiniteMagnitude) }
 
   // What is picked: everything under the finger, smallest first, and which one is chosen.
   private var candidates: [Inspector.Found] = []
@@ -141,8 +147,10 @@ final class OverlayController: UIViewController {
       let before = note.userInfo?["before"] as? Connection.State
       MainActor.assumeIsolated { self?.connectionChanged(from: before) }
     }
-    NotificationCenter.default.addObserver(forName: Outbox.changed, object: nil, queue: .main) { [weak self] _ in
-      MainActor.assumeIsolated { self?.updateBadge() }
+    for name in [Outbox.changed, Relay.changed] {
+      NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+        MainActor.assumeIsolated { self?.updateBadge() }
+      }
     }
     NotificationCenter.default.addObserver(forName: Outbox.newFixes, object: nil, queue: .main) { [weak self] note in
       let count = note.userInfo?["count"] as? Int ?? 0
@@ -154,6 +162,13 @@ final class OverlayController: UIViewController {
     buildTesting()
     buildTab()
     updateBadge()
+    for name in [UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardWillHideNotification] {
+      NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+        let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+        let hiding = note.name == UIResponder.keyboardWillHideNotification
+        MainActor.assumeIsolated { self?.keyboardMoved(hiding ? nil : end) }
+      }
+    }
     // Pictures of the screens as the app is used, for the sitemap.
     snapshotTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       MainActor.assumeIsolated {
@@ -202,7 +217,9 @@ final class OverlayController: UIViewController {
       let safe = view.safeAreaInsets
       var f = button.frame
       f.origin.x = max(8, min(f.origin.x, view.bounds.width - f.width - 8))
-      f.origin.y = max(safe.top + 8, min(f.origin.y, view.bounds.height - safe.bottom - f.height - 8))
+      f.origin.y = max(safe.top + 8, min(f.origin.y, floorY - f.height - 8))
+      // Put there by the person: where it stays when the keyboard closes.
+      beforeKeyboard = nil
       UIView.animate(withDuration: 0.2) {
         self.button.frame = f
         self.layoutTestPill()
@@ -247,7 +264,7 @@ final class OverlayController: UIViewController {
       // Thrown from off the screen: come back fully on it, on that side.
       beforeStash.origin.x = side == .right ? view.bounds.width - beforeStash.width - 16 : 16
     }
-    let y = min(max(button.frame.minY, view.safeAreaInsets.top + 8), view.bounds.height - view.safeAreaInsets.bottom - button.bounds.height - 8)
+    let y = min(max(button.frame.minY, view.safeAreaInsets.top + 8), floorY - button.bounds.height - 8)
     beforeStash.origin.y = y
     // A tab half off the edge, wide enough to grab: 44 points tall at least.
     let tabFrame = CGRect(x: side == .right ? view.bounds.width - 18 : -10, y: y + (button.bounds.height - 64) / 2, width: 28, height: 64)
@@ -288,6 +305,44 @@ final class OverlayController: UIViewController {
     }
   }
 
+  // MARK: The keyboard
+
+  /// A keyboard opened, moved or closed (nil). The button, its tab and the test card go above it, and the button back down after.
+  private func keyboardMoved(_ screenFrame: CGRect?) {
+    guard view.window != nil else { return }
+    var top: CGFloat?
+    if let screenFrame, let space = view.window?.screen.coordinateSpace {
+      let frame = view.convert(screenFrame, from: space)
+      // A keyboard off the screen, or a hardware one showing only a thin bar at the bottom, is no keyboard here.
+      if frame.minY < view.bounds.height - 1, frame.height > 0 { top = frame.minY }
+    }
+    keyboardTop = top
+    UIView.animate(withDuration: 0.25, delay: 0, options: .curveEaseOut) {
+      if let top {
+        let lowest = top - self.button.bounds.height - 8
+        if self.button.frame.minY > lowest {
+          if self.beforeKeyboard == nil { self.beforeKeyboard = self.stashed != nil ? self.beforeStash.minY : self.button.frame.minY }
+          self.button.frame.origin.y = lowest
+          if self.stashed != nil { self.beforeStash.origin.y = lowest }
+        }
+      } else if let y = self.beforeKeyboard {
+        self.button.frame.origin.y = y
+        if self.stashed != nil { self.beforeStash.origin.y = y }
+        self.beforeKeyboard = nil
+      }
+      if self.stashed != nil { self.edgeTab.frame.origin.y = self.button.frame.minY + (self.button.bounds.height - 64) / 2 }
+      self.layoutTestPill()
+      if !self.testCard.isHidden {
+        let room = self.floorY - self.view.safeAreaInsets.top - self.testCard.bounds.height - 8
+        self.cardTop?.constant = max(8, min(self.cardOffset, room))
+        self.view.layoutIfNeeded()
+      }
+      if !self.toast.isHidden, let top {
+        self.toast.frame.origin.y = min(self.toast.frame.minY, top - self.toast.bounds.height - 12)
+      }
+    }
+  }
+
   // MARK: Connection
 
   private func connectionChanged(from before: Connection.State?) {
@@ -298,7 +353,9 @@ final class OverlayController: UIViewController {
       flash(project.isEmpty ? "Connected to grndwrk" : "Connected to grndwrk \u{201C}\(project)\u{201D}")
     case .offline:
       // Only say it when it was there a moment ago. The dot says the rest.
-      if case .connected = before { flash("Lost grndwrk. Comments wait on the phone.") }
+      if case .connected = before {
+        flash(Relay.usable ? "Away from grndwrk's Wi-Fi. Comments go through your team's relay." : "Lost grndwrk. Comments wait on the phone.")
+      }
     case .needsCode:
       // Ask once when it starts wanting the code, not every time it checks.
       if case .needsCode = before { return }
@@ -387,7 +444,7 @@ final class OverlayController: UIViewController {
   @objc private func menu(_ press: UILongPressGestureRecognizer) {
     guard press.state == .began else { return }
     let count = Outbox.count
-    var lines = [status(), Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
+    var lines = [status(), Connection.viaRelay ? "" : Relay.status.map { "\($0)." } ?? "", Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
     if count > 0 { lines.append("\(count) \(count == 1 ? "comment waits" : "comments wait") to be sent.") }
     let sheet = UIAlertController(title: "grndwrk", message: lines.joined(separator: "\n"), preferredStyle: .actionSheet)
     if case .needsCode = Connection.state {
@@ -407,6 +464,14 @@ final class OverlayController: UIViewController {
     if count > 0 {
       sheet.addAction(UIAlertAction(title: "Share \(count) \(count == 1 ? "comment" : "comments") as a file", style: .default) { [weak self] _ in self?.share() })
     }
+    if Relay.joined == nil {
+      sheet.addAction(UIAlertAction(title: "Join with an invite", style: .default) { [weak self] _ in self?.joinRelay() })
+    } else if Relay.joined?.refused != nil {
+      sheet.addAction(UIAlertAction(title: "Show the digits to be allowed", style: .default) { [weak self] _ in self?.showDigits() })
+      sheet.addAction(UIAlertAction(title: "Leave the relay", style: .default) { [weak self] _ in self?.leaveRelay() })
+    } else {
+      sheet.addAction(UIAlertAction(title: "Leave the relay", style: .default) { [weak self] _ in self?.leaveRelay() })
+    }
     sheet.addAction(UIAlertAction(title: "Hide the grndwrk button", style: .destructive) { [weak self] _ in self?.confirmHide() })
     sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     sheet.popoverPresentationController?.sourceView = button
@@ -418,7 +483,11 @@ final class OverlayController: UIViewController {
     switch Connection.state {
     case .connected(let project, let host): return "Connected to \(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)."
     case .needsCode(let project, let host): return "\(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host) needs the pairing code. Comments wait on the phone."
-    case .offline(let why): return "Not connected. \(why) Comments wait on the phone."
+    case .offline(let why):
+      if Connection.viaRelay, let host = Relay.joined.flatMap({ URL(string: $0.url)?.host }) {
+        return "Through your team's relay at \(host). No grndwrk on this Wi-Fi, so comments go to the relay and reach grndwrk when someone on the team runs it."
+      }
+      return "Not connected. \(why) Comments wait on the phone."
     case .unknown: return "Looking for grndwrk..."
     }
   }
@@ -526,6 +595,7 @@ final class OverlayController: UIViewController {
   /// and a card stays on top with what changed, the steps, Approve and Reject.
   func startTesting(_ item: Outbox.Item) {
     testing = item
+    stepMarks = [:]
     dismiss(animated: true)
     var opened = false
     if let name = item.screen, let open = GrndwrkFeedback.openScreen { opened = open(name) }
@@ -540,6 +610,59 @@ final class OverlayController: UIViewController {
   }
 
   private var cardOpen = true
+  /// Each step of the fix being tested, marked works (true) or not (false) by the person.
+  private var stepMarks: [Int: Bool] = [:]
+
+  /// What to say when it does not work: the steps marked as not working, to add to.
+  private func failedSteps(_ item: Outbox.Item) -> String {
+    item.steps.enumerated().compactMap { i, s in
+      stepMarks[i] == false ? "Step \(i + 1) (\(s.count > 60 ? s.prefix(57) + "..." : s)): " : nil
+    }.joined(separator: "\n")
+  }
+
+  /// One step: its number (or a tick or a cross), the words, and Works and No.
+  private func stepRow(_ i: Int, _ step: String, item: Outbox.Item, opened: Bool, light: UIColor) -> UIView {
+    let mark = stepMarks[i]
+    let badge = UILabel()
+    badge.text = mark == true ? "✓" : mark == false ? "✕" : "\(i + 1)"
+    badge.font = .systemFont(ofSize: 12, weight: .semibold)
+    badge.textAlignment = .center
+    badge.textColor = mark == true ? .systemGreen : mark == false ? .systemRed : light.withAlphaComponent(0.7)
+    badge.backgroundColor = (mark == true ? UIColor.systemGreen : mark == false ? .systemRed : light).withAlphaComponent(0.18)
+    badge.layer.cornerRadius = 11
+    badge.clipsToBounds = true
+    badge.widthAnchor.constraint(equalToConstant: 22).isActive = true
+    badge.heightAnchor.constraint(equalToConstant: 22).isActive = true
+    let words = UILabel()
+    words.text = step
+    words.font = .systemFont(ofSize: 14)
+    words.textColor = mark == true ? light.withAlphaComponent(0.55) : light
+    words.numberOfLines = 0
+    words.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    func toggle(_ title: String, _ value: Bool, _ color: UIColor) -> UIButton {
+      var c: UIButton.Configuration = mark == value ? .filled() : .gray()
+      c.title = title
+      c.cornerStyle = .capsule
+      c.buttonSize = .small
+      c.baseBackgroundColor = mark == value ? color : nil
+      c.baseForegroundColor = mark == value ? .white : light
+      let b = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in
+        guard let self else { return }
+        self.stepMarks[i] = self.stepMarks[i] == value ? nil : value
+        self.buildCard(item, opened: opened)
+      })
+      b.accessibilityLabel = "Step \(i + 1) \(value ? "works" : "does not work")"
+      b.heightAnchor.constraint(greaterThanOrEqualToConstant: 32).isActive = true
+      return b
+    }
+    let buttons = UIStackView(arrangedSubviews: [toggle("Works", true, .systemGreen), toggle("No", false, .systemRed)])
+    buttons.spacing = 4
+    buttons.setContentHuggingPriority(.required, for: .horizontal)
+    let row = UIStackView(arrangedSubviews: [badge, words, buttons])
+    row.spacing = 8
+    row.alignment = .top
+    return row
+  }
 
   private func buildCard(_ item: Outbox.Item, opened: Bool) {
     testStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -590,8 +713,14 @@ final class OverlayController: UIViewController {
         testStack.addArrangedSubview(text("What changed", 11, .semibold, light.withAlphaComponent(0.55)))
         testStack.addArrangedSubview(text(fix, 14, .regular, light))
       }
-      testStack.addArrangedSubview(text("To test", 11, .semibold, light.withAlphaComponent(0.55)))
-      testStack.addArrangedSubview(text(item.test?.isEmpty == false ? item.test! : "Try what the comment was about, and see whether it is right now.", 14, .regular, light))
+      if item.steps.isEmpty {
+        testStack.addArrangedSubview(text("To test", 11, .semibold, light.withAlphaComponent(0.55)))
+        testStack.addArrangedSubview(text(item.test?.isEmpty == false ? item.test! : "Try what the comment was about, and see whether it is right now.", 14, .regular, light))
+      } else {
+        let works = item.steps.indices.filter { stepMarks[$0] == true }.count
+        testStack.addArrangedSubview(text("To test · \(works) of \(item.steps.count) work", 11, .semibold, light.withAlphaComponent(0.55)))
+        for (i, step) in item.steps.enumerated() { testStack.addArrangedSubview(stepRow(i, step, item: item, opened: opened, light: light)) }
+      }
     }
 
     func action(_ title: String, _ color: UIColor, filled: Bool, _ run: @escaping () -> Void) -> UIButton {
@@ -605,8 +734,9 @@ final class OverlayController: UIViewController {
       b.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
       return b
     }
-    let reject = action("Reject", .systemRed, filled: false) { [weak self] in self?.rejectTested(item) }
-    let approve = action("Approve: it works", .systemGreen, filled: true) { [weak self] in self?.sendTested(item, works: true) }
+    let failing = stepMarks.values.contains(false)
+    let reject = action(failing ? "Reject: send back" : "Reject", .systemRed, filled: failing) { [weak self] in self?.rejectTested(item) }
+    let approve = action("Approve: it works", .systemGreen, filled: !failing) { [weak self] in self?.sendTested(item, works: true) }
     let row = UIStackView(arrangedSubviews: [reject, UIView(), approve])
     row.alignment = .center
     row.spacing = 8
@@ -617,7 +747,7 @@ final class OverlayController: UIViewController {
     view.bringSubviewToFront(testCard)
     // Folding or unfolding changes its height: keep it on the screen where it was put.
     view.layoutIfNeeded()
-    let room = view.bounds.height - view.safeAreaInsets.top - view.safeAreaInsets.bottom - testCard.bounds.height - 8
+    let room = floorY - view.safeAreaInsets.top - testCard.bounds.height - 8
     cardOffset = max(8, min(cardOffset, room))
     cardTop?.constant = cardOffset
   }
@@ -625,28 +755,33 @@ final class OverlayController: UIViewController {
   @objc private func moveCard(_ pan: UIPanGestureRecognizer) {
     let move = pan.translation(in: view).y
     pan.setTranslation(.zero, in: view)
-    let room = view.bounds.height - view.safeAreaInsets.top - view.safeAreaInsets.bottom - testCard.bounds.height - 8
+    let room = floorY - view.safeAreaInsets.top - testCard.bounds.height - 8
     cardOffset = max(8, min(cardOffset + move, room))
     cardTop?.constant = cardOffset
   }
 
   private func rejectTested(_ item: Outbox.Item) {
     let alert = UIAlertController(title: "Reject", message: "What is still wrong? It goes back to grndwrk with the comment, for the next /feedback.", preferredStyle: .alert)
-    alert.addTextField { $0.placeholder = "Optional" }
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    let start = failedSteps(item)
+    alert.addTextField { $0.placeholder = "Optional"; $0.text = start }
     alert.addAction(UIAlertAction(title: "Reject", style: .destructive) { [weak self] _ in
       self?.sendTested(item, works: false, note: alert.textFields?.first?.text ?? "")
     })
+    // Rejects it now, and opens it in the map on the Mac to write what is still wrong there.
+    alert.addAction(UIAlertAction(title: "Reject and write on the Mac", style: .default) { [weak self] _ in
+      self?.sendTested(item, works: false, note: alert.textFields?.first?.text ?? "", onMac: true)
+    })
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     present(alert, animated: true)
   }
 
-  private func sendTested(_ item: Outbox.Item, works: Bool, note: String = "") {
+  private func sendTested(_ item: Outbox.Item, works: Bool, note: String = "", onMac: Bool = false) {
     guard let node = item.node else { return }
     Task {
-      let ok = await Outbox.tested(node: node, works: works, note: note)
+      let ok = await Outbox.tested(node: node, works: works, note: note, onMac: onMac)
       guard ok else { return flash("grndwrk is not reachable. Try again when connected.") }
       stopTesting()
-      flash(works ? "Approved. It is fixed in grndwrk." : "Rejected. It is back in grndwrk with your note.")
+      flash(works ? "Approved. It is fixed in grndwrk." : onMac ? "Rejected. Write what is still wrong on your Mac." : "Rejected. It is back in grndwrk with your note.")
     }
   }
 
@@ -907,6 +1042,10 @@ final class OverlayController: UIViewController {
         Outbox.remember(data, id: id, project: project)
         self?.flash("Opened on your Mac. Write it there.")
         return nil
+      case .relayed:
+        Outbox.remember(data, id: "", project: nil, relayed: true)
+        self?.flash("Sent through the relay. Write it in the map when you are at your Mac.")
+        return nil
       case .rejected(let status): return "grndwrk did not take it (\(status))."
       case .blockedByATS: return "Blocked by App Transport Security. See the GrndwrkFeedback README."
       case .unreachable: return "grndwrk is not reachable. Write it here instead, and it goes once it is."
@@ -937,6 +1076,10 @@ final class OverlayController: UIViewController {
       Outbox.remember(data, id: id, project: project)
       flash("Sent to grndwrk")
       await Outbox.flush()
+    case .relayed:
+      Outbox.remember(data, id: "", project: nil, relayed: true)
+      flash("Sent through the relay. It reaches grndwrk when one on your team runs")
+      await Outbox.flush()
     case .rejected(let status):
       flash("grndwrk did not take it (\(status))")
     case .blockedByATS:
@@ -958,18 +1101,20 @@ final class OverlayController: UIViewController {
   func updateBadge() {
     var config = button.configuration
     // Offline, the button says so in words, so nobody wonders where comments went.
+    // Through the relay it is not offline: comments still go, only another way.
+    let relay = Connection.viaRelay
     let offline: Bool
-    if case .offline = Connection.state { offline = true } else { offline = false }
+    if case .offline = Connection.state { offline = !relay } else { offline = false }
     let name = offline ? "Offline" : "grndwrk"
     config?.title = Outbox.count > 0 ? "\(name) · \(Outbox.count)" : name
-    config?.image = UIImage(systemName: offline ? "wifi.slash" : "text.bubble")
+    config?.image = UIImage(systemName: offline ? "wifi.slash" : relay ? "globe" : "text.bubble")
     config?.titleLineBreakMode = .byClipping
     config?.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16 + testRoom)
     button.configuration = config
     switch Connection.state {
     case .connected: dot.backgroundColor = .systemGreen
     case .needsCode: dot.backgroundColor = .systemYellow
-    case .offline: dot.backgroundColor = .systemOrange
+    case .offline: dot.backgroundColor = relay ? .systemBlue : .systemOrange
     case .unknown: dot.backgroundColor = .systemGray
     }
     button.accessibilityValue = status()
@@ -986,7 +1131,7 @@ final class OverlayController: UIViewController {
     toast.text = text
     let width = min(toast.intrinsicContentSize.width, view.bounds.width - 32)
     let height = toast.sizeThatFits(CGSize(width: width - 24, height: .greatestFiniteMagnitude)).height + 12
-    toast.frame = CGRect(x: (view.bounds.width - width) / 2, y: view.bounds.height - view.safeAreaInsets.bottom - height - 80, width: width, height: height)
+    toast.frame = CGRect(x: (view.bounds.width - width) / 2, y: (keyboardTop.map { $0 - height - 12 } ?? view.bounds.height - view.safeAreaInsets.bottom - height - 80), width: width, height: height)
     toast.isHidden = false
     view.bringSubviewToFront(toast)
     let shown = text

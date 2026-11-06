@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mergePages, readProject, writeKickoff, writePages } from '../src/store/project.js'
+import { mergePages, readProject, writeFields, writeKickoff, writePages } from '../src/store/project.js'
 import { parseNode, serializeNode } from '../src/store/frontmatter.js'
 
 let root: string
@@ -43,5 +43,18 @@ describe('pages', () => {
     await writeKickoff(root, { check: null, map: null })
     raw = await readFile(join(root, 'project.md'), 'utf8')
     expect(raw).toBe('---\nname: grndwrk\npages: [Product, Feedback]\n---\nBody stays.\n')
+  })
+})
+
+describe('the badge', () => {
+  it('writes name, letters and color, and an empty value takes the field out', async () => {
+    await writeFile(join(root, 'project.md'), '---\nname: Shop\npurpose: Sell things\n---\nNotes\n')
+    await writeFields(root, { name: 'Harbor Rooms', initials: 'AR', color: '#e11d48' })
+    let text = await readFile(join(root, 'project.md'), 'utf8')
+    expect(text).toContain('name: Harbor Rooms\npurpose: Sell things\ninitials: AR\ncolor: "#e11d48"\n')
+    expect((await readProject(root)).data.color).toBe('#e11d48')
+    await writeFields(root, { initials: '', color: '' })
+    text = await readFile(join(root, 'project.md'), 'utf8')
+    expect(text).toBe('---\nname: Harbor Rooms\npurpose: Sell things\n---\nNotes\n')
   })
 })

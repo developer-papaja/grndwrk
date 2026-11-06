@@ -88,3 +88,19 @@ describe('thread entries in files of their own', () => {
     expect(saved.body).toContain('New notes.')
   })
 })
+
+describe('pictures in thread entries', () => {
+  it('points a picture at files/ from where the entry file sits, and reads it back as in the card', async () => {
+    const n = (await store.create({ title: 'Booking' })).upserted[0]
+    const pic = `![](../files/${n.id}/1793877000000.png)`
+    const saved = (await store.update(n.id, { body: appendEntry(n.body, 'you', `See this:\n${pic}`, '2026-11-06') })).upserted[0]
+    const [file] = await entryFiles(n.id)
+    // On disk, one folder deeper: ../../files/, so the picture opens from the file itself.
+    expect(await readFile(join(gw, 'threads', n.id, file), 'utf8')).toContain(`![](../../files/${n.id}/1793877000000.png)`)
+    // In the map, the same text the map sent.
+    expect(splitBody(saved.body).entries[0].text).toBe(`See this:\n${pic}`)
+    // Saving the same body again adds nothing.
+    await store.update(n.id, { body: saved.body })
+    expect(await entryFiles(n.id)).toHaveLength(1)
+  })
+})

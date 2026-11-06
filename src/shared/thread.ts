@@ -21,8 +21,17 @@
  *
  *   Community
  *
- * A **You** entry without a quote answers every question before it.
+ * A **You** entry without a quote is a remark: it answers no question. The
+ * map always quotes the question it answers. Before REMARKS_SINCE an entry
+ * without a quote answered every question before it, and older entries are
+ * still read that way, so what was answered stays answered.
  */
+
+/** From this day on, a **You** entry without a quote answers nothing. */
+export const REMARKS_SINCE = '2026-11-06'
+
+/** Written before remarks existed: a dated entry from before REMARKS_SINCE. */
+const answersAll = (date: string) => /^\d{4}-\d{2}-\d{2}/.test(date.trim()) && date.trim().slice(0, 10) < REMARKS_SINCE
 
 export type Who = 'you' | 'claude' | 'claude-asks'
 
@@ -104,6 +113,8 @@ function questionsIn(entries: Entry[]): Question[] {
     } else {
       const { quoted, rest } = leadingQuote(e.text)
       const target = quoted ? pending.find((q) => sameQuestion(q.question, quoted)) : undefined
+      // A remark, or a quote of something that is not an open question: nothing is answered.
+      if (!target && !answersAll(e.date)) return
       for (const q of target ? [target] : pending) {
         q.open = false
         q.answer = target ? rest : e.text
@@ -176,13 +187,10 @@ export function splitQuestions(text: string): { question: string; options: strin
 }
 
 /**
- * Answer one question: a **You** entry that quotes it, so it reads as the
- * answer to that one even when Claude asked several. Without other open
- * questions the quote is left out.
+ * Answer one question: a **You** entry that quotes it. Without the quote the
+ * entry would be a remark and answer nothing.
  */
 export function appendAnswer(body: string, question: Question, text: string, date: string): string {
-  const others = questions(body).filter((q) => q.open && !(q.entry === question.entry && q.index === question.index))
-  if (!others.length) return appendEntry(body, 'you', text, date)
   const first = question.question.split('\n').find((l) => l.trim())?.trim() ?? question.question
   return appendEntry(body, 'you', `> ${first}\n\n${text.trim()}`, date)
 }
@@ -208,6 +216,22 @@ export function questionOptions(text: string): { question: string; options: stri
     .map((l) => /^\s*[-*]\s+(.+)$/.exec(l)?.[1].trim())
     .filter((o): o is string => !!o)
   return { question: text.slice(0, m.index).trim(), options }
+}
+
+/**
+ * One answer from the options picked and the person's own words. The picks
+ * keep the order Claude gave them; one pick is the option itself, several are
+ * a list, and the words follow:
+ *
+ *   - Today
+ *   - The last day booked
+ *
+ *   Whichever is later.
+ */
+export function answerText(options: string[], picked: string[], words: string): string {
+  const chosen = options.filter((o) => picked.includes(o))
+  const list = chosen.length > 1 ? chosen.map((o) => `- ${o}`).join('\n') : (chosen[0] ?? '')
+  return [list, words.trim()].filter(Boolean).join('\n\n')
 }
 
 /** How many questions in the thread wait for an answer. */

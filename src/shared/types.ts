@@ -61,7 +61,7 @@ export type ServerEvent =
   | { type: 'node:delete'; id: string }
   | { type: 'file:change'; path: string }
   /** A comment pointed out on the phone, to be written in the browser. */
-  | { type: 'node:open'; id: string }
+  | { type: 'node:open'; id: string; reply?: boolean }
   /** A phone on the network asks to send comments; the map asks the person to allow it. */
   | { type: 'pair:request'; request: PairRequest }
   /** That request was answered, or ran out. */
@@ -70,6 +70,8 @@ export type ServerEvent =
   | { type: 'site:request'; origin: string }
   /** That site was answered. */
   | { type: 'site:done'; origin: string }
+  /** A phone joined through the relay and waits to be allowed, or no longer does: the map asks again. */
+  | { type: 'relay:waiting' }
 
 /** A phone asking to send comments, as the map shows it. */
 export interface PairRequest {
@@ -178,6 +180,24 @@ export interface Foundation {
   file?: string
 }
 
+/**
+ * One thing to focus on next, written by /readiness, the most important
+ * first: a foundation, the design system, tests, accessibility, anything
+ * that matters most for this project now. It stays until it is done or the
+ * person says Not now.
+ */
+export interface FocusItem {
+  /** Stable across runs, so Not now sticks: `design_system`, `tests`. */
+  id: string
+  title: string
+  /** Why it matters for this project, in a sentence or two. */
+  why: string
+  /** An instruction to paste into the agent in the product's repo. */
+  prompt: string
+  /** The day the person set it aside with Not now. */
+  later?: string
+}
+
 export interface Readiness {
   report: {
     verdict: Verdict | null
@@ -192,6 +212,10 @@ export interface Readiness {
   design: DesignCheck[]
   /** What the project has and lacks, empty until /readiness or /survey writes it. */
   foundations: Foundation[]
+  /** What to focus on next, the most important first, empty until /readiness writes it. */
+  focus: FocusItem[]
+  /** When /readiness wrote the focus list. */
+  focusChecked?: string
   /** Set when gaps.json could not be read, so the UI can say so. */
   error?: string
 }
@@ -232,7 +256,7 @@ export interface Persona extends Record<PersonaSection, string> {
   /** Parts of the product they live in, and those they only visit. */
   lives_in: string[]
   visits: string[]
-  /** What they ask about: hardware, permissions, login, scope... */
+  /** What they ask about: scheduling, permissions, login, payments... */
   themes: string[]
   /** Per segment id: how common the hat is there, and the titles that wear it. */
   segments: Record<string, PersonaInSegment>
@@ -282,7 +306,7 @@ export const PERSONA_DEVICES = ['laptop', 'desktop', 'phone', 'tablet'] as const
 export interface Segment {
   id: string
   name: string
-  /** own office, property owner, coworking, partner or other. */
+  /** How the customer is set up: single site, multi site, franchise, partner or other. */
   type: string
   industry: string
   /** People employed, from and to; 0 when not known. Without size_max it is open upwards. */
@@ -297,7 +321,7 @@ export interface Segment {
   error?: string
 }
 
-export const SEGMENT_TYPES = ['own office', 'property owner', 'coworking', 'partner', 'other'] as const
+export const SEGMENT_TYPES = ['single site', 'multi site', 'franchise', 'partner', 'other'] as const
 /** Size bands to filter segments by: [label, from, to]. */
 export const SIZE_BANDS: [string, number, number][] = [
   ['Under 50', 0, 49],

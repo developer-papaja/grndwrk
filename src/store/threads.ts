@@ -40,7 +40,7 @@ export async function readEntryFiles(gwDir: string, owner: string): Promise<Entr
       const { data, content } = readMatter(await readFile(join(folder(gwDir, owner), file), 'utf8'))
       const who = String(data.who ?? '').trim().toLowerCase() as Who
       if (!WHO.includes(who) || !content.trim()) continue
-      out.push({ file, who, date: String(data.date ?? '').trim(), text: content.trim() })
+      out.push({ file, who, date: String(data.date ?? '').trim(), text: fromEntryFile(content.trim()) })
     } catch {
       // Unreadable or deleted while reading: left out, never shown half.
     }
@@ -91,11 +91,20 @@ export async function saveBody(gwDir: string, owner: string, fileBody: string, n
   for (const e of added) {
     const name = `${ms++}-${ALPHABET[randomInt(36)]}${ALPHABET[randomInt(36)]}.md`
     const tmp = join(folder(gwDir, owner), `.${name}.tmp`)
-    await writeFile(tmp, `---\nwho: ${e.who}\ndate: ${e.date || new Date().toISOString().slice(0, 10)}\n---\n${e.text.trim()}\n`, 'utf8')
+    await writeFile(tmp, `---\nwho: ${e.who}\ndate: ${e.date || new Date().toISOString().slice(0, 10)}\n---\n${toEntryFile(e.text.trim())}\n`, 'utf8')
     await rename(tmp, join(folder(gwDir, owner), name))
   }
   return replaceNotes(fileBody, notes)
 }
+
+/**
+ * Pictures in a thread entry point at `files/`. In the card's own file that
+ * is `../files/<id>/<name>`; an entry file sits one folder deeper, so on disk
+ * it says `../../files/...`, and a person or an agent opening the file finds
+ * the picture. In memory it reads as in the card, so nothing else has to know.
+ */
+const toEntryFile = (text: string) => text.replace(/\]\(\.\.\/files\//g, '](../../files/')
+const fromEntryFile = (text: string) => text.replace(/\]\(\.\.\/\.\.\/files\//g, '](../files/')
 
 /** A card or screen is gone: so is its thread. */
 export async function removeEntries(gwDir: string, owner: string): Promise<void> {
