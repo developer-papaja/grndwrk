@@ -20,7 +20,9 @@ GrndwrkFeedback is for your own debug builds. It shows a button that sends what 
 
 ## Add it
 
-1. In Xcode: File > Add Package Dependencies > Add Local, and pick `clients/ios/GrndwrkFeedback` in the grndwrk folder.
+1. In Xcode: File > Add Package Dependencies, paste `https://github.com/developer-papaja/grndwrk`, and pick **Up to Next Minor Version** from the version of grndwrk you run (`npm ls -g grndwrk`), so the phone and the map stay in step. Everyone on the team gets it from GitHub when they build, CI too; nothing is copied into the app's repository. Add the library to the app target only.
+
+   Working on grndwrk itself? Drag your checkout's `clients/ios/GrndwrkFeedback` folder into the app's project navigator: Xcode then builds your local copy instead of the one from GitHub, and the project file does not change.
 2. Start it in debug builds only:
 
    ```swift
