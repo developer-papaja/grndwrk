@@ -134,7 +134,9 @@ describe('relay', () => {
     expect((await p.asPhone('POST', `/v1/${MB}/inbox`, body)).status).toBe(202)
     const [e] = await (await t.asTeam('GET', `/v1/${MB}/inbox`)).json() as { id: string }[]
     const got = new Uint8Array(await (await t.asTeam('GET', `/v1/${MB}/inbox/${e.id}`)).arrayBuffer())
-    expect(got).toEqual(body)
+    // Compared as bytes: a deep comparison of a megabyte takes seconds on a slow runner.
+    expect(got.length).toBe(body.length)
+    expect(Buffer.from(got).equals(Buffer.from(body))).toBe(true)
     expect([...t.store.data.keys()].filter((k) => k.startsWith(`chunk/${e.id}/`))).toHaveLength(3)
     await t.asTeam('DELETE', `/v1/${MB}/inbox/${e.id}`)
     expect([...t.store.data.keys()].filter((k) => k.startsWith('chunk/'))).toEqual([])
