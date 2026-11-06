@@ -20,6 +20,10 @@ In a product's own repo it is the other way around: there the stories are meant 
 
 `notes/decisions.md` is the person's own log of decisions, the reasons behind them, and the plan for publishing. It is git-ignored and never published. Read it before changing anything it covers. Add to it; never rewrite it, drop entries or replace the file.
 
+## Clients stay out
+
+This repository is public. Never name a client of the person's, or describe what a client does (its product, customers, segments, research, support questions), in code, tests, docs, examples, placeholders, commit messages or this repo's map. Examples use a made-up product: veterinary clinics. The person's `client-privacy` skill holds the rules and a private list to check against; run its scan before committing.
+
 ## Principles
 
 - **Lives in the project.** No accounts, no cloud, no database. The `.grndwrk/` folder is the source of truth.
@@ -271,17 +275,17 @@ id: pe_k2m4ab
 name: Clinic coordinator
 summary: Runs the clinic's day, and the product with it. Not IT.
 tier: primary
-employer: [customer, service provider]
+employer: [customer]
 technical: low
 frequency: daily
-device: [desktop, phone]
+device: [desktop, tablet]
 learning_curve: little
 lives_in: [Appointments, Patients, Staff]
-visits: [Access]
-themes: [hardware, permissions, login]
+visits: [Billing]
+themes: [scheduling, permissions, login]
 segments:
-  sg_audit01: {how: most, titles: [Receptionist, Service desk]}
-  sg_cowork1: {how: present, titles: [Owner]}
+  sg_chain01: {how: most, titles: [Clinic coordinator, Head nurse]}
+  sg_single1: {how: present, titles: [Owner]}
 source: data
 edited: [segments]
 created: 2026-10-22
@@ -290,7 +294,7 @@ created: 2026-10-22
 1. Move appointments when a vet calls in sick.
 
 ## Evidence
-- [Clinic chains · hardware] An appointment says Conflict. What do I do?
+- [Clinic chains · scheduling] An appointment says Conflict. What do I do?
 ```
 
 - **name** is what screens write in `for:`. A screen's "Who it is for" holds only persona names: the Sitemap shows each as a link (× takes it off) and offers the personas it does not name yet; there is no free text. New persona there makes one from a name and puts it on the screen. Renaming a persona renames it in those screens, deleting one takes it off them. Names that are no persona (written before, by hand or by an older `/sitemap`) are listed once at the top of the Personas overview, each settled for every screen at once: made a persona, merged into one ("Same as"), or removed (`POST /api/personas/settle`, `looseNames` and `settleAudienceName`).
@@ -299,7 +303,7 @@ created: 2026-10-22
 - **edited:** the fields the person changed in the map; `/personas` never rewrites them. **source:** data, code or docs when there is evidence, inferred when Claude guessed (shown as Guess), none when the person wrote it. **confirmed:** the date the person pressed Confirm it.
 - **id:** `pe_` plus six characters, never changed.
 
-A segment file (`segments/<id>.md`, `sg_` ids): `name`, `type` (own office, property owner, coworking, partner, other), `industry`, `size_min` and `size_max` (people employed; no max is open upwards), `admins` (titles), `source`, and notes. Edited in place in the Personas view, or written by `/personas` from research.
+A segment file (`segments/<id>.md`, `sg_` ids): `name`, `type` (single site, multi site, franchise, partner, other), `industry`, `size_min` and `size_max` (people employed; no max is open upwards), `admins` (titles), `source`, and notes. Edited in place in the Personas view, or written by `/personas` from research.
 
 **The overview** is drawn by the map from those fields, not written: personas down the side, and across either the segments (how common, and who wears the hat), the themes (how many evidence lines) or the areas (● lives, ○ visits), filtered by size band (`SIZE_BANDS`) and kind of customer, smallest customers first. Below it, the notes `/personas` writes (`outputs/personas/<run>.md`) for what the tables cannot say.
 

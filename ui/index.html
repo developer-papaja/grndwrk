@@ -1173,7 +1173,7 @@
                         <input
                           id="screen-new-persona"
                           class="field w-44 py-0.5 text-[12px]"
-                          placeholder="New persona, like Receptionist"
+                          placeholder="New persona, like Clinic coordinator"
                           x-model="$store.gw.screenPersona"
                           x-init="$nextTick(() => $el.focus())"
                           @keydown.enter.prevent="$store.gw.addPersonaFromScreen()"
@@ -1435,7 +1435,7 @@
           <li x-show="!$store.gw.personas.length" class="px-2 py-2 text-xs text-fog/45">No personas yet. Add one below, or run /personas in your agent.</li>
         </ul>
         <form class="border-t border-line p-3" @submit.prevent="$store.gw.addPersona()">
-          <input id="new-persona" class="field w-full" placeholder="New persona, like Receptionist" x-model="$store.gw.newPersona" />
+          <input id="new-persona" class="field w-full" placeholder="New persona, like Clinic coordinator" x-model="$store.gw.newPersona" />
         </form>
       </aside>
       <section class="min-w-0 flex-1 overflow-y-auto">
@@ -1572,7 +1572,7 @@
                     <span class="label">Kind of customer</span>
                     <select class="field w-full" @change="$store.gw.editSegment(sg.id, { type: $event.target.value })">
                       <option value="">Not said</option>
-                      <template x-for="t in $store.gw.segmentTypes" :key="t"><option :value="t" :selected="t === sg.type" x-text="t[0].toUpperCase() + t.slice(1)"></option></template>
+                      <template x-for="t in $store.gw.segmentTypes.includes(sg.type) || !sg.type ? $store.gw.segmentTypes : [...$store.gw.segmentTypes, sg.type]" :key="t"><option :value="t" :selected="t === sg.type" x-text="t[0].toUpperCase() + t.slice(1)"></option></template>
                     </select>
                   </label>
                   <label class="block">
@@ -1589,7 +1589,7 @@
                   </div>
                   <label class="block">
                     <span class="label">Who is admin</span>
-                    <input class="field w-full" :value="sg.admins.join(', ')" placeholder="Reception, Office manager" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.editSegment(sg.id, { admins: $store.gw.words($event.target.value) })" />
+                    <input class="field w-full" :value="sg.admins.join(', ')" placeholder="Practice manager, Head nurse" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.editSegment(sg.id, { admins: $store.gw.words($event.target.value) })" />
                   </label>
                 </div>
                 <div x-show="$store.gw.personaList.some((p) => p.segments[sg.id] && p.segments[sg.id].how !== 'none')" class="mt-3 flex flex-wrap gap-1.5 text-xs">
@@ -1668,7 +1668,7 @@
                 <div>
                   <span class="label">Employed by</span>
                   <div class="flex flex-wrap gap-1">
-                    <template x-for="e in $store.gw.employers" :key="e">
+                    <template x-for="e in [...new Set([...$store.gw.employers, ...$store.gw.persona.employer])]" :key="e">
                       <button class="chip" :class="$store.gw.persona.employer.includes(e) && 'chip-on'" @click="$store.gw.togglePersona('employer', e)" x-text="$store.gw.valueLabel(e)"></button>
                     </template>
                   </div>
@@ -1691,7 +1691,7 @@
                     </select>
                   </label>
                 </template>
-                <template x-for="f in [['lives_in', 'Lives in', 'Bookings, Users'], ['visits', 'Visits', 'Insights'], ['themes', 'Asks about', 'hardware, login, scope']]" :key="f[0]">
+                <template x-for="f in [['lives_in', 'Lives in', 'Bookings, Users'], ['visits', 'Visits', 'Insights'], ['themes', 'Asks about', 'scheduling, login, payments']]" :key="f[0]">
                   <label class="block">
                     <span class="label" x-text="f[1]"></span>
                     <input class="field w-full" :placeholder="f[2]" :value="$store.gw.persona[f[0]].join(', ')" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.savePersonaList(f[0], $event.target.value)" />

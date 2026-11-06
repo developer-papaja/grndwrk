@@ -15,7 +15,7 @@ export const SECTIONS: { key: PersonaSection; heading: string; hint: string; als
   {
     key: 'evidence',
     heading: 'Evidence',
-    hint: 'What it rests on, one line each, tagged with the segment and the theme: - [Clinic chains · hardware] An appointment says Conflict. What do I do?',
+    hint: 'What it rests on, one line each, tagged with the segment and the theme: - [Clinic chains · scheduling] An appointment says Conflict. What do I do?',
     also: ['questions they ask', 'quotes'],
   },
 ]
@@ -97,7 +97,7 @@ export interface Evidence {
 }
 
 /**
- * The evidence lines of a persona: `- [Clinic chains · hardware] text`.
+ * The evidence lines of a persona: `- [Clinic chains · scheduling] text`.
  * A tag that names a segment (by name or id) is the segment; the others are themes.
  */
 export function readEvidence(text: string, segments: Segment[]): Evidence[] {

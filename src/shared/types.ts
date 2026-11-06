@@ -256,7 +256,7 @@ export interface Persona extends Record<PersonaSection, string> {
   /** Parts of the product they live in, and those they only visit. */
   lives_in: string[]
   visits: string[]
-  /** What they ask about: hardware, permissions, login, scope... */
+  /** What they ask about: scheduling, permissions, login, payments... */
   themes: string[]
   /** Per segment id: how common the hat is there, and the titles that wear it. */
   segments: Record<string, PersonaInSegment>
@@ -306,7 +306,7 @@ export const PERSONA_DEVICES = ['laptop', 'desktop', 'phone', 'tablet'] as const
 export interface Segment {
   id: string
   name: string
-  /** own office, property owner, coworking, partner or other. */
+  /** How the customer is set up: single site, multi site, franchise, partner or other. */
   type: string
   industry: string
   /** People employed, from and to; 0 when not known. Without size_max it is open upwards. */
@@ -321,7 +321,7 @@ export interface Segment {
   error?: string
 }
 
-export const SEGMENT_TYPES = ['own office', 'property owner', 'coworking', 'partner', 'other'] as const
+export const SEGMENT_TYPES = ['single site', 'multi site', 'franchise', 'partner', 'other'] as const
 /** Size bands to filter segments by: [label, from, to]. */
 export const SIZE_BANDS: [string, number, number][] = [
   ['Under 50', 0, 49],

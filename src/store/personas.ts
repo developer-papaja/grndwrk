@@ -18,12 +18,12 @@ import { PERSONA_CHOICES, PERSONA_FIELDS, PERSONA_LISTS, PERSONA_SECTIONS, SEGME
  *   name: Clinic coordinator
  *   summary: Runs the clinic's day, and the product with it.
  *   tier: primary
- *   employer: [customer, service provider]
+ *   employer: [customer]
  *   technical: low
  *   frequency: daily
- *   themes: [hardware, permissions, login]
+ *   themes: [scheduling, permissions, login]
  *   segments:
- *     sg_audit: {how: most, titles: [Receptionist, Office manager]}
+ *     sg_chain: {how: most, titles: [Clinic coordinator, Practice manager]}
  *   source: data
  *   created: 2026-10-22
  *   ---

@@ -49,10 +49,10 @@ Write one file per segment in `.grndwrk/segments/<id>.md`, from the research whe
 ---
 id: sg_k2m4ab
 name: Clinic chains
-type: own office
-industry: Clinic chains
-size_min: 1000
-size_max: 5000
+type: franchise
+industry: Veterinary care
+size_min: 200
+size_max: 2000
 admins: [Operations manager, Clinic coordinator, Practice manager]
 source: data
 created: 2026-10-22
@@ -62,7 +62,7 @@ Groups of twenty clinics or more under one owner. A central operations team runs
 
 - `id`: `sg_` plus six random lowercase letters or digits. Never change an id.
 - `name`: what the person would call this kind of customer. Never a company's name.
-- `type`: `own office` (runs its own office), `property owner` (rents out space to tenants), `coworking`, `partner` (acts for customers: resellers, installers, service providers), or `other`.
+- `type`: how the customer is set up: `single site`, `multi site` (several sites under one owner), `franchise` (sites run by others under one brand), `partner` (acts for customers: resellers, installers, service providers), or `other`.
 - `industry`: in plain words.
 - `size_min`, `size_max`: people employed, as numbers. Leave `size_max` out when it is open upwards ("10 000+"). Approximate is fine; say so in the notes when sizes cover a whole group of companies.
 - `admins`: who administers the product at these customers, as titles.
@@ -85,17 +85,17 @@ id: pe_k2m4ab
 name: Clinic coordinator
 summary: Runs the clinic's day, and the product with it. Not IT.
 tier: primary
-employer: [customer, service provider]
+employer: [customer]
 technical: low
 frequency: daily
-device: [desktop, phone]
+device: [desktop, tablet]
 learning_curve: little
 lives_in: [Appointments, Patients, Staff, Messages]
-visits: [Access]
-themes: [hardware, permissions, login, scope]
+visits: [Billing]
+themes: [scheduling, permissions, login, payments]
 segments:
-  sg_k2m4ab: {how: most, titles: [Receptionist, Service desk, Office manager]}
-  sg_p7x2qd: {how: most, titles: [Property manager, Meeting host]}
+  sg_k2m4ab: {how: most, titles: [Clinic coordinator, Head nurse, Practice manager]}
+  sg_p7x2qd: {how: common, titles: [Front office, Head vet]}
   sg_c4n8we: {how: present, titles: [Owner]}
 source: data
 seen_in: [research/support-2026.md]
@@ -103,23 +103,23 @@ created: 2026-10-22
 ---
 ## Jobs
 1. Move appointments when a vet calls in sick.
-2. Check why a colleague cannot get in.
+2. Check why a colleague cannot log in.
 
 ## Needs to see first
-What is broken or waiting, with the next step. When nothing is, say so.
+Today's gaps and clashes, with the next step. When there are none, say so.
 
 ## Judged on
 No pet owner left waiting without being told why. Their work shows only when it fails.
 
 ## Where it goes wrong
-- A device says Out of service with no next step.
-- The access view does not say the colleague is deactivated.
+- A booking says Conflict with no next step.
+- The staff view does not say the colleague is deactivated.
 
 ## Design implications
-- Explain hardware and access problems in the interface, with the next step.
+- Explain scheduling clashes in the interface, with the next step.
 
 ## Evidence
-- [Clinic chains · hardware] An appointment says Conflict. What do I do?
+- [Clinic chains · scheduling] An appointment says Conflict. What do I do?
 - [Single clinics · payments] Does a card payment reach the right clinic's account?
 ```
 
@@ -135,7 +135,7 @@ The fields, all standardized so they line up in the overview:
 - `device`: `laptop`, `desktop`, `phone`, `tablet`.
 - `learning_curve`: what they can bear: `none` (here rarely, under pressure), `little` or `some`.
 - `lives_in`, `visits`: the areas of the product they live in and those they only visit. Use the screens' titles where the sitemap has them, and the same words across personas.
-- `themes`: what they ask about, as short lowercase words, the same words across personas and evidence: `hardware`, `permissions`, `login`, `scope`, `notifications`, `bookings`, `pricing`, `integration`.
+- `themes`: what they ask about, as short lowercase words, the same words across personas and evidence: `scheduling`, `permissions`, `login`, `payments`, `notifications`, `pricing`, `integration`.
 - `segments`: per segment id, `how` common the hat is there (`most`, `common`, `present`, `none`) and the `titles` that wear it there. One line per segment. Leave out a segment you know nothing about.
 - `source`: `data` when research backs it, `code` or `docs`, `inferred` when it is your guess. `seen_in`: the files, paths or doc anchors it rests on. `from`: thoughts it came from. `created`: today, for a new persona.
 
