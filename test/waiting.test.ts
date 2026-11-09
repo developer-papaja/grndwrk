@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { NodeStore } from '../src/store/nodes.js'
 import { readWaiting, setPersonalInfo, setWaiting } from '../src/store/waiting.js'
@@ -14,7 +14,7 @@ let gw: string
 let local: string
 beforeEach(async () => {
   gw = await mkdtemp(join(tmpdir(), 'gw-waiting-'))
-  local = join(gw, '..', `${gw.split('/').pop()}-state`, 'waiting.json')
+  local = join(gw, '..', `${basename(gw)}-state`, 'waiting.json')
   process.env.GRNDWRK_WAITING_FILE = local
   await writeFile(join(gw, 'project.md'), '---\nname: Clinic\nstart: new\n---\nNotes\n')
 })
