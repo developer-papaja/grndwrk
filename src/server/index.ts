@@ -91,7 +91,10 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   } else {
     ui = sirv(join(PACKAGE_ROOT, 'dist', 'ui'), {
       single: true,
-      dev: false,
+      // Read from disk on each request, not listed once at start: after an
+      // update or a rebuild while grndwrk runs, the fresh page names scripts
+      // a list made at start would not know, and the map would load blank.
+      dev: true,
       // The page must always be fresh, or a browser keeps running an old
       // build after an update. Built assets have hashed names and never change.
       setHeaders: (res, pathname) => {

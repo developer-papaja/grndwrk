@@ -245,6 +245,7 @@ enum Outbox {
       c["fix"] = a["fix"]
       c["test"] = a["test"]
       c["steps"] = a["steps"]
+      c["round"] = a["round"]
       next.append(c)
     }
     write(next, to: sentFile)
@@ -275,7 +276,7 @@ enum Outbox {
         try? FileManager.default.moveItem(at: from, to: pictures.appendingPathComponent("\(id).png"))
       }
       c["node"] = id
-      for field in ["title", "status", "state", "fix", "test", "steps"] { c[field] = a[field] }
+      for field in ["title", "status", "state", "fix", "test", "steps", "round"] { c[field] = a[field] }
       next.append(c)
     }
     write(next, to: sentFile)
@@ -291,7 +292,10 @@ enum Outbox {
   /// true when it did.
   static func tested(node: String, works: Bool, note: String = "", onMac: Bool = false) async -> Bool {
     guard let entry = read(sentFile).first(where: { $0["node"] as? String == node }), let key = entry["key"] as? String else { return false }
-    var body: [String: Any] = ["comments": [["id": node, "key": key]], "works": works]
+    // Which round of fixing was tested, as grndwrk last said: a result for an earlier fix never settles a newer one.
+    var comment: [String: Any] = ["id": node, "key": key]
+    if let round = entry["round"] as? String { comment["round"] = round }
+    var body: [String: Any] = ["comments": [comment], "works": works]
     if !note.isEmpty { body["note"] = note }
     if onMac && !works { body["on_mac"] = true }
     guard let data = try? JSONSerialization.data(withJSONObject: body), taken(await post(data, to: "api/feedback/tested")) else { return false }

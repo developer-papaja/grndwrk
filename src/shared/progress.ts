@@ -30,7 +30,9 @@ export function progressOfNode(n: GNode): Progress {
     const st = feedbackState(n)
     return st === 'fixed' ? 'done' : st === 'ready' ? 'ready' : st === 'proposed' ? 'in-progress' : 'open'
   }
-  return n.status === 'settled' ? 'done' : 'open'
+  if (n.status === 'settled') return 'done'
+  // Any thought the agent built something for waits for the person to test it, like a comment's fix.
+  return n.extra?.built ? 'ready' : 'open'
 }
 
 export function progressOfStory(s: Story): Progress {
@@ -39,8 +41,9 @@ export function progressOfStory(s: Story): Progress {
 }
 
 /**
- * What the filter shows: '' everything not finished (open, in progress,
- * ready to test), one status, or 'all'.
+ * What the status filter shows: '' everything not finished (open, in progress,
+ * ready to test), one status, or 'all'. Only the new comments through the relay
+ * is a filter of its own next to it (`newOnly` in the map), not a status.
  */
 export type ProgressFilter = '' | Progress | 'all'
 

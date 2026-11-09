@@ -198,7 +198,19 @@ describe('new or existing', () => {
     expect(asked[0]).toMatch(/has code/)
     expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
     await init(root, { ask: async (q) => (asked.push(q), 'y') })
-    expect(asked).toHaveLength(1)
+    // New or existing, and whether the map may hold names: each asked once.
+    expect(asked).toHaveLength(2)
+    expect(asked[1]).toMatch(/people's names/)
+    expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^personal_info: "?no"?$/m)
+  })
+
+  it('writes personal_info: yes when the map may hold names, and asks nothing without a terminal', async () => {
+    await init(root, { ask: async (q) => (/names/.test(q) ? 'y' : '') })
+    expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^personal_info: "?yes"?$/m)
+    const other = await mkdtemp(join(tmpdir(), 'gw-init-'))
+    await init(other)
+    expect(await readFile(join(other, '.grndwrk', 'project.md'), 'utf8')).not.toContain('personal_info')
+    await rm(other, { recursive: true, force: true })
   })
 
   it('adds start to a project.md written before it existed', async () => {

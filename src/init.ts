@@ -8,6 +8,8 @@ import { createInterface } from 'node:readline/promises'
 import { GW_DIR, OLD_GW_DIR, PACKAGE_ROOT } from './root.js'
 import { scalar } from './store/frontmatter.js'
 import { readProject, writeFields } from './store/project.js'
+import { setPersonalInfo } from './store/waiting.js'
+import { personalInfo } from './shared/waiting.js'
 
 export type Start = 'new' | 'existing'
 
@@ -33,6 +35,7 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   const start: Start = known === 'new' || known === 'existing' ? known : await decideStart(projectRoot, options.ask)
   const project = (await readFile(join(templates, 'project.md'), 'utf8')).replace('{{name}}', scalar(basename(projectRoot))).replace('{{start}}', start)
   if (!(await writeOnce(join(gw, 'project.md'), project, say)) && known !== start) await writeFields(gw, { start })
+  await decidePersonalInfo(gw, options.ask)
   await writeOnce(join(gw, 'readiness', 'checklist.md'), await readFile(join(templates, 'checklist.md'), 'utf8'), say)
   await dropRetiredAreas(join(gw, 'readiness', 'checklist.md'), say)
 
@@ -143,6 +146,20 @@ async function decideStart(projectRoot: string, ask?: (question: string) => Prom
   const yes = answer === '' || answer.startsWith('y')
   console.log('')
   return yes ? guess : guess === 'existing' ? 'new' : 'existing'
+}
+
+/**
+ * Whether the map may hold people's names (who a question waits for). Asked
+ * once, when there is someone to ask; without an answer the names stay on
+ * this Mac, and the map asks the first time someone picks a name.
+ */
+async function decidePersonalInfo(gw: string, ask?: (question: string) => Promise<string>): Promise<void> {
+  if (personalInfo((await readProject(gw)).data)) return
+  const prompt = ask ?? (process.stdin.isTTY ? askInTerminal : undefined)
+  if (!prompt) return
+  const answer = (await prompt('May the map hold people\'s names, such as who a question waits for? Say no if the repository is public. [y/N] ')).trim().toLowerCase()
+  console.log('')
+  await setPersonalInfo(gw, answer.startsWith('y') ? 'yes' : 'no')
 }
 
 async function askInTerminal(question: string): Promise<string> {

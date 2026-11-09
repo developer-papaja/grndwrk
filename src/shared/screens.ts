@@ -130,13 +130,16 @@ export interface SitemapLayout {
 }
 
 export const BOX = { width: 200, height: 96, gapX: 28, gapY: 64 }
+/** Boxes when the project has pictures of its screens: the picture below the text, so taller. */
+export const BOX_SHOTS = { width: 200, height: 220, gapX: 28, gapY: 64 }
 
 /**
- * The screens drawn as a site map, top down: the product at the top, then
- * each screen under its parent. Leaves sit side by side, and a parent is
- * centered over its children. The root box has the id ''.
+ * The screens drawn as a site map, top down: the top-level screens in the
+ * first row, each screen under its parent. Leaves sit side by side, and a
+ * parent is centered over its children. No box for the product itself: it
+ * said only the project's name, which the rail already shows.
  */
-export function layoutSitemap(screens: Screen[]): SitemapLayout {
+export function layoutSitemap(screens: Screen[], box: typeof BOX = BOX): SitemapLayout {
   const rows = screenTree(screens)
   // The tree as screenTree resolved it: each row's parent is the nearest row above at one less depth.
   const parentOf = new Map<string, string>()
@@ -150,23 +153,24 @@ export function layoutSitemap(screens: Screen[]): SitemapLayout {
     children.set(screen.id, children.get(screen.id) ?? [])
     stack.push(screen.id)
   }
-  const slot = BOX.width + BOX.gapX
-  const level = BOX.height + BOX.gapY
+  const slot = box.width + box.gapX
+  const level = box.height + box.gapY
   const boxes = new Map<string, SitemapBox>()
   let next = 0
   const place = (id: string, depth: number): number => {
     const kids = children.get(id) ?? []
     const xs = kids.map((k) => place(k, depth + 1))
     const x = xs.length ? (xs[0] + xs[xs.length - 1]) / 2 : next++ * slot
-    boxes.set(id, { id, x, y: depth * level, depth })
+    if (id) boxes.set(id, { id, x, y: depth * level, depth })
     return x
   }
-  place('', 0)
+  place('', -1)
   const all = [...boxes.values()]
+  if (!all.length) return { boxes: [], edges: [], width: 0, height: 0 }
   return {
     boxes: all,
-    edges: [...parentOf.entries()].map(([to, from]) => ({ from, to })),
-    width: Math.max(...all.map((b) => b.x)) + BOX.width,
-    height: Math.max(...all.map((b) => b.y)) + BOX.height,
+    edges: [...parentOf.entries()].filter(([, from]) => from).map(([to, from]) => ({ from, to })),
+    width: Math.max(...all.map((b) => b.x)) + box.width,
+    height: Math.max(...all.map((b) => b.y)) + box.height,
   }
 }

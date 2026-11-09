@@ -54,6 +54,7 @@ The map shows what to do next. For a new idea: write the purpose, add thoughts, 
 | `/topics` | Groups the thoughts into a few topics |
 | `/readiness` | Checks whether you have enough to start building, and what to add |
 | `/challenge` | Asks a few sharp questions where the thinking is thin |
+| `/questions` | Puts every question your agent asked you in the chat, or still has, into the map, and writes in the answers you already gave |
 | `/brief` | Writes the brief, the first user stories (with acceptance criteria to tick), and a starter `CLAUDE.md` |
 | `/decisions` | Looks back over a session and its commits, and settles what was decided |
 | `/feedback` | Proposes, and when you ask, builds fixes for comments made in the running product |

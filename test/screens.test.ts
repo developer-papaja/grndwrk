@@ -134,14 +134,16 @@ describe('screen tree and links', () => {
 })
 
 describe('sitemap layout', () => {
-  it('puts the product on top, children under their parent, and a parent over its children', () => {
+  it('puts top-level screens on top, children under their parent, and a parent over its children', () => {
     const l = layoutSitemap([screen('p_h', 'Home'), screen('p_a', 'A', 'p_h'), screen('p_b', 'B', 'p_h'), screen('p_s', 'Settings')])
     const at = (id: string) => l.boxes.find((b) => b.id === id)!
-    expect([at('').depth, at('p_h').depth, at('p_a').depth, at('p_s').depth]).toEqual([0, 1, 2, 1])
+    expect(l.boxes.some((b) => b.id === '')).toBe(false)
+    expect([at('p_h').depth, at('p_a').depth, at('p_s').depth]).toEqual([0, 1, 0])
+    expect(at('p_h').y).toBe(0)
     expect(at('p_h').x).toBe((at('p_a').x + at('p_b').x) / 2)
     expect(at('p_a').x).toBeLessThan(at('p_b').x)
     expect(at('p_b').x).toBeLessThan(at('p_s').x)
     expect(l.edges).toContainEqual({ from: 'p_h', to: 'p_a' })
-    expect(l.edges).toContainEqual({ from: '', to: 'p_s' })
+    expect(l.edges.some((e) => e.from === '')).toBe(false)
   })
 })

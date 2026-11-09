@@ -118,6 +118,12 @@ export function isValidId(id: string): boolean {
   return /^[A-Za-z0-9_-]{1,64}$/.test(id)
 }
 
+/** An item of a one-line `[a, b]` list: quoted also when it holds a character that ends or splits the list. */
+export function flowItem(s: string): string {
+  const plain = scalar(s)
+  return plain === s && /[,\[\]{}#]/.test(s) ? JSON.stringify(s) : plain
+}
+
 /** Write a string as a YAML scalar, quoting only when plain style would misparse. */
 export function scalar(s: string): string {
   const needsQuotes =

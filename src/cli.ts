@@ -9,6 +9,9 @@ import { openTarget } from './opener.js'
 const HELP = `Usage:
   grndwrk init        create .grndwrk/ and install the agent commands and skills, or update them
   grndwrk [start]     open the map in the browser
+  grndwrk check       read every file in .grndwrk/ as the map does and say
+                         what does not read, what to quote, and questions the
+                         map will not show; run it after writing map files
   grndwrk import-feedback <file>
                          add comments a tester shared as a file
   grndwrk screenshots [screen...]
@@ -88,6 +91,18 @@ async function main() {
     const script = join(PACKAGE_ROOT, 'clients', 'ios', 'build-loader.sh')
     const run = spawnSync('/bin/sh', [script, ...positionals.slice(1, 2)], { stdio: 'inherit' })
     return void process.exit(run.status ?? 1)
+  }
+
+  if (command === 'check') {
+    const root = findProjectRoot(process.cwd())
+    if (!root) {
+      console.error(noMapMessage(process.cwd()))
+      process.exit(1)
+    }
+    const { checkMap, formatFindings } = await import('./check.js')
+    const findings = await checkMap(join(root, GW_DIR))
+    console.log(formatFindings(findings))
+    return void process.exit(findings.length ? 1 : 0)
   }
 
   if (command === 'import-feedback') {
