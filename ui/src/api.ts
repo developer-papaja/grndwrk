@@ -44,6 +44,12 @@ export const fetchSegments = () => request<Segment[]>('GET', '/api/segments')
 export const createSegment = (name: string) => request<Segment>('POST', '/api/segments', { name })
 export type SegmentInput = { name?: string; type?: string; industry?: string; size_min?: number; size_max?: number; admins?: string[]; body?: string }
 export const updateSegment = (id: string, input: SegmentInput) => request<Segment>('PATCH', `/api/segments/${encodeURIComponent(id)}`, input)
+/** The person's own answer in a thread: taken back just after it was given, or changed later (keep the old one beside it, or overwrite it). */
+export type ThreadOwner = { kind: 'node'; item: GNode } | { kind: 'screen'; item: Screen } | { kind: 'persona'; item: Persona } | { kind: 'segment'; item: Segment }
+export const undoEntry = (owner: string, run: string, text: string) =>
+  request<ThreadOwner & { run: null }>('POST', `/api/threads/${encodeURIComponent(owner)}/${encodeURIComponent(run)}/undo`, { text })
+export const changeEntry = (owner: string, run: string, text: string, keep: boolean) =>
+  request<ThreadOwner & { run: string }>('PATCH', `/api/threads/${encodeURIComponent(owner)}/${encodeURIComponent(run)}`, { text, keep })
 export const deleteSegment = (id: string) => request<void>('DELETE', `/api/segments/${encodeURIComponent(id)}`)
 export const updateScreen = (id: string, input: { purpose?: string; audience?: string[]; tasks?: string[]; body?: string; hidden?: boolean; features?: string[] }) =>
   request<Screen>('PATCH', `/api/screens/${encodeURIComponent(id)}`, input)
@@ -110,6 +116,8 @@ export const fetchRelay = () => request<RelayInfo>('GET', '/api/relay').catch(()
 export const inviteColleague = (name: string) => request<{ id: string; name: string; link: string }>('POST', '/api/relay/invites', { name })
 export const answerJoin = (invite: string, allow: boolean) => request<RelayInfo>('POST', `/api/relay/joins/${invite}`, { allow })
 export const removeFromRelay = (kind: 'phones' | 'invites', id: string) => request<RelayInfo>('DELETE', `/api/relay/${kind}/${id}`)
+/** A comment through the relay was opened here: the server writes `seen:` on it the first time. */
+export const markSeen = (id: string) => request<{ seen: boolean }>('POST', `/api/nodes/${encodeURIComponent(id)}/seen`, {})
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
 
 /** Subscribe to server events. EventSource reconnects on its own after a drop. */
@@ -124,3 +132,9 @@ export function subscribe(handlers: {
   source.onmessage = (msg) => handlers.onEvent(JSON.parse(msg.data))
   return source
 }
+
+// Questions waiting for someone's answer (src/store/waiting.ts).
+export interface WaitingState { personal_info: 'yes' | 'no' | null; people: string[]; items: { key: string; on: string; question: string; since: string; for?: string }[] }
+export const fetchWaiting = () => request<WaitingState>('GET', '/api/waiting')
+export const saveWaiting = (input: { on: string; question: string; for?: string | null; clear?: boolean }) => request<WaitingState>('POST', '/api/waiting', input)
+export const savePersonalInfo = (value: 'yes' | 'no') => request<WaitingState>('POST', '/api/waiting/personal-info', { value })

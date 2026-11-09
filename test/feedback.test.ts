@@ -242,6 +242,25 @@ describe('comments a device can follow up on', () => {
     expect((await store.get(node.id))!.body).toContain('Tested on the Mac: approved. Marked fixed.')
   })
 
+  it('ignores a test result for an earlier round of fixing', async () => {
+    const { feedbackStatus, testedOnDevice } = await import('../src/server/feedback.js')
+    const { appendEntry } = await import('../src/shared/thread.js')
+    const node = await createFeedback(gw, store, parseFeedback({ text: 'The ring is too small', key }))
+    await store.update(node.id, { proposed: '2026-10-13', built: '2026-10-13', body: appendEntry(node.body, 'claude', 'Bigger ring.\n\nTo test:\n1. Open Today.', '2026-10-13') })
+    const first = (await feedbackStatus(store, { comments: [{ id: node.id, key }] }))[0].round
+    expect(first).toMatch(/^[0-9a-f]{16}$/)
+    // Rejected, built again the same day: a new round.
+    expect(await testedOnDevice(store, { comments: [{ id: node.id, key, round: first }], works: false, note: 'Still small' })).toEqual([{ id: node.id, state: 'incoming' }])
+    const now = (await store.get(node.id))!
+    await store.update(node.id, { proposed: '2026-10-13', built: '2026-10-13', body: appendEntry(now.body, 'claude', 'Even bigger ring.\n\nTo test:\n1. Open Today.', '2026-10-13') })
+    const second = (await feedbackStatus(store, { comments: [{ id: node.id, key }] }))[0].round
+    expect(second).not.toBe(first)
+    // The old approval, kept or handed over again, settles nothing; one for this round does.
+    expect(await testedOnDevice(store, { comments: [{ id: node.id, key, round: first }], works: true })).toEqual([])
+    expect((await store.get(node.id))!.extra.fixed).toBeUndefined()
+    expect(await testedOnDevice(store, { comments: [{ id: node.id, key, round: second }], works: true })).toEqual([{ id: node.id, state: 'fixed' }])
+  })
+
   it('shows the proposed fix, and lets the key holder mark it fixed or send it back', async () => {
     const { feedbackStatus, testedOnDevice } = await import('../src/server/feedback.js')
     const { appendEntry, splitBody } = await import('../src/shared/thread.js')

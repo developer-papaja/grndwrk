@@ -10,12 +10,14 @@ import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/
 import { createPersona, deletePersona, listPersonas, settleAudienceName, updatePersona } from '../store/personas.js'
 import { createSegment, deleteSegment, listSegments, updateSegment } from '../store/segments.js'
 import { listShots, readShot } from '../store/shots.js'
+import { changeOwnEntry, EntryRefused, removeOwnEntry } from '../store/threads.js'
 import { rememberedApp } from '../store/local.js'
 import { LinkRefused } from '../store/fs.js'
 import { today } from '../store/frontmatter.js'
 import { docOnDisk, listDocs, readDoc } from './docs.js'
 import { PERSONA_CHOICES, PERSONA_LISTS, PERSONA_SECTIONS, type NodeInput, type PersonaInSegment } from '../shared/types.js'
-import { noteTab, subscribe, type NodeSync } from './events.js'
+import { broadcast, noteTab, subscribe, type NodeSync } from './events.js'
+import { readWaiting, setPersonalInfo, setWaiting } from '../store/waiting.js'
 import type { Pairings } from './pairing.js'
 import type { Sites } from './sites.js'
 import { openTarget } from '../opener.js'
@@ -100,6 +102,36 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       const id = decodeURIComponent(testedMatch[1])
       const state = await testedInMap(ctx.store, id, await readBody(req))
       return send(res, 200, { state, node: await ctx.store.get(id) })
+    }
+
+    // A comment through the relay opened in the panel: `seen:` the first time anyone does.
+    const seenMatch = url.pathname.match(/^\/api\/nodes\/([^/]+)\/seen$/)
+    if (seenMatch && method === 'POST') {
+      const change = await ctx.store.markSeen(decodeURIComponent(seenMatch[1]))
+      if (change.upserted.length) await ctx.nodes.sync()
+      return send(res, 200, { seen: change.upserted.length > 0 })
+    }
+
+    // The person's own answer in a thread: taken back just after (undo), or changed later.
+    const entryMatch = url.pathname.match(/^\/api\/threads\/((?:n|p|pe|sg)_[A-Za-z0-9_-]{1,60})\/(\d{9,13}-[a-z0-9]{2})(\/undo)?$/)
+    if (entryMatch && ((entryMatch[3] && method === 'POST') || (!entryMatch[3] && method === 'PATCH'))) {
+      const [, owner, run, undo] = entryMatch
+      const input = (await readBody(req)) as { text?: unknown; keep?: unknown }
+      const kind = await threadOwner(ctx, owner)
+      if (!kind) throw new NotFound(owner)
+      try {
+        let now = run
+        if (undo) await removeOwnEntry(ctx.gwDir, owner, run, typeof input.text === 'string' ? input.text : undefined)
+        else {
+          if (typeof input.text !== 'string' || input.text.length > 20_000) throw new BadInput('text must be the answer')
+          now = await changeOwnEntry(ctx.gwDir, owner, run, input.text, input.keep === true)
+        }
+        if (kind === 'node') await ctx.nodes.sync()
+        return send(res, 200, { kind, run: undo ? null : now, item: await threadItem(ctx, kind, owner) })
+      } catch (err) {
+        if (err instanceof EntryRefused) return send(res, 409, { error: err.message })
+        throw err
+      }
     }
 
     // A map tab in the background, saying it is still open.
@@ -387,6 +419,30 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       // folder: the project's folder name, shown when project.md has no name.
       return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
     }
+    // Questions waiting for someone's answer, and whether the map may hold their names.
+    if (url.pathname === '/api/waiting' && method === 'GET') return send(res, 200, await readWaiting(ctx.gwDir))
+    if (url.pathname === '/api/waiting' && method === 'POST') {
+      const input = (await readBody(req)) as { on?: unknown; question?: unknown; for?: unknown; clear?: unknown }
+      if (typeof input.on !== 'string' || !/^(?:n|p|pe)_[A-Za-z0-9_]{1,60}$/.test(input.on)) throw new BadInput('on must be the id of a thought, a screen or a persona')
+      if (typeof input.question !== 'string' || !input.question.trim() || input.question.length > 5000) throw new BadInput('question must be the question asked')
+      if (input.for !== undefined && input.for !== null && typeof input.for !== 'string') throw new BadInput('for must be a name, or empty')
+      const on = input.on
+      const known = (await ctx.store.get(on).then(() => true, () => false)) ||
+        (await listScreens(ctx.gwDir)).some((s) => s.id === on) ||
+        (await listPersonas(ctx.gwDir)).some((p) => p.id === on)
+      if (!known) throw new NotFound(on)
+      const out = await setWaiting(ctx.gwDir, { on, question: input.question, for: input.for as string | null | undefined, clear: input.clear === true })
+      // Names kept on this Mac change no file in the map: other tabs are told here.
+      broadcast({ type: 'file:change', path: 'waiting/' })
+      return send(res, 200, out)
+    }
+    if (url.pathname === '/api/waiting/personal-info' && method === 'POST') {
+      const input = (await readBody(req)) as { value?: unknown }
+      if (input.value !== 'yes' && input.value !== 'no') throw new BadInput('value must be yes or no')
+      const out = await setPersonalInfo(ctx.gwDir, input.value)
+      broadcast({ type: 'file:change', path: 'waiting/' })
+      return send(res, 200, out)
+    }
     if (url.pathname === '/api/authors' && method === 'GET') {
       return send(res, 200, { me: await gitUser(ctx.gwDir), first: await firstAuthors(ctx.gwDir) })
     }
@@ -482,6 +538,23 @@ export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwD
   }
   res.writeHead(200, { 'Content-Type': image.type, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' }).end(image.data)
   return true
+}
+
+type ThreadKind = 'node' | 'screen' | 'persona' | 'segment'
+
+/** What a thread belongs to, when it exists: a thought, a screen, a persona or a segment. */
+async function threadOwner(ctx: Ctx, id: string): Promise<ThreadKind | null> {
+  if (id.startsWith('n_')) return (await ctx.store.get(id).then(() => true, () => false)) ? 'node' : null
+  if (id.startsWith('pe_')) return (await listPersonas(ctx.gwDir)).some((p) => p.id === id) ? 'persona' : null
+  if (id.startsWith('sg_')) return (await listSegments(ctx.gwDir)).some((s) => s.id === id) ? 'segment' : null
+  return (await listScreens(ctx.gwDir)).some((s) => s.id === id) ? 'screen' : null
+}
+
+/** The thought, screen, persona or segment as the map shows it, with its thread as it is now. */
+async function threadItem(ctx: Ctx, kind: ThreadKind, id: string): Promise<unknown> {
+  if (kind === 'node') return ctx.store.get(id)
+  const list = kind === 'persona' ? await listPersonas(ctx.gwDir) : kind === 'segment' ? await listSegments(ctx.gwDir) : await listScreens(ctx.gwDir)
+  return (list as { id: string }[]).find((x) => x.id === id) ?? null
 }
 
 function send(res: ServerResponse, status: number, body: unknown): true {

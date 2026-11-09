@@ -80,7 +80,14 @@
     @apply flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-fog hover:bg-tint/8;
   }
   .menu-btn-on {
-    @apply bg-accent/20 text-white ring-1 ring-accent hover:bg-accent/25;
+    @apply bg-accent/20 text-fog ring-1 ring-accent hover:bg-accent/25;
+  }
+  /* A filter in use, like Notion's: its name and value; opened to change or remove it. */
+  .filter-pill {
+    @apply flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] text-fog/75 ring-1 ring-line hover:bg-tint/8 hover:text-fog;
+  }
+  .filter-pill-on {
+    @apply bg-accent/15 text-fog ring-accent/60 hover:bg-accent/20;
   }
   .menu-pop {
     @apply absolute left-0 top-10 z-20 flex min-w-[220px] flex-col rounded-xl border border-line bg-panel p-1 text-[13px] shadow-xl shadow-shade/40;

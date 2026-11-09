@@ -40,7 +40,9 @@ export function tickCriterion(body: string, line: number, met: boolean): string 
 }
 
 /** How a story's status reads: "1 of 3 criteria met" when it has criteria, otherwise in words. */
-export function storyStatusLabel(story: Pick<Story, 'status' | 'body'>): string {
+export function storyStatusLabel(story: Pick<Story, 'status' | 'body'> & { error?: string }): string {
+  // A header that does not read says nothing about the status; its criteria would only mislead.
+  if (story.error && !story.error.startsWith('This story names no thought')) return "Can't be read"
   if (story.status === 'done') return 'Done'
   const c = criteriaOf(story.body)
   const met = c.filter((x) => x.met).length

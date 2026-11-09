@@ -1,7 +1,7 @@
 import { readFile, rename, writeFile } from './fs.js'
 import { join } from 'node:path'
 import { readMatter } from './matter.js'
-import { scalar } from './frontmatter.js'
+import { flowItem, scalar } from './frontmatter.js'
 export { mergePages } from '../shared/pages.js'
 
 /**
@@ -54,7 +54,7 @@ export async function writeKickoff(gwDir: string, changes: Partial<Record<Kickof
 
 /** Set fields of project.md, such as `start: existing` or the purpose, keeping the rest. */
 /** Set fields in project.md. An empty value takes the field out. */
-export async function writeFields(gwDir: string, fields: Record<string, string>): Promise<void> {
+export async function writeFields(gwDir: string, fields: Record<string, string | string[]>): Promise<void> {
   const { data, body } = await readProject(gwDir)
   const next: Record<string, unknown> = { ...data, ...fields }
   for (const [k, v] of Object.entries(fields)) if (v === '') delete next[k]
@@ -64,9 +64,9 @@ export async function writeFields(gwDir: string, fields: Record<string, string>)
 async function writeProject(gwDir: string, next: Record<string, unknown>, body: string): Promise<void> {
   const path = join(gwDir, 'project.md')
   const lines = Object.entries(next).map(([k, v]) => {
-    if (k === 'pages') return `pages: [${(v as string[]).map(scalar).join(', ')}]`
+    if (k === 'pages') return `pages: [${(v as string[]).map(flowItem).join(', ')}]`
     // Lists of words, like variants: [New UI, Previous UI], stay on one readable line.
-    if (Array.isArray(v) && v.every((x) => typeof x === 'string')) return `${k}: [${v.map(scalar).join(', ')}]`
+    if (Array.isArray(v) && v.every((x) => typeof x === 'string')) return `${k}: [${v.map(flowItem).join(', ')}]`
     if (k === 'kickoff') {
       const steps = KICKOFF_STEPS.filter((s) => (v as Record<string, string>)[s]).map((s) => `${s}: ${(v as Record<string, string>)[s]}`)
       return `kickoff: { ${steps.join(', ')} }`

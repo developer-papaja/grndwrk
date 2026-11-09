@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { NODE_TYPES, STATUSES, type GNode, type NodeInput } from '../shared/types.js'
 import { DEFAULTS, isValidId, oneOf, parseNode, serializeNode, toAltitude, today } from './frontmatter.js'
 import { readEntryFiles, removeEntries, saveBody, withEntries } from './threads.js'
+import { needsSeen } from '../shared/unseen.js'
 
 export class NotFound extends Error {}
 export class ReadOnly extends Error {}
@@ -184,6 +185,28 @@ export class NodeStore {
       const onlyBody = Object.entries(input).every(([k, v]) => k === 'body' || v === undefined)
       if (!(onlyBody && body === bodies.get(id))) await this.write(next, own, body)
       return this.changed(touched)
+    })
+  }
+
+  /**
+   * Someone opened a comment that came through the relay: `seen: <date>` is
+   * added as one line at the end of its header, the rest of the file left as
+   * it is, so it merges with any other change. Only the first opening writes;
+   * after that, and for anything else, nothing changes (an empty Change).
+   */
+  markSeen(id: string, date = today()): Promise<Change> {
+    return this.serial(async () => {
+      const current = (await this.read()).nodes.find((n) => n.id === id)
+      if (!current) throw new NotFound(id)
+      if (!needsSeen(current)) return { upserted: [], deleted: [] }
+      const path = this.pathFor(id)
+      const raw = await readFile(path, 'utf8')
+      const m = /^(---\r?\n[\s\S]*?)(\r?\n)(---[ \t]*(\r?\n|$))/.exec(raw)
+      if (!m) throw new ReadOnly(`${id}.md has no header to mark`)
+      const tmp = join(this.dir, `.${id}.md.tmp`)
+      await writeFile(tmp, `${m[1]}${m[2]}seen: ${date}${m[2]}${raw.slice(m[1].length + m[2].length)}`, 'utf8')
+      await rename(tmp, path)
+      return this.changed([id])
     })
   }
 

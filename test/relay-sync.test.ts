@@ -102,6 +102,31 @@ async function phone(link: string) {
 const ctx = () => ({ gwDir: gw, store, nodes: new NodeSync(() => store.list()), project: 'Rooms', uiUrl: 'http://localhost:1' })
 
 describe('relay and grndwrk', () => {
+  it('tries a comment again when it failed for a passing reason, instead of dropping it as seen', async () => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) return
+    const { chmod } = await import('node:fs/promises')
+    const r = await project()
+    const sync = new RelaySync(r, ctx())
+    const { link } = await sync.invite('Anna')
+    const p = await phone(link)
+    await sync.tick()
+    await sync.answerJoin((await sync.summary()).waiting[0].invite, true)
+    expect((await p.send('/api/feedback', { text: 'Book is cut off', key: 'k'.repeat(20) })).status).toBe(202)
+    // The map's folder cannot be written for a moment: the comment stays at the relay.
+    await chmod(join(gw, 'nodes'), 0o500)
+    const quiet = console.error
+    console.error = () => {}
+    try {
+      await sync.tick()
+    } finally {
+      console.error = quiet
+      await chmod(join(gw, 'nodes'), 0o700)
+    }
+    expect(await store.list()).toEqual([])
+    await sync.tick()
+    expect((await store.list()).map((n) => n.title)).toEqual(['Book is cut off'])
+  })
+
   it('brings a colleague’s comment into the map, with their name, and their status back', async () => {
     const r = await project()
     const sync = new RelaySync(r, ctx())
@@ -141,6 +166,57 @@ describe('relay and grndwrk', () => {
     await sync.tick()
     expect((await store.get(node.id)).body).toContain('> Still cut off')
     expect((await p.status())?.comments[0]).toMatchObject({ state: 'incoming' })
+  })
+
+  it('settles a fix when the phone sends back the round it got with its status, and not for an older round', async () => {
+    const r = await project()
+    const sync = new RelaySync(r, ctx())
+    const p = await phone((await sync.invite('Ed')).link)
+    await sync.tick()
+    await sync.answerJoin((await sync.summary()).waiting[0].invite, true)
+    await p.send('/api/feedback', { text: 'Ring too small', key: 'e'.repeat(20) })
+    await sync.tick()
+    const [node] = await store.list()
+    const today = new Date().toISOString().slice(0, 10)
+    await store.update(node.id, { proposed: today, built: today, body: `${node.body}\n## Thread\n\n**Claude** · ${today}\nBigger.\n\nTo test:\n1. Open Today.\n` })
+    await sync.tick()
+    const old = (await p.status())!.comments[0].round as string
+    expect(old).toMatch(/^[0-9a-f]{16}$/)
+    // Built again: the phone still holding the old round settles nothing.
+    const now = (await store.get(node.id))!
+    await store.update(node.id, { body: `${now.body}\n\n**Claude** · ${today}\nEven bigger.\n\nTo test:\n1. Open Today.\n` })
+    await p.send('/api/feedback/tested', { comments: [{ id: node.id, key: 'e'.repeat(20), round: old }], works: true })
+    await sync.tick()
+    expect((await store.get(node.id))!.extra.fixed).toBeUndefined()
+    const fresh = (await p.status())!.comments[0].round as string
+    expect(fresh).not.toBe(old)
+    await p.send('/api/feedback/tested', { comments: [{ id: node.id, key: 'e'.repeat(20), round: fresh }], works: true })
+    await sync.tick()
+    expect((await store.get(node.id))!.extra.fixed).toBe(today)
+  })
+
+  it('ignores a test result sealed before the fix was built', async () => {
+    const r = await project()
+    const sync = new RelaySync(r, ctx())
+    const p = await phone((await sync.invite('Di')).link)
+    await sync.tick()
+    await sync.answerJoin((await sync.summary()).waiting[0].invite, true)
+    await p.send('/api/feedback', { text: 'Ring too small', key: 'd'.repeat(20) })
+    await sync.tick()
+    const [node] = await store.list()
+    await store.update(node.id, { proposed: '2026-11-07', built: '2026-11-09', body: `${node.body}\n## Thread\n\n**Claude** · 2026-11-09\nBigger.\n\nTo test:\n1. Open Today.\n` })
+    // Sealed two days before the build: an old result handed over again.
+    const day = Date.UTC(2026, 10, 7, 12)
+    const old = p.envelope('/api/feedback/tested', { comments: [{ id: node.id, key: 'd'.repeat(20) }], works: true }, day)
+    expect((await p.leave(old)).status).toBe(202)
+    const real = Date.now
+    Date.now = () => day + 60_000
+    try {
+      await sync.tick()
+    } finally {
+      Date.now = real
+    }
+    expect((await store.get(node.id))!.extra.fixed).toBeUndefined()
   })
 
   it('lets any teammate’s grndwrk let a phone in and open its comments, with the team link', async () => {

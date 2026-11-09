@@ -174,10 +174,22 @@ export class RelaySync {
     if (typeof path !== 'string' || !COMMENT_PATHS.includes(path) || path === '/api/feedback/status') throw new BadInput('not something a phone sends')
     if (typeof id !== 'string' || !/^[A-Za-z0-9-]{16,64}$/.test(id) || typeof at !== 'number') throw new BadInput('it has no id and time from the phone')
     if (seen[device]?.[id] || at < now - FRESH || at > now + 5 * 60_000) throw new BadInput('it was handled before, or is too old: the relay handed it over again')
-    ;(seen[device] ??= {})[id] = at
     // A phone acts only on the comments it sent itself, whatever keys it knows.
-    const own = path === '/api/feedback' ? body : await this.onlyOwn(body, device)
+    let own = path === '/api/feedback' ? body : await this.onlyOwn(body, device)
+    // A test result sealed before the fix was built is about an earlier fix: a relay handing an old one over again settles nothing.
+    if (path === '/api/feedback/tested') own = await this.builtBefore(own, at)
     await commentRequest(path, own, { ...this.ctx, via: 'relay', from: { name: phone.name, device } })
+    // Seen once handled, not before: one that failed for a passing reason stays at the relay and is tried again.
+    ;(seen[device] ??= {})[id] = at
+  }
+
+  private async builtBefore(body: unknown, at: number): Promise<unknown> {
+    const list = (body as { comments?: unknown })?.comments
+    if (!Array.isArray(list)) return body
+    // A day of slack: built dates are written by the map (UTC) and by agents (their own day), so a genuine result is never dropped across time zones.
+    const sealed = new Date(at + 86_400_000).toISOString().slice(0, 10)
+    const built = new Map((await this.ctx.store.list()).map((n) => [n.id, typeof n.extra?.built === 'string' ? n.extra.built : '']))
+    return { ...(body as object), comments: list.filter((c) => (built.get((c as { id?: unknown })?.id as string) ?? '') <= sealed) }
   }
 
   private async onlyOwn(body: unknown, device: string): Promise<unknown> {

@@ -7,6 +7,12 @@ function isTyping(target: EventTarget | null): boolean {
 
 export function bindKeys(captureInput: () => HTMLElement | null, actions: { layout: () => void }) {
   window.addEventListener('keydown', (e) => {
+    // Cmd+Z (Ctrl+Z on Windows) outside a field takes back the answer just given.
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && state.undoAnswer && !isTyping(e.target)) {
+      e.preventDefault()
+      void state.undoLast()
+      return
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return
 
     // A picture open on top of everything takes the keys: Esc closes, arrows step.
@@ -38,11 +44,12 @@ export function bindKeys(captureInput: () => HTMLElement | null, actions: { layo
         e.preventDefault()
         state.openList()
         break
+      // A card hidden by another view (selectionInView) is never changed or closed by a key.
       case '[':
-        state.nudgeAltitude(-1)
+        if (state.selectionInView) state.nudgeAltitude(-1)
         break
       case ']':
-        state.nudgeAltitude(1)
+        if (state.selectionInView) state.nudgeAltitude(1)
         break
       case 'v':
       case 'V':
@@ -51,12 +58,12 @@ export function bindKeys(captureInput: () => HTMLElement | null, actions: { layo
       case 'Delete':
       case 'Backspace':
         e.preventDefault()
-        state.requestDelete()
+        if (state.selectionInView) state.requestDelete()
         break
       case 'Escape':
         if (state.view === 'focus') state.setView('map')
         else if (state.mode === 'link') state.toggleLinkMode()
-        else if (state.selectedId || state.selectedGapId || state.selectedStoryId || state.reportOpen) state.closePanel()
+        else if (state.selectionInView && (state.selectedId || state.selectedGapId || state.selectedStoryId || state.reportOpen)) state.closePanel()
         break
     }
   })

@@ -1,8 +1,9 @@
+import { createHash } from 'node:crypto'
 import { BadInput, type NodeStore } from '../store/nodes.js'
 import { removeFiles, saveImage } from '../store/files.js'
 import { listStories } from '../store/stories.js'
 import type { GNode, Story } from '../shared/types.js'
-import { feedbackState, testSteps } from '../shared/feedback.js'
+import { feedbackState, isFeedback, testSteps } from '../shared/feedback.js'
 import { appendEntry, splitBody } from '../shared/thread.js'
 import { cleanText } from '../shared/text.js'
 
@@ -176,6 +177,8 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
 interface Ask {
   id: string
   key: string
+  /** With a test result: the round of fixing it is about (`fixRound`). */
+  round?: string
 }
 
 function asks(body: unknown): Ask[] {
@@ -183,7 +186,7 @@ function asks(body: unknown): Ask[] {
   if (!Array.isArray(list)) throw new BadInput('Send { comments: [{ id, key }] }')
   return list
     .slice(0, 500)
-    .map((c) => ({ id: typeof c?.id === 'string' ? c.id : '', key: validKey(c?.key) ?? '' }))
+    .map((c) => ({ id: typeof c?.id === 'string' ? c.id : '', key: validKey(c?.key) ?? '', ...(typeof c?.round === 'string' && /^[0-9a-f]{16}$/.test(c.round) ? { round: c.round } : {}) }))
     .filter((c) => c.id && c.key)
 }
 
@@ -196,7 +199,7 @@ function asks(body: unknown): Ask[] {
 export async function feedbackStatus(
   store: NodeStore,
   body: unknown,
-): Promise<{ id: string; title?: string; status?: string; state?: string; fix?: string; test?: string; gone?: true }[]> {
+): Promise<{ id: string; title?: string; status?: string; state?: string; fix?: string; test?: string; round?: string; gone?: true }[]> {
   const nodes = new Map((await store.list()).map((n) => [n.id, n]))
   return asks(body).map(({ id, key }) => {
     const n = nodes.get(id)
@@ -205,8 +208,19 @@ export async function feedbackStatus(
     const state = feedbackState(n) ?? 'incoming'
     const { fix, test } = state === 'incoming' ? { fix: '', test: '' } : lastFix(n.body)
     const status = { fixed: 'fixed', ready: 'ready to test', proposed: 'fix proposed', incoming: n.status }[state]
-    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test, steps: stepsOf(test) } : {}) }
+    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test, steps: stepsOf(test) } : {}), ...(state === 'ready' ? { round: fixRound(n.body) } : {}) }
   })
+}
+
+/**
+ * Which round of fixing a comment is in: a short fingerprint of Claude's last
+ * entry, what it built and how to test it. A device sends it back with its
+ * result, so a result for an earlier round (kept, or replayed by a relay)
+ * never settles a newer fix.
+ */
+export function fixRound(body: string): string {
+  const said = splitBody(body).entries.filter((e) => e.who === 'claude')
+  return createHash('sha256').update(said[said.length - 1]?.text ?? '').digest('hex').slice(0, 16)
 }
 
 /**
@@ -248,16 +262,28 @@ export async function testedOnDevice(store: NodeStore, body: unknown): Promise<{
   if (typeof b.works !== 'boolean') throw new BadInput('Say whether the fix works: { comments, works }')
   const nodes = new Map((await store.list()).map((n) => [n.id, n]))
   const done: { id: string; state: 'fixed' | 'incoming' }[] = []
-  for (const { id, key } of asks(body)) {
+  for (const { id, key, round } of asks(body)) {
     const n = nodes.get(id)
     // Only a built fix is tested, as on the web (webTestOf).
     if (!n || n.extra?.source !== 'app' || n.extra?.key !== key || feedbackState(n) !== 'ready') continue
+    // A result for another round of fixing (sent from a phone that names it) is not about this fix.
+    if (round && round !== fixRound(n.body)) continue
     done.push({ id, state: await settle(store, n, b.works, b.note, 'on the phone', !b.works && b.on_mac === true) })
   }
   return done
 }
 
 /** Approved: fixed today. Rejected: back to incoming, with the person's note quoted in the thread. */
+/** A note as quoted lines, with the pictures in it (Markdown images of the map's own files) on lines of their own below the quote. */
+function quoteNote(note: string, label: string): string {
+  const picture = /^!\[[^\]]*\]\((?:\.\.\/)+files\/[A-Za-z0-9_-]{1,64}\/[0-9]{10,16}(?:-[0-9]+)?\.(?:png|jpg|gif|webp)\)$/
+  const lines = note.split('\n')
+  const pictures = lines.filter((l) => picture.test(l.trim())).map((l) => l.trim())
+  const words = lines.filter((l) => !picture.test(l.trim())).join('\n').trim()
+  const quoted = words ? `\n\n${label}\n\n${words.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n')}` : ''
+  return quoted + (pictures.length ? `\n\n${pictures.join('\n')}` : '')
+}
+
 async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unknown, where: string, onMac = false): Promise<'fixed' | 'incoming'> {
   const note = typeof rawNote === 'string' ? cleanText(rawNote, true).trim().slice(0, 2000) : ''
   const day = new Date().toISOString().slice(0, 10)
@@ -265,7 +291,7 @@ async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unkno
     await store.update(n.id, { fixed: day, body: appendEntry(n.body, 'you', `Tested ${where}: approved. Marked fixed.`, day) })
     return 'fixed'
   }
-  const quoted = note ? `\n\n${NOTE_LABEL}\n\n${note.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n')}` : ''
+  const quoted = note ? quoteNote(note, NOTE_LABEL) : ''
   // Rejected on the phone, the note to be written on the Mac: it follows as the next entry.
   const later = onMac ? ' What is still wrong is written on the Mac, in the next entry.' : ''
   await store.update(n.id, { fixed: '', proposed: '', built: '', body: appendEntry(n.body, 'you', `Tested ${where}: rejected, not fixed yet.${later}${quoted}`, day) })
@@ -282,13 +308,30 @@ function addressOf(n: GNode): URL | null {
   }
 }
 
-/** The person tested a built fix and says so in the map: `{ works, note? }`. Only a comment that is ready to test. */
+/**
+ * The person tested something built and says so in the map: `{ works, note? }`.
+ * A comment's fix that is ready to test, or any thought with `built:` that is
+ * not settled yet: works settles it, does not work takes `built` away and
+ * says what is still wrong, so the agent picks it up again.
+ */
 export async function testedInMap(store: NodeStore, id: string, body: unknown): Promise<'fixed' | 'incoming'> {
   const b = (body ?? {}) as Record<string, unknown>
   if (typeof b.works !== 'boolean') throw new BadInput('Say whether the fix works: { works, note }')
   const n = await store.get(id)
-  if (feedbackState(n) !== 'ready') throw new BadInput('Only a built fix, ready to test, is tested')
-  return settle(store, n, b.works, b.note, 'on the Mac')
+  if (isFeedback(n)) {
+    if (feedbackState(n) !== 'ready') throw new BadInput('Only a built fix, ready to test, is tested')
+    return settle(store, n, b.works, b.note, 'on the Mac')
+  }
+  if (!n.extra?.built || n.status !== 'open') throw new BadInput('Only something built, ready to test, is tested')
+  const note = typeof b.note === 'string' ? cleanText(b.note, true).trim().slice(0, 2000) : ''
+  const day = new Date().toISOString().slice(0, 10)
+  if (b.works) {
+    await store.update(n.id, { status: 'settled', body: appendEntry(n.body, 'you', 'Tested on the Mac: it works. Marked done.', day) })
+    return 'fixed'
+  }
+  const quoted = note ? quoteNote(note, 'What is still wrong:') : ''
+  await store.update(n.id, { built: '', body: appendEntry(n.body, 'you', `Tested on the Mac: does not work yet.${quoted}`, day) })
+  return 'incoming'
 }
 
 /** A built fix on a comment made on this site, which the site may show and settle. */
