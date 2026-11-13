@@ -4,6 +4,7 @@
  * else is in relay.ts.
  */
 import { Relay, type Store } from './relay.js'
+import { OVERLAY, RELAY, SHOT } from './assets.js'
 
 interface Env {
   OWNER_AUTH?: string
@@ -21,7 +22,7 @@ interface DurableObjectStorage {
 export class RelayObject {
   private relay: Relay
   constructor(state: { storage: DurableObjectStorage }, env: Env) {
-    this.relay = new Relay(state.storage as Store, env.OWNER_AUTH)
+    this.relay = new Relay(state.storage as Store, env.OWNER_AUTH, Date.now, { overlay: OVERLAY, relay: RELAY, shot: SHOT })
   }
   fetch(req: Request): Promise<Response> {
     return this.relay.handle(req)

@@ -6,6 +6,7 @@ import type { GNode, Story } from '../shared/types.js'
 import { feedbackState, isFeedback, testSteps } from '../shared/feedback.js'
 import { appendEntry, splitBody } from '../shared/thread.js'
 import { cleanText } from '../shared/text.js'
+import { suspiciousSigns } from '../shared/suspicious.js'
 
 /**
  * A comment left on the running product, from the web overlay or the iOS
@@ -145,6 +146,8 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
   if (stories.length) lines.push('', `Stories for this screen: ${stories.map((s) => `${s.id} (${s.title})`).join(', ')}`)
 
   const seenIn = [input.screen, e.id ? `#${e.id}` : e.label, e.component].filter((s): s is string => !!s)
+  // Reads like orders to an agent rather than a report: marked, never dropped.
+  const suspicious = suspiciousSigns(input.text, e.label, e.id, e.component, e.selector, input.screen, input.url)
   const change = await store.create(
     { title, type: 'idea', page: 'Feedback', topic: topicFor(input.screen), altitude: 1, status: 'open', body: lines.join('\n') + '\n' },
     {
@@ -155,6 +158,7 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
       // Where a web comment was made, so the page can find its fixes to test.
       ...(input.url ? { url: input.url } : {}),
       ...(via ? { via } : {}),
+      ...(suspicious.length ? { suspicious } : {}),
       ...(from ? { from: cleanText(from.name).trim().slice(0, 80) || 'A colleague', relay_device: from.device } : {}),
     },
   )

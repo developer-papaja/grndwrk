@@ -12,6 +12,10 @@
  * The phone (signed with its signing key, which the team registered):
  *   POST /v1/inbox            leave an envelope (at most 4 MB)
  *   GET  /v1/outbox           the sealed status of its comments, or 204
+ * A browser on the team's staging site does what a phone does, on the same
+ * three paths (join, inbox, outbox), with CORS for that site only:
+ *   GET /v1/feedback.js       the Comment button, only for the staging site (by Referer), set to run only there
+ *   GET /v1/screenshot.js     what draws a comment's picture
  * A phone joining with an invite (not signed: it has no key here yet):
  *   POST /v1/join/<invite>    its key, sealed with the invite's secret, once
  * The project's team (signed as `team` with the mailbox's auth key):
@@ -26,7 +30,8 @@
  *   GET    /v1/inbox          the envelopes waiting, oldest first
  *   GET    /v1/inbox/<id>     one envelope; DELETE it once handled
  *   PUT    /v1/outbox/<device>  the sealed status for a phone
- *   GET    /v1/sync           joins, phones and the envelopes waiting, in one request
+ *   GET    /v1/sync           joins, phones, the envelopes waiting and the staging site, in one request
+ *   PUT    /v1/site {site}    the staging site whose browsers may join and send, an https origin, or '' for none
  * Anyone: GET /v1/hello.
  *
  * A nonce is kept only for requests that change something: a GET sent again
@@ -85,21 +90,50 @@ const fail = (status: number, error: string) => json({ error }, status)
 const bytes = (data: Uint8Array, headers: Record<string, string> = {}) =>
   new Response(data as BodyInit, { headers: { 'content-type': 'application/octet-stream', 'cache-control': 'no-store', ...headers } })
 
+/** The scripts for a staging site, put into the Worker when it is deployed (assets.ts). */
+export interface Assets { overlay: string; relay: string; shot: string }
+
+/** What a browser on the staging site may ask for, with CORS: what a phone asks for, nothing of the team's. */
+const BROWSER = new Set(['inbox', 'outbox'])
+const ALLOW_HEADERS = 'content-type, x-grndwrk-device, x-grndwrk-time, x-grndwrk-nonce, x-grndwrk-signature'
+
 export class Relay {
   constructor(
     private store: Store,
     /** The owner's auth key (64 hex), set as a secret when the relay is deployed. Only it opens mailboxes. */
     private ownerAuth: string | undefined,
     private now: () => number = Date.now,
+    private assets?: Assets,
   ) {}
 
   async handle(req: Request): Promise<Response> {
+    let res: Response
     try {
-      return await this.route(req)
+      res = await this.route(req)
     } catch (e) {
-      if (e instanceof Response) return e
-      return fail(500, 'The relay failed')
+      res = e instanceof Response ? e : fail(500, 'The relay failed')
     }
+    return this.withCors(req, res)
+  }
+
+  /**
+   * The staging site's browsers read the answers to their own requests (join,
+   * inbox, outbox), and nothing else: no other site, and never the team's paths.
+   */
+  private async withCors(req: Request, res: Response): Promise<Response> {
+    const origin = req.headers.get('origin')
+    if (!origin || !this.browserPath(new URL(req.url).pathname)) return res
+    const site = await this.store.get<string>('site').catch(() => undefined)
+    if (!site || origin !== site) return res
+    const headers = new Headers(res.headers)
+    headers.set('access-control-allow-origin', site)
+    headers.append('vary', 'Origin')
+    return new Response(res.body, { status: res.status, headers })
+  }
+
+  private browserPath(path: string): boolean {
+    const [, , what, id] = path.split('/').filter(Boolean)
+    return what === 'join' ? !!id : BROWSER.has(what) && id === undefined
   }
 
   private async route(req: Request): Promise<Response> {
@@ -126,6 +160,11 @@ export class Relay {
 
     const teamAuth = await this.store.get<string>('team')
     if (!teamAuth) return fail(404, 'No such mailbox')
+
+    // The staging site: its button, and the browser asking before it sends.
+    if (method === 'OPTIONS') return this.preflight(req, path)
+    if (method === 'GET' && (rest === 'feedback.js' || rest === 'screenshot.js')) return this.script(req, url, mailbox, rest)
+
     await this.sweep()
 
     if (method === 'POST' && parts[1] === 'join' && parts.length === 3) {
@@ -147,6 +186,52 @@ export class Relay {
       return out ? bytes(out) : new Response(null, { status: 204 })
     }
     return fail(404, 'Not found')
+  }
+
+  /** A browser on the staging site asks before it sends: yes for that site, on a browser's own paths only. */
+  private async preflight(req: Request, path: string): Promise<Response> {
+    const site = await this.store.get<string>('site')
+    if (!site || req.headers.get('origin') !== site || !this.browserPath(path)) return new Response(null, { status: 403 })
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'access-control-allow-origin': site,
+        'access-control-allow-methods': 'GET, POST',
+        'access-control-allow-headers': ALLOW_HEADERS,
+        'access-control-max-age': '600',
+        vary: 'Origin',
+      },
+    })
+  }
+
+  /**
+   * The Comment button for the staging site, and what draws its pictures.
+   * Only when the team named a site, and only to a page there (a page
+   * elsewhere that names the relay gets nothing); the button itself also
+   * refuses to run on any other address. The code is public, the keys are not.
+   */
+  private async script(req: Request, url: URL, mailbox: string, name: string): Promise<Response> {
+    const site = await this.store.get<string>('site')
+    if (!site || !this.assets?.overlay) return fail(404, 'No staging site for this mailbox')
+    const referer = req.headers.get('referer')
+    let from = ''
+    try {
+      from = referer ? new URL(referer).origin : ''
+    } catch {}
+    if (referer && from !== site) return new Response('Only for the staging site', { status: 403 })
+    const config = { url: url.origin, mailbox, site }
+    const js =
+      name === 'screenshot.js'
+        ? `;(function () { var exports, module, define; var globalThis = {};\n${this.assets.shot}\n;window.__grndwrkShot = globalThis.modernScreenshot })()\n`
+        : `window.__grndwrkRelayConfig = ${JSON.stringify(config)};\n${this.assets.relay}\n${this.assets.overlay}\n`
+    return new Response(js, {
+      headers: {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-cache',
+        'x-content-type-options': 'nosniff',
+        'cross-origin-resource-policy': 'cross-origin',
+      },
+    })
   }
 
   /** Open a mailbox with its team's auth key, once; or close it with everything in it. */
@@ -196,7 +281,18 @@ export class Relay {
     }
     if (what === 'joins' && method === 'GET' && parts.length === 2) return json(await this.joins())
     if (what === 'sync' && method === 'GET' && parts.length === 2) {
-      return json({ joins: await this.joins(), devices: await this.devices(), inbox: await this.inbox() })
+      return json({ joins: await this.joins(), devices: await this.devices(), inbox: await this.inbox(), site: (await this.store.get<string>('site')) ?? '' })
+    }
+    if (what === 'site' && method === 'PUT' && parts.length === 2) {
+      const { site } = this.parse(body)
+      if (site === '') {
+        await this.store.delete(['site'])
+        return json({ ok: true, site: '' })
+      }
+      const origin = typeof site === 'string' ? siteOrigin(site) : ''
+      if (!origin) return fail(400, 'The staging site is an https address, like https://staging.example.com')
+      await this.store.put('site', origin)
+      return json({ ok: true, site: origin })
     }
     if (what === 'devices' && method === 'PUT' && one && ID.test(id)) {
       const { sign, sealed } = this.parse(body)
@@ -367,6 +463,19 @@ export class Relay {
     }
     await this.store.put('total', { n, bytes: size })
     await this.store.put('swept', now)
+  }
+}
+
+/** An https origin and nothing else (http only for localhost, to try it out); '' when it is not one. */
+export function siteOrigin(text: string): string {
+  try {
+    const u = new URL(text.trim())
+    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1'
+    if (u.protocol !== 'https:' && !(local && u.protocol === 'http:')) return ''
+    if (u.username || u.password) return ''
+    return u.origin
+  } catch {
+    return ''
   }
 }
 

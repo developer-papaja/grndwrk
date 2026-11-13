@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { listScreens, parseScreen, updateScreen } from '../src/store/screens.js'
-import { commentsForScreen, hiddenScreenIds, layoutSitemap, screenTree, storiesForScreen } from '../src/shared/screens.js'
+import { commentsForScreen, hiddenScreenIds, layoutSitemap, screenPartIds, screenParts, screenTree, storiesForScreen } from '../src/shared/screens.js'
 import type { GNode, Screen, Story } from '../src/shared/types.js'
 
 let root: string
@@ -34,7 +34,7 @@ On the screen: a calendar and a floor plan.
 `
 
 const screen = (id: string, title: string, parent = '', extra: Partial<Screen> = {}): Screen => ({
-  id, title, parent, purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], in: [], replaced_by: '', stories: [], features: [], status: 'built', hidden: '', source: '', created: '', body: '', ...extra,
+  id, title, parent, purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], in: [], replaced_by: '', part: '', stories: [], features: [], status: 'built', hidden: '', source: '', created: '', body: '', ...extra,
 })
 
 describe('screens store', () => {
@@ -145,5 +145,44 @@ describe('sitemap layout', () => {
     expect(at('p_b').x).toBeLessThan(at('p_s').x)
     expect(l.edges).toContainEqual({ from: 'p_h', to: 'p_a' })
     expect(l.edges.some((e) => e.from === '')).toBe(false)
+  })
+})
+
+describe('parts of the product that do not connect', () => {
+  const screens = [
+    screen('p_home', 'Home', '', { part: 'Pet owners' }),
+    screen('p_book', 'Book a visit', 'p_home'),
+    screen('p_dash', 'Dashboard', '', { part: 'Clinic staff' }),
+    screen('p_appt', 'Appointments', 'p_dash'),
+    screen('p_pats', 'Patients', 'p_dash'),
+    screen('p_login', 'Log in'),
+  ]
+
+  it('puts every screen in the part of the top screen its tree starts from', () => {
+    const of = screenPartIds(screens)
+    expect(of.get('p_book')).toBe('Pet owners')
+    expect(of.get('p_pats')).toBe('Clinic staff')
+    expect(of.get('p_login')).toBe('')
+  })
+
+  it('lists the parts in the order of the tree, with how many screens each holds', () => {
+    expect(screenParts(screens)).toEqual([
+      { name: 'Clinic staff', count: 3 },
+      { name: 'Pet owners', count: 2 },
+    ])
+  })
+
+  it('survives a loop of parents', () => {
+    const loop = [screen('p_a', 'A', 'p_b'), screen('p_b', 'B', 'p_a', { part: 'X' })]
+    expect(() => screenPartIds(loop)).not.toThrow()
+  })
+
+  it('reads part from a screen file and writes it back only where it was', async () => {
+    await writeFile(join(root, 'screens', 'p_dash.md'), '---\nid: p_dash\ntitle: Dashboard\npart: Clinic staff\nstatus: built\n---\n')
+    expect(parseScreen('p_dash', await readFile(join(root, 'screens', 'p_dash.md'), 'utf8')).part).toBe('Clinic staff')
+    await updateScreen(root, 'p_dash', { part: '' })
+    expect(await readFile(join(root, 'screens', 'p_dash.md'), 'utf8')).not.toContain('part:')
+    await updateScreen(root, 'p_dash', { part: 'Back office' })
+    expect(await readFile(join(root, 'screens', 'p_dash.md'), 'utf8')).toContain('part: Back office')
   })
 })

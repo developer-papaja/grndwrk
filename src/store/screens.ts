@@ -36,7 +36,7 @@ export async function listScreens(gwDir: string): Promise<Screen[]> {
   return screens
 }
 
-const KNOWN = ['id', 'title', 'parent', 'in', 'replaced_by', 'purpose', 'for', 'does', 'leads_to', 'code', 'open', 'seen_as', 'shots', 'stories', 'features', 'status', 'hidden', 'source', 'created']
+const KNOWN = ['id', 'title', 'parent', 'in', 'replaced_by', 'part', 'purpose', 'for', 'does', 'leads_to', 'code', 'open', 'seen_as', 'shots', 'stories', 'features', 'status', 'hidden', 'source', 'created']
 
 export function parseScreen(id: string, raw: string): Screen {
   let data: Record<string, unknown>
@@ -63,6 +63,7 @@ export function parseScreen(id: string, raw: string): Screen {
     parent: text(data.parent),
     in: list(data.in),
     replaced_by: ID.test(text(data.replaced_by)) && text(data.replaced_by) !== id ? text(data.replaced_by) : '',
+    part: text(data.part).replace(/\s+/g, ' ').trim().slice(0, 60),
     purpose: text(data.purpose),
     audience: list(data.for),
     tasks: list(data.does),
@@ -98,7 +99,7 @@ async function withThread(gwDir: string, screen: Screen): Promise<Screen> {
 }
 
 function empty(id: string): Screen {
-  return { id, title: id, parent: '', in: [], replaced_by: '', purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], stories: [], features: [], status: 'built', hidden: '', source: '', created: '', body: '' }
+  return { id, title: id, parent: '', in: [], replaced_by: '', part: '', purpose: '', audience: [], tasks: [], leads_to: [], code: [], open: [], seen_as: [], shots: [], stories: [], features: [], status: 'built', hidden: '', source: '', created: '', body: '' }
 }
 
 /** A date as YYYY-MM-DD, or empty: anything else would be written back unquoted. */
@@ -126,6 +127,8 @@ export interface ScreenEdit {
   /** A date hides the screen, empty shows it again. */
   hidden?: string
   features?: string[]
+  /** The part of the product a top screen's tree is in; empty takes it out of any. */
+  part?: string
 }
 
 /**
@@ -185,6 +188,7 @@ export function serializeScreen(s: Screen, extra: Record<string, unknown>, body:
     ...(s.parent ? [`parent: ${s.parent}`] : []),
     ...(s.in.length ? [`in: ${inline(s.in)}`] : []),
     ...(s.replaced_by ? [`replaced_by: ${s.replaced_by}`] : []),
+    ...(s.part ? [`part: ${scalar(s.part)}`] : []),
     `purpose: ${scalar(s.purpose)}`,
     `for: ${inline(s.audience)}`,
     ...(s.tasks.length ? ['does:', ...s.tasks.map((t) => `  - ${scalar(t)}`)] : ['does: []']),

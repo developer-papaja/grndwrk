@@ -51,7 +51,7 @@ export const undoEntry = (owner: string, run: string, text: string) =>
 export const changeEntry = (owner: string, run: string, text: string, keep: boolean) =>
   request<ThreadOwner & { run: string }>('PATCH', `/api/threads/${encodeURIComponent(owner)}/${encodeURIComponent(run)}`, { text, keep })
 export const deleteSegment = (id: string) => request<void>('DELETE', `/api/segments/${encodeURIComponent(id)}`)
-export const updateScreen = (id: string, input: { purpose?: string; audience?: string[]; tasks?: string[]; body?: string; hidden?: boolean; features?: string[] }) =>
+export const updateScreen = (id: string, input: { purpose?: string; audience?: string[]; tasks?: string[]; body?: string; hidden?: boolean; features?: string[]; part?: string }) =>
   request<Screen>('PATCH', `/api/screens/${encodeURIComponent(id)}`, input)
 export const fetchOutput = (name: 'brief.md' | 'CLAUDE.starter.md' | 'survey.md' | 'personas.md') =>
   request<{ text: string | null }>('GET', `/api/outputs/${encodeURIComponent(name)}`).then((r) => r.text)
@@ -108,6 +108,7 @@ export interface RelayInfo {
   phones?: { id: string; name: string; joined: string }[]
   invites?: { id: string; name: string; expires: number }[]
   waiting?: { invite: string; name: string; digits: string }[]
+  site?: string
   error?: string
 }
 /** Who is on this Mac (git's user.name), and each thought's first author in git, by id. */

@@ -3,7 +3,7 @@ import { cached } from './reactivity'
 import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
 import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, answerJoin, type RelayInfo, fetchAuthors } from './api'
-import { BOX, BOX_SHOTS, commentsForScreen, hiddenScreenIds, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
+import { BOX, BOX_SHOTS, commentsForScreen, hiddenScreenIds, layoutSitemap, screenPartIds, screenParts, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { answerText, appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, sameQuestion, splitBody, type Entry, type Question } from '../../src/shared/thread'
@@ -176,7 +176,7 @@ export const state = Alpine.reactive({
   /** The size of a box in the drawn sitemap: taller when any screen in view has a picture, which sits below the text. */
   get box(): typeof BOX {
     // Zoomed in, the picture sits to the right of the text; zoomed out, below the title, so it needs the height.
-    return this.sitemapCompact && this.viewScreens.some((sc) => this.shotsOf(sc).length) ? BOX_SHOTS : BOX
+    return this.sitemapCompact && this.sitemapScreens.some((sc) => this.shotsOf(sc).length) ? BOX_SHOTS : BOX
   },
   brief: null as string | null,
   starter: null as string | null,
@@ -218,6 +218,10 @@ export const state = Alpine.reactive({
   get count() {
     return Object.keys(this.nodes).length
   },
+  /** What All holds with the filters in view, so it adds up with the pages and the topics under it. */
+  get shownCount() {
+    return cached('shownCount', () => this.nodesMatching('', Object.values(this.nodes).filter((n) => this.inScope(n))).length)
+  },
   /** Pages in the person's order, plus any that nodes use. */
   get pageNames(): string[] {
     return cached('pageNames', () => {
@@ -249,7 +253,7 @@ export const state = Alpine.reactive({
    * variant in view. `skip` leaves one filter out, so its menu can count what
    * each of its choices would show together with the others.
    */
-  nodesMatching(skip = ''): GNode[] {
+  nodesMatching(skip = '', base?: GNode[]): GNode[] {
     const f = this.progressFilter
     const hidden = this.hiddenScreens
     const shownNew = this.newOnly && skip !== 'new' ? new Set([...this.newShown, ...this.newComments.map((n) => n.id)]) : null
@@ -259,7 +263,7 @@ export const state = Alpine.reactive({
     const type = skip === 'type' ? '' : this.typeFilter
     const topic = skip === 'topic' ? '' : this.topicFilter
     const level = skip === 'level' ? 0 : this.levelFilter
-    return this.pageNodes.filter(
+    return (base ?? this.pageNodes).filter(
       (n) =>
         (skip === 'status' || showsProgress(f, progressOfNode(n))) &&
         !(hidden.size && hidden.has(screenOf(n, this.screens))) &&
@@ -417,14 +421,63 @@ export const state = Alpine.reactive({
     }
     return menus
   },
-  /** The variant menu again, for the Sitemap view's header. */
+  /** The variant menu again, for the Sitemap view's header, and the Part menu when the screens name parts. */
   get sitemapMenus(): MapMenu[] {
-    return this.mapMenus.filter((m) => m.key === 'menu-variant').map((m) => ({ ...m, key: 'sitemap-variant' }))
+    const menus = this.mapMenus.filter((m) => m.key === 'menu-variant').map((m) => ({ ...m, key: 'sitemap-variant' }))
+    const parts = this.sitemapParts
+    if (parts.length > 1) {
+      const all = this.viewScreens.length
+      menus.push({
+        key: 'sitemap-part',
+        name: 'Part',
+        value: this.sitemapPart || 'All parts',
+        title: 'Part: which part of the product to draw. The map stays whole.',
+        icon: 'i-tree',
+        active: !!this.sitemapPart,
+        options: [
+          ...parts.map((p) => ({ key: p.name, label: p.name, count: p.count, on: this.sitemapPart === p.name })),
+          { key: '*', label: 'All parts', count: all, on: !this.sitemapPart },
+        ],
+      })
+    }
+    return menus
   },
   chooseMenu(menu: string, option: string) {
     this.openMenu = ''
+    if (menu === 'sitemap-part') return this.setSitemapPart(option === '*' ? '' : option)
     if (menu === 'sitemap-variant') menu = 'menu-variant'
     if (menu === 'menu-variant') this.setVariant(option)
+  },
+  // Parts: trees of screens that do not connect (an admin dashboard and the public site), drawn as sitemaps of their own.
+  /** The parts the screens in view name. One or none: no menu. */
+  get sitemapParts(): { name: string; count: number }[] {
+    return cached('sitemapParts', () => screenParts(this.viewScreens))
+  },
+  /** The part chosen per project, kept in the browser. '' is all of them. */
+  partChoice: readStored<Record<string, string>>('grndwrk.sitemapPart', {}),
+  get sitemapPart(): string {
+    const chosen = this.partChoice[String(this.project.name ?? '')] ?? ''
+    return this.sitemapParts.some((p) => p.name === chosen) ? chosen : ''
+  },
+  setSitemapPart(name: string) {
+    this.partChoice = { ...this.partChoice, [String(this.project.name ?? '')]: name }
+    store('grndwrk.sitemapPart', this.partChoice)
+  },
+  /** The screens the Sitemap view draws: those in view, in the part chosen. Only the Sitemap is split; the map, Inbox and Status stay whole. */
+  get sitemapScreens(): Screen[] {
+    return cached('sitemapScreens', () => {
+      const part = this.sitemapPart
+      if (!part) return this.viewScreens
+      const of = screenPartIds(this.viewScreens)
+      return narrowView(this.viewScreens, new Set(this.viewScreens.filter((s) => of.get(s.id) === part).map((s) => s.id)))
+    })
+  },
+  /** How many trees the sitemap has: more than one, and a top screen can be put in a part by hand. */
+  get topScreens(): number {
+    return this.viewScreens.filter((s) => !s.parent).length
+  },
+  get sitemapRows(): { screen: Screen; depth: number }[] {
+    return cached('sitemapRows', () => screenTree(this.sitemapScreens))
   },
   feedbackWords: { incoming: 'Incoming', proposed: 'Proposed', ready: 'Ready to test', fixed: 'Fixed' } as Record<FeedbackState, string>,
   /** Thoughts, comments and stories on the page in view, per status. */
@@ -1099,9 +1152,25 @@ export const state = Alpine.reactive({
   gapInScope(g: Gap): boolean {
     return !this.scopeScreen || g.screen === this.scopeScreen.id
   },
-  /** How many thoughts are about a screen. */
+  /** The thoughts and comments about a screen, whatever the filters say: what working on it gathers. */
+  aboutScreen(id: string): GNode[] {
+    const s = this.screens.find((x) => x.id === id)
+    if (!s) return []
+    const nodes = Object.values(this.nodes)
+    return [...new Set([...nodes.filter((n) => n.extra?.screen === id), ...commentsForScreen(s, nodes)])]
+  },
+  /** How many of them the board will show when working on it: those the status filter lets through, as the board counts them. */
   thoughtsOn(id: string): number {
-    return Object.values(this.nodes).filter((n) => n.extra?.screen === id).length
+    return this.aboutScreen(id).filter((n) => showsProgress(this.progressFilter, progressOfNode(n))).length
+  },
+  /** Working on one part, the thoughts about it the filters keep out of view (done ones, by default). */
+  get scopeFilteredOut(): number {
+    return this.scopeScreen ? this.pageNodes.length - this.visibleNodes.length : 0
+  },
+  /** Show everything about the part in view: every status, no other filter. */
+  showAllInScope() {
+    this.resetFilters()
+    this.setProgressFilter('all')
   },
   setScope(id: string | null) {
     this.scope = id
@@ -1171,6 +1240,11 @@ export const state = Alpine.reactive({
   /** The questions in one entry of a thread, each with its options and whether it is answered. */
   entryQuestions(body: string, entry: number): Question[] {
     return questions(body).filter((q) => q.entry === entry)
+  },
+  /** Why a comment reads like orders to an agent (`suspicious:`, written when it came in), or nothing. */
+  suspiciousOf(n: GNode | null): string[] {
+    const s = n?.extra?.suspicious
+    return Array.isArray(s) ? s.filter((x): x is string => typeof x === 'string').slice(0, 10) : []
   },
   /** How many questions wait in a body. Several mean each is answered on its own. */
   openCount(body: string): number {
@@ -1256,9 +1330,10 @@ export const state = Alpine.reactive({
     const n = this.nodes[id]
     return !!n && openQuestions(n.body) > 0
   },
+  /** What a page shows with the filters in view, as its topics below count them. */
   pageCount(page: string): number {
     const names = this.pageNames
-    return Object.values(this.nodes).filter((n) => samePage(pageOf(n, names), page)).length
+    return this.nodesMatching('', Object.values(this.nodes).filter((n) => this.inScope(n) && samePage(pageOf(n, names), page))).length
   },
   get selected(): GNode | null {
     return this.selectedId ? (this.nodes[this.selectedId] ?? null) : null
@@ -1498,7 +1573,7 @@ export const state = Alpine.reactive({
   },
   /** The open screen, or the first one. */
   get screen(): Screen | null {
-    return this.viewScreens.find((s) => s.id === this.screenId) ?? this.screenRows[0]?.screen ?? null
+    return this.sitemapScreens.find((s) => s.id === this.screenId) ?? this.sitemapRows[0]?.screen ?? null
   },
   screenById(id: string): Screen | undefined {
     return this.screens.find((s) => s.id === id)
@@ -1523,12 +1598,16 @@ export const state = Alpine.reactive({
     const notes = this.screen ? splitBody(this.screen.body).notes.trim() : ''
     return notes ? linkIds(md(notes)) : ''
   },
+  /** Open questions on every screen in view, whatever part the Sitemap draws: the rail's count. */
+  get screenQuestions(): number {
+    return this.viewScreens.reduce((n, s) => n + openQuestions(s.body), 0)
+  },
   get sitemapSummary(): { screens: number; noStory: number; questions: number; guesses: number; unreadable: number } {
     return {
-      screens: this.viewScreens.length,
-      noStory: this.viewScreens.filter((s) => !s.error && s.status !== 'planned' && !this.storiesOf(s).length).length,
-      questions: this.viewScreens.reduce((n, s) => n + openQuestions(s.body), 0),
-      guesses: this.viewScreens.filter((s) => s.source === 'inferred').length,
+      screens: this.sitemapScreens.length,
+      noStory: this.sitemapScreens.filter((s) => !s.error && s.status !== 'planned' && !this.storiesOf(s).length).length,
+      questions: this.sitemapScreens.reduce((n, s) => n + openQuestions(s.body), 0),
+      guesses: this.sitemapScreens.filter((s) => s.source === 'inferred').length,
       unreadable: this.screens.filter((s) => s.error).length,
     }
   },
@@ -1536,7 +1615,7 @@ export const state = Alpine.reactive({
   get sitemapDrawing() {
     return cached('sitemapDrawing', () => {
       const box = this.box
-      const layout = layoutSitemap(this.viewScreens, box)
+      const layout = layoutSitemap(this.sitemapScreens, box)
       const pad = 24
       const at = new Map(layout.boxes.map((b) => [b.id, { x: b.x + pad, y: b.y + pad }]))
       const { width: w, height: h } = box
@@ -1577,7 +1656,7 @@ export const state = Alpine.reactive({
         ...links.map((l) => `<path d="${l.d}" fill="none" stroke="#0d99ff" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-dasharray="5 4" marker-end="url(#sitemap-arrow)" />`),
       ].join('')
       return {
-        boxes: layout.boxes.map((b) => ({ ...b, x: b.x + pad, y: b.y + pad, screen: this.viewScreens.find((s: Screen) => s.id === b.id) ?? null })),
+        boxes: layout.boxes.map((b) => ({ ...b, x: b.x + pad, y: b.y + pad, screen: this.sitemapScreens.find((s: Screen) => s.id === b.id) ?? null })),
         svg,
         width: layout.width + pad * 2,
         height: layout.height + pad * 2,
@@ -1639,6 +1718,12 @@ export const state = Alpine.reactive({
     return Math.max(1, Math.min(2, Math.floor((BOX.height * this.sitemapZoom - 8) / 14)))
   },
   selectScreen(id: string) {
+    // A screen in another part than the one drawn: draw its part.
+    const part = this.sitemapPart
+    if (part && !this.sitemapScreens.some((s) => s.id === id)) {
+      const of = screenPartIds(this.viewScreens).get(id)
+      if (of !== undefined) this.setSitemapPart(of)
+    }
     this.screenId = id
     this.screenReply = ''
     this.screenStatus = ''
@@ -1660,6 +1745,18 @@ export const state = Alpine.reactive({
     try {
       this.putScreen(await updateScreen(s.id, input))
       this.flash('Saved')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Put a top screen, and the screens under it, in a part, or in none. */
+  async saveScreenPart(value: string) {
+    const s = this.screen
+    const part = value.replace(/\s+/g, ' ').trim()
+    if (!s || part === s.part) return
+    try {
+      this.putScreen(await updateScreen(s.id, { part }))
+      this.flash(part ? `${s.title} is in ${part}` : `${s.title} is in no part`)
     } catch (err) {
       this.flash(errorText(err))
     }

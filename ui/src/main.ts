@@ -208,5 +208,9 @@ function stillOpen() {
 }
 setInterval(stillOpen, 30_000)
 stillOpen()
-window.addEventListener('pagehide', disconnect)
+window.addEventListener('pagehide', (e) => {
+  disconnect()
+  // Closed, not kept for going back: grndwrk opens a new tab next time instead of waiting for this one.
+  if (!e.persisted) navigator.sendBeacon('/api/tab?gone=1')
+})
 if (!document.hidden) connect()

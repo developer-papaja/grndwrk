@@ -44,6 +44,36 @@ export function hiddenScreenIds(screens: Screen[]): Set<string> {
   return out
 }
 
+/**
+ * The part of the product each screen is in: the `part:` of the top screen
+ * its tree starts from. Screens in no part (none set, or a loop of parents) get ''.
+ */
+export function screenPartIds(screens: Screen[]): Map<string, string> {
+  const byId = new Map(screens.map((s) => [s.id, s]))
+  const out = new Map<string, string>()
+  for (const s of screens) {
+    const seen = new Set<string>()
+    let at: Screen | undefined = s
+    while (at && at.parent && byId.has(at.parent) && !seen.has(at.id)) {
+      seen.add(at.id)
+      at = byId.get(at.parent)
+    }
+    out.set(s.id, at?.part ?? '')
+  }
+  return out
+}
+
+/** The parts the screens name, in the order of the tree, each with how many screens it holds. */
+export function screenParts(screens: Screen[]): { name: string; count: number }[] {
+  const of = screenPartIds(screens)
+  const counts = new Map<string, number>()
+  for (const { screen } of screenTree(screens)) {
+    const p = of.get(screen.id)
+    if (p) counts.set(p, (counts.get(p) ?? 0) + 1)
+  }
+  return [...counts].map(([name, count]) => ({ name, count }))
+}
+
 /** File names that say nothing about which screen they are, like app/booking/page.tsx. */
 const GENERIC = new Set(['index', 'page', 'layout', 'route', 'main', 'app', 'view', 'screen', 'content', 'contentview', '+page', 'default'])
 

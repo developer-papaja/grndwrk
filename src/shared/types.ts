@@ -340,6 +340,8 @@ export interface Screen {
   in: string[]
   /** For a screen in one variant only: the screen that stands for it in the other. */
   replaced_by: string
+  /** On a top screen: the part of the product its tree belongs to, when parts that do not connect are shown as sitemaps of their own (an admin dashboard and the public site). The screens under it are in that part too. */
+  part: string
   /** What the screen is for, in a sentence. */
   purpose: string
   /** Who it is meant for. `for:` in the file. */

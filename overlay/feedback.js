@@ -3,10 +3,19 @@
 // The comment lands in the grndwrk map, on the Feedback page.
 ;(() => {
   if (window.__grndwrkFeedback) return
-  // A tool for your own machine: localhost, or a local development name like
-  // shop.test (Herd, Valet) or shop.localhost. On any other address it does
-  // nothing and says why, so it never reaches the people using the product.
-  if (!/^(localhost|127\.0\.0\.1|\[::1\])$|\.(test|localhost)$/.test(location.hostname)) {
+  // On the team's staging site, loaded from the team's relay (overlay/relay.js
+  // in front of this file): comments go through the relay, and only on the
+  // one site the team named, so a tag left in production does nothing.
+  const relay = window.__grndwrkRelay
+  if (window.__grndwrkRelayConfig) {
+    if (!relay || location.origin !== relay.site) {
+      console.warn(`grndwrk comments through the relay only run on ${window.__grndwrkRelayConfig.site}. Remove this script from the page.`)
+      return
+    }
+  } else if (!/^(localhost|127\.0\.0\.1|\[::1\])$|\.(test|localhost)$/.test(location.hostname)) {
+    // A tool for your own machine: localhost, or a local development name like
+    // shop.test (Herd, Valet) or shop.localhost. On any other address it does
+    // nothing and says why, so it never reaches the people using the product.
     console.warn('grndwrk comments only run on this machine (localhost, *.test, *.localhost). Remove this script from the page.')
     return
   }
@@ -120,6 +129,11 @@
       .steps .m button.on.w { background: rgba(20,174,92,.25); color: #a7f3c9; }
       .steps .m button.on.f { background: rgba(244,63,94,.25); color: #fecdd3; }
       .t-count { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
+      .jcard { position: fixed; right: 16px; bottom: 64px; width: 300px; pointer-events: auto; padding: 12px; border-radius: 10px; background: #2c2c2c;
+        border: 1px solid rgba(255,255,255,.12); box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; }
+      .jcard p { margin: 0 0 8px; }
+      .jcard .digits { font-size: 22px; font-weight: 600; letter-spacing: .15em; margin: 4px 0 8px; }
+      .jcard .err { color: #ff8a80; font-size: 12px; margin-top: 6px; display: none; }
       .toast { position: fixed; right: 16px; bottom: 64px; padding: 6px 12px; border-radius: 8px; background: #2c2c2c; border: 1px solid rgba(255,255,255,.12); display: none; }
     </style>
     <div class="box"></div><div class="tip"></div>
@@ -135,6 +149,20 @@
       <div class="row"><button class="b cancel">Cancel</button><button class="b send">Send to grndwrk</button></div>
     </div>
     <div class="toast"></div>
+    <div class="jcard" role="dialog" aria-label="Join the team's comments">
+      <div class="j-ask">
+        <p>Comments from this site go to your team's grndwrk. Paste the invite you were sent, once, in this browser.</p>
+        <textarea class="j-link" placeholder="grndwrk:invite/…" rows="2"></textarea>
+        <div class="err j-err"></div>
+        <div class="row"><button class="b j-cancel">Not now</button><button class="b send j-go">Join</button></div>
+      </div>
+      <div class="j-wait" style="display:none">
+        <p>Tell whoever invited you these digits. They allow this browser in grndwrk's map.</p>
+        <div class="digits j-digits"></div>
+        <p class="j-state" style="color: rgba(232,230,227,.6); font-size: 12px">Your comments wait here until then.</p>
+        <div class="row"><button class="b j-leave">Leave</button><button class="b send j-ok">Close</button></div>
+      </div>
+    </div>
     <button class="save" title="Save the waiting comments as a file to send to whoever runs grndwrk">Save as file</button>
     <div class="dock-target"></div>
     <div class="bar">
@@ -258,6 +286,10 @@
   /** 'sent', 'rejected' (do not retry), 'asked' (wait for the person to allow this site), or 'waiting' (try again later). */
   async function post(comment) {
     if (!comment.image && held.has(comment.written)) comment = { ...comment, image: held.get(comment.written) }
+    if (relay) {
+      const result = await relay.post(comment)
+      return result === 'join' ? 'asked' : result
+    }
     try {
       const res = await fetch(`${base}/__grndwrk/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(comment) })
       if (res.status === 201) return 'sent'
@@ -588,7 +620,7 @@
     if (!shotLib) {
       shotLib = new Promise((resolve, reject) => {
         const tag = document.createElement('script')
-        tag.src = `${base}/__grndwrk/screenshot.js`
+        tag.src = relay ? relay.shotUrl : `${base}/__grndwrk/screenshot.js`
         tag.onload = () => (window.__grndwrkShot ? resolve(window.__grndwrkShot) : reject(new Error('not loaded')))
         tag.onerror = reject
         document.head.appendChild(tag)
@@ -726,7 +758,7 @@
     sendBtn.disabled = false
     closeCard()
     if (result === 'sent') {
-      flash('Sent to grndwrk')
+      flash(relay ? 'Sent to your team' : 'Sent to grndwrk')
       flush()
       loadTests()
     } else if (result === 'waiting' || result === 'asked') {
@@ -735,7 +767,10 @@
       if (keep !== comment) held.set(comment.written, comment.image)
       const list = [...outbox.read(), keep]
       outbox.write(list)
-      flash(result === 'asked'
+      if (relay && result === 'asked') openJoin()
+      flash(relay && result === 'asked'
+        ? 'Saved. It goes once this browser is allowed in grndwrk\'s map.'
+        : result === 'asked'
         ? `Allow ${location.host} in grndwrk's map once. The comment goes then.`
         : `Saved. It goes to grndwrk when it is running (${list.length} waiting)`)
       asked = result === 'asked'
@@ -792,7 +827,8 @@
       if (e.altKey && (e.key === 'c' || e.code === 'KeyC')) {
         e.preventDefault()
         closeCard()
-        setPicking(!picking)
+        if (relay && !picking) relay.joined().then((yes) => (yes ? setPicking(true) : openJoin()))
+        else setPicking(!picking)
       } else if (e.key === 'Escape' && (picking || picked)) {
         e.preventDefault()
         setPicking(false)
@@ -806,7 +842,7 @@
   $('.smaller').addEventListener('click', () => (step(-1), field.focus()))
   $('.bigger').addEventListener('click', () => (step(1), field.focus()))
 
-  pill.addEventListener('click', (e) => {
+  pill.addEventListener('click', async (e) => {
     if (moved && moved.swallow) {
       moved = null
       e.preventDefault()
@@ -814,13 +850,48 @@
     }
     if (e.composedPath().includes(pillTest)) return openTests()
     closeCard()
+    // Through the relay, a browser that has not joined yet joins first.
+    if (relay && !picking && !(await relay.joined())) return openJoin()
     setPicking(!picking)
+  })
+
+  // Joining the team's comments with an invite, once per browser, on the staging site.
+  const jcard = $('.jcard'), jLink = $('.j-link'), jErr = $('.j-err')
+  async function openJoin() {
+    if (!relay) return
+    const digits = await relay.digits()
+    $('.j-ask').style.display = digits ? 'none' : 'block'
+    $('.j-wait').style.display = digits ? 'block' : 'none'
+    $('.j-digits').textContent = digits
+    jErr.style.display = 'none'
+    jcard.style.display = 'block'
+    if (!digits) jLink.focus()
+    else relay.allowed().then((ok) => ($('.j-state').textContent = ok ? 'Allowed: your comments go to your team.' : 'Waiting to be allowed. Your comments wait here until then.'))
+  }
+  jLink.addEventListener('keydown', (e) => e.stopPropagation())
+  $('.j-cancel').addEventListener('click', () => (jcard.style.display = 'none'))
+  $('.j-ok').addEventListener('click', () => (jcard.style.display = 'none'))
+  $('.j-go').addEventListener('click', async () => {
+    try {
+      await relay.join(jLink.value)
+      jLink.value = ''
+      openJoin()
+    } catch (err) {
+      jErr.textContent = err && err.message ? err.message : String(err)
+      jErr.style.display = 'block'
+    }
+  })
+  $('.j-leave').addEventListener('click', async () => {
+    await relay.leave()
+    jcard.style.display = 'none'
+    flash('This browser left. An invite brings it back.')
   })
   $('.cancel').addEventListener('click', closeCard)
   saveBtn.addEventListener('click', saveFile)
   barSave.addEventListener('click', saveFile)
-  barGo.addEventListener('click', () => {
+  barGo.addEventListener('click', async () => {
     closeCard()
+    if (relay && !picking && !(await relay.joined())) return openJoin()
     setPicking(!picking)
   })
   $('.float').addEventListener('click', () => ((seat = { mode: 'float', x: null, y: null }), applyPlace()))
@@ -850,6 +921,8 @@
   const TESTING = 'grndwrk.testing'
   let tests = [], current = null, marked = null, siteAllowed = true
   async function loadTests() {
+    // Testing fixes through the relay is not there yet: only comments go that way.
+    if (relay) return (tests = [])
     try {
       const res = await fetch(`${base}/__grndwrk/tests`, { cache: 'no-store' })
       // Not allowed yet: asked again only after a comment goes through.
@@ -996,6 +1069,7 @@
       return note.focus()
     }
     try {
+      if (relay) return
       const res = await fetch(`${base}/__grndwrk/tested`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id, works, note: works ? '' : note.value }) })
       if (!res.ok) throw new Error()
       flash(works ? 'Approved. Marked fixed.' : 'Rejected. It goes back to your agent with your note.')
@@ -1027,6 +1101,7 @@
   $('.t-show').addEventListener('click', async () => {
     if (!current) return
     try {
+      if (relay) return
       const res = await fetch(`${base}/__grndwrk/show`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id }) })
       flash(res.ok ? 'Opened in grndwrk' : 'grndwrk could not open it')
     } catch {

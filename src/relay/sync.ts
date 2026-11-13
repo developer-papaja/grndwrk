@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto'
 import { BadInput } from '../store/nodes.js'
 import { feedbackStatus } from '../server/feedback.js'
 import { COMMENT_PATHS, commentRequest, type CommentsCtx } from '../server/comments.js'
-import { inviteLink, readSeen, saveSeen, type ProjectRelay } from './config.js'
+import { inviteLink, readSeen, saveSeen, siteOrigin, type ProjectRelay } from './config.js'
 import { RelayClient } from './client.js'
 import { inviteId, open, openJson, phoneSealKey, phoneSignKey, randomKey, relayDeviceId, seal, sealJson, teamSealKey } from './keys.js'
 
@@ -28,6 +28,8 @@ export interface RelaySummary {
   invites: { id: string; name: string; expires: number }[]
   /** Phones that joined with an invite and wait to be allowed, with the digits they show. */
   waiting: { invite: string; name: string; digits: string }[]
+  /** The staging site colleagues may comment from, or ''. */
+  site: string
   error?: string
 }
 
@@ -47,6 +49,8 @@ export class RelaySync {
   private waiting = new Map<string, Waiting>()
   private sent = new Map<string, string>()
   private tries = new Map<string, number>()
+  /** The staging site the team named (`grndwrk relay site`), from the relay: a web comment's address must be on it. */
+  private site = ''
   private timer?: NodeJS.Timeout
   private running?: Promise<void>
   error?: string
@@ -93,7 +97,10 @@ export class RelaySync {
       joins: { invite: string; sealed: string; body: string }[]
       devices: { id: string; sealed: string }[]
       inbox: { id: string; device: string }[]
+      site?: string
     }>('GET', '/sync')
+    // The relay says which site: only an https origin is believed (it is shown in the map and checked against).
+    this.site = typeof sync.site === 'string' ? siteOrigin(sync.site) : ''
     this.readJoins(sync.joins)
     this.readPhones(sync.devices)
     await this.fetchInbox(sync.inbox)
@@ -175,12 +182,31 @@ export class RelaySync {
     if (typeof id !== 'string' || !/^[A-Za-z0-9-]{16,64}$/.test(id) || typeof at !== 'number') throw new BadInput('it has no id and time from the phone')
     if (seen[device]?.[id] || at < now - FRESH || at > now + 5 * 60_000) throw new BadInput('it was handled before, or is too old: the relay handed it over again')
     // A phone acts only on the comments it sent itself, whatever keys it knows.
-    let own = path === '/api/feedback' ? body : await this.onlyOwn(body, device)
+    let own = path === '/api/feedback' ? this.onSite(body) : await this.onlyOwn(body, device)
     // A test result sealed before the fix was built is about an earlier fix: a relay handing an old one over again settles nothing.
     if (path === '/api/feedback/tested') own = await this.builtBefore(own, at)
     await commentRequest(path, own, { ...this.ctx, via: 'relay', from: { name: phone.name, device } })
     // Seen once handled, not before: one that failed for a passing reason stays at the relay and is tried again.
     ;(seen[device] ??= {})[id] = at
+  }
+
+  /**
+   * A comment from a browser on the staging site says which page it was
+   * made on. Only an address on that site is kept: the map links to it,
+   * and testing would go there.
+   */
+  private onSite(body: unknown): unknown {
+    if (!body || typeof body !== 'object') return body
+    const b = body as Record<string, unknown>
+    if (typeof b.url !== 'string') return body
+    let ok = false
+    try {
+      const u = new URL(b.url)
+      ok = !!this.site && u.origin === this.site && !u.username && !u.password
+    } catch {}
+    if (ok) return body
+    const { url: _drop, ...rest } = b
+    return rest
   }
 
   private async builtBefore(body: unknown, at: number): Promise<unknown> {
@@ -226,7 +252,7 @@ export class RelaySync {
   }
 
   async summary(): Promise<RelaySummary> {
-    const out: RelaySummary = { url: this.relay.url, phones: [], invites: [], waiting: [], ...(this.error ? { error: this.error } : {}) }
+    const out: RelaySummary = { url: this.relay.url, phones: [], invites: [], waiting: [], site: this.site, ...(this.error ? { error: this.error } : {}) }
     try {
       const invites = await this.client.json<{ id: string; sealed: string; expires: number }[]>('GET', '/invites')
       out.invites = invites.flatMap((i) => {

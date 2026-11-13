@@ -13,6 +13,9 @@ export function subscribe(res: ServerResponse): void {
   res.write('retry: 1000\n: connected\n\n')
   clients.add(res)
   tabSeen = Date.now()
+  // Something a phone asked to open while every map tab was in the background: the first tab back in view opens it.
+  if (held && Date.now() - held.at < HOLD_MS) res.write(`data: ${JSON.stringify(held.event)}\n\n`)
+  held = null
   res.on('close', () => {
     clients.delete(res)
     tabSeen = Date.now()
@@ -29,8 +32,21 @@ export function clientCount(): number {
  * connection (see ui/src/main.ts), so it says it is still there now and then.
  */
 let tabSeen = 0
-export function noteTab(): void {
-  tabSeen = Date.now()
+export function noteTab(gone = false): void {
+  // A tab closing says so, so a request to open something then gets a new tab rather than waiting for none.
+  tabSeen = gone ? 0 : Date.now()
+}
+
+/**
+ * An event for the next tab that connects. A tab in the background has no
+ * connection (macOS counts a browser window behind others as hidden too), so
+ * opening a comment there waits until the person looks at the map, instead of
+ * opening yet another tab or window.
+ */
+const HOLD_MS = 10 * 60_000
+let held: { event: ServerEvent; at: number } | null = null
+export function holdForTab(event: ServerEvent): void {
+  held = { event, at: Date.now() }
 }
 export function tabAround(withinMs = 120_000): boolean {
   return clients.size > 0 || Date.now() - tabSeen < withinMs

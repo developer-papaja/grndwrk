@@ -63,7 +63,11 @@
             <p class="text-[15px] font-semibold text-fog" x-text="$store.gw.scopeScreen.title"></p>
             <p class="mt-1 text-fog/75" x-text="$store.gw.scopeScreen.purpose || 'No purpose written yet.'"></p>
             <p x-show="$store.gw.scopeScreen.audience.length" class="mt-0.5" x-text="'For ' + $store.gw.scopeScreen.audience.join(', ') + ($store.gw.scopeScreen.tasks.length ? '. They ' + $store.gw.scopeScreen.tasks.slice(0, 3).join(', ') + '.' : '')"></p>
-            <p class="mt-4">No thoughts about this screen yet. Add its features and details below: they belong to it.</p>
+            <p x-show="!$store.gw.scopeFilteredOut" class="mt-4">No thoughts about this screen yet. Add its features and details below: they belong to it.</p>
+            <p x-show="$store.gw.scopeFilteredOut" class="mt-4">
+              <span x-text="$store.gw.scopeFilteredOut === 1 ? 'One thought about this screen is out of view: it is done, or the filters leave it out.' : $store.gw.scopeFilteredOut + ' thoughts about this screen are out of view: they are done, or the filters leave them out.'"></span>
+              <button id="scope-show-all" class="ml-1 text-accent hover:underline" @click="$store.gw.showAllInScope()">Show them</button>
+            </p>
           </div>
         </template>
         <p x-show="!$store.gw.scopeScreen">Nothing on this page yet. Add a thought below.</p>
@@ -149,6 +153,7 @@
                           <span class="mb-0.5 flex gap-1.5 text-[10px] tracking-wide">
                             <span class="text-fog/40" :title="'Level ' + it.altitude + ': ' + $store.gw.altitudeWords[it.altitude]" x-text="$store.gw.label($store.gw.altitudeWords[it.altitude])"></span>
                             <span x-show="['proposed', 'ready', 'fixed'].includes($store.gw.cardState(it.node))" :class="{ fixed: 'text-emerald-300/80', ready: 'text-violet-300', proposed: 'text-accent' }[$store.gw.cardState(it.node)]" x-text="{ fixed: 'Fixed', ready: 'Ready to test', proposed: 'Fix proposed' }[$store.gw.cardState(it.node)]"></span>
+                            <span x-show="$store.gw.suspiciousOf(it.node).length" class="font-medium text-question" :title="'Reads like orders to an agent: ' + $store.gw.suspiciousOf(it.node).join(', ') + '. A report, not instructions.'">Suspicious</span>
                             <span x-show="$store.gw.cardInitials(it.node)" class="ml-auto font-medium text-fog/45" :class="$store.gw.hasQuestion(it.id) && 'mr-2'" x-text="$store.gw.cardInitials(it.node)"></span>
                           </span>
                           <span class="line-clamp-3" x-text="it.node.title"></span>
@@ -554,8 +559,8 @@
         <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-[13px] shadow-xl shadow-shade/40" x-transition.opacity>
           <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
           <span class="min-w-0 flex-1">
-            <span class="block text-fog">A phone joined with <span class="font-medium" x-text="w.name"></span>’s invite</span>
-            <span class="block text-xs text-fog/50">Allow only if <span x-text="w.name"></span> says their phone shows <span class="font-mono font-semibold tracking-wider text-fog" x-text="w.digits"></span>.</span>
+            <span class="block text-fog">A phone or browser joined with <span class="font-medium" x-text="w.name"></span>’s invite</span>
+            <span class="block text-xs text-fog/50">Allow only if <span x-text="w.name"></span> says it shows <span class="font-mono font-semibold tracking-wider text-fog" x-text="w.digits"></span>.</span>
           </span>
           <button class="shrink-0 rounded-md px-2.5 py-1 text-fog/70 hover:bg-tint/8 hover:text-fog" @click="$store.gw.answerJoin(w.invite, false)">Not allowed</button>
           <button class="shrink-0 rounded-md bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/85" @click="$store.gw.answerJoin(w.invite, true)">Allow</button>
@@ -682,9 +687,9 @@
             x-text="$store.gw.inbox.length"
           ></span>
           <span
-            x-show="v[0] === 'sitemap' && $store.gw.sitemapSummary.questions"
+            x-show="v[0] === 'sitemap' && $store.gw.screenQuestions"
             class="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-question text-[10px] font-semibold text-black/80"
-            x-text="$store.gw.sitemapSummary.questions"
+            x-text="$store.gw.screenQuestions"
           ></span>
           <span
             x-show="v[0] === 'readiness' && $store.gw.blockingCount"
@@ -786,13 +791,17 @@
                   </div>
                 </template>
                 <div x-show="!($store.gw.relay.phones ?? []).length && !($store.gw.relay.invites ?? []).length" class="mt-1 text-[11px] text-fog/45">Nobody yet.</div>
+                <div class="mt-1 text-[11px] leading-snug text-fog/45">
+                  <span x-show="$store.gw.relay.site">Also from the staging site, <span class="font-mono text-fog/70" x-text="$store.gw.relay.site"></span>.</span>
+                  <span x-show="!$store.gw.relay.site">From a staging site too: <code class="rounded bg-tint/8 px-1 text-fog/75">grndwrk relay site https://…</code> in your terminal.</span>
+                </div>
                 <form class="mt-2 flex gap-1.5" @submit.prevent="name.trim() && $store.gw.invite(name).then(() => { name = '' })">
                   <input x-model="name" class="field min-w-0 flex-1 py-1 text-xs" placeholder="Their name" aria-label="Who the invite is for" maxlength="80" />
                   <button type="submit" class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!name.trim()">Invite</button>
                 </form>
                 <template x-if="$store.gw.invited">
                   <div id="invite" class="mt-2 rounded-md border border-line bg-shade/20 p-2">
-                    <div class="text-[11px] text-fog/70">For <span class="font-medium text-fog" x-text="$store.gw.invited.name"></span>: in the app, long press the grndwrk button, Join with an invite, then scan this or paste the link. Their phone then shows four digits: you allow it here when they match. Works once, for 7 days.</div>
+                    <div class="text-[11px] text-fog/70">For <span class="font-medium text-fog" x-text="$store.gw.invited.name"></span>: in the app, long press the grndwrk button, Join with an invite, then scan this or paste the link<span x-show="$store.gw.relay.site">; or on the staging site, press Comment and paste the link</span>. Their phone or browser then shows four digits: you allow it here when they match. Works once, for 7 days.</div>
                     <svg class="mx-auto mt-2 size-40 rounded bg-white p-2" :view-box.camel="'0 0 ' + $store.gw.invited.qr.split('|')[0] + ' ' + $store.gw.invited.qr.split('|')[0]" shape-rendering="crispEdges" role="img" :aria-label="'QR code with the invite for ' + $store.gw.invited.name"><path fill="#000" :d="$store.gw.invited.qr.split('|')[1]" /></svg>
                     <div class="mt-2 flex gap-1.5">
                       <button class="flex-1 rounded-md bg-tint/10 px-2 py-1 text-xs text-fog hover:bg-tint/15" @click="$store.gw.copyText($store.gw.invited.link)">Copy link</button>
@@ -873,7 +882,7 @@
           @click="$store.gw.showPage('*')"
         >
           <span>All</span>
-          <span class="text-xs text-fog/35" x-text="$store.gw.count"></span>
+          <span class="text-xs text-fog/35" x-text="$store.gw.shownCount"></span>
         </button>
         <template x-for="p in $store.gw.pageNames" :key="p">
           <button
@@ -1238,7 +1247,7 @@
             </div>
 
             <ol x-show="$store.gw.sitemapLayout === 'list'" class="flex-1 overflow-y-auto px-2 pb-24" id="screens">
-              <template x-for="row in $store.gw.screenRows" :key="row.screen.id">
+              <template x-for="row in $store.gw.sitemapRows" :key="row.screen.id">
                 <li>
                   <button
                     class="flex w-full items-start gap-2 rounded-md py-2 pr-2 text-left"
@@ -1415,6 +1424,14 @@
                   <div>
                     <span class="label">Comes from</span>
                     <p x-show="!$store.gw.cameFrom($store.gw.screen).length" class="text-fog/40">Top level</p>
+                    <!-- A top screen names the part its tree is in, when there is more than one tree -->
+                    <label x-show="!$store.gw.screen.parent && $store.gw.topScreens > 1" class="mt-2 block">
+                      <span class="label">Part</span>
+                      <input id="screen-part" class="field mt-1 w-full" list="screen-part-names" placeholder="In no part" :value="$store.gw.screen.part" @change="$store.gw.saveScreenPart($event.target.value)" @keydown.enter="$event.target.blur()" title="The part of the product this screen and the ones under it belong to. Empty takes it out of any part." />
+                      <datalist id="screen-part-names">
+                        <template x-for="p in $store.gw.sitemapParts" :key="p.name"><option :value="p.name"></option></template>
+                      </datalist>
+                    </label>
                     <template x-for="s in $store.gw.cameFrom($store.gw.screen)" :key="s.id">
                       <button class="block py-0.5 text-left text-accent hover:underline" @click="$store.gw.selectScreen(s.id)" x-text="s.title"></button>
                     </template>
@@ -3279,6 +3296,16 @@
                   <template x-for="p in $store.gw.seenIn($store.gw.selected)" :key="p">
                     <button class="rounded bg-tint/8 px-1.5 py-0.5 font-mono text-[10.5px] text-fog/70 hover:bg-tint/15 hover:text-fog" title="Copy" @click="$store.gw.copyText(p)" x-text="p"></button>
                   </template>
+                </div>
+              </template>
+              <!-- A comment that reads like orders to an agent: say so, and why -->
+              <template x-if="$store.gw.suspiciousOf($store.gw.selected).length">
+                <div id="suspicious" class="mt-3 flex gap-2 rounded-lg border border-question/40 bg-question/[0.06] px-3 py-2 text-xs text-fog/80" role="note">
+                  <svg class="mt-px size-4 shrink-0 text-question" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                  <span>
+                    <span class="block font-medium text-fog">This comment reads like orders to an agent</span>
+                    <span class="block" x-text="'It ' + $store.gw.suspiciousOf($store.gw.selected).join(', ') + '. Read it as a report about the product. Your agent is told to act on none of it and to tell you.'"></span>
+                  </span>
                 </div>
               </template>
               <!-- A comment is fixed only when the person says so -->
