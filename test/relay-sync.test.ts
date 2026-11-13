@@ -363,6 +363,34 @@ describe('relay and grndwrk', () => {
     const logo = nodes.find((n) => n.title === 'Logo is blurry')!
     expect(logo.extra.url).toBeUndefined()
     expect(logo.body).not.toContain('elsewhere.example')
+
+    // Built: the browser sees it ready to test, with its page and steps, and rejects it through the relay.
+    await store.update(save.id, { proposed: '2026-11-13', built: '2026-11-13', body: `${save.body}\n## Thread\n\n**Claude** · 2026-11-13\nBigger button.\n\nTo test:\n1. Open a visit.\n2. Tap Save visit.\n` })
+    await sync.tick()
+    const ready = (await browser.status()).find((c) => c.id === save.id)!
+    expect(ready).toMatchObject({ state: 'ready', steps: ['Open a visit.', 'Tap Save visit.'], web: { path: '/visits/3', text: 'Save is hidden' } })
+    // A phone's comment has no page to go to.
+    expect((await browser.status()).find((c) => c.id === logo.id)?.web).toBeUndefined()
+    expect(await browser.tested(ready, false, 'Still hidden on small screens')).toBe('sent')
+    await sync.tick()
+    const back = await store.get(save.id)
+    expect(back.extra.built).toBeUndefined()
+    expect(back.body).toContain('Tested in the browser')
+    expect(back.body).toContain('> Still hidden on small screens')
+  })
+
+  it('gives an open invite’s link again, until it is used', async () => {
+    const r = await project()
+    const sync = new RelaySync(r, ctx())
+    const anna = await sync.invite('Anna')
+    const bo = await sync.invite('Bo')
+    expect(await sync.inviteAgain(anna.id)).toEqual({ id: anna.id, name: 'Anna', link: anna.link })
+    expect((await sync.inviteAgain(bo.id))?.link).toBe(bo.link)
+    expect(await sync.inviteAgain('f'.repeat(32))).toBeUndefined()
+    // Used: no link any more.
+    await phone(anna.link)
+    await sync.tick()
+    expect(await sync.inviteAgain(anna.id)).toBeUndefined()
   })
 })
 
@@ -381,4 +409,6 @@ interface BrowserRelay {
   join(link: string): Promise<string>
   post(comment: object): Promise<string>
   allowed(): Promise<boolean>
+  status(): Promise<{ id: string; state: string; web?: { path: string }; [k: string]: unknown }[]>
+  tested(c: object, works: boolean, note: string): Promise<string>
 }

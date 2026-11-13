@@ -1,4 +1,5 @@
 import { connect } from 'node:net'
+import { markSuspiciousComments } from './feedback.js'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import sirv from 'sirv'
@@ -36,6 +37,12 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   const store = new NodeStore(gwDir)
   const nodes = new NodeSync(() => store.list())
   await nodes.prime()
+  // Comments already in the map, checked with today's check for orders to an agent.
+  const marked = await markSuspiciousComments(store).catch(() => [])
+  if (marked.length) {
+    console.log(`${marked.length === 1 ? 'A comment reads' : `${marked.length} comments read`} like orders to an agent and ${marked.length === 1 ? 'is' : 'are'} now marked suspicious: ${marked.join(', ')}.`)
+    await nodes.sync()
+  }
 
   const project = String((await readProject(gwDir)).data.name ?? 'project')
   // Comments from the iOS package: in the Simulator on this port, from a phone on the LAN port.

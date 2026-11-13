@@ -28,6 +28,15 @@
     out.set(ct, 12)
     return out
   }
+  /** The plain bytes, or null when it was changed, is for another place, or another key sealed it. */
+  async function open(key, context, sealed) {
+    if (sealed.length < 28) return null
+    try {
+      return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: sealed.slice(0, 12), additionalData: enc.encode(context) }, key, sealed.slice(12)))
+    } catch {
+      return null
+    }
+  }
   /** The four digits the map shows next to the colleague's name, worked out from the key as on the phone. */
   const joinDigits = async (key) => String(parseInt((await sha256Hex(`grndwrk-join:${key}`)).slice(0, 8), 16) % 10000).padStart(4, '0')
 
@@ -91,8 +100,51 @@
       })
     }
 
+    /** Leave a sealed request at the relay, as the phone does. */
+    async function leave(path, body) {
+      const j = await load()
+      if (!j) return 'join'
+      const envelope = { path, body, id: randomHex(16), at: Date.now() }
+      try {
+        const sealed = await seal(j.seal, `inbox:${j.device}`, enc.encode(JSON.stringify(envelope)))
+        const res = await signed('POST', '/inbox', sealed)
+        if (res.status === 202) return 'sent'
+        if (res.status === 401) return 'asked'
+        return res.status === 413 || res.status === 400 ? 'rejected' : 'waiting'
+      } catch {
+        return 'waiting'
+      }
+    }
+    // The newest status read: an older one handed over again is ignored, as on the phone.
+    let lastStatus = { at: 0, comments: [] }
+
     return {
       site: config.site,
+      /**
+       * This browser's own comments as the team's grndwrk last told it, sealed
+       * for it at the relay: each with its key, state, and for a fix ready to
+       * test, what changed, the steps, the round and where it was made.
+       */
+      async status() {
+        const j = await load()
+        if (!j) return []
+        try {
+          const res = await signed('GET', '/outbox')
+          if (res.status !== 200) return lastStatus.comments
+          const plain = await open(j.seal, `outbox:${j.device}`, new Uint8Array(await res.arrayBuffer()))
+          const said = plain ? JSON.parse(new TextDecoder().decode(plain)) : null
+          if (said && Array.isArray(said.comments) && Number(said.at) >= lastStatus.at) lastStatus = { at: Number(said.at), comments: said.comments }
+        } catch {}
+        return lastStatus.comments
+      },
+      /** Tested: works or not, with a note, for the round it was given. */
+      tested(c, works, note) {
+        return leave('/api/feedback/tested', { comments: [{ id: c.id, key: c.key, round: c.round }], works, note: works ? '' : note, platform: 'Web' })
+      },
+      /** Open it in the map on the team's Macs. */
+      show(c) {
+        return leave('/api/feedback/show', { comments: [{ id: c.id, key: c.key }] })
+      },
       shotUrl: `${base}/screenshot.js`,
       async joined() {
         return !!(await load())
@@ -117,20 +169,8 @@
       },
       /** 'sent', 'join' (no invite yet), 'asked' (waiting to be allowed), 'waiting' (try later) or 'rejected'. */
       async post(comment) {
-        const j = await load()
-        if (!j) return 'join'
         // Each comment carries a key of its own, as on the phone, so its status can be asked for later.
-        const body = { ...comment, key: comment.key || randomHex(16) }
-        const envelope = { path: '/api/feedback', body, id: randomHex(16), at: Date.now() }
-        try {
-          const sealed = await seal(j.seal, `inbox:${j.device}`, enc.encode(JSON.stringify(envelope)))
-          const res = await signed('POST', '/inbox', sealed)
-          if (res.status === 202) return 'sent'
-          if (res.status === 401) return 'asked'
-          return res.status === 413 || res.status === 400 ? 'rejected' : 'waiting'
-        } catch {
-          return 'waiting'
-        }
+        return leave('/api/feedback', { ...comment, key: comment.key || randomHex(16) })
       },
     }
   }

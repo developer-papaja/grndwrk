@@ -114,6 +114,7 @@ export interface RelayInfo {
 /** Who is on this Mac (git's user.name), and each thought's first author in git, by id. */
 export const fetchAuthors = () => request<{ me: string; first: Record<string, string> }>('GET', '/api/authors').catch(() => ({ me: '', first: {} }))
 export const fetchRelay = () => request<RelayInfo>('GET', '/api/relay').catch(() => ({ connected: false }) as RelayInfo)
+export const inviteLinkAgain = (id: string) => request<{ id: string; name: string; link: string }>('POST', `/api/relay/invites/${id}/link`, {})
 export const inviteColleague = (name: string) => request<{ id: string; name: string; link: string }>('POST', '/api/relay/invites', { name })
 export const answerJoin = (invite: string, allow: boolean) => request<RelayInfo>('POST', `/api/relay/joins/${invite}`, { allow })
 export const removeFromRelay = (kind: 'phones' | 'invites', id: string) => request<RelayInfo>('DELETE', `/api/relay/${kind}/${id}`)

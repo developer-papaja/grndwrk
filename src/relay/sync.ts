@@ -251,6 +251,19 @@ export class RelaySync {
     return { id, name: clean, link: inviteLink(this.relay, secret) }
   }
 
+  /**
+   * The link of an invite still open, for showing it again: its secret is
+   * kept at the relay sealed for the team, so any teammate's grndwrk can.
+   * Undefined when it was used, withdrawn or has expired.
+   */
+  async inviteAgain(id: string): Promise<{ id: string; name: string; link: string } | undefined> {
+    const invites = await this.client.json<{ id: string; sealed: string; expires: number }[]>('GET', '/invites')
+    const found = invites.find((i) => i.id === id)
+    const inv = found && openJson<{ secret: string; name: string }>(this.teamSeal, `invite:${id}`, found.sealed)
+    if (!inv || !KEY.test(inv.secret) || inviteId(inv.secret) !== id || this.waiting.has(id)) return undefined
+    return { id, name: inv.name, link: inviteLink(this.relay, inv.secret) }
+  }
+
   async summary(): Promise<RelaySummary> {
     const out: RelaySummary = { url: this.relay.url, phones: [], invites: [], waiting: [], site: this.site, ...(this.error ? { error: this.error } : {}) }
     try {

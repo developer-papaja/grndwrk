@@ -82,6 +82,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
         throw new BadInput(err instanceof Error ? err.message : String(err))
       }
     }
+    // An open invite's link again, for someone invited earlier: only when asked, never in the summary.
+    const linkMatch = url.pathname.match(/^\/api\/relay\/invites\/([a-f0-9]{32})\/link$/)
+    if (linkMatch && method === 'POST') {
+      const found = await ctx.relay?.inviteAgain(linkMatch[1])
+      if (!found) throw new NotFound(linkMatch[1])
+      return send(res, 200, found)
+    }
     const joinMatch = url.pathname.match(/^\/api\/relay\/joins\/([a-f0-9]{32})$/)
     if (joinMatch && method === 'POST') {
       if (!ctx.relay) throw new NotFound(joinMatch[1])

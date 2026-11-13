@@ -772,22 +772,44 @@
             <template x-if="$store.gw.relay.connected">
               <div>
                 <p x-show="$store.gw.relay.error" class="mt-1 text-[11px] text-rose-300" x-text="'The relay: ' + $store.gw.relay.error"></p>
+                <!-- Each colleague opens on a click: an invite with its QR code and link, a joined device with what it sent -->
                 <template x-for="p in $store.gw.relay.phones ?? []" :key="p.id">
-                  <div class="mt-1.5 flex items-center gap-2 text-[12px]">
-                    <span class="min-w-0 flex-1 truncate text-fog/85" x-text="p.name"></span>
-                    <span class="shrink-0 text-[11px] text-fog/40" x-text="'joined ' + p.joined"></span>
-                    <button class="shrink-0 rounded p-0.5 text-fog/40 hover:bg-tint/8 hover:text-fog" :title="'Take ' + p.name + ' out: their phone can no longer send'" :aria-label="'Remove ' + p.name" @click.stop="$store.gw.removeColleague('phones', p.id)">
-                      <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg>
+                  <div class="mt-1 rounded-md" :class="$store.gw.colleagueOpen === p.id && 'bg-tint/[0.04] ring-1 ring-line'">
+                    <button class="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[12px] hover:bg-tint/5" :aria-expanded="$store.gw.colleagueOpen === p.id" @click.stop="$store.gw.openColleague('phones', p.id)">
+                      <span class="size-1.5 shrink-0 rounded-full bg-emerald-400"></span>
+                      <span class="min-w-0 flex-1 truncate text-fog/85" x-text="p.name"></span>
+                      <span class="shrink-0 text-[11px] text-fog/40" x-text="'joined ' + p.joined"></span>
                     </button>
+                    <div x-show="$store.gw.colleagueOpen === p.id" class="px-1.5 pb-2 pl-5 text-[11px] leading-snug text-fog/60">
+                      <p x-text="'Joined on ' + p.joined + ' and allowed. ' + ($store.gw.commentsFrom(p.name) === 1 ? '1 comment' : $store.gw.commentsFrom(p.name) + ' comments') + ' from ' + p.name + ' so far.'"></p>
+                      <p class="mt-1 text-fog/45">Their invite is used. For another phone or browser, invite them again.</p>
+                      <div class="mt-2 flex gap-1.5">
+                        <button class="rounded-md bg-tint/10 px-2 py-1 text-xs text-fog hover:bg-tint/15" @click.stop="$store.gw.invite(p.name)">Invite again</button>
+                        <button class="rounded-md px-2 py-1 text-xs text-rose-300/90 hover:bg-tint/8" :title="'Take ' + p.name + ' out: their phone or browser can no longer send'" @click.stop="$store.gw.removeColleague('phones', p.id)">Remove</button>
+                      </div>
+                    </div>
                   </div>
                 </template>
                 <template x-for="v in $store.gw.relay.invites ?? []" :key="v.id">
-                  <div class="mt-1.5 flex items-center gap-2 text-[12px]">
-                    <span class="min-w-0 flex-1 truncate text-fog/60" x-text="v.name"></span>
-                    <span class="shrink-0 text-[11px] text-fog/40">invited, not joined</span>
-                    <button class="shrink-0 rounded p-0.5 text-fog/40 hover:bg-tint/8 hover:text-fog" :title="'Withdraw the invite for ' + v.name" :aria-label="'Withdraw the invite for ' + v.name" @click.stop="$store.gw.removeColleague('invites', v.id)">
-                      <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12" /></svg>
+                  <div class="mt-1 rounded-md" :class="$store.gw.colleagueOpen === v.id && 'bg-tint/[0.04] ring-1 ring-line'">
+                    <button class="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[12px] hover:bg-tint/5" :aria-expanded="$store.gw.colleagueOpen === v.id" @click.stop="$store.gw.openColleague('invites', v.id)">
+                      <span class="size-1.5 shrink-0 rounded-full border border-fog/40"></span>
+                      <span class="min-w-0 flex-1 truncate text-fog/60" x-text="v.name"></span>
+                      <span class="shrink-0 text-[11px] text-fog/40">invited</span>
                     </button>
+                    <div x-show="$store.gw.colleagueOpen === v.id" class="px-1.5 pb-2 pl-5 text-[11px] leading-snug text-fog/60">
+                      <p>Not joined yet. In the app: long press the grndwrk button, Join with an invite, then scan this or paste the link<span x-show="$store.gw.relay.site">. On the staging site: press Comment and paste the link</span>. Works once, until <span x-text="new Date(v.expires).toLocaleDateString()"></span>.</p>
+                      <template x-if="$store.gw.colleagueInvite && $store.gw.colleagueInvite.id === v.id">
+                        <div>
+                          <svg class="mx-auto mt-2 size-40 rounded bg-white p-2" :view-box.camel="'0 0 ' + $store.gw.colleagueInvite.qr.split('|')[0] + ' ' + $store.gw.colleagueInvite.qr.split('|')[0]" shape-rendering="crispEdges" role="img" :aria-label="'QR code with the invite for ' + v.name"><path fill="#000" :d="$store.gw.colleagueInvite.qr.split('|')[1]" /></svg>
+                          <div class="mt-2 flex gap-1.5">
+                            <button class="flex-1 rounded-md bg-tint/10 px-2 py-1 text-xs text-fog hover:bg-tint/15" @click.stop="$store.gw.copyText($store.gw.colleagueInvite.link)">Copy link</button>
+                            <button class="rounded-md px-2 py-1 text-xs text-rose-300/90 hover:bg-tint/8" :title="'Withdraw the invite for ' + v.name" @click.stop="$store.gw.removeColleague('invites', v.id)">Withdraw</button>
+                          </div>
+                        </div>
+                      </template>
+                      <p x-show="!($store.gw.colleagueInvite && $store.gw.colleagueInvite.id === v.id)" class="mt-2 text-fog/40">Getting the link…</p>
+                    </div>
                   </div>
                 </template>
                 <div x-show="!($store.gw.relay.phones ?? []).length && !($store.gw.relay.invites ?? []).length" class="mt-1 text-[11px] text-fog/45">Nobody yet.</div>

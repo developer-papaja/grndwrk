@@ -1,5 +1,5 @@
 // grndwrk comment overlay. Added to each page by `grndwrk --app`.
-// Press Comment (or Alt+C), point at anything, click it, and write a line.
+// Press Comment (or Alt+C, Option+C on a Mac), point at anything, click it, and write a line.
 // The comment lands in the grndwrk map, on the Feedback page.
 ;(() => {
   if (window.__grndwrkFeedback) return
@@ -24,6 +24,9 @@
   const base = document.currentScript && document.currentScript.src ? new URL(document.currentScript.src).origin : location.origin
   window.__grndwrkFeedback = true
 
+  // The key is Option on a Mac's keyboard, Alt elsewhere: say it the way the keyboard does.
+  const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+  const ALT = MAC ? 'Option' : 'Alt'
   const host = document.createElement('grndwrk-feedback')
   // all: initial keeps the page's styles out; font and color are set again after it.
   host.style.cssText = 'all: initial; position: fixed; inset: 0; pointer-events: none; z-index: 2147483647; font: 13px/1.4 Inter, system-ui, -apple-system, sans-serif; color: #e8e6e3;'
@@ -129,6 +132,20 @@
       .steps .m button.on.w { background: rgba(20,174,92,.25); color: #a7f3c9; }
       .steps .m button.on.f { background: rgba(244,63,94,.25); color: #fecdd3; }
       .t-count { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
+      .gmenu { position: fixed; width: 260px; pointer-events: auto; padding: 6px; border-radius: 10px; background: #2c2c2c;
+        border: 1px solid rgba(255,255,255,.12); box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; font-size: 12.5px; }
+      .gmenu .g-status { display: flex; align-items: center; gap: 7px; padding: 6px 8px 2px; color: #e8e6e3; font-weight: 600; }
+      .gmenu .g-dot { width: 7px; height: 7px; border-radius: 50%; background: #3ecf8e; flex: none; }
+      .gmenu .g-dot.wait { background: #f5b14c; } .gmenu .g-dot.off { background: #888; }
+      .gmenu .g-lines { padding: 0 8px 6px 22px; color: rgba(232,230,227,.6); font-size: 12px; }
+      .gmenu .g-lines div + div { margin-top: 2px; }
+      .gmenu hr { border: 0; border-top: 1px solid rgba(255,255,255,.1); margin: 4px 0; }
+      .gmenu button { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; font: inherit; padding: 6px 8px; border: 0; border-radius: 6px;
+        background: transparent; color: rgba(232,230,227,.85); cursor: pointer; }
+      .gmenu button:hover, .gmenu button:focus-visible { background: rgba(255,255,255,.08); color: #e8e6e3; outline: none; }
+      .gmenu button .tick { margin-left: auto; color: #0d99ff; }
+      .gmenu button.danger { color: #ff8a80; }
+      .gmenu .g-hint { padding: 4px 8px 2px; color: rgba(232,230,227,.4); font-size: 11px; }
       .jcard { position: fixed; right: 16px; bottom: 64px; width: 300px; pointer-events: auto; padding: 12px; border-radius: 10px; background: #2c2c2c;
         border: 1px solid rgba(255,255,255,.12); box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; }
       .jcard p { margin: 0 0 8px; }
@@ -142,13 +159,14 @@
     <div class="card">
       <div class="on-what"></div>
       <div class="steps">
-        <button class="smaller" title="Smaller: the part inside it ( Alt ↓ )"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5 5.25 5.25" /></svg>Smaller</button>
-        <button class="bigger" title="Bigger: what it sits in ( Alt ↑ )"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>Bigger</button>
+        <button class="smaller" title="Smaller: the part inside it ( ${ALT} ↓ )"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5 5.25 5.25" /></svg>Smaller</button>
+        <button class="bigger" title="Bigger: what it sits in ( ${ALT} ↑ )"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>Bigger</button>
       </div>
       <textarea placeholder="What should change? Enter sends"></textarea>
       <div class="row"><button class="b cancel">Cancel</button><button class="b send">Send to grndwrk</button></div>
     </div>
     <div class="toast"></div>
+    <div class="gmenu" role="menu" aria-label="grndwrk"></div>
     <div class="jcard" role="dialog" aria-label="Join the team's comments">
       <div class="j-ask">
         <p>Comments from this site go to your team's grndwrk. Paste the invite you were sent, once, in this browser.</p>
@@ -167,15 +185,16 @@
     <div class="dock-target"></div>
     <div class="bar">
       <span class="name"><span class="dot"></span>grndwrk</span>
-      <button class="go" title="Comment on this page (Alt+C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg><span class="bar-label">Comment</span></button>
+      <button class="go" title="Comment on this page (${ALT}+C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg><span class="bar-label">Comment</span></button>
       <button class="bar-test" title="Fixes ready to test on this site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg><span class="bar-count"></span></button>
       <button class="bar-save" title="Save the waiting comments as a file to send to whoever runs grndwrk" style="display:none">Save as file</button>
       <span class="grow"></span>
+      <button class="bar-more" title="More: where comments go, waiting ones, where the button sits (or right-click)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM18.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" /></svg></button>
       <button class="float" title="Float the button over the page instead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>Float</button>
       <button class="fold" title="Fold into a small tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg></button>
     </div>
     <button class="tab" title="grndwrk: open the bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg>grndwrk</button>
-    <button class="pill" title="Comment on this page (Alt+C). Drag to move it; drop it on the bottom edge for a bar.">
+    <button class="pill" title="Comment on this page (${ALT}+C). Drag to move it; drop it on the bottom edge for a bar. Hold it down, or right-click, for more.">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg>
       <span>Comment</span>
       <span class="pill-test" title="Fixes ready to test on this site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" /></svg><span class="pill-count"></span></span>
@@ -218,14 +237,19 @@
       localStorage.removeItem('groundwork.' + k)
     }
   } catch {}
+  const isHidden = () => {
+    try { return !!sessionStorage.getItem('grndwrk.hidden') } catch { return false }
+  }
   let seat = { mode: 'float', x: null, y: null }
   try { seat = { ...seat, ...JSON.parse(localStorage.getItem(PLACE) || '{}') } } catch {}
   const pagePadding = document.documentElement.style.paddingBottom
   function applyPlace() {
-    pill.style.display = seat.mode === 'float' ? 'flex' : 'none'
-    bar.style.display = seat.mode === 'bar' ? 'flex' : 'none'
-    tab.style.display = seat.mode === 'tab' ? 'flex' : 'none'
-    document.documentElement.style.paddingBottom = seat.mode === 'bar' ? '36px' : pagePadding
+    // Hidden in this tab (the menu's Hide): none of the three, and the page keeps its own padding.
+    const shown = !isHidden()
+    pill.style.display = shown && seat.mode === 'float' ? 'flex' : 'none'
+    bar.style.display = shown && seat.mode === 'bar' ? 'flex' : 'none'
+    tab.style.display = shown && seat.mode === 'tab' ? 'flex' : 'none'
+    document.documentElement.style.paddingBottom = shown && seat.mode === 'bar' ? '36px' : pagePadding
     if (seat.mode === 'float' && seat.x !== null) {
       const x = Math.max(4, Math.min(window.innerWidth - pill.offsetWidth - 4, seat.x))
       const y = Math.max(4, Math.min(window.innerHeight - pill.offsetHeight - 4, seat.y))
@@ -236,21 +260,33 @@
 
   // Dragging the button: a short move is still a click.
   let moved = null
+  // Held down without moving: the menu, as a long press on the phone's button.
+  let press = 0
   pill.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return
     const r = pill.getBoundingClientRect()
     moved = { dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY, dragging: false }
     pill.setPointerCapture(e.pointerId)
+    clearTimeout(press)
+    press = setTimeout(() => {
+      if (!moved || moved.dragging || moved.swallow) return
+      moved = { swallow: true }
+      openMenu()
+    }, 550)
   })
   pill.addEventListener('pointermove', (e) => {
-    if (!moved) return
+    if (!moved || moved.swallow) return
     if (!moved.dragging && Math.hypot(e.clientX - moved.x, e.clientY - moved.y) < 5) return
+    clearTimeout(press)
     moved.dragging = true
     pill.classList.add('dragging')
     Object.assign(pill.style, { left: `${e.clientX - moved.dx}px`, top: `${e.clientY - moved.dy}px`, right: 'auto', bottom: 'auto' })
     dockTarget.style.display = e.clientY > window.innerHeight - 40 ? 'block' : 'none'
   })
   pill.addEventListener('pointerup', (e) => {
-    if (!moved) return
+    clearTimeout(press)
+    // The menu opened while it was held: the click that follows does nothing more.
+    if (!moved || moved.swallow) return
     const dragged = moved.dragging
     pill.classList.remove('dragging')
     dockTarget.style.display = 'none'
@@ -636,9 +672,78 @@
    * another site can be missing). Without the box, the card or the button.
    * Null when it cannot be drawn: the comment goes without it.
    */
+  /**
+   * The page's fonts for the drawing. The library reads @font-face from the
+   * page's own stylesheets only; a stylesheet from another server (Google
+   * Fonts, Bunny, a CDN) cannot be read that way, so its fonts were missing
+   * and the picture fell back to another font, with text overlapping. Such a
+   * stylesheet is fetched here (it is public, and sent to anyone), and only
+   * the faces the drawn part uses are kept. Null: nothing came from another
+   * server, and the library does it as before.
+   */
+  async function fontCss(around) {
+    const used = new Set()
+    const els = [around, ...around.querySelectorAll('*')].slice(0, 3000)
+    for (const el of els) for (const f of getComputedStyle(el).fontFamily.split(',')) used.add(f.trim().replace(/^["']|["']$/g, '').toLowerCase())
+    const faces = []
+    let foreign = false
+    const absolute = (css, base) => css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (all, q, u) => {
+      try { return `url("${new URL(u, base).href}")` } catch { return all }
+    })
+    const keep = (css, base) => {
+      const family = /font-family\s*:\s*(['"]?)([^;'"}]+)\1/i.exec(css)
+      if (family && used.has(family[2].trim().toLowerCase())) faces.push(absolute(css, base))
+    }
+    const walk = async (sheet) => {
+      const base = sheet.href || location.href
+      let rules = null
+      try { rules = sheet.cssRules } catch {}
+      if (rules) {
+        for (const r of rules) {
+          if (r.type === 5) keep(r.cssText, base)
+          else if (r.styleSheet) await walk(r.styleSheet)
+          else if (r.cssRules) for (const inner of r.cssRules) if (inner.type === 5) keep(inner.cssText, base)
+        }
+        return
+      }
+      if (!sheet.href) return
+      try {
+        const text = await (await fetch(sheet.href, { mode: 'cors', credentials: 'omit' })).text()
+        foreign = true
+        for (const m of text.matchAll(/@font-face\s*{[^}]*}/g)) keep(m[0], sheet.href)
+      } catch {}
+    }
+    for (const sheet of document.styleSheets) await walk(sheet)
+    if (!foreign || !faces.length) return null
+    // A drawing cannot load anything itself: each font file goes in as data, the first format of each face, a few MB at most.
+    let budget = 6_000_000
+    const inline = async (face) => {
+      const m = /url\("([^"]+)"\)(\s*format\([^)]*\))?/.exec(face)
+      if (!m || m[1].startsWith('data:')) return face
+      try {
+        const blob = await (await fetch(m[1], { mode: 'cors', credentials: 'omit' })).blob()
+        if (blob.size > budget) return null
+        budget -= blob.size
+        const data = await new Promise((resolve, reject) => {
+          const r = new FileReader()
+          r.onload = () => resolve(r.result)
+          r.onerror = reject
+          r.readAsDataURL(blob)
+        })
+        return face.replace(/src\s*:[^;}]*/i, `src: url("${data}")${m[2] || ''}`)
+      } catch {
+        return null
+      }
+    }
+    const done = (await Promise.all(faces.map(inline))).filter(Boolean)
+    return done.length ? done.join('\n') : null
+  }
+
   async function pictureOf(rect) {
     try {
       const lib = await loadShotLib()
+      // The page's own fonts, once loaded, so the picture is not drawn in a fallback font.
+      if (document.fonts && document.fonts.ready) await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))])
       const margin = 48
       const want = { left: rect.left - margin, top: rect.top - margin, right: rect.left + rect.width + margin, bottom: rect.top + rect.height + margin }
       // The smallest element around the spot and its margin, so the whole page is not drawn.
@@ -662,8 +767,10 @@
         const r = el.getBoundingClientRect()
         return r.right < want.left || r.left > want.right || r.bottom < want.top || r.top > want.bottom
       }
+      const fonts = await Promise.race([fontCss(around).catch(() => null), new Promise((r) => setTimeout(() => r(null), 3000))])
       const drawing = lib.domToCanvas(around, {
         scale,
+        ...(fonts ? { font: { cssText: fonts } } : {}),
         timeout: 4000,
         filter: (n) => n !== host && !outside(n.parentElement),
         onCloneEachNode: cleanAttributes,
@@ -824,8 +931,9 @@
   window.addEventListener(
     'keydown',
     (e) => {
-      if (e.altKey && (e.key === 'c' || e.code === 'KeyC')) {
+      if (e.altKey && (e.key === 'c' || e.key === 'C' || e.code === 'KeyC' || e.keyCode === 67)) {
         e.preventDefault()
+        if (isHidden()) showButton()
         closeCard()
         if (relay && !picking) relay.joined().then((yes) => (yes ? setPicking(true) : openJoin()))
         else setPicking(!picking)
@@ -920,17 +1028,30 @@
   const panel = $('.panel'), items = $('.items'), tcard = $('.tcard'), mark = $('.mark'), note = $('.t-note')
   const TESTING = 'grndwrk.testing'
   let tests = [], current = null, marked = null, siteAllowed = true
+  /** Whether grndwrk answers this site: 'on', 'ask' (allow it in the map first) or 'off' (not running); for the menu. */
+  let reach = 'off'
   async function loadTests() {
-    // Testing fixes through the relay is not there yet: only comments go that way.
-    if (relay) return (tests = [])
+    if (relay) {
+      // Through the relay: this browser's own comments made in a browser, built and ready to test.
+      const own = await relay.status().catch(() => [])
+      tests = own
+        .filter((c) => c && c.state === 'ready' && c.web && typeof c.web.path === 'string' && /^\/(?![\/\\])/.test(c.web.path))
+        .map((c) => ({ id: c.id, key: c.key, round: c.round, title: c.title || '', fix: c.fix || '', test: c.test || '', steps: Array.isArray(c.steps) ? c.steps : [], ...c.web }))
+      return showTestCount()
+    }
     try {
       const res = await fetch(`${base}/__grndwrk/tests`, { cache: 'no-store' })
       // Not allowed yet: asked again only after a comment goes through.
       siteAllowed = res.status !== 403
+      reach = res.ok ? 'on' : res.status === 403 ? 'ask' : 'off'
       tests = res.ok ? (await res.json()).tests || [] : []
     } catch {
+      reach = 'off'
       tests = []
     }
+    return showTestCount()
+  }
+  function showTestCount() {
     const n = tests.length
     pillTest.style.display = n ? 'flex' : 'none'
     pillCount.textContent = n
@@ -1068,8 +1189,15 @@
       rejecting(true)
       return note.focus()
     }
+    if (relay) {
+      const said = await relay.tested(current, works, note.value)
+      if (said !== 'sent') return flash(said === 'asked' ? 'This browser is not allowed yet.' : 'The relay did not take it. Try again.')
+      flash(works ? 'Approved. It is marked fixed once your team\'s grndwrk reads it.' : 'Rejected. It goes back to your agent with your note.')
+      tests = tests.filter((t) => t.id !== current.id)
+      closeTest()
+      return showTestCount()
+    }
     try {
-      if (relay) return
       const res = await fetch(`${base}/__grndwrk/tested`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id, works, note: works ? '' : note.value }) })
       if (!res.ok) throw new Error()
       flash(works ? 'Approved. Marked fixed.' : 'Rejected. It goes back to your agent with your note.')
@@ -1100,8 +1228,8 @@
   $('.t-no').addEventListener('click', () => answer(false))
   $('.t-show').addEventListener('click', async () => {
     if (!current) return
+    if (relay) return flash((await relay.show(current)) === 'sent' ? 'It opens in grndwrk on your team\'s Macs' : 'The relay did not take it')
     try {
-      if (relay) return
       const res = await fetch(`${base}/__grndwrk/show`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id }) })
       flash(res.ok ? 'Opened in grndwrk' : 'grndwrk could not open it')
     } catch {
@@ -1126,6 +1254,133 @@
   grab.addEventListener('pointerup', () => (lift = null))
   window.addEventListener('scroll', placeMark, true)
   window.addEventListener('resize', placeMark)
+  /**
+   * The menu: hold the button down, right-click it, or the bar's dots. As the
+   * phone's long press: where comments go, what waits, fixes to test, the
+   * team's relay on a staging site, where the button sits, and hiding it.
+   */
+  const gmenu = $('.gmenu')
+  function closeMenu() {
+    gmenu.style.display = 'none'
+  }
+  async function openMenu() {
+    closeCard()
+    setPicking(false)
+    if (relay) await loadTests()
+    const waiting = outbox.read().length
+    const lines = []
+    let state = 'off', head = ''
+    if (relay) {
+      const joined = await relay.joined()
+      const allowed = joined && (await relay.allowed())
+      state = allowed ? 'on' : joined ? 'wait' : 'off'
+      head = allowed ? 'Comments go to your team' : joined ? 'Waiting to be allowed' : 'Not joined yet'
+      lines.push(allowed ? 'Through your team\'s relay.' : joined ? `Whoever invited you allows this browser in grndwrk's map. It shows ${await relay.digits()}.` : 'Join with the invite you were sent.')
+    } else {
+      await loadTests()
+      state = reach === 'on' ? 'on' : reach === 'ask' ? 'wait' : 'off'
+      head = reach === 'on' ? 'Connected to grndwrk' : reach === 'ask' ? 'Allow this site in grndwrk' : 'grndwrk is not answering'
+      lines.push(reach === 'on' ? `Comments from ${location.host} go to the map.` : reach === 'ask' ? 'Send a comment, then allow it in the map once.' : 'Start grndwrk on your Mac. Comments wait here until then.')
+    }
+    if (waiting) lines.push(`${waiting} ${waiting === 1 ? 'comment waits' : 'comments wait'} to be sent.`)
+    if (tests.length) lines.push(`${tests.length} ${tests.length === 1 ? 'fix is' : 'fixes are'} ready to test.`)
+
+    const items = []
+    const item = (label, act, opts = {}) => {
+      const b = document.createElement('button')
+      b.setAttribute('role', opts.tick !== undefined ? 'menuitemradio' : 'menuitem')
+      if (opts.danger) b.className = 'danger'
+      b.textContent = label
+      if (opts.tick) {
+        const t = document.createElement('span')
+        t.className = 'tick'
+        t.textContent = '✓'
+        b.appendChild(t)
+      }
+      b.addEventListener('click', () => {
+        closeMenu()
+        act()
+      })
+      items.push(b)
+    }
+    const rule = () => items.push(document.createElement('hr'))
+    if (tests.length) item(tests.length === 1 ? 'Test 1 fix' : `Test ${tests.length} fixes`, openTests)
+    item('Comment on this page', () => setPicking(true))
+    if (waiting) item(`Save ${waiting} waiting ${waiting === 1 ? 'comment' : 'comments'} as a file`, saveFile)
+    if (relay) {
+      const joined = await relay.joined()
+      if (!joined) item('Join with an invite', openJoin)
+      else if (state !== 'on') item('Show the digits to be allowed', openJoin)
+      if (joined) {
+        item('Leave the team\'s comments', async () => {
+          await relay.leave()
+          loadTests()
+          flash('This browser left. An invite brings it back.')
+        })
+      }
+    }
+    rule()
+    item('Float over the page', () => ((seat = { mode: 'float', x: seat.x ?? null, y: seat.y ?? null }), applyPlace()), { tick: seat.mode === 'float' })
+    item('Bar at the bottom', () => ((seat = { ...seat, mode: 'bar' }), applyPlace()), { tick: seat.mode === 'bar' })
+    item('Small tab in the corner', () => ((seat = { ...seat, mode: 'tab' }), applyPlace()), { tick: seat.mode === 'tab' })
+    rule()
+    item('Hide in this tab', hideButton, { danger: true })
+
+    const status = document.createElement('div')
+    status.className = 'g-status'
+    const dot = document.createElement('span')
+    dot.className = `g-dot ${state === 'on' ? '' : state === 'wait' ? 'wait' : 'off'}`
+    status.append(dot, document.createTextNode(head))
+    const lineBox = document.createElement('div')
+    lineBox.className = 'g-lines'
+    for (const l of lines) {
+      const d = document.createElement('div')
+      d.textContent = l
+      lineBox.appendChild(d)
+    }
+    const hint = document.createElement('div')
+    hint.className = 'g-hint'
+    hint.textContent = `${ALT}+C comments, and brings a hidden button back.`
+    gmenu.replaceChildren(status, lineBox, document.createElement('hr'), ...items, hint)
+
+    // Next to wherever the button is.
+    gmenu.style.display = 'block'
+    const anchor = seat.mode === 'bar' ? bar : seat.mode === 'tab' ? tab : pill
+    const r = anchor.getBoundingClientRect()
+    const w = gmenu.offsetWidth, h = gmenu.offsetHeight
+    const left = Math.max(8, Math.min(window.innerWidth - w - 8, seat.mode === 'bar' ? window.innerWidth - w - 8 : r.right - w))
+    const top = r.top - h - 8 >= 8 ? r.top - h - 8 : Math.min(window.innerHeight - h - 8, r.bottom + 8)
+    Object.assign(gmenu.style, { left: `${left}px`, top: `${top}px` })
+    gmenu.querySelector('button')?.focus()
+  }
+  /** Out of the way in this tab, until Alt+C or a new tab. Comments that wait stay. */
+  const HIDDEN = 'grndwrk.hidden'
+  function hideButton() {
+    try { sessionStorage.setItem(HIDDEN, '1') } catch {}
+    setPicking(false)
+    closeCard()
+    applyPlace()
+    // Said before it goes, so it is clear how it comes back.
+    flash(`Hidden in this tab. ${ALT}+C brings it back.`)
+  }
+  function showButton() {
+    try { sessionStorage.removeItem(HIDDEN) } catch {}
+    applyPlace()
+  }
+  applyPlace()
+  for (const el of [pill, bar, tab]) el.addEventListener('contextmenu', (e) => (e.preventDefault(), openMenu()))
+  $('.bar-more').addEventListener('click', () => (gmenu.style.display === 'block' ? closeMenu() : openMenu()))
+  gmenu.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') return (e.stopPropagation(), closeMenu())
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const all = [...gmenu.querySelectorAll('button')]
+    const at = all.indexOf(root.activeElement)
+    all[(at + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length]?.focus()
+  })
+  // A click anywhere else closes it.
+  window.addEventListener('pointerdown', (e) => gmenu.style.display === 'block' && !e.composedPath().includes(gmenu) && !e.composedPath().includes($('.bar-more')) && closeMenu(), true)
+
   // A test started on another page continues here, once its page has loaded.
   loadTests().then((list) => {
     let id = null

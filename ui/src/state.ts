@@ -2,7 +2,7 @@ import Alpine from 'alpinejs'
 import { cached } from './reactivity'
 import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, answerJoin, type RelayInfo, fetchAuthors } from './api'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, inviteLinkAgain, removeFromRelay, answerJoin, type RelayInfo, fetchAuthors } from './api'
 import { BOX, BOX_SHOTS, commentsForScreen, hiddenScreenIds, layoutSitemap, screenPartIds, screenParts, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
@@ -10,7 +10,7 @@ import { answerText, appendAnswer, appendEntry, openQuestions, questionOptions, 
 import { parseAreas, type Area } from '../../src/shared/report'
 import { changeEntry, undoEntry, type ThreadOwner } from './api'
 import { splitAnswer } from '../../src/shared/thread'
-import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testSteps, type FeedbackState } from '../../src/shared/feedback'
+import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testEntryIndex, testSteps, type FeedbackState } from '../../src/shared/feedback'
 import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
 import { isNewComment, isRelayComment, needsSeen } from '../../src/shared/unseen'
 import { markSeen as postSeen } from './api'
@@ -480,16 +480,31 @@ export const state = Alpine.reactive({
     return cached('sitemapRows', () => screenTree(this.sitemapScreens))
   },
   feedbackWords: { incoming: 'Incoming', proposed: 'Proposed', ready: 'Ready to test', fixed: 'Fixed' } as Record<FeedbackState, string>,
-  /** Thoughts, comments and stories on the page in view, per status. */
+  /**
+   * Thoughts and comments on the page or part in view, per status, counted as
+   * the pages and topics count them, so the numbers add up. Stories are
+   * counted apart (`storyCounts`) and named under the choice.
+   */
   get progressCounts(): Record<Progress, number> {
     return cached('progressCounts', () => {
       const counts = Object.fromEntries(PROGRESS.map((p) => [p, 0])) as Record<Progress, number>
-      for (const n of this.pageNodes) counts[progressOfNode(n)]++
+      for (const n of this.nodesMatching('status')) counts[progressOfNode(n)]++
+      return counts
+    })
+  },
+  /** Stories on the page or part in view, per status: the ones the board would show with each choice. */
+  get storyCounts(): Record<Progress, number> {
+    return cached('storyCounts', () => {
+      const counts = Object.fromEntries(PROGRESS.map((p) => [p, 0])) as Record<Progress, number>
+      if (this.narrowed) return counts
       const names = this.pageNames
-      for (const st of this.stories) {
-        const first = this.nodes[st.from[0]]
-        if (this.onAll || (first && samePage(pageOf(first, names), this.currentPage))) counts[progressOfStory(st)]++
-      }
+      const list = this.scopeScreen
+        ? storiesForScreen(this.scopeScreen, this.stories)
+        : this.stories.filter((st) => {
+            const first = this.nodes[st.from[0]]
+            return this.onAll || (first && samePage(pageOf(first, names), this.currentPage))
+          })
+      for (const st of list) counts[progressOfStory(st)]++
       return counts
     })
   },
@@ -543,13 +558,14 @@ export const state = Alpine.reactive({
   },
   /** Everything built and waiting for the person to test it, on every page: comments' fixes and thoughts alike. */
   get toTestCount(): number {
-    return cached('toTestCount', () => Object.values(this.nodes as Record<string, GNode>).filter((n) => progressOfNode(n) === 'ready').length)
+    // Working on one part: that part's only, as everything else on the screen then is.
+    return cached('toTestCount', () => Object.values(this.nodes as Record<string, GNode>).filter((n) => this.inScope(n) && progressOfNode(n) === 'ready').length)
   },
-  /** The "N to test" chip: only what is ready to test, on every page, or back to everything open. */
+  /** The "N to test" chip: only what is ready to test, on every page (or in the part in view), or back to everything open. */
   toggleToTest() {
     if (this.progressFilter === 'ready') return this.setProgressFilter('')
     if (this.view !== 'map') this.setView('map')
-    if (!this.onAll) this.showPage(ALL)
+    if (!this.onAll && !this.scopeScreen) this.showPage(ALL)
     this.setProgressFilter('ready')
   },
   /** The sidebar's "N new" chip: a shortcut to the same filter. */
@@ -613,16 +629,21 @@ export const state = Alpine.reactive({
   /** One filter's choices, each with how many cards it would show together with the other filters. */
   filterOptionsFor(key: string): { key: string; label: string; hint?: string; count?: number; on: boolean }[] {
     if (key === 'status') {
+      // Thoughts, as the pages and topics count them; stories that match too are said under the choice.
       const counts = this.progressCounts
+      const st = this.storyCounts
       const f = this.progressFilter
-      const notDone = counts.open + counts['in-progress'] + counts.ready
+      const sum = (c: Record<Progress, number>, keys: Progress[]) => keys.reduce((n, k) => n + c[k], 0)
+      const also = (n: number) => (n ? ` Also ${n} ${n === 1 ? 'story' : 'stories'}.` : '')
+      const open: Progress[] = ['open', 'in-progress', 'ready']
+      const all: Progress[] = [...open, 'done', 'later']
       return [
-        { key: '', label: 'Open', hint: 'Everything not done yet', count: notDone, on: f === '' },
-        { key: 'in-progress', label: 'In progress', hint: 'A fix proposed, a story partly met', count: counts['in-progress'], on: f === 'in-progress' },
-        { key: 'ready', label: 'Ready to test', hint: 'Built. Test it, then approve or reject it.', count: counts.ready, on: f === 'ready' },
-        { key: 'done', label: 'Done', hint: 'Fixed comments, done stories, settled thoughts', count: counts.done, on: f === 'done' },
-        { key: 'later', label: 'Not now', hint: 'Parked thoughts, stories set aside', count: counts.later, on: f === 'later' },
-        { key: 'all', label: 'Everything', hint: 'Done and not done', count: notDone + counts.done + counts.later, on: f === 'all' },
+        { key: '', label: 'Open', hint: 'Everything not done yet.' + also(sum(st, open)), count: sum(counts, open), on: f === '' },
+        { key: 'in-progress', label: 'In progress', hint: 'A fix proposed, a story partly met.' + also(st['in-progress']), count: counts['in-progress'], on: f === 'in-progress' },
+        { key: 'ready', label: 'Ready to test', hint: 'Built. Test it, then approve or reject it.' + also(st.ready), count: counts.ready, on: f === 'ready' },
+        { key: 'done', label: 'Done', hint: 'Fixed comments, done stories, settled thoughts.' + also(st.done), count: counts.done, on: f === 'done' },
+        { key: 'later', label: 'Not now', hint: 'Parked thoughts, stories set aside.' + also(st.later), count: counts.later, on: f === 'later' },
+        { key: 'all', label: 'Everything', hint: 'Done and not done.' + also(sum(st, all)), count: sum(counts, all), on: f === 'all' },
       ]
     }
     if (key === 'new') return [{ key: 'new', label: 'Only new comments', hint: 'Through the relay, and nobody has looked at them yet', count: this.newComments.length, on: this.newOnly }]
@@ -940,11 +961,33 @@ export const state = Alpine.reactive({
   async invite(name: string) {
     try {
       const { name: who, link } = await inviteColleague(name)
+      this.colleagueOpen = ''
       this.invited = { name: who, link, qr: await qrPath(link) }
       await this.loadRelay()
     } catch (err) {
       this.flash(errorText(err))
     }
+  },
+  /** The colleague whose details are open in Colleagues: an invite's or a joined device's id. */
+  colleagueOpen: '',
+  /** An open invite's link and QR code, fetched when its details open. */
+  colleagueInvite: null as { id: string; link: string; qr: string } | null,
+  async openColleague(kind: 'phones' | 'invites', id: string) {
+    if (this.colleagueOpen === id) return void (this.colleagueOpen = '')
+    this.colleagueOpen = id
+    this.colleagueInvite = null
+    this.invited = null
+    if (kind !== 'invites') return
+    try {
+      const { link } = await inviteLinkAgain(id)
+      if (this.colleagueOpen === id) this.colleagueInvite = { id, link, qr: await qrPath(link) }
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** How many comments a colleague sent through the relay, by the name they were invited with. */
+  commentsFrom(name: string): number {
+    return Object.values(this.nodes).filter((n) => n.extra?.via === 'relay' && n.extra?.from === name).length
   },
   /** A colleague's phone joined with their invite: allowed only when it shows the same four digits. */
   async answerJoin(invite: string, allow: boolean) {
@@ -1030,12 +1073,10 @@ export const state = Alpine.reactive({
   testSteps(text: string): { fix: string; steps: string[] } {
     return testSteps(this.entryWords(text))
   },
-  /** The entry whose steps can be tested now: Claude's last word on a comment that is ready to test. */
+  /** The entry whose steps can be tested now, on something ready to test: Claude's latest entry with steps, even with a note after it. */
   get testableEntry(): number {
     if (!this.selected || progressOfNode(this.selected) !== 'ready') return -1
-    const t = this.thread
-    for (let i = t.length - 1; i >= 0; i--) if (t[i].who === 'claude') return testSteps(t[i].text).steps.length ? i : -1
-    return -1
+    return testEntryIndex(this.thread.map((e) => ({ who: e.who, text: this.entryWords(e.text) })))
   },
   /** Each step marked works or not, per comment and entry, kept in this browser until the comment is settled. */
   testChecks: readStored<Record<string, Record<number, 'ok' | 'bad'>>>('grndwrk.testChecks', {}),
