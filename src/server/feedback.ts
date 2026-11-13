@@ -3,9 +3,10 @@ import { BadInput, type NodeStore } from '../store/nodes.js'
 import { removeFiles, saveImage } from '../store/files.js'
 import { listStories } from '../store/stories.js'
 import type { GNode, Story } from '../shared/types.js'
-import { feedbackState, isFeedback, testSteps } from '../shared/feedback.js'
+import { feedbackState, isFeedback, testEntryIndex, testSteps } from '../shared/feedback.js'
 import { appendEntry, splitBody } from '../shared/thread.js'
 import { cleanText } from '../shared/text.js'
+import { suspiciousSigns } from '../shared/suspicious.js'
 
 /**
  * A comment left on the running product, from the web overlay or the iOS
@@ -73,6 +74,27 @@ export function parseFeedback(body: unknown): FeedbackInput {
 }
 
 const validKey = (k: unknown) => (typeof k === 'string' && /^[A-Za-z0-9-]{16,64}$/.test(k) ? k : undefined)
+
+/**
+ * Comments already in the map, checked again with the current check (it
+ * learns new wording over time): a comment whose own words now show signs
+ * gets them added to `suspicious:`. Only what the commenter sent is read:
+ * the title, the quoted words, where it was made and the selector, never
+ * the thread. Returns the ids marked.
+ */
+export async function markSuspiciousComments(store: NodeStore): Promise<string[]> {
+  const marked: string[] = []
+  for (const n of await store.list()) {
+    if (n.error || n.extra?.source !== 'app') continue
+    const words = n.body.split(COMMENT_LABEL)[1]?.split('\n\n').find((b) => b.trim().startsWith('>')) ?? ''
+    const seenIn = Array.isArray(n.extra.seen_in) ? n.extra.seen_in.filter((x): x is string => typeof x === 'string') : []
+    const selector = /^Selector: `(.+)`$/m.exec(n.body)?.[1]
+    const signs = suspiciousSigns(n.title, words.replace(/^> ?/gm, ''), ...seenIn, selector, typeof n.extra.url === 'string' ? n.extra.url : undefined)
+    if (!signs.length) continue
+    if ((await store.markSuspicious(n.id, signs)).upserted.length) marked.push(n.id)
+  }
+  return marked
+}
 
 /** "the button "Book" (#book-button)" */
 export function describeElement(e: FeedbackInput['element'] = {}): string {
@@ -145,6 +167,8 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
   if (stories.length) lines.push('', `Stories for this screen: ${stories.map((s) => `${s.id} (${s.title})`).join(', ')}`)
 
   const seenIn = [input.screen, e.id ? `#${e.id}` : e.label, e.component].filter((s): s is string => !!s)
+  // Reads like orders to an agent rather than a report: marked, never dropped.
+  const suspicious = suspiciousSigns(input.text, e.label, e.id, e.component, e.selector, input.screen, input.url)
   const change = await store.create(
     { title, type: 'idea', page: 'Feedback', topic: topicFor(input.screen), altitude: 1, status: 'open', body: lines.join('\n') + '\n' },
     {
@@ -155,6 +179,7 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
       // Where a web comment was made, so the page can find its fixes to test.
       ...(input.url ? { url: input.url } : {}),
       ...(via ? { via } : {}),
+      ...(suspicious.length ? { suspicious } : {}),
       ...(from ? { from: cleanText(from.name).trim().slice(0, 80) || 'A colleague', relay_device: from.device } : {}),
     },
   )
@@ -199,7 +224,7 @@ function asks(body: unknown): Ask[] {
 export async function feedbackStatus(
   store: NodeStore,
   body: unknown,
-): Promise<{ id: string; title?: string; status?: string; state?: string; fix?: string; test?: string; round?: string; gone?: true }[]> {
+): Promise<{ id: string; title?: string; status?: string; state?: string; fix?: string; test?: string; round?: string; gone?: true; web?: { text: string; path: string; selector: string; label: string } }[]> {
   const nodes = new Map((await store.list()).map((n) => [n.id, n]))
   return asks(body).map(({ id, key }) => {
     const n = nodes.get(id)
@@ -208,7 +233,7 @@ export async function feedbackStatus(
     const state = feedbackState(n) ?? 'incoming'
     const { fix, test } = state === 'incoming' ? { fix: '', test: '' } : lastFix(n.body)
     const status = { fixed: 'fixed', ready: 'ready to test', proposed: 'fix proposed', incoming: n.status }[state]
-    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test, steps: stepsOf(test) } : {}), ...(state === 'ready' ? { round: fixRound(n.body) } : {}) }
+    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test, steps: stepsOf(test) } : {}), ...(state === 'ready' ? { round: fixRound(n.body), ...webPlace(n) } : {}) }
   })
 }
 
@@ -228,8 +253,11 @@ export function fixRound(body: string): string {
  * after a "To test:" line, how to check it in the app. Plain text, capped.
  */
 export function lastFix(body: string): { fix: string; test: string } {
-  const said = splitBody(body).entries.filter((e) => e.who === 'claude')
-  const text = said[said.length - 1]?.text ?? ''
+  const entries = splitBody(body).entries
+  const said = entries.filter((e) => e.who === 'claude')
+  // The steps to test may sit in an earlier entry, with a note after it: that entry is the fix to test.
+  const at = testEntryIndex(entries)
+  const text = (at >= 0 ? entries[at].text : said[said.length - 1]?.text) ?? ''
   const m = /^\s*(?:to test|how to test)\s*:\s*/im.exec(text)
   const cap = (t: string, n: number) => (t.length > n ? t.slice(0, n - 3) + '...' : t)
   if (!m) return { fix: cap(text.trim(), 1500), test: '' }
@@ -268,7 +296,7 @@ export async function testedOnDevice(store: NodeStore, body: unknown): Promise<{
     if (!n || n.extra?.source !== 'app' || n.extra?.key !== key || feedbackState(n) !== 'ready') continue
     // A result for another round of fixing (sent from a phone that names it) is not about this fix.
     if (round && round !== fixRound(n.body)) continue
-    done.push({ id, state: await settle(store, n, b.works, b.note, 'on the phone', !b.works && b.on_mac === true) })
+    done.push({ id, state: await settle(store, n, b.works, b.note, b.platform === 'Web' ? 'in the browser' : 'on the phone', !b.works && b.on_mac === true) })
   }
   return done
 }
@@ -299,6 +327,26 @@ async function settle(store: NodeStore, n: GNode, works: boolean, rawNote: unkno
 }
 
 /** Where a web comment was made: its `url`, or the Address line of a comment from before that was kept. */
+/**
+ * For a comment made in a browser (a staging site through the relay): what
+ * its Test needs, the words, the page's path and the element, as the local
+ * button gets them from webTests. Nothing for a phone's comment.
+ */
+function webPlace(n: GNode): { web?: { text: string; path: string; selector: string; label: string } } {
+  const at = typeof n.extra?.url === 'string' ? addressOf(n) : null
+  if (!at) return {}
+  const words = n.body.split(COMMENT_LABEL)[1]?.split('\n\n').find((b) => b.trim().startsWith('>')) ?? ''
+  const seen = Array.isArray(n.extra?.seen_in) ? (n.extra.seen_in as unknown[]).map(String) : []
+  return {
+    web: {
+      text: words.split('\n').map((l) => l.replace(/^>\s?/, '')).join('\n').trim() || n.title,
+      path: at.pathname,
+      selector: /^Selector: `(.+)`$/m.exec(n.body)?.[1] ?? '',
+      label: seen[1] ?? '',
+    },
+  }
+}
+
 function addressOf(n: GNode): URL | null {
   const raw = typeof n.extra?.url === 'string' ? n.extra.url : /^Address: (\S+)$/m.exec(n.body)?.[1]
   try {

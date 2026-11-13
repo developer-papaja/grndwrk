@@ -61,6 +61,19 @@ export function relayOrigin(raw: string): string {
   return u.origin
 }
 
+/** A staging site's origin, as the relay checks it (relay/src/relay.ts siteOrigin): https (http only for localhost), no login in it; '' otherwise. */
+export function siteOrigin(text: string): string {
+  try {
+    const u = new URL(text.trim())
+    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1'
+    if (u.protocol !== 'https:' && !(local && u.protocol === 'http:')) return ''
+    if (u.username || u.password) return ''
+    return u.origin
+  } catch {
+    return ''
+  }
+}
+
 /**
  * An invite for a phone, or a team link for a teammate's grndwrk:
  * `grndwrk:invite/<relay host>/<mailbox>/<secret>`. Not a web address on

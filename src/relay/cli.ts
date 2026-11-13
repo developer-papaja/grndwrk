@@ -7,7 +7,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { PACKAGE_ROOT, stateDir } from '../root.js'
 import { RelayClient } from './client.js'
-import { ownRelay, parseLink, projectRelay, relayOrigin, saveOwnRelay, saveProjectRelay, teamLink } from './config.js'
+import { ownRelay, parseLink, projectRelay, relayOrigin, saveOwnRelay, saveProjectRelay, siteOrigin, teamLink } from './config.js'
 import { ownerAuthKey, randomId, randomKey, teamAuthKey } from './keys.js'
 
 /**
@@ -27,6 +27,9 @@ export const RELAY_HELP = `Usage:
                        connect this project's grndwrk to the team's relay
   grndwrk relay        where this project's comments come through
   grndwrk relay link   the team link for teammates (it opens the project's comments: send it privately)
+  grndwrk relay site <https://staging.example.com>
+                       let colleagues comment from the staging site, through the relay;
+                       prints the line to add to the staging site's layout. off: stop it
   grndwrk relay leave  stop using the relay in this project, on this Mac
 `
 
@@ -41,6 +44,7 @@ export async function relayCommand(args: string[], gwDir: string | undefined, na
     return void console.log('This project no longer uses the relay on this Mac. Its mailbox stays for your teammates; grndwrk relay join brings it back.')
   }
   if (sub === 'status') return status(gwDir)
+  if (sub === 'site') return site(gwDir, arg)
   if (sub === 'link') {
     const r = await projectRelay(gwDir)
     if (!r) throw new Error('This project does not use a relay.')
@@ -57,6 +61,8 @@ async function deploy(name?: string) {
   const dir = join(stateDir(), 'relay-worker')
   await mkdir(dir, { recursive: true })
   await cp(join(PACKAGE_ROOT, 'relay', 'src'), join(dir, 'src'), { recursive: true, force: true })
+  // The Comment button for a staging site, from this grndwrk, served by the relay to that site only.
+  await writeFile(join(dir, 'src', 'assets.ts'), await relayAssets())
   for (const f of ['package.json', 'package-lock.json']) await cp(join(PACKAGE_ROOT, 'relay', f), join(dir, f), { force: true })
   const toml = await readFile(join(PACKAGE_ROOT, 'relay', 'wrangler.toml'), 'utf8')
   await writeFile(join(dir, 'wrangler.toml'), toml.replace(/^name = ".*"$/m, `name = "${worker}"`))
@@ -96,6 +102,49 @@ async function deploy(name?: string) {
   const hello = await fetch(`${url}/v1/hello`).then((r) => r.json() as Promise<{ relay?: string }>).catch(() => ({ relay: undefined }))
   console.log(hello.relay === 'grndwrk' ? `\nDone. Your relay runs at ${url}.` : `\nDone. Your relay is at ${url}; it may take a minute before it answers.`)
   console.log('\nNext, in each project whose colleagues should send through it:\n  grndwrk relay add')
+}
+
+/** assets.ts for the relay's copy: the button, its way through the relay, and the picture library, as text. */
+export async function relayAssets(): Promise<string> {
+  const read = (...p: string[]) => readFile(join(PACKAGE_ROOT, ...p), 'utf8')
+  const shot = await read('dist', 'vendor', 'modern-screenshot.js').catch(() => '')
+  return [
+    '// Written by grndwrk relay deploy, from the grndwrk that deployed this relay.',
+    `export const OVERLAY = ${JSON.stringify(await read('overlay', 'feedback.js'))}`,
+    `export const RELAY = ${JSON.stringify(await read('overlay', 'relay.js'))}`,
+    `export const SHOT = ${JSON.stringify(shot)}`,
+    '',
+  ].join('\n')
+}
+
+/** The staging site whose browsers may join and send comments through the relay, or off. */
+async function site(gwDir: string, arg: string | undefined) {
+  const r = await projectRelay(gwDir)
+  if (!r) throw new Error('This project does not use a relay yet: grndwrk relay add (or join) first.')
+  const client = RelayClient.team(r.url, r.mailbox, r.team)
+  if (!arg) {
+    const { site: said } = await client.json<{ site?: string }>('GET', '/sync')
+    // Printed in the terminal: only an origin, never whatever the relay sent.
+    const now = typeof said === 'string' ? siteOrigin(said) : ''
+    if (!now) return void console.log('No staging site yet. grndwrk relay site https://staging.example.com lets colleagues comment from it.')
+    return printSiteLine(r, now)
+  }
+  if (arg === 'off') {
+    await client.json('PUT', '/site', { site: '' })
+    return void console.log('Done: the relay no longer serves the Comment button to the staging site, and takes nothing from its browsers. Remove the line from its layout.')
+  }
+  const wanted = siteOrigin(arg)
+  if (!wanted) throw new Error('The staging site is an https address, like https://staging.example.com')
+  await client.json('PUT', '/site', { site: wanted })
+  const set = wanted
+  console.log(`Colleagues can comment from ${set} once they join with an invite (the map: the globe at the bottom of the rail, Colleagues, Invite).`)
+  printSiteLine(r, set)
+}
+
+function printSiteLine(r: { url: string; mailbox: string }, site: string) {
+  console.log(`\nAdd this line to the staging site's layout, and only there (in Laravel inside @env('staging')):\n  <script src="${r.url}/v1/${r.mailbox}/feedback.js" defer></script>`)
+  console.log(`\nThe button runs only on ${site}, and the relay serves it to no other site. If the site sends a Content-Security-Policy, it must allow ${r.url} in script-src and connect-src.`)
+  console.log('A relay deployed with an older grndwrk serves no button: run grndwrk relay deploy once to update it.')
 }
 
 async function add(gwDir: string) {

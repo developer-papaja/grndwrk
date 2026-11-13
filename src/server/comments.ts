@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { BadInput, type NodeStore } from '../store/nodes.js'
-import { broadcast, clientCount, type NodeSync } from './events.js'
+import { broadcast, clientCount, holdForTab, tabAround, type NodeSync } from './events.js'
+import type { ServerEvent } from '../shared/types.js'
 import { createFeedback, feedbackStatus, ownComments, parseFeedback, removeFeedback, testedOnDevice } from './feedback.js'
 import { saveIosShot, type ShotAbout } from '../store/shots.js'
 import { openTarget } from '../opener.js'
@@ -113,8 +114,14 @@ let lastTab = 0
 
 /** Open a comment in the map with its title ready to type: in an open tab, or a new one. */
 export async function openOnMac(id: string, uiUrl: string, to: 'write' | 'reply' = 'write'): Promise<'browser' | 'new tab'> {
+  const event: ServerEvent = to === 'reply' ? { type: 'node:open', id, reply: true } : { type: 'node:open', id }
   if (clientCount() > 0) {
-    broadcast(to === 'reply' ? { type: 'node:open', id, reply: true } : { type: 'node:open', id })
+    broadcast(event)
+    return 'browser'
+  }
+  // A map tab is open but not in view (another tab, or the browser behind other windows): it opens the comment when looked at.
+  if (tabAround()) {
+    holdForTab(event)
     return 'browser'
   }
   // Someone on the network could ask over and over. One new tab every few seconds at most.

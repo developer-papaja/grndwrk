@@ -82,6 +82,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
         throw new BadInput(err instanceof Error ? err.message : String(err))
       }
     }
+    // An open invite's link again, for someone invited earlier: only when asked, never in the summary.
+    const linkMatch = url.pathname.match(/^\/api\/relay\/invites\/([a-f0-9]{32})\/link$/)
+    if (linkMatch && method === 'POST') {
+      const found = await ctx.relay?.inviteAgain(linkMatch[1])
+      if (!found) throw new NotFound(linkMatch[1])
+      return send(res, 200, found)
+    }
     const joinMatch = url.pathname.match(/^\/api\/relay\/joins\/([a-f0-9]{32})$/)
     if (joinMatch && method === 'POST') {
       if (!ctx.relay) throw new NotFound(joinMatch[1])
@@ -137,7 +144,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     // A map tab in the background, saying it is still open.
     if (url.pathname === '/api/tab' && method === 'POST') {
       if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(res, 403, { error: 'Only from the map' })
-      noteTab()
+      noteTab(url.searchParams.get('gone') === '1')
       res.writeHead(204).end()
       return true
     }
@@ -581,6 +588,10 @@ function parseScreenEdit(input: unknown): ScreenEdit {
     out.body = o.body
   }
   if (o.features !== undefined) out.features = [...new Set(words(o.features, 'features'))]
+  if (o.part !== undefined) {
+    if (typeof o.part !== 'string') throw new BadInput('part must be text')
+    out.part = o.part.replace(/\s+/g, ' ').trim().slice(0, 60)
+  }
   if (o.hidden !== undefined) {
     if (typeof o.hidden !== 'boolean') throw new BadInput('hidden must be true or false')
     out.hidden = o.hidden ? today() : ''

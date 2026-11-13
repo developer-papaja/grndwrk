@@ -9,7 +9,7 @@ import { NodeStore } from '../src/store/nodes.js'
 import { NodeSync } from '../src/server/events.js'
 import { RelayClient } from '../src/relay/client.js'
 import { RelaySync, joinDigits } from '../src/relay/sync.js'
-import { parseLink, projectRelay, saveProjectRelay, teamLink, type ProjectRelay } from '../src/relay/config.js'
+import { parseLink, projectRelay, saveProjectRelay, siteOrigin, teamLink, type ProjectRelay } from '../src/relay/config.js'
 import { inviteId, open, ownerAuthKey, phoneSealKey, phoneSignKey, randomId, randomKey, relayDeviceId, requestSignature, seal, sealJson, teamAuthKey } from '../src/relay/keys.js'
 
 class MemoryStore implements Store {
@@ -323,4 +323,92 @@ describe('relay and grndwrk', () => {
     expect((await p.send('/api/feedback', { text: 'x', key: 'd'.repeat(20) })).status).toBe(401)
     await expect(sync.answerJoin('f'.repeat(32), true)).rejects.toThrow(/no longer waiting/)
   })
+
+  it('brings a comment from a browser on the staging site, joined with an invite like a phone', async () => {
+    await import('../overlay/relay.js')
+    const factory = (globalThis as unknown as { __grndwrkRelayFactory: (c: object, k: object, f: typeof fetch) => BrowserRelay }).__grndwrkRelayFactory
+    const r = await project()
+    const site = 'https://staging.clinic.example'
+    await RelayClient.team(r.url, r.mailbox, r.team).json('PUT', '/site', { site })
+    const sync = new RelaySync(r, ctx())
+    const { link } = await sync.invite('Tess')
+
+    // What the browser keeps: here in memory, on the site in IndexedDB.
+    const kept = new Map<string, unknown>()
+    const keep = { get: async (k: string) => kept.get(k), put: async (k: string, v: unknown) => void kept.set(k, v), remove: async (k: string) => void kept.delete(k) }
+    const browser = factory({ url: r.url, mailbox: r.mailbox, site }, keep, fetch)
+    const comment = (text: string, url: string) => ({ text, platform: 'Web', screen: '/visits/3', url, written: new Date().toISOString(), element: { label: 'Save', role: 'button' } })
+
+    expect(await browser.post(comment('Save is hidden', `${site}/visits/3`))).toBe('join')
+    await expect(browser.join(link.replace(r.mailbox, 'a'.repeat(32)))).rejects.toThrow(/another project/)
+    const digits = await browser.join(link)
+    // The key itself is not kept, only what signs and seals, as keys.
+    expect(JSON.stringify([...kept.values()])).not.toMatch(/[a-f0-9]{64}/)
+    expect(await browser.post(comment('Save is hidden', `${site}/visits/3`))).toBe('asked')
+    expect(await browser.allowed()).toBe(false)
+
+    await sync.tick()
+    const [waiting] = (await sync.summary()).waiting
+    expect(waiting).toMatchObject({ name: 'Tess', digits })
+    await sync.answerJoin(waiting.invite, true)
+    expect(await browser.allowed()).toBe(true)
+
+    expect(await browser.post(comment('Save is hidden', `${site}/visits/3`))).toBe('sent')
+    // An address on another site is not kept.
+    expect(await browser.post(comment('Logo is blurry', 'https://elsewhere.example/phish'))).toBe('sent')
+    await sync.tick()
+    const nodes = await store.list()
+    const save = nodes.find((n) => n.title === 'Save is hidden')!
+    expect(save.extra).toMatchObject({ source: 'app', via: 'relay', from: 'Tess', url: `${site}/visits/3` })
+    const logo = nodes.find((n) => n.title === 'Logo is blurry')!
+    expect(logo.extra.url).toBeUndefined()
+    expect(logo.body).not.toContain('elsewhere.example')
+
+    // Built: the browser sees it ready to test, with its page and steps, and rejects it through the relay.
+    await store.update(save.id, { proposed: '2026-11-13', built: '2026-11-13', body: `${save.body}\n## Thread\n\n**Claude** · 2026-11-13\nBigger button.\n\nTo test:\n1. Open a visit.\n2. Tap Save visit.\n` })
+    await sync.tick()
+    const ready = (await browser.status()).find((c) => c.id === save.id)!
+    expect(ready).toMatchObject({ state: 'ready', steps: ['Open a visit.', 'Tap Save visit.'], web: { path: '/visits/3', text: 'Save is hidden' } })
+    // A phone's comment has no page to go to.
+    expect((await browser.status()).find((c) => c.id === logo.id)?.web).toBeUndefined()
+    expect(await browser.tested(ready, false, 'Still hidden on small screens')).toBe('sent')
+    await sync.tick()
+    const back = await store.get(save.id)
+    expect(back.extra.built).toBeUndefined()
+    expect(back.body).toContain('Tested in the browser')
+    expect(back.body).toContain('> Still hidden on small screens')
+  })
+
+  it('gives an open invite’s link again, until it is used', async () => {
+    const r = await project()
+    const sync = new RelaySync(r, ctx())
+    const anna = await sync.invite('Anna')
+    const bo = await sync.invite('Bo')
+    expect(await sync.inviteAgain(anna.id)).toEqual({ id: anna.id, name: 'Anna', link: anna.link })
+    expect((await sync.inviteAgain(bo.id))?.link).toBe(bo.link)
+    expect(await sync.inviteAgain('f'.repeat(32))).toBeUndefined()
+    // Used: no link any more.
+    await phone(anna.link)
+    await sync.tick()
+    expect(await sync.inviteAgain(anna.id)).toBeUndefined()
+  })
 })
+
+describe('the staging site the relay reports', () => {
+  it('is believed only as an https origin, so nothing else reaches the terminal or the map', () => {
+    expect(siteOrigin('https://staging.clinic.example/visits?x=1')).toBe('https://staging.clinic.example')
+    expect(siteOrigin('http://staging.clinic.example')).toBe('')
+    expect(siteOrigin('http://localhost:3000')).toBe('http://localhost:3000')
+    expect(siteOrigin('https://user:pw@staging.clinic.example')).toBe('')
+    expect(siteOrigin('\u001b]8;;https://evil\u0007click')).toBe('')
+    expect(siteOrigin('javascript:alert(1)')).toBe('')
+  })
+})
+
+interface BrowserRelay {
+  join(link: string): Promise<string>
+  post(comment: object): Promise<string>
+  allowed(): Promise<boolean>
+  status(): Promise<{ id: string; state: string; web?: { path: string }; [k: string]: unknown }[]>
+  tested(c: object, works: boolean, note: string): Promise<string>
+}

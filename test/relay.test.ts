@@ -29,7 +29,7 @@ function relays(owner: string | undefined, now: () => number) {
     handle(req: Request) {
       const mb = /^\/v1\/([a-f0-9]{32})/.exec(new URL(req.url).pathname)?.[1] ?? 'none'
       if (!stores.has(mb)) stores.set(mb, new MemoryStore())
-      return new Relay(stores.get(mb)!, owner, now).handle(req)
+      return new Relay(stores.get(mb)!, owner, now, { overlay: '/* the button */', relay: '/* through the relay */', shot: '/* pictures */' }).handle(req)
     },
   }
 }
@@ -307,5 +307,56 @@ describe('relay', () => {
     const moved = await t.relay.handle(new Request(`${BASE}/v1/${b}/inbox`, { method: 'POST', body: 'x'.repeat(40), headers: { 'x-grndwrk-device': p.id, 'x-grndwrk-time': time, 'x-grndwrk-nonce': 'moved-nonce-00001', 'x-grndwrk-signature': sig } }))
     expect(moved.status).toBe(401)
     expect(await (await t.signed('team', t.auth, 'GET', `/v1/${a}/inbox`)).json()).toHaveLength(1)
+  })
+
+  it('serves the Comment button only to the staging site the team named, set to run only there', async () => {
+    const t = await setup()
+    const script = (referer?: string) => t.relay.handle(new Request(`${BASE}/v1/${MB}/feedback.js`, { headers: referer ? { referer } : {} }))
+    // No site yet: no button.
+    expect((await script('https://staging.clinic.example/visits')).status).toBe(404)
+    // Only the team names it, and only an https address.
+    expect((await t.relay.handle(new Request(`${BASE}/v1/${MB}/site`, { method: 'PUT', body: JSON.stringify({ site: 'https://evil.example' }) }))).status).toBe(401)
+    expect((await t.asTeam('PUT', `/v1/${MB}/site`, JSON.stringify({ site: 'http://staging.clinic.example' }))).status).toBe(400)
+    expect((await t.asTeam('PUT', `/v1/${MB}/site`, JSON.stringify({ site: 'javascript:alert(1)' }))).status).toBe(400)
+    const set = await t.asTeam('PUT', `/v1/${MB}/site`, JSON.stringify({ site: 'https://staging.clinic.example/any/path' }))
+    expect(await set.json()).toEqual({ ok: true, site: 'https://staging.clinic.example' })
+    expect((await (await t.asTeam('GET', `/v1/${MB}/sync`)).json()).site).toBe('https://staging.clinic.example')
+
+    const ok = await script('https://staging.clinic.example/visits/3')
+    expect(ok.status).toBe(200)
+    expect(ok.headers.get('content-type')).toContain('javascript')
+    const js = await ok.text()
+    expect(js).toContain(`"site":"https://staging.clinic.example"`)
+    expect(js).toContain(`"mailbox":"${MB}"`)
+    expect(js.indexOf('through the relay')).toBeLessThan(js.indexOf('the button'))
+    // A page on any other site gets nothing, production included.
+    expect((await script('https://clinic.example/visits/3')).status).toBe(403)
+    expect((await script('https://staging.clinic.example.evil.example/')).status).toBe(403)
+    expect((await t.relay.handle(new Request(`${BASE}/v1/${MB}/screenshot.js`, { headers: { referer: 'https://staging.clinic.example/' } }))).status).toBe(200)
+
+    // Off: no button, and its browsers are no longer answered.
+    expect((await t.asTeam('PUT', `/v1/${MB}/site`, JSON.stringify({ site: '' }))).status).toBe(200)
+    expect((await script('https://staging.clinic.example/')).status).toBe(404)
+  })
+
+  it('answers the staging site’s browsers on a phone’s paths only, and no other site', async () => {
+    const t = await setup()
+    await t.asTeam('PUT', `/v1/${MB}/site`, JSON.stringify({ site: 'https://staging.clinic.example' }))
+    const preflight = (path: string, origin: string) =>
+      t.relay.handle(new Request(`${BASE}/v1/${MB}${path}`, { method: 'OPTIONS', headers: { origin, 'access-control-request-method': 'POST' } }))
+    const yes = await preflight('/inbox', 'https://staging.clinic.example')
+    expect(yes.status).toBe(204)
+    expect(yes.headers.get('access-control-allow-origin')).toBe('https://staging.clinic.example')
+    expect(yes.headers.get('access-control-allow-headers')).toContain('x-grndwrk-signature')
+    expect((await preflight('/join/' + 'a'.repeat(32), 'https://staging.clinic.example')).status).toBe(204)
+    expect((await preflight('/inbox', 'https://clinic.example')).status).toBe(403)
+    // The team's paths: never for a browser.
+    for (const path of ['/sync', '/devices', '/invites', '/site', '/inbox/abc']) expect((await preflight(path, 'https://staging.clinic.example')).status).toBe(403)
+
+    // The answer to its own request carries CORS for that site; for another site, or a team path, none.
+    const unsigned = (path: string, origin: string, method = 'POST') => t.relay.handle(new Request(`${BASE}/v1/${MB}${path}`, { method, headers: { origin }, body: method === 'GET' ? undefined : 'x' }))
+    expect((await unsigned('/inbox', 'https://staging.clinic.example')).headers.get('access-control-allow-origin')).toBe('https://staging.clinic.example')
+    expect((await unsigned('/inbox', 'https://clinic.example')).headers.get('access-control-allow-origin')).toBeNull()
+    expect((await unsigned('/sync', 'https://staging.clinic.example', 'GET')).headers.get('access-control-allow-origin')).toBeNull()
   })
 })

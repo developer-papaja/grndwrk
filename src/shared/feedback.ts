@@ -32,6 +32,21 @@ export const isFixed = (n: GNode): boolean => feedbackState(n) === 'fixed'
  * one per numbered (or `- `) line, with the lines under a step joined to it.
  * Steps is empty when the entry has no "To test:" line.
  */
+/**
+ * Which thread entry holds the steps to test now: Claude's latest entry with
+ * a "To test:" list, even when Claude added a note without steps after it
+ * ("the steps above still hold"). A "Tested ..." entry after it means that
+ * round is done: then none (-1).
+ */
+export function testEntryIndex(entries: { who: string; text: string }[]): number {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i]
+    if (e.who === 'you' && /^\s*Tested\b/.test(e.text)) return -1
+    if (e.who === 'claude' && testSteps(e.text).steps.length) return i
+  }
+  return -1
+}
+
 export function testSteps(text: string): { fix: string; steps: string[] } {
   const m = /^[ \t]*(?:to test|how to test)[ \t]*:[ \t]*/im.exec(text)
   if (!m) return { fix: text.trim(), steps: [] }

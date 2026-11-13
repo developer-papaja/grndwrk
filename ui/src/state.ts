@@ -2,15 +2,15 @@ import Alpine from 'alpinejs'
 import { cached } from './reactivity'
 import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
-import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, removeFromRelay, answerJoin, type RelayInfo, fetchAuthors } from './api'
-import { BOX, BOX_SHOTS, commentsForScreen, hiddenScreenIds, layoutSitemap, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
+import { answerPairRequest, answerSiteRequest, fetchSites, removeSite, type AllowedSite, createNode, deleteNode, fetchPairRequests, fetchRuntime, fetchShots, placeShot, type Shot, fetchDraft, fetchOutput, fetchReadiness, setFocusLater, fetchScreens, fetchPersonas, createPersona, updatePersona, deletePersona, settleName, fetchSegments, createSegment, updateSegment as saveSegment, deleteSegment, type PersonaInput, type SegmentInput, fetchStories, fetchDocs, fetchDoc, openDocInEditor, type Doc, createStory, updateStory as saveStory, markGapAnswered, saveKickoff, savePages, saveProjectFields, updateNode, updateScreen, uploadImage, markTested, fetchRelay, inviteColleague, inviteLinkAgain, removeFromRelay, answerJoin, type RelayInfo, fetchAuthors } from './api'
+import { BOX, BOX_SHOTS, commentsForScreen, hiddenScreenIds, layoutSitemap, screenPartIds, screenParts, needsExample, openPath, screenTree, shotsForScreen, storiesForScreen } from '../../src/shared/screens'
 import { buildStatus, type ProjectStatus, type StatusRow } from '../../src/shared/status'
 import { mergePages, pageOf, samePage } from '../../src/shared/pages'
 import { answerText, appendAnswer, appendEntry, openQuestions, questionOptions, questions, replaceNotes, sameQuestion, splitBody, type Entry, type Question } from '../../src/shared/thread'
 import { parseAreas, type Area } from '../../src/shared/report'
 import { changeEntry, undoEntry, type ThreadOwner } from './api'
 import { splitAnswer } from '../../src/shared/thread'
-import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testSteps, type FeedbackState } from '../../src/shared/feedback'
+import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testEntryIndex, testSteps, type FeedbackState } from '../../src/shared/feedback'
 import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
 import { isNewComment, isRelayComment, needsSeen } from '../../src/shared/unseen'
 import { markSeen as postSeen } from './api'
@@ -176,7 +176,7 @@ export const state = Alpine.reactive({
   /** The size of a box in the drawn sitemap: taller when any screen in view has a picture, which sits below the text. */
   get box(): typeof BOX {
     // Zoomed in, the picture sits to the right of the text; zoomed out, below the title, so it needs the height.
-    return this.sitemapCompact && this.viewScreens.some((sc) => this.shotsOf(sc).length) ? BOX_SHOTS : BOX
+    return this.sitemapCompact && this.sitemapScreens.some((sc) => this.shotsOf(sc).length) ? BOX_SHOTS : BOX
   },
   brief: null as string | null,
   starter: null as string | null,
@@ -218,6 +218,10 @@ export const state = Alpine.reactive({
   get count() {
     return Object.keys(this.nodes).length
   },
+  /** What All holds with the filters in view, so it adds up with the pages and the topics under it. */
+  get shownCount() {
+    return cached('shownCount', () => this.nodesMatching('', Object.values(this.nodes).filter((n) => this.inScope(n))).length)
+  },
   /** Pages in the person's order, plus any that nodes use. */
   get pageNames(): string[] {
     return cached('pageNames', () => {
@@ -249,7 +253,7 @@ export const state = Alpine.reactive({
    * variant in view. `skip` leaves one filter out, so its menu can count what
    * each of its choices would show together with the others.
    */
-  nodesMatching(skip = ''): GNode[] {
+  nodesMatching(skip = '', base?: GNode[]): GNode[] {
     const f = this.progressFilter
     const hidden = this.hiddenScreens
     const shownNew = this.newOnly && skip !== 'new' ? new Set([...this.newShown, ...this.newComments.map((n) => n.id)]) : null
@@ -259,7 +263,7 @@ export const state = Alpine.reactive({
     const type = skip === 'type' ? '' : this.typeFilter
     const topic = skip === 'topic' ? '' : this.topicFilter
     const level = skip === 'level' ? 0 : this.levelFilter
-    return this.pageNodes.filter(
+    return (base ?? this.pageNodes).filter(
       (n) =>
         (skip === 'status' || showsProgress(f, progressOfNode(n))) &&
         !(hidden.size && hidden.has(screenOf(n, this.screens))) &&
@@ -417,26 +421,90 @@ export const state = Alpine.reactive({
     }
     return menus
   },
-  /** The variant menu again, for the Sitemap view's header. */
+  /** The variant menu again, for the Sitemap view's header, and the Part menu when the screens name parts. */
   get sitemapMenus(): MapMenu[] {
-    return this.mapMenus.filter((m) => m.key === 'menu-variant').map((m) => ({ ...m, key: 'sitemap-variant' }))
+    const menus = this.mapMenus.filter((m) => m.key === 'menu-variant').map((m) => ({ ...m, key: 'sitemap-variant' }))
+    const parts = this.sitemapParts
+    if (parts.length > 1) {
+      const all = this.viewScreens.length
+      menus.push({
+        key: 'sitemap-part',
+        name: 'Part',
+        value: this.sitemapPart || 'All parts',
+        title: 'Part: which part of the product to draw. The map stays whole.',
+        icon: 'i-tree',
+        active: !!this.sitemapPart,
+        options: [
+          ...parts.map((p) => ({ key: p.name, label: p.name, count: p.count, on: this.sitemapPart === p.name })),
+          { key: '*', label: 'All parts', count: all, on: !this.sitemapPart },
+        ],
+      })
+    }
+    return menus
   },
   chooseMenu(menu: string, option: string) {
     this.openMenu = ''
+    if (menu === 'sitemap-part') return this.setSitemapPart(option === '*' ? '' : option)
     if (menu === 'sitemap-variant') menu = 'menu-variant'
     if (menu === 'menu-variant') this.setVariant(option)
   },
+  // Parts: trees of screens that do not connect (an admin dashboard and the public site), drawn as sitemaps of their own.
+  /** The parts the screens in view name. One or none: no menu. */
+  get sitemapParts(): { name: string; count: number }[] {
+    return cached('sitemapParts', () => screenParts(this.viewScreens))
+  },
+  /** The part chosen per project, kept in the browser. '' is all of them. */
+  partChoice: readStored<Record<string, string>>('grndwrk.sitemapPart', {}),
+  get sitemapPart(): string {
+    const chosen = this.partChoice[String(this.project.name ?? '')] ?? ''
+    return this.sitemapParts.some((p) => p.name === chosen) ? chosen : ''
+  },
+  setSitemapPart(name: string) {
+    this.partChoice = { ...this.partChoice, [String(this.project.name ?? '')]: name }
+    store('grndwrk.sitemapPart', this.partChoice)
+  },
+  /** The screens the Sitemap view draws: those in view, in the part chosen. Only the Sitemap is split; the map, Inbox and Status stay whole. */
+  get sitemapScreens(): Screen[] {
+    return cached('sitemapScreens', () => {
+      const part = this.sitemapPart
+      if (!part) return this.viewScreens
+      const of = screenPartIds(this.viewScreens)
+      return narrowView(this.viewScreens, new Set(this.viewScreens.filter((s) => of.get(s.id) === part).map((s) => s.id)))
+    })
+  },
+  /** How many trees the sitemap has: more than one, and a top screen can be put in a part by hand. */
+  get topScreens(): number {
+    return this.viewScreens.filter((s) => !s.parent).length
+  },
+  get sitemapRows(): { screen: Screen; depth: number }[] {
+    return cached('sitemapRows', () => screenTree(this.sitemapScreens))
+  },
   feedbackWords: { incoming: 'Incoming', proposed: 'Proposed', ready: 'Ready to test', fixed: 'Fixed' } as Record<FeedbackState, string>,
-  /** Thoughts, comments and stories on the page in view, per status. */
+  /**
+   * Thoughts and comments on the page or part in view, per status, counted as
+   * the pages and topics count them, so the numbers add up. Stories are
+   * counted apart (`storyCounts`) and named under the choice.
+   */
   get progressCounts(): Record<Progress, number> {
     return cached('progressCounts', () => {
       const counts = Object.fromEntries(PROGRESS.map((p) => [p, 0])) as Record<Progress, number>
-      for (const n of this.pageNodes) counts[progressOfNode(n)]++
+      for (const n of this.nodesMatching('status')) counts[progressOfNode(n)]++
+      return counts
+    })
+  },
+  /** Stories on the page or part in view, per status: the ones the board would show with each choice. */
+  get storyCounts(): Record<Progress, number> {
+    return cached('storyCounts', () => {
+      const counts = Object.fromEntries(PROGRESS.map((p) => [p, 0])) as Record<Progress, number>
+      if (this.narrowed) return counts
       const names = this.pageNames
-      for (const st of this.stories) {
-        const first = this.nodes[st.from[0]]
-        if (this.onAll || (first && samePage(pageOf(first, names), this.currentPage))) counts[progressOfStory(st)]++
-      }
+      const list = this.scopeScreen
+        ? storiesForScreen(this.scopeScreen, this.stories)
+        : this.stories.filter((st) => {
+            const first = this.nodes[st.from[0]]
+            return this.onAll || (first && samePage(pageOf(first, names), this.currentPage))
+          })
+      for (const st of list) counts[progressOfStory(st)]++
       return counts
     })
   },
@@ -490,13 +558,14 @@ export const state = Alpine.reactive({
   },
   /** Everything built and waiting for the person to test it, on every page: comments' fixes and thoughts alike. */
   get toTestCount(): number {
-    return cached('toTestCount', () => Object.values(this.nodes as Record<string, GNode>).filter((n) => progressOfNode(n) === 'ready').length)
+    // Working on one part: that part's only, as everything else on the screen then is.
+    return cached('toTestCount', () => Object.values(this.nodes as Record<string, GNode>).filter((n) => this.inScope(n) && progressOfNode(n) === 'ready').length)
   },
-  /** The "N to test" chip: only what is ready to test, on every page, or back to everything open. */
+  /** The "N to test" chip: only what is ready to test, on every page (or in the part in view), or back to everything open. */
   toggleToTest() {
     if (this.progressFilter === 'ready') return this.setProgressFilter('')
     if (this.view !== 'map') this.setView('map')
-    if (!this.onAll) this.showPage(ALL)
+    if (!this.onAll && !this.scopeScreen) this.showPage(ALL)
     this.setProgressFilter('ready')
   },
   /** The sidebar's "N new" chip: a shortcut to the same filter. */
@@ -560,16 +629,21 @@ export const state = Alpine.reactive({
   /** One filter's choices, each with how many cards it would show together with the other filters. */
   filterOptionsFor(key: string): { key: string; label: string; hint?: string; count?: number; on: boolean }[] {
     if (key === 'status') {
+      // Thoughts, as the pages and topics count them; stories that match too are said under the choice.
       const counts = this.progressCounts
+      const st = this.storyCounts
       const f = this.progressFilter
-      const notDone = counts.open + counts['in-progress'] + counts.ready
+      const sum = (c: Record<Progress, number>, keys: Progress[]) => keys.reduce((n, k) => n + c[k], 0)
+      const also = (n: number) => (n ? ` Also ${n} ${n === 1 ? 'story' : 'stories'}.` : '')
+      const open: Progress[] = ['open', 'in-progress', 'ready']
+      const all: Progress[] = [...open, 'done', 'later']
       return [
-        { key: '', label: 'Open', hint: 'Everything not done yet', count: notDone, on: f === '' },
-        { key: 'in-progress', label: 'In progress', hint: 'A fix proposed, a story partly met', count: counts['in-progress'], on: f === 'in-progress' },
-        { key: 'ready', label: 'Ready to test', hint: 'Built. Test it, then approve or reject it.', count: counts.ready, on: f === 'ready' },
-        { key: 'done', label: 'Done', hint: 'Fixed comments, done stories, settled thoughts', count: counts.done, on: f === 'done' },
-        { key: 'later', label: 'Not now', hint: 'Parked thoughts, stories set aside', count: counts.later, on: f === 'later' },
-        { key: 'all', label: 'Everything', hint: 'Done and not done', count: notDone + counts.done + counts.later, on: f === 'all' },
+        { key: '', label: 'Open', hint: 'Everything not done yet.' + also(sum(st, open)), count: sum(counts, open), on: f === '' },
+        { key: 'in-progress', label: 'In progress', hint: 'A fix proposed, a story partly met.' + also(st['in-progress']), count: counts['in-progress'], on: f === 'in-progress' },
+        { key: 'ready', label: 'Ready to test', hint: 'Built. Test it, then approve or reject it.' + also(st.ready), count: counts.ready, on: f === 'ready' },
+        { key: 'done', label: 'Done', hint: 'Fixed comments, done stories, settled thoughts.' + also(st.done), count: counts.done, on: f === 'done' },
+        { key: 'later', label: 'Not now', hint: 'Parked thoughts, stories set aside.' + also(st.later), count: counts.later, on: f === 'later' },
+        { key: 'all', label: 'Everything', hint: 'Done and not done.' + also(sum(st, all)), count: sum(counts, all), on: f === 'all' },
       ]
     }
     if (key === 'new') return [{ key: 'new', label: 'Only new comments', hint: 'Through the relay, and nobody has looked at them yet', count: this.newComments.length, on: this.newOnly }]
@@ -887,11 +961,33 @@ export const state = Alpine.reactive({
   async invite(name: string) {
     try {
       const { name: who, link } = await inviteColleague(name)
+      this.colleagueOpen = ''
       this.invited = { name: who, link, qr: await qrPath(link) }
       await this.loadRelay()
     } catch (err) {
       this.flash(errorText(err))
     }
+  },
+  /** The colleague whose details are open in Colleagues: an invite's or a joined device's id. */
+  colleagueOpen: '',
+  /** An open invite's link and QR code, fetched when its details open. */
+  colleagueInvite: null as { id: string; link: string; qr: string } | null,
+  async openColleague(kind: 'phones' | 'invites', id: string) {
+    if (this.colleagueOpen === id) return void (this.colleagueOpen = '')
+    this.colleagueOpen = id
+    this.colleagueInvite = null
+    this.invited = null
+    if (kind !== 'invites') return
+    try {
+      const { link } = await inviteLinkAgain(id)
+      if (this.colleagueOpen === id) this.colleagueInvite = { id, link, qr: await qrPath(link) }
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** How many comments a colleague sent through the relay, by the name they were invited with. */
+  commentsFrom(name: string): number {
+    return Object.values(this.nodes).filter((n) => n.extra?.via === 'relay' && n.extra?.from === name).length
   },
   /** A colleague's phone joined with their invite: allowed only when it shows the same four digits. */
   async answerJoin(invite: string, allow: boolean) {
@@ -977,12 +1073,10 @@ export const state = Alpine.reactive({
   testSteps(text: string): { fix: string; steps: string[] } {
     return testSteps(this.entryWords(text))
   },
-  /** The entry whose steps can be tested now: Claude's last word on a comment that is ready to test. */
+  /** The entry whose steps can be tested now, on something ready to test: Claude's latest entry with steps, even with a note after it. */
   get testableEntry(): number {
     if (!this.selected || progressOfNode(this.selected) !== 'ready') return -1
-    const t = this.thread
-    for (let i = t.length - 1; i >= 0; i--) if (t[i].who === 'claude') return testSteps(t[i].text).steps.length ? i : -1
-    return -1
+    return testEntryIndex(this.thread.map((e) => ({ who: e.who, text: this.entryWords(e.text) })))
   },
   /** Each step marked works or not, per comment and entry, kept in this browser until the comment is settled. */
   testChecks: readStored<Record<string, Record<number, 'ok' | 'bad'>>>('grndwrk.testChecks', {}),
@@ -1099,9 +1193,25 @@ export const state = Alpine.reactive({
   gapInScope(g: Gap): boolean {
     return !this.scopeScreen || g.screen === this.scopeScreen.id
   },
-  /** How many thoughts are about a screen. */
+  /** The thoughts and comments about a screen, whatever the filters say: what working on it gathers. */
+  aboutScreen(id: string): GNode[] {
+    const s = this.screens.find((x) => x.id === id)
+    if (!s) return []
+    const nodes = Object.values(this.nodes)
+    return [...new Set([...nodes.filter((n) => n.extra?.screen === id), ...commentsForScreen(s, nodes)])]
+  },
+  /** How many of them the board will show when working on it: those the status filter lets through, as the board counts them. */
   thoughtsOn(id: string): number {
-    return Object.values(this.nodes).filter((n) => n.extra?.screen === id).length
+    return this.aboutScreen(id).filter((n) => showsProgress(this.progressFilter, progressOfNode(n))).length
+  },
+  /** Working on one part, the thoughts about it the filters keep out of view (done ones, by default). */
+  get scopeFilteredOut(): number {
+    return this.scopeScreen ? this.pageNodes.length - this.visibleNodes.length : 0
+  },
+  /** Show everything about the part in view: every status, no other filter. */
+  showAllInScope() {
+    this.resetFilters()
+    this.setProgressFilter('all')
   },
   setScope(id: string | null) {
     this.scope = id
@@ -1171,6 +1281,11 @@ export const state = Alpine.reactive({
   /** The questions in one entry of a thread, each with its options and whether it is answered. */
   entryQuestions(body: string, entry: number): Question[] {
     return questions(body).filter((q) => q.entry === entry)
+  },
+  /** Why a comment reads like orders to an agent (`suspicious:`, written when it came in), or nothing. */
+  suspiciousOf(n: GNode | null): string[] {
+    const s = n?.extra?.suspicious
+    return Array.isArray(s) ? s.filter((x): x is string => typeof x === 'string').slice(0, 10) : []
   },
   /** How many questions wait in a body. Several mean each is answered on its own. */
   openCount(body: string): number {
@@ -1256,9 +1371,10 @@ export const state = Alpine.reactive({
     const n = this.nodes[id]
     return !!n && openQuestions(n.body) > 0
   },
+  /** What a page shows with the filters in view, as its topics below count them. */
   pageCount(page: string): number {
     const names = this.pageNames
-    return Object.values(this.nodes).filter((n) => samePage(pageOf(n, names), page)).length
+    return this.nodesMatching('', Object.values(this.nodes).filter((n) => this.inScope(n) && samePage(pageOf(n, names), page))).length
   },
   get selected(): GNode | null {
     return this.selectedId ? (this.nodes[this.selectedId] ?? null) : null
@@ -1498,7 +1614,7 @@ export const state = Alpine.reactive({
   },
   /** The open screen, or the first one. */
   get screen(): Screen | null {
-    return this.viewScreens.find((s) => s.id === this.screenId) ?? this.screenRows[0]?.screen ?? null
+    return this.sitemapScreens.find((s) => s.id === this.screenId) ?? this.sitemapRows[0]?.screen ?? null
   },
   screenById(id: string): Screen | undefined {
     return this.screens.find((s) => s.id === id)
@@ -1523,12 +1639,16 @@ export const state = Alpine.reactive({
     const notes = this.screen ? splitBody(this.screen.body).notes.trim() : ''
     return notes ? linkIds(md(notes)) : ''
   },
+  /** Open questions on every screen in view, whatever part the Sitemap draws: the rail's count. */
+  get screenQuestions(): number {
+    return this.viewScreens.reduce((n, s) => n + openQuestions(s.body), 0)
+  },
   get sitemapSummary(): { screens: number; noStory: number; questions: number; guesses: number; unreadable: number } {
     return {
-      screens: this.viewScreens.length,
-      noStory: this.viewScreens.filter((s) => !s.error && s.status !== 'planned' && !this.storiesOf(s).length).length,
-      questions: this.viewScreens.reduce((n, s) => n + openQuestions(s.body), 0),
-      guesses: this.viewScreens.filter((s) => s.source === 'inferred').length,
+      screens: this.sitemapScreens.length,
+      noStory: this.sitemapScreens.filter((s) => !s.error && s.status !== 'planned' && !this.storiesOf(s).length).length,
+      questions: this.sitemapScreens.reduce((n, s) => n + openQuestions(s.body), 0),
+      guesses: this.sitemapScreens.filter((s) => s.source === 'inferred').length,
       unreadable: this.screens.filter((s) => s.error).length,
     }
   },
@@ -1536,7 +1656,7 @@ export const state = Alpine.reactive({
   get sitemapDrawing() {
     return cached('sitemapDrawing', () => {
       const box = this.box
-      const layout = layoutSitemap(this.viewScreens, box)
+      const layout = layoutSitemap(this.sitemapScreens, box)
       const pad = 24
       const at = new Map(layout.boxes.map((b) => [b.id, { x: b.x + pad, y: b.y + pad }]))
       const { width: w, height: h } = box
@@ -1577,7 +1697,7 @@ export const state = Alpine.reactive({
         ...links.map((l) => `<path d="${l.d}" fill="none" stroke="#0d99ff" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-dasharray="5 4" marker-end="url(#sitemap-arrow)" />`),
       ].join('')
       return {
-        boxes: layout.boxes.map((b) => ({ ...b, x: b.x + pad, y: b.y + pad, screen: this.viewScreens.find((s: Screen) => s.id === b.id) ?? null })),
+        boxes: layout.boxes.map((b) => ({ ...b, x: b.x + pad, y: b.y + pad, screen: this.sitemapScreens.find((s: Screen) => s.id === b.id) ?? null })),
         svg,
         width: layout.width + pad * 2,
         height: layout.height + pad * 2,
@@ -1639,6 +1759,12 @@ export const state = Alpine.reactive({
     return Math.max(1, Math.min(2, Math.floor((BOX.height * this.sitemapZoom - 8) / 14)))
   },
   selectScreen(id: string) {
+    // A screen in another part than the one drawn: draw its part.
+    const part = this.sitemapPart
+    if (part && !this.sitemapScreens.some((s) => s.id === id)) {
+      const of = screenPartIds(this.viewScreens).get(id)
+      if (of !== undefined) this.setSitemapPart(of)
+    }
     this.screenId = id
     this.screenReply = ''
     this.screenStatus = ''
@@ -1660,6 +1786,18 @@ export const state = Alpine.reactive({
     try {
       this.putScreen(await updateScreen(s.id, input))
       this.flash('Saved')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** Put a top screen, and the screens under it, in a part, or in none. */
+  async saveScreenPart(value: string) {
+    const s = this.screen
+    const part = value.replace(/\s+/g, ' ').trim()
+    if (!s || part === s.part) return
+    try {
+      this.putScreen(await updateScreen(s.id, { part }))
+      this.flash(part ? `${s.title} is in ${part}` : `${s.title} is in no part`)
     } catch (err) {
       this.flash(errorText(err))
     }

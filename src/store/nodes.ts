@@ -210,6 +210,31 @@ export class NodeStore {
     })
   }
 
+  /**
+   * Mark a comment as reading like orders to an agent: one `suspicious:`
+   * line in its header, added or widened, never taken away. Written in place,
+   * like `seen:`, so the rest of the file stays as it is.
+   */
+  markSuspicious(id: string, reasons: string[]): Promise<Change> {
+    return this.serial(async () => {
+      const current = (await this.read()).nodes.find((n) => n.id === id)
+      if (!current) throw new NotFound(id)
+      const had = Array.isArray(current.extra?.suspicious) ? (current.extra.suspicious as unknown[]).filter((x): x is string => typeof x === 'string') : []
+      const all = [...new Set([...had, ...reasons])]
+      if (all.length === had.length) return { upserted: [], deleted: [] }
+      const path = this.pathFor(id)
+      const raw = await readFile(path, 'utf8')
+      const m = /^(---\r?\n[\s\S]*?)(\r?\n)(---[ \t]*(\r?\n|$))/.exec(raw)
+      if (!m) throw new ReadOnly(`${id}.md has no header to mark`)
+      const nl = m[2]
+      const header = m[1].split(/\r?\n/).filter((l) => !/^suspicious:/.test(l)).join(nl)
+      const tmp = join(this.dir, `.${id}.md.tmp`)
+      await writeFile(tmp, `${header}${nl}suspicious: ${JSON.stringify(all)}${nl}${raw.slice(m[1].length + nl.length)}`, 'utf8')
+      await rename(tmp, path)
+      return this.changed([id])
+    })
+  }
+
   delete(id: string): Promise<Change> {
     return this.serial(async () => {
       const { nodes: all, own, bodies } = await this.read()
