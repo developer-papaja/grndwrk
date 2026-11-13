@@ -7,7 +7,7 @@ topic_by: claude
 page: Feedback
 altitude: 4
 links: [n_0pvl]
-status: open
+status: settled
 created: 2026-11-05
 ---
 The system should be better at telling me what matters most right now, in plain words, about anything important that is missing or weak. One example: "Hey, your design system is not complete. I think you should focus on that more."

@@ -6,7 +6,7 @@ topic: constraints
 page: Product
 altitude: 3
 links: []
-status: open
+status: settled
 created: 2026-11-05
 answers: gap_npm_name
 ---

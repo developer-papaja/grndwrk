@@ -7,7 +7,7 @@ topic_by: claude
 page: Feedback
 altitude: 2
 links: []
-status: open
+status: settled
 created: 2026-11-05
 ---
 Be able to choose more than one answer in a piece of feedback.

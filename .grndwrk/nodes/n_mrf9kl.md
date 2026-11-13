@@ -7,7 +7,7 @@ topic_by: claude
 page: Feedback
 altitude: 2
 links: []
-status: open
+status: settled
 created: 2026-11-05
 ---
 Bug report. When I write in a thread that has open questions, but what I write is a remark and not an answer, it is taken as the answer to every open question. Test it and make sure it does not happen.

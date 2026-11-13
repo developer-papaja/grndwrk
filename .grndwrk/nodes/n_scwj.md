@@ -6,7 +6,7 @@ topic: flows
 page: Product
 altitude: 3
 links: [n_5dqs, n_ax4k]
-status: open
+status: settled
 created: 2026-10-03
 answers: gap_kickoff_flow
 ---

@@ -7,7 +7,7 @@ topic_by: claude
 page: Feedback
 altitude: 4
 links: []
-status: open
+status: settled
 created: 2026-11-05
 ---
 It would be really cool to be able to point grndwrk at a server or database instead of saving everything locally on your machine, if you wanted. I understand that is something else. But it would close a gap we have today: colleagues who do not have the iOS project locally cannot comment.

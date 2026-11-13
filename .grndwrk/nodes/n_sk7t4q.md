@@ -7,7 +7,7 @@ topic_by: claude
 page: Product
 altitude: 3
 links: [n_lk8q2v]
-status: open
+status: settled
 created: 2026-11-03
 ---
 Socket shows four alerts for grndwrk 0.2.0 on npm. To talk through at some point. Claude's first read of each, not yet decided:

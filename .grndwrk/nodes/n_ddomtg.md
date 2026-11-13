@@ -7,7 +7,7 @@ topic_by: claude
 page: Feedback
 altitude: 3
 links: [n_0fe7zi]
-status: open
+status: settled
 created: 2026-11-05
 ---
 Follows from the shared server idea.
