@@ -19,9 +19,10 @@ const HELP = `Usage:
                          for the Sitemap view. Uses Chrome.
       --app <url>        where the product runs (default: the last --app)
       --login            log in once in a Chrome window; the session is kept
-  grndwrk relay [deploy | add | join <team link> | leave]
+  grndwrk relay [deploy | add | join <team link> | link | site <url|off> | leave]
                          comments from colleagues' phones away from your Wi-Fi,
-                         through a relay on your own Cloudflare account
+                         and from a staging site, through a relay on your own
+                         Cloudflare account
   grndwrk build-ios-loader [path]
                          build GrndwrkFeedback for injecting into an app in
                          the iOS Simulator, without changing the app; prints

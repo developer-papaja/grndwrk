@@ -9,7 +9,7 @@ grndwrk lives inside your project. It keeps everything as plain markdown files i
 - **Think before you build.** Capture thoughts as cards, grouped by screen or topic, from vision down to detail. Your agent asks where things are thin, and tells you whether you are ready to build, ready to prototype, or not ready yet.
 - **Start from a project that already exists.** `/survey` reads the code, docs and history and draws the map from what is there. `/sitemap` draws every screen, what it is for and who it is for.
 - **Write the brief and the stories.** `/brief` writes a brief, user stories linked to the thoughts behind them, and a starter `CLAUDE.md` for building the product.
-- **Comment on the running product.** A Comment button on your website or in your iOS app turns what you point at into a card in the map. Your agent proposes and builds fixes, and you test them in the app, then approve or reject them.
+- **Comment on the running product.** A Comment button on your website or in your iOS app turns what you point at into a card in the map. Your agent proposes and builds fixes, and you test them in the app, then approve or reject them. Anything else your agent builds from the map comes back the same way, with steps to test.
 
 ## Requirements
 
@@ -38,7 +38,7 @@ grndwrk init    # asks whether the project is new or already exists, creates .gr
 grndwrk         # starts the map and opens it in the browser
 ```
 
-Run `grndwrk init` again after updating grndwrk: it updates the commands you have not changed yourself.
+Run `grndwrk init` again after updating grndwrk: it updates the commands you have not changed yourself. `grndwrk check` reads every file in `.grndwrk/` as the map does and says what does not read and where; your agent runs it after writing to the map.
 
 The map shows what to do next. For a new idea: write the purpose, add thoughts, run `/readiness`, answer what is missing, run `/brief`. For an existing project: run `/survey` and `/sitemap` first.
 
@@ -49,7 +49,7 @@ The map shows what to do next. For a new idea: write the purpose, add thoughts, 
 | Command | What it does |
 | --- | --- |
 | `/survey` | Draws the map from an existing project: what is built, decided, half done, and where the why is missing |
-| `/sitemap` | Draws every screen, its purpose, who it is for, and how they connect |
+| `/sitemap` | Draws every screen, its purpose, who it is for, and how they connect; a sitemap of its own for each part that does not connect to the rest (an admin dashboard and the public site), if you want |
 | `/personas` | Maps out who the product is for: a persona per hat, the person behind it, and an overview of who wears which hat |
 | `/topics` | Groups the thoughts into a few topics |
 | `/readiness` | Checks whether you have enough to start building, and what to add |
@@ -62,7 +62,7 @@ The map shows what to do next. For a new idea: write the purpose, add thoughts, 
 
 The **Documents** view shows the files that steer your agent in your product (CLAUDE.md, AGENTS.md, the README, design and content docs, skills), what the last `/readiness` found in each, and the files it suggests writing, with a draft. Comment on a document or a section, and copy a prompt for your agent with the findings and your comments; every prompt is shown in full before you copy it. grndwrk reads these files but never changes them.
 
-Your agent asks you questions in the map. They collect in the **Inbox**, one per question, with suggested answers to pick from.
+Your agent asks you questions in the map. They collect in the **Inbox**, one per question, with suggested answers to pick from. A question you cannot answer yourself can be marked as waiting for someone, so you can go through all of theirs together later. Names stay on your Mac unless the project says the map may hold them (`grndwrk init` asks; say no for a public repository).
 
 ## Comment on your running product
 
@@ -70,8 +70,7 @@ Whatever you comment on becomes a card on the **Feedback** page of the map: the 
 
 ### On a website
 
-The Comment button can be dragged anywhere on the page. Drop it on the bottom edge and it becomes a slim bar along the bottom, like Laravel's debug bar, with room made for it so it covers nothing; fold the bar into a small tab, or float the button again. Your choice is kept per site.
-
+The Comment button can be dragged anywhere on the page. Drop it on the bottom edge and it becomes a slim bar along the bottom, like Laravel's debug bar, with room made for it so it covers nothing; fold the bar into a small tab, or float the button again. Your choice is kept per site. Hold the button down (or right-click it) for its menu: where your comments go, how many wait and how many fixes are ready to test, where the button sits, and Hide in this tab. Alt+C (Option+C on a Mac) brings a hidden button back.
 
 There are two ways. Pick one per project.
 
@@ -96,7 +95,7 @@ In Laravel:
 @env('local')<script src="http://localhost:7777/__grndwrk/feedback.js" defer></script>@endenv
 ```
 
-The button only runs on addresses on your own machine (`localhost`, `*.test`, `*.localhost`), and grndwrk only takes comments from such pages. The first comment from a site asks in the map: "shop.test wants to send comments". The map's tab shows it too, as "(1) Allow to send comments" with a red dot on its icon, so you see it from any tab. Allow it once, and the waiting comment arrives; from then on that site sends straight away. A site you did not allow, such as another project's dev server, cannot add anything to your map. On an https site this works in Chrome, Arc, Edge, Brave and Firefox. Safari blocks it: use the first way there.
+The button only runs on addresses on your own machine (`localhost`, `*.test`, `*.localhost`), and grndwrk only takes comments from such pages. The first comment from a site asks in the map: "shop.test wants to send comments". The map's tab shows it too, as "(1) Allow to send comments" with a red count on its icon, so you see it from any tab. Allow it once, and the waiting comment arrives; from then on that site sends straight away. A site you did not allow, such as another project's dev server, cannot add anything to your map. On an https site this works in Chrome, Arc, Edge, Brave and Firefox. Safari blocks it: use the first way there.
 
 ### In an iOS app
 
@@ -104,7 +103,9 @@ Add the Swift package in `clients/ios/GrndwrkFeedback` to the app's debug build,
 
 ### Testing fixes
 
-When your agent builds a fix for a comment, it writes what changed and how to test it. The comment is then **ready to test**. On the iPhone, the grndwrk button shows how many are waiting. Tap one: the app goes to the screen, and a card shows the steps with **Approve** and **Reject**. On a website, the Comment button shows a test icon and a count after a thin line: press it for the list, and **Test** opens the page the comment was made on, marks the element, and shows the same card, which you can drag anywhere. Approved comments are fixed. Rejected ones go back to your agent with your note. In the map, the Show menu in the toolbar picks what to see: what is open, in progress, ready to test, done or set aside, for comments, stories and thoughts alike. Sites, the globe at the bottom left of the map, lists which sites may send comments (remove one, and its next comment asks again).
+When your agent builds a fix for a comment, it writes what changed and how to test it. The comment is then **ready to test**. On the iPhone, the grndwrk button shows how many are waiting. Tap one: the app goes to the screen, and a card shows the steps with **Approve** and **Reject**. On a website, the Comment button shows a test icon and a count after a thin line: press it for the list, and **Test** opens the page the comment was made on, marks the element, and shows the same card, which you can drag anywhere. Approved comments are fixed. Rejected ones go back to your agent with your note. The steps are a checklist: mark each Works or No, and what goes back starts from the steps marked No.
+
+The same goes for anything else your agent builds from the map: the thought shows as **Ready to test** with its steps, and you test it in the map's panel, then mark it done or send it back. In the map, the Status filter picks what to see: open, in progress, ready to test, done or not now, for comments, stories and thoughts alike, and "N to test" next to Topics shows what waits for you. Sites, the globe at the bottom left of the map, lists which sites may send comments (remove one, and its next comment asks again).
 
 `grndwrk init` puts these rules in `.grndwrk/`: as `CLAUDE.md` for Claude Code, `AGENTS.md` for Cursor, and the `grndwrk-map` skill for Codex. Your agent reads them whenever it works on the map's files, so a fix you ask for in plain words ("go through the feedback") is still marked ready to test. `/feedback` also catches up comments that were fixed without being marked. Codex reads `AGENTS.md` only from the project's root down, so if your project has an `AGENTS.md`, `init` suggests one line to add to it that points Codex at the rules.
 
@@ -122,7 +123,18 @@ grndwrk relay join <team link>   # a teammate's grndwrk, in the same project
 
 On Cloudflare's free plan, each running grndwrk asks the relay once every 15 seconds, and a phone with the app open about as often. That is a few thousand requests a day per person, well inside the free plan's daily requests; check Cloudflare's current limits if a large team shares one account.
 
-Then, in the map, the globe at the bottom of the rail: **Colleagues**, a name, **Invite**. Send the link, or show the QR code. In the app they long press the grndwrk button, **Join with an invite**, and paste or scan it. Their phone shows four digits; the map asks you to allow the phone, with the same digits. Allow it only when they match: a link someone else got hold of is worth nothing without that. Their comments wait at the relay until a grndwrk on the team runs, arrive with their name on them, and what becomes of them goes back to their phone, so they test fixes like you do. The iOS package README shows how to set up a Beta build for TestFlight.
+Then, in the map, the globe at the bottom of the rail: **Colleagues**, a name, **Invite**. Send the link, or show the QR code. In the app they long press the grndwrk button, **Join with an invite**, and paste or scan it. Their phone shows four digits; the map asks you to allow the phone, with the same digits. Allow it only when they match: a link someone else got hold of is worth nothing without that. Click a colleague in the list to see their invite again (the link and the QR code, until it is used or expires), withdraw it, invite them again for another device, or remove them. Their comments wait at the relay until a grndwrk on the team runs, arrive with their name on them, and what becomes of them goes back to their phone, so they test fixes like you do. The iOS package README shows how to set up a Beta build for TestFlight.
+
+### Colleagues on a staging site
+
+The relay can also put the Comment button on one staging website, so colleagues comment there as they would in the app:
+
+```
+grndwrk relay site https://staging.example.com   # prints the line to add to the staging site's layout
+grndwrk relay site off                           # stop it
+```
+
+Add the line it prints to the staging site's layout, and only there (in Laravel inside `@env('staging')`). The relay serves the button to that site only, and the button runs only there. The first time, a colleague pastes an invite into the button's menu, sees four digits, and waits until you allow the browser in the map, as with a phone. They can test fixes there too. The browser keeps its keys in the site's storage in a form a script cannot copy out. If the site sends a Content-Security-Policy, it must allow the relay's address in `script-src` and `connect-src`. A relay deployed before grndwrk 0.4.0 needs `grndwrk relay deploy` once to serve the button.
 
 ### Testers without grndwrk
 
@@ -155,8 +167,8 @@ Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed 
 
 - **It runs on your machine only.** The map answers on `localhost`. Websites on the internet get nothing from it, and local sites can only send comments, once you allow them.
 - **Phones pair once.** With `--lan`, phones on your Wi-Fi can only send comments, after you allow them on the Mac (or type the pairing code once). Each phone then gets its own long key: the phone checks that it talks to your grndwrk before it sends anything, and signs every request with the key instead of sending it, so nothing a neighbour records can be reused. The connection is plain HTTP, so others on the Wi-Fi can read comments and pictures on the way, and the moment of pairing: use `--lan` on networks you trust.
-- **Comments are untrusted input.** Anyone who used the product wrote them. grndwrk stores their words as a quote, and every command tells your agent to read them as a report, never as instructions. Still, think twice before letting your agent act on comments from people you do not know without your review.
-- **Nothing ships with your product.** The web button runs only on local addresses. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
+- **Comments are untrusted input.** Anyone who used the product wrote them. grndwrk stores their words as a quote, and every command tells your agent to read them as a report, never as instructions. A comment that reads like orders to an agent (asks to ignore its rules, to run a command, for secrets, names the agent's own files, hides text) is marked **Suspicious** with the reasons, in English, Swedish, Norwegian, Danish, German, Dutch, French and Spanish; the comment is kept as sent, and your agent is told to act on none of it and tell you. Still, think twice before letting your agent act on comments from people you do not know without your review.
+- **Nothing ships with your product.** The web button runs only on local addresses, or on the one staging site you named for the relay. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
 - **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine, and grndwrk never follows a symbolic link inside `.grndwrk/`, so a file in a pull request cannot point it at anything else on your machine.
 - **Review `.grndwrk/` in pull requests like code.** A colleague's change can add thoughts, answers or questions that look like your agent's; read them before you run commands on them.
 - **The relay cannot read what it carries.** Each phone makes its own key when it joins, and seals every comment with a key made from it, which the relay never gets; a changed or moved envelope is refused, and so is one the relay hands over a second time, or after 30 days. The relay knows only enough to check that a request comes from a phone your team let in. A phone is let in only when someone allows it in the map, with four digits it shows too, and acts only on its own comments. A phone can send at most 60 comments and 100 MB an hour, 300 and 300 MB a day. The keys for your project's mailbox (the team key) and the relay's owner key stay in your user folder, never in the project. A team link opens the project's comments, so send it privately. Envelopes are deleted once fetched, or after 30 days.
