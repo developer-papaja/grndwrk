@@ -121,7 +121,7 @@ export function isValidId(id: string): boolean {
 /** An item of a one-line `[a, b]` list: quoted also when it holds a character that ends or splits the list. */
 export function flowItem(s: string): string {
   const plain = scalar(s)
-  return plain === s && /[,\[\]{}#]/.test(s) ? JSON.stringify(s) : plain
+  return plain === s && /[,[\]{}#]/.test(s) ? JSON.stringify(s) : plain
 }
 
 /** Write a string as a YAML scalar, quoting only when plain style would misparse. */
@@ -130,7 +130,7 @@ export function scalar(s: string): string {
     s === '' ||
     s !== s.trim() ||
     /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(s) ||
-    /^[-?:,\[\]{}#&*!|>'"%@`]/.test(s) ||
+    /^[-?:,[\]{}#&*!|>'"%@`]/.test(s) ||
     /: |:$| #/.test(s) ||
     /^(true|false|yes|no|on|off|null|~)$/i.test(s) ||
     /^[-+]?(\d[\d_]*(\.\d*)?|\.\d+)([eE][-+]?\d+)?$/.test(s) ||

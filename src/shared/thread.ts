@@ -152,7 +152,9 @@ function parseThread(section: string): Entry[] {
   for (const e of entries) e.text = e.text.trim()
   markChanges(entries)
   const asked = questionsIn(entries)
-  entries.forEach((e, i) => (e.open = asked.some((q) => q.entry === i && q.open)))
+  entries.forEach((e, i) => {
+    e.open = asked.some((q) => q.entry === i && q.open)
+  })
   return entries
 }
 
@@ -179,7 +181,9 @@ function questionsIn(entries: Entry[]): Question[] {
   entries.forEach((e, i) => {
     const pending = all.filter((q) => q.open)
     if (e.who === 'claude-asks') {
-      splitQuestions(e.text).forEach((q, j) => all.push({ entry: i, index: j, date: e.date, ...q, open: true }))
+      splitQuestions(e.text).forEach((q, j) => {
+        all.push({ entry: i, index: j, date: e.date, ...q, open: true })
+      })
     } else if (e.who === 'claude') {
       // Claude moved on: what it asked before is no longer waiting.
       for (const q of pending) q.open = false

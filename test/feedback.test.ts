@@ -100,7 +100,9 @@ describe('feedback', () => {
 
 describe('proxy', () => {
   const servers: Server[] = []
-  afterEach(() => servers.forEach((s) => s.close()))
+  afterEach(() => {
+    for (const s of servers) s.close()
+  })
   const listen = (s: Server) => new Promise<number>((r) => s.listen(0, '127.0.0.1', () => r((s.address() as AddressInfo).port)))
 
   it('adds the overlay to pages once', () => {

@@ -192,7 +192,7 @@ async function handleTests(req: IncomingMessage, res: ServerResponse, ctx: Overl
 }
 
 /** A path on the site: one leading slash, never `//` or `/\\` (which a browser reads as another site). */
-export const isSitePath = (path: string) => /^\/(?![\/\\])/.test(path)
+export const isSitePath = (path: string) => /^\/(?![/\\])/.test(path)
 
 function siteAddress(site: string, sent: string | undefined): string | undefined {
   let path = ''
@@ -226,7 +226,6 @@ export function createProxy({ target, gwDir, store, nodes, ca, uiUrl }: ProxyOpt
   const trusted = secure ? (ca ?? systemCertificates()) : undefined
   const server = createServer(async (req, res) => {
     if (!isLocal(req.headers.host, own)) return res.writeHead(403).end('Forbidden')
-    const path = req.url ?? '/'
     if (await handleOverlay(req, res, overlay)) return
     forward(req, res)
   })
@@ -326,9 +325,9 @@ function systemCertificates(): string[] {
  * same host (a Vite dev server) is left alone.
  */
 export function toProxy(text: string, target: URL, here: string): string {
-  const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const host = escape(target.host)
-  const scheme = escape(target.protocol.replace(/:$/, ''))
+  const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const host = escapeRe(target.host)
+  const scheme = escapeRe(target.protocol.replace(/:$/, ''))
   const plain = new RegExp(`${scheme}://${host}(?![\\w.:-])`, 'g')
   const json = new RegExp(`${scheme}:\\\\/\\\\/${host}(?![\\w.:-])`, 'g')
   return text.replace(plain, here).replace(json, here.replace(/\//g, '\\/'))

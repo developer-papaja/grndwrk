@@ -46,7 +46,7 @@ export function screenForPath(path: string, screens: Screen[]): Screen | null {
   for (const s of live) {
     for (const r of routes(s)) {
       const re = routePattern(r)
-      if (!re || !re.test(want)) continue
+      if (!re?.test(want)) continue
       // The route with the most fixed parts wins: /visits/new before /visits/:id.
       const fixed = r.split('/').filter((p) => p && !/[:{[*]/.test(p)).length
       if (!best || fixed > best.fixed) best = { screen: s, fixed }

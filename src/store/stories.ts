@@ -101,7 +101,7 @@ export async function updateStory(gwDir: string, id: string, edit: StoryEdit): P
   const m = /^---[^\n]*\n([\s\S]*?)\n---[^\n]*\n?/.exec(raw)
   if (!m) throw new Error(`stories/${id}.md has no frontmatter`)
   let front = m[1] + '\n'
-  if (edit.title !== undefined && edit.title.trim() && edit.title.trim() !== story.title) front = setField(front, 'title', yamlText(edit.title.trim().slice(0, 200)))
+  if (edit.title?.trim() && edit.title.trim() !== story.title) front = setField(front, 'title', yamlText(edit.title.trim().slice(0, 200)))
   if (edit.status !== undefined && edit.status !== story.status) {
     if (!(STORY_STATUSES as readonly string[]).includes(edit.status)) throw new Error(`A story is not-started, partial or done, not ${edit.status}`)
     front = setField(front, 'status', edit.status)

@@ -69,7 +69,7 @@ The local server serves the UI, exposes a small REST API for nodes, and watches 
 
 During development of the tool itself, use `npm link` to run it inside a real project.
 
-The tests, type check and build run on macOS and Windows in GitHub Actions (`.github/workflows/test.yml`, actions pinned by commit) on every push. grndwrk's per-user folder (`stateDir` in `src/root.ts`) is `~/Library/Application Support/grndwrk` on macOS, `%LOCALAPPDATA%\grndwrk` on Windows and `$XDG_STATE_HOME/grndwrk` (or `~/.local/state/grndwrk`) elsewhere.
+The tests, type check, lint and build run on macOS and Windows in GitHub Actions (`.github/workflows/test.yml`, actions pinned by commit) on every push. Lint is Biome (`npm run lint`, `biome.json`, pinned to an exact version at least two weeks old): the recommended rules, minus those the code breaks on purpose (non-null assertions, comma and assignment expressions, control characters in the sanitizing regexes, `innerText` where only visible text should count). Its formatter is off: it would rewrap the dense one-line style across the whole code base; formatting stays by hand, two spaces, single quotes, no semicolons. grndwrk's per-user folder (`stateDir` in `src/root.ts`) is `~/Library/Application Support/grndwrk` on macOS, `%LOCALAPPDATA%\grndwrk` on Windows and `$XDG_STATE_HOME/grndwrk` (or `~/.local/state/grndwrk`) elsewhere.
 
 ## Stack
 

@@ -228,7 +228,7 @@ export async function feedbackStatus(
   const nodes = new Map((await store.list()).map((n) => [n.id, n]))
   return asks(body).map(({ id, key }) => {
     const n = nodes.get(id)
-    if (!n || n.extra?.source !== 'app' || n.extra?.key !== key) return { id, gone: true as const }
+    if (n?.extra?.source !== 'app' || n.extra?.key !== key) return { id, gone: true as const }
     // The phone shows any status but open as a word next to the comment.
     const state = feedbackState(n) ?? 'incoming'
     const { fix, test } = state === 'incoming' ? { fix: '', test: '' } : lastFix(n.body)
@@ -293,7 +293,7 @@ export async function testedOnDevice(store: NodeStore, body: unknown): Promise<{
   for (const { id, key, round } of asks(body)) {
     const n = nodes.get(id)
     // Only a built fix is tested, as on the web (webTestOf).
-    if (!n || n.extra?.source !== 'app' || n.extra?.key !== key || feedbackState(n) !== 'ready') continue
+    if (n?.extra?.source !== 'app' || n.extra?.key !== key || feedbackState(n) !== 'ready') continue
     // A result for another round of fixing (sent from a phone that names it) is not about this fix.
     if (round && round !== fixRound(n.body)) continue
     done.push({ id, state: await settle(store, n, b.works, b.note, b.platform === 'Web' ? 'in the browser' : 'on the phone', !b.works && b.on_mac === true) })
@@ -386,7 +386,7 @@ export async function testedInMap(store: NodeStore, id: string, body: unknown): 
 function webTestOf(n: GNode | undefined, origin: string): GNode | null {
   const at = n && addressOf(n)
   // A path that would lead off the site (`//evil.example`) is never offered, whoever wrote the file.
-  return n && at && feedbackState(n) === 'ready' && at.origin === origin && /^\/(?![\/\\])/.test(at.pathname) ? n : null
+  return n && at && feedbackState(n) === 'ready' && at.origin === origin && /^\/(?![/\\])/.test(at.pathname) ? n : null
 }
 
 /**
@@ -434,7 +434,7 @@ export async function removeFeedback(gwDir: string, store: NodeStore, body: unkn
   const done: string[] = []
   for (const { id, key } of asks(body)) {
     const n = nodes.get(id)
-    if (!n || n.extra?.source !== 'app' || n.extra?.key !== key) continue
+    if (n?.extra?.source !== 'app' || n.extra?.key !== key) continue
     await store.delete(id)
     await removeFiles(gwDir, id)
     done.push(id)

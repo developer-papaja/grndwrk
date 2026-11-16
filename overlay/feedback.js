@@ -21,7 +21,7 @@
   }
   // Comments go back to the grndwrk the script came from: the proxy, or the
   // map's server when the product's own layout loads it.
-  const base = document.currentScript && document.currentScript.src ? new URL(document.currentScript.src).origin : location.origin
+  const base = document.currentScript?.src ? new URL(document.currentScript.src).origin : location.origin
   window.__grndwrkFeedback = true
 
   // The key is Option on a Mac's keyboard, Alt elsewhere: say it the way the keyboard does.
@@ -493,11 +493,13 @@
     box.classList.add('edit')
     tip.style.display = 'none'
     const corners = [[r.left, r.top], [r.left + r.width, r.top], [r.left, r.top + r.height], [r.left + r.width, r.top + r.height]]
-    handles.forEach((h, i) => Object.assign(h.style, { display: 'block', left: `${corners[i][0]}px`, top: `${corners[i][1]}px` }))
+    handles.forEach((h, i) => {
+      Object.assign(h.style, { display: 'block', left: `${corners[i][0]}px`, top: `${corners[i][1]}px` })
+    })
   }
   function hideSelection() {
     box.classList.remove('edit')
-    handles.forEach((h) => (h.style.display = 'none'))
+    for (const h of handles) h.style.display = 'none'
   }
 
   /** From the clicked element out to the page, each step a box the eye sees as bigger. */
@@ -619,12 +621,12 @@
 
   // Framing by hand: a corner resizes the box, the inside moves it.
   let drag = null
-  handles.forEach((h, i) =>
+  handles.forEach((h, i) => {
     h.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       drag = { corner: i, start: selectionRect(), x: e.clientX, y: e.clientY }
-    }),
-  )
+    })
+  })
   box.addEventListener('pointerdown', (e) => {
     if (!picked) return
     e.preventDefault()
@@ -695,7 +697,7 @@
     for (const el of els) for (const f of getComputedStyle(el).fontFamily.split(',')) used.add(f.trim().replace(/^["']|["']$/g, '').toLowerCase())
     const faces = []
     let foreign = false
-    const absolute = (css, base) => css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (all, q, u) => {
+    const absolute = (css, base) => css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (all, _q, u) => {
       try { return `url("${new URL(u, base).href}")` } catch { return all }
     })
     const keep = (css, base) => {
@@ -751,13 +753,13 @@
     try {
       const lib = await loadShotLib()
       // The page's own fonts, once loaded, so the picture is not drawn in a fallback font.
-      if (document.fonts && document.fonts.ready) await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))])
+      if (document.fonts?.ready) await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))])
       const margin = 48
       const want = { left: rect.left - margin, top: rect.top - margin, right: rect.left + rect.width + margin, bottom: rect.top + rect.height + margin }
       // The smallest element around the spot and its margin, so the whole page is not drawn.
       let around = area ? anchorOf(rect) : picked
       // Inside an open dialog the drawing stops at the dialog: the page under it is another layer, drawn without it.
-      const layer = around && around.closest && around.closest('dialog[open]')
+      const layer = around?.closest?.('dialog[open]')
       while (around && around !== document.body && around !== layer) {
         const r = around.getBoundingClientRect()
         if (r.left <= want.left && r.top <= want.top && r.right >= want.right && r.bottom >= want.bottom) break
@@ -959,7 +961,7 @@
   $('.bigger').addEventListener('click', () => (step(1), field.focus()))
 
   pill.addEventListener('click', async (e) => {
-    if (moved && moved.swallow) {
+    if (moved?.swallow) {
       moved = null
       e.preventDefault()
       return
@@ -993,7 +995,7 @@
       jLink.value = ''
       openJoin()
     } catch (err) {
-      jErr.textContent = err && err.message ? err.message : String(err)
+      jErr.textContent = err?.message ? err.message : String(err)
       jErr.style.display = 'block'
     }
   })
@@ -1043,7 +1045,7 @@
       // Through the relay: this browser's own comments made in a browser, built and ready to test.
       const own = await relay.status().catch(() => [])
       tests = own
-        .filter((c) => c && c.state === 'ready' && c.web && typeof c.web.path === 'string' && /^\/(?![\/\\])/.test(c.web.path))
+        .filter((c) => c && c.state === 'ready' && c.web && typeof c.web.path === 'string' && /^\/(?![/\\])/.test(c.web.path))
         .map((c) => ({ id: c.id, key: c.key, round: c.round, title: c.title || '', fix: c.fix || '', test: c.test || '', steps: Array.isArray(c.steps) ? c.steps : [], ...c.web }))
       return showTestCount()
     }
@@ -1111,7 +1113,7 @@
     // Only ever a page on this site: anything else is not followed.
     let to = null
     try { to = new URL(t.path, location.origin) } catch {}
-    if (!to || to.origin !== location.origin || !/^\/(?![\/\\])/.test(t.path)) return flash('That fix points outside this site')
+    if (!to || to.origin !== location.origin || !/^\/(?![/\\])/.test(t.path)) return flash('That fix points outside this site')
     if (location.pathname !== to.pathname) return location.assign(to.pathname)
     showTest(t)
   }
@@ -1136,7 +1138,7 @@
     try { marked = t.selector ? document.querySelector(t.selector) : null } catch {}
     if (marked) marked.scrollIntoView({ block: 'center', behavior: 'instant' })
     // On the side away from what it marks, so the card never covers it.
-    const r = marked && marked.getBoundingClientRect()
+    const r = marked?.getBoundingClientRect()
     const left = r && r.left + r.width / 2 > window.innerWidth / 2
     Object.assign(tcard.style, left ? { left: '16px', right: 'auto', top: '16px' } : { left: 'auto', right: '16px', top: '16px' })
     placeMark()
@@ -1180,7 +1182,7 @@
     })
   }
   function placeMark() {
-    if (!marked || !marked.isConnected || tcard.style.display !== 'block') return (mark.style.display = 'none')
+    if (!marked?.isConnected || tcard.style.display !== 'block') return (mark.style.display = 'none')
     const r = marked.getBoundingClientRect()
     Object.assign(mark.style, { display: 'block', left: `${r.left - 3}px`, top: `${r.top - 3}px`, width: `${r.width + 6}px`, height: `${r.height + 6}px` })
   }
@@ -1390,7 +1392,7 @@
       const who = el('div', 'g-who')
       who.append(el('div', 'g-label', 'For'), el('b', '', p.name))
       if (p.summary) who.append(el('div', '', p.summary))
-      if (p.jobs && p.jobs.length) {
+      if (p.jobs?.length) {
         const ul = el('ul')
         for (const j of p.jobs) ul.append(el('li', '', j))
         who.append(el('div', 'g-label', 'Jobs'), ul)

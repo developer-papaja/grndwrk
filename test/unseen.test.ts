@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { NodeStore } from '../src/store/nodes.js'
 import { isNewComment, needsSeen } from '../src/shared/unseen.js'
-import { showsProgress } from '../src/shared/progress.js'
 import type { GNode } from '../src/shared/types.js'
 
 let gw: string

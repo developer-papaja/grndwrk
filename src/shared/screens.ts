@@ -54,7 +54,7 @@ export function screenPartIds(screens: Screen[]): Map<string, string> {
   for (const s of screens) {
     const seen = new Set<string>()
     let at: Screen | undefined = s
-    while (at && at.parent && byId.has(at.parent) && !seen.has(at.id)) {
+    while (at?.parent && byId.has(at.parent) && !seen.has(at.id)) {
       seen.add(at.id)
       at = byId.get(at.parent)
     }

@@ -3075,7 +3075,7 @@ export const state = Alpine.reactive({
     const info = this.openDocInfo
     const live = (info?.findings ?? []).filter((f) => f.section && f.status !== 'done')
     const slug = (t: string) => t.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-')
-    el.querySelectorAll('.doc-flag-note').forEach((n) => n.remove())
+    for (const n of el.querySelectorAll('.doc-flag-note')) n.remove()
     el.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => {
       h.classList.remove('doc-flag')
       const hits = live.filter((f) => f.section === slug(h.textContent ?? ''))
@@ -3889,7 +3889,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
     const href = node.getAttribute('href') ?? ''
     // A path starting with a backslash after the slash is read as '//host' by browsers: outside too.
-    if (/^(https?:|[\/\\]{2})/i.test(href)) {
+    if (/^(https?:|[/\\]{2})/i.test(href)) {
       node.setAttribute('target', '_blank')
       node.setAttribute('rel', 'noopener noreferrer')
     } else if (href && !/^(#|\/|\.)/.test(href)) node.removeAttribute('href')

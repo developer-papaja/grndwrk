@@ -227,7 +227,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (storyMatch && method === 'PATCH') {
       const b = (await readBody(req)) as Record<string, unknown>
       const text = (v: unknown) => (typeof v === 'string' ? v : undefined)
-      let story
+      let story: Awaited<ReturnType<typeof updateStory>>
       try {
         story = await updateStory(ctx.gwDir, storyMatch[1], {
           title: text(b.title),
@@ -281,7 +281,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (personaMatch && method === 'PATCH') {
       const b = (await readBody(req)) as Record<string, unknown>
       const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : undefined)
-      let persona
+      let persona: Awaited<ReturnType<typeof updatePersona>>
       try {
         const words = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map((x) => x.slice(0, 200)).slice(0, 60) : undefined)
         persona = await updatePersona(ctx.gwDir, personaMatch[1], {
@@ -323,7 +323,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       const b = (await readBody(req)) as Record<string, unknown>
       const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : undefined)
       const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined)
-      let segment
+      let segment: Awaited<ReturnType<typeof updateSegment>>
       try {
         segment = await updateSegment(ctx.gwDir, segmentMatch[1], {
           name: text(b.name, 200),

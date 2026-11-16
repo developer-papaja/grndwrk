@@ -14,14 +14,14 @@
 // often written in here (English, Swedish, Norwegian, Danish, German, Dutch,
 // French, Spanish), so a comment in another language is caught too.
 const IGNORE = String.raw`ignore|ignorera|ignorer|ignoriere|ignorieren|negeer|ignora|disregard|forget|override|bypass|glöm|glem|strunta\s+i|bortse\s+från|se\s+bort\s+från|skippa|vergiss|vergeet|oublie|olvida|no\s+hagas\s+caso`
-const RULES = String.raw`instructions?|prompts?|rules?|guidelines?|guardrails?|context|instruktion(?:er|erna|en)?|instruksjon(?:er|ene)?|regl(?:er|erna)|regl(?:ene)?|anvisning(?:ar|arna)?|riktlinjer|Anweisung(?:en)?|Regeln|instructies|regels|consignes|règles|instrucciones|reglas`
+const RULES = `instructions?|prompts?|rules?|guidelines?|guardrails?|context|instruktion(?:er|erna|en)?|instruksjon(?:er|ene)?|regl(?:er|erna)|regl(?:ene)?|anvisning(?:ar|arna)?|riktlinjer|Anweisung(?:en)?|Regeln|instructies|regels|consignes|règles|instrucciones|reglas`
 const AGENT_FILES = String.raw`agents?\.md|claude\.md|gemini\.md|skill\.md|\.cursorrules|copilot-instructions|\.claude\/|\.agents\/|\.grndwrk\/`
 /** "run the command", "kör kommandot", "führe den Befehl aus", or run followed by a slash command. */
 const RUN = String.raw`run|execute|exec|kör|köra|exekvera|kjør|udfør|führe|ausführen|voer\s+uit|exécute|lance|ejecuta|corre`
-const COMMAND = String.raw`commands?|kommando(?:t|n|er|na)?|kommandoen|Befehl|commando|commande|comando`
+const COMMAND = `commands?|kommando(?:t|n|er|na)?|kommandoen|Befehl|commando|commande|comando`
 
 /** Commands agents run by name: grndwrk's own, and common ones built into agents. A page's path (/visits) is not one. */
-const SLASH = String.raw`feedback|readiness|brief|survey|sitemap|decisions|topics|challenge|import|questions|personas|review|init|clear|compact|config|permissions|hooks|agents|mcp|model|login|logout|install|deploy|security-review|code-review|bash|shell|run|exec`
+const SLASH = `feedback|readiness|brief|survey|sitemap|decisions|topics|challenge|import|questions|personas|review|init|clear|compact|config|permissions|hooks|agents|mcp|model|login|logout|install|deploy|security-review|code-review|bash|shell|run|exec`
 
 const SIGNS: [RegExp, string][] = [
   [new RegExp(String.raw`(?:${IGNORE})\b[^\n]{0,60}?(?:\b(?:${RULES})\b|${AGENT_FILES})`, 'i'), 'asks to ignore instructions'],

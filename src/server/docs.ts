@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { lstat, open, readdir } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
-import { readdirSync } from 'node:fs'
+import { readdirSync, type Dirent, type Stats } from 'node:fs'
 import { PACKAGE_ROOT } from '../root.js'
 import { BadInput } from '../store/nodes.js'
 import { readDraft } from '../store/stories.js'
@@ -49,7 +49,7 @@ const isOwnSkill = (rel: string) => {
 
 /** Markdown files in a folder, a level or two down, skipping what is not the project's own. */
 async function markdownIn(root: string, dir: string, depth: number): Promise<string[]> {
-  let entries
+  let entries: Dirent[]
   try {
     entries = await readdir(join(root, dir), { withFileTypes: true })
   } catch {
@@ -91,7 +91,7 @@ async function stateOf(root: string, rel: string): Promise<{ is: 'file' } | { is
   const parts = rel.split('/')
   for (let i = 1; i <= parts.length; i++) {
     const at = parts.slice(0, i).join('/')
-    let st
+    let st: Stats
     try {
       st = await lstat(join(root, at))
     } catch (err) {
@@ -180,7 +180,7 @@ export async function readDoc(gwDir: string, foundations: Foundation[], path: st
 /** The file on disk for a document in the list that exists, to open in the person's editor. */
 export async function docOnDisk(gwDir: string, foundations: Foundation[], path: string): Promise<string> {
   const doc = (await listDocs(gwDir, foundations)).find((d) => d.path === path)
-  if (!doc || !doc.exists) throw new BadInput('Not a document grndwrk shows')
+  if (!doc?.exists) throw new BadInput('Not a document grndwrk shows')
   const root = resolve(dirname(gwDir))
   if (!(await isPlainFile(root, path))) throw new BadInput(`${path} is a symbolic link or not a file`)
   return join(root, path)

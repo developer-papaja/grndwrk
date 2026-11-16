@@ -73,7 +73,7 @@ export const featureOf = (n: GNode) => (typeof n.extra?.feature === 'string' ? n
  */
 export function sectionsOf(items: BoardItem[], group: CardGroup, screen?: Screen): CardSection[] {
   if (group === 'level') return [{ key: '', name: '', items }]
-  const valueOf = (it: BoardItem): string => {
+  const valueFor = (it: BoardItem): string => {
     if (group === 'topic') return it.kind === 'node' ? it.node.topic.trim() : (it.gap.topic ?? '').trim()
     if (it.kind === 'gap') return ''
     return group === 'feature' ? featureOf(it.node) : it.node.type
@@ -81,7 +81,7 @@ export function sectionsOf(items: BoardItem[], group: CardGroup, screen?: Screen
   const names = new Map<string, string>()
   if (group === 'feature') for (const f of screen?.features ?? []) if (!names.has(fold(f))) names.set(fold(f), f)
   for (const it of items) {
-    const v = valueOf(it)
+    const v = valueFor(it)
     if (v && !names.has(fold(v))) names.set(fold(v), v)
   }
   const order = [...names.keys()]
@@ -90,8 +90,8 @@ export function sectionsOf(items: BoardItem[], group: CardGroup, screen?: Screen
   if (group === 'type') rest.sort((a, b) => NODE_TYPES.indexOf(a as never) - NODE_TYPES.indexOf(b as never))
   else rest.sort((a, b) => a.localeCompare(b))
   const keys = [...order.slice(0, listed), ...rest]
-  const sections = keys.map((k) => ({ key: k, name: names.get(k)!, items: items.filter((it) => fold(valueOf(it)) === k) }))
-  const none = items.filter((it) => !valueOf(it))
+  const sections = keys.map((k) => ({ key: k, name: names.get(k)!, items: items.filter((it) => fold(valueFor(it)) === k) }))
+  const none = items.filter((it) => !valueFor(it))
   const noneName = { feature: 'No feature', topic: 'No topic', type: 'Missing' }[group]
   return none.length || !sections.length ? [...sections, { key: '', name: noneName, items: none }] : sections
 }
