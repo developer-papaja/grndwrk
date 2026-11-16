@@ -264,13 +264,16 @@ describe('comments straight to the store', () => {
     expect(n.extra?.suspicious).toBeTruthy()
   })
 
-  it('an inbox file that is no comment stays in the inbox, said once', async () => {
+  it('an inbox file that is no comment is kept on this machine and taken out of the inbox, so it never counts against the commenter for good', async () => {
     const a = await machine('a')
     await shared.write('inbox/phone_0003/c_0000000003.json', text('[1, 2]'), { type: 'application/json', create: true })
+    await shared.write('inbox/phone_0003/c_0000000004.json', text('{}'), { type: 'application/json', create: true })
     await a.sync.fullPass()
     await a.sync.fullPass()
-    expect(await shared.read('inbox/phone_0003/c_0000000003.json')).toBeTruthy()
-    expect(lines.filter((l) => /not a comment grndwrk can file/.test(l))).toHaveLength(1)
+    expect(await shared.read('inbox/phone_0003/c_0000000003.json')).toBeNull()
+    expect(await shared.read('inbox/phone_0003/c_0000000004.json')).toBeNull()
+    expect(lines.filter((l) => /not a comment grndwrk can file/.test(l))).toHaveLength(2)
+    expect(await readFile((await findFile(a.sync.conflictsDir(), 'c_0000000003.json'))!, 'utf8')).toBe('[1, 2]')
     expect((await a.nodes.list()).length).toBe(0)
   })
 })
@@ -354,12 +357,21 @@ describe('testing and deleting through the store', () => {
     expect(await shared.read(`nodes/${n.id}.md`)).toBeNull()
   })
 
-  it('an envelope for anything else stays in the inbox, and is never filed as a comment', async () => {
+  it('an envelope for anything else is never filed as a comment, and leaves the inbox', async () => {
     const a = await machine('a')
     await drop('browser_01', 'r_0000000009', { path: '/api/feedback/show', body: { comments: [] } })
     await a.sync.fullPass()
-    expect(await shared.read('inbox/browser_01/r_0000000009.json')).toBeTruthy()
+    expect(await shared.read('inbox/browser_01/r_0000000009.json')).toBeNull()
+    expect(await findFile(a.sync.conflictsDir(), 'r_0000000009.json')).toBeTruthy()
     expect((await a.nodes.list()).length).toBe(0)
+  })
+
+  it('a test result without a real round or a time settles nothing', async () => {
+    const { a, n, key } = await builtComment()
+    await drop('browser_01', 'r_0000000010', { path: '/api/feedback/tested', body: { comments: [{ id: n.id, key, round: 'not-a-round' }], works: true }, at: Date.now() })
+    await drop('browser_01', 'r_0000000011', { path: '/api/feedback/tested', body: { comments: [{ id: n.id, key, round: (await statusOf('browser_01')).comments[0].round }], works: true } })
+    await a.sync.pull()
+    expect((await find(a, n.id))?.extra?.fixed).toBeUndefined()
   })
 })
 

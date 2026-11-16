@@ -17,8 +17,14 @@ initializeApp()
 
 const handle = storeFunction({
   backend: firebaseBackend(getFirestore(), () => getStorage().bucket()),
-  // checkRevoked: a member signed out everywhere (or disabled) is refused at once.
-  verify: async (token) => ({ uid: (await getAuth().verifyIdToken(token, true)).uid }),
+  // checkRevoked: a member signed out everywhere (or disabled) is refused at once. An account with an
+  // email it never proved it owns is refused too: whoever signed up first with a colleague's address
+  // would otherwise get the role meant for the colleague.
+  verify: async (token) => {
+    const t = await getAuth().verifyIdToken(token, true)
+    if (t.email && t.email_verified !== true) return null
+    return { uid: t.uid }
+  },
   // The page and the Comment button: the folder `grndwrk store assets page` wrote here, deployed with the function.
   page: (name) => readFile(new URL(`./page/${name}`, import.meta.url)).catch(() => null),
   // The store's own address, as the staging site and the page reach it: the function's address

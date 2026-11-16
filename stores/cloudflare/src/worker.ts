@@ -48,9 +48,18 @@ export function limitsOf(env: Env): Partial<InboxLimits> {
   return out
 }
 
-/** Cloudflare Access, when all three settings are there (access.ts). */
-const accessOf = (env: Env): Identify | undefined =>
-  env.ACCESS_TEAM && env.ACCESS_AUD && env.ACCESS_ROLES ? access({ team: env.ACCESS_TEAM, aud: env.ACCESS_AUD, roles: env.ACCESS_ROLES }) : undefined
+/**
+ * Cloudflare Access, when all three settings are there (access.ts). One per
+ * isolate and settings, so its cache of Access's keys outlives a request:
+ * otherwise every request with a made-up login would fetch the keys again.
+ */
+let accessCache: { key: string; identify: Identify } | null = null
+const accessOf = (env: Env): Identify | undefined => {
+  if (!env.ACCESS_TEAM || !env.ACCESS_AUD || !env.ACCESS_ROLES) return undefined
+  const key = JSON.stringify([env.ACCESS_TEAM, env.ACCESS_AUD, env.ACCESS_ROLES])
+  if (accessCache?.key !== key) accessCache = { key, identify: access({ team: env.ACCESS_TEAM, aud: env.ACCESS_AUD, roles: env.ACCESS_ROLES }) }
+  return accessCache.identify
+}
 
 /**
  * `GET /v1/projects`, at the store's root: the projects this person may read,

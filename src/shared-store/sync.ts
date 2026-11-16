@@ -483,7 +483,7 @@ export class StoreSync {
    * reads like orders to an agent. Who left it is the path's commenter,
    * never what the body says; the name is the body's `from`, which the
    * store sets. Removed from the inbox once filed (If-Match: a comment
-   * changed meanwhile comes again). One that is no comment stays there.
+   * changed meanwhile comes again). One that is no comment is kept on this machine and taken out.
    */
   private async takeComment(path: string, version: string) {
     if (this.readOnly) return
@@ -515,8 +515,14 @@ export class StoreSync {
       }
     } catch (err) {
       const said = err instanceof Error ? err.message : String(err)
-      // Not a comment: left in the inbox for whoever runs the store to look at, never deleted unseen. Said once per version.
-      if (err instanceof BadInput || err instanceof SyntaxError) return this.sayOnce(`${path}@${version}`, `${path} in the store is not a comment grndwrk can file (${said}). It stays in the inbox.`)
+      // Not a comment: kept on this machine, then taken out of the inbox, so it never counts against the
+      // commenter's limits for good. Never deleted unseen: the copy and the reason are said.
+      if (err instanceof BadInput || err instanceof SyntaxError) {
+        const kept = await this.keep(path, r.bytes)
+        this.log(`${path} in the store is not a comment grndwrk can file (${said}). Taken out of the inbox; kept at ${kept}`)
+        await this.store.remove(path, r.version)
+        return
+      }
       // Failed here (the disk?): tried again, five times, then left in the inbox.
       const tries = (this.inboxTries.get(path) ?? 0) + 1
       this.inboxTries.set(path, tries)
@@ -543,13 +549,13 @@ export class StoreSync {
     const mine = new Set(nodes.filter((n) => n.extra?.store_commenter === commenter).map((n) => n.id))
     let own = list.filter((c) => mine.has((c as { id?: unknown })?.id as string))
     if (path === '/api/feedback/tested') {
-      own = own.filter((c) => typeof (c as { round?: unknown })?.round === 'string')
-      if (typeof at === 'number') {
-        // A day of slack: built dates are written by the map (UTC) and by agents (their own day).
-        const made = new Date(at + 86_400_000).toISOString().slice(0, 10)
-        const built = new Map(nodes.map((n) => [n.id, typeof n.extra?.built === 'string' ? n.extra.built : '']))
-        own = own.filter((c) => (built.get((c as { id: string }).id) ?? '') <= made)
-      }
+      // The round as fixRound makes it, and when the result was made: without both, it settles nothing.
+      if (typeof at !== 'number' || !Number.isFinite(at)) return
+      own = own.filter((c) => /^[0-9a-f]{16}$/.test(String((c as { round?: unknown })?.round ?? '')))
+      // A day of slack: built dates are written by the map (UTC) and by agents (their own day).
+      const made = new Date(at + 86_400_000).toISOString().slice(0, 10)
+      const built = new Map(nodes.map((n) => [n.id, typeof n.extra?.built === 'string' ? n.extra.built : '']))
+      own = own.filter((c) => (built.get((c as { id: string }).id) ?? '') <= made)
     }
     if (!own.length) return
     // Show on my Mac is not offered through a store: nobody's map is asked to open anything.

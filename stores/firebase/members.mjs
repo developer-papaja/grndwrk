@@ -33,7 +33,18 @@ if (!map || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/.test(map) || !['add', 'key', 're
 
 initializeApp({ credential: applicationDefault() })
 const db = getFirestore()
-const uidOf = async (/** @type {string} */ w) => (w.includes('@') ? (await getAuth().getUserByEmail(w)).uid : w)
+/**
+ * The account behind an email or an id. To add a member or make a key, the account must have proved
+ * it owns the email: whoever signed up first with a colleague's address would get the colleague's role.
+ * @param {string} w
+ * @param {boolean} [verified]
+ */
+const uidOf = async (w, verified = true) => {
+  if (!w.includes('@')) return w
+  const user = await getAuth().getUserByEmail(w)
+  if (verified && !user.emailVerified) throw new Error(`${w} has not verified that email yet. Ask them to verify it (or pass their user id) and try again`)
+  return user.uid
+}
 
 if (action === 'site') {
   // The one staging site whose Comment button may call the store from the browser.
@@ -59,7 +70,7 @@ if (action === 'site') {
   await db.doc(`projects/${map}/keys/${keyHash(key)}`).set({ uid, created: new Date().toISOString() })
   console.log(`A store key for ${who}. It is shown once; only its hash is kept.\n\n${key}\n`)
 } else {
-  const uid = await uidOf(who)
+  const uid = await uidOf(who, false)
   await db.doc(`projects/${map}/members/${uid}`).delete()
   for (const d of (await db.collection(`projects/${map}/keys`).where('uid', '==', uid).get()).docs) await d.ref.delete()
   console.log(`${who} no longer reaches ${map}`)

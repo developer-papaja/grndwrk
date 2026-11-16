@@ -125,7 +125,8 @@ export async function checkStore(store: StoreClient, http?: { url: string; token
   })
 
   if (http) {
-    const f = http.fetcher ?? fetch
+    // Never after a redirect: the token goes to the store it was given for, as in HttpStore.
+    const f = (input: URL, init: RequestInit = {}) => (http.fetcher ?? fetch)(input, { ...init, redirect: 'error' })
     const at = (p: string) => new URL(p, http.url.replace(/\/?$/, '/'))
     const auth = { Authorization: `Bearer ${http.token}` }
     await rule('refuses a request without a token (401)', async () => {

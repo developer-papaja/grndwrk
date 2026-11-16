@@ -65,6 +65,8 @@ node members.mjs clinic list
 
 A member need not have a Firebase account: `dev_frontdesk1` above is an id you chose for a device, which then reaches the store with its key only.
 
+A member added by email must have verified that email first, and the function refuses an ID token whose email is not verified. Otherwise, where anyone may sign up with email and a password, whoever signed up first with a colleague's address would get the role meant for the colleague. Removing a member works whatever the email's state.
+
 **Your own login instead.** Replace `verify` in `index.mjs` (a function from a token to `{ uid }`, or null) with whatever checks your tokens: a session cookie, another identity provider, a signed link. Keep the members documents, or replace `userOf` and the members lookup in `functions.mjs` with your own table of who may do what.
 
 **A staging site's Comment button** calls the store from the browser. Name the one site that may:
