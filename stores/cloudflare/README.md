@@ -49,6 +49,16 @@ The answer holds `id` and `token`. `GET .../clinic/admin/tokens` lists them with
 
 A comment token may only `PUT inbox/<its commenter>/<id>.json` with `If-None-Match: *` and `GET status/<its commenter>.json`; everything else is `403`. When the token has a name, the store writes it as `from` in the comment, whatever the device sent.
 
+## A staging site's Comment button
+
+The button on a staging site calls the store from the browser, so the store must answer CORS for that site. List the sites in `COMMENT_ORIGINS`, exact https origins separated by commas (in `wrangler.toml` under `[vars]`, or the dashboard):
+
+```
+COMMENT_ORIGINS = "https://staging.clinic.example"
+```
+
+A listed site gets CORS (its exact origin, never `*`; `GET, PUT`; `Authorization, Content-Type, If-None-Match`; `ETag` exposed; `Vary: Origin`) on three calls only: `hello`, `PUT inbox/...` and `GET status/...`, with a comment token, or with no valid token, so the page can read a `401` or `403` and ask the person to log in again. The preflight (`OPTIONS`) answers `204` for those calls from a listed site and `403` otherwise. A read or write token never gets CORS, from any site. Anything not https, or not an exact origin, is ignored.
+
 ## Cloudflare Access (an option)
 
 If your team already signs in through Cloudflare Access, put the Worker behind an Access application and set three variables (in `wrangler.toml` or the dashboard):
@@ -74,4 +84,4 @@ Run it against a project with nothing in it that matters yet. The same check run
 - `src/worker.ts`: the Worker; each request goes to its project's Durable Object.
 - `wrangler.toml`, `package.json`, `package-lock.json`: the Worker's settings and the exact wrangler to deploy with.
 
-Not here, and worth adding for real use: limits per token on how much a commenter may send, CORS for a staging site's Comment button, and pruning deletions from the log after a while (then answer older cursors with `410`).
+Not here, and worth adding for real use: limits per token on how much a commenter may send, and pruning deletions from the log after a while (then answer older cursors with `410`).

@@ -7,10 +7,12 @@
  *   https://<worker>/<project>/admin/tokens   tokens, for whoever deployed it
  */
 import { access } from './access.js'
-import { type Storage, Store } from './store.js'
+import { parseOrigins, type Storage, Store } from './store.js'
 
 export interface Env {
   OWNER_AUTH?: string
+  /** Staging sites whose Comment button may call the store with a comment token: https origins, by commas or spaces. */
+  COMMENT_ORIGINS?: string
   /** Optional, all three or none: see access.ts. */
   ACCESS_TEAM?: string
   ACCESS_AUD?: string
@@ -25,7 +27,7 @@ export class StoreObject {
   private store: Store
   constructor(state: { storage: Storage }, env: Env) {
     const identify = env.ACCESS_TEAM && env.ACCESS_AUD && env.ACCESS_ROLES ? access({ team: env.ACCESS_TEAM, aud: env.ACCESS_AUD, roles: env.ACCESS_ROLES }) : undefined
-    this.store = new Store(state.storage, { ownerAuth: env.OWNER_AUTH, identify })
+    this.store = new Store(state.storage, { ownerAuth: env.OWNER_AUTH, identify, origins: parseOrigins(env.COMMENT_ORIGINS) })
   }
   fetch(req: Request): Promise<Response> {
     const project = PROJECT.exec(new URL(req.url).pathname)?.[1] ?? ''
