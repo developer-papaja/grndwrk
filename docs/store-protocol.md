@@ -16,6 +16,7 @@ A store holds files by **path**, relative to `.grndwrk/`, like `nodes/n_k2m4ab.m
 - A path is one to eight parts joined by `/`. Each part starts with a letter or digit and holds only letters, digits, `.`, `_` and `-`. At most 300 characters in all. No `..`, no leading `/`, no backslash.
 - Two folders hold comments on their way in and their status on the way out, `inbox/` and `status/` (see Comments straight to the store); they are never copied into `.grndwrk/`.
 - Only these are synced: `project.md`, and anything under `nodes/`, `threads/`, `stories/`, `screens/`, `personas/`, `segments/`, `waiting/`, `files/`, `readiness/` and `outputs/`. Everything else in `.grndwrk/` belongs to one machine or one repository (`local.json`, `lan-code`, `lan-devices.json`, `shots/`, `store.json`, the agent rules and command lists) and never goes to a store. A store refuses any other path with `400`.
+- The path decides a file's type; a `Content-Type` sent with a write is only a hint and never overrides it.
 - Types, by the path's extension: `.md` is `text/markdown`, `.json` is `application/json`, `.png` is `image/png`, `.jpg` and `.jpeg` are `image/jpeg`. A store refuses anything else with `415`, and refuses a picture whose bytes are not a PNG or a JPEG.
 - Sizes: text up to 1 MB, pictures up to 10 MB. Larger is `413`.
 
@@ -85,7 +86,11 @@ A comment token may do exactly two things:
 - **Leave a comment:** `PUT v1/files/inbox/<commenter>/<id>.json` with `If-None-Match: *`. `<commenter>` is the id your store gave this person or device when it handed out the token, and the store refuses any other; `<id>` is new for each comment. Both are 8 to 64 letters, digits, `_` or `-`. The body is the same JSON the button sends to grndwrk's `/api/feedback` (words, the page or screen, the element, a picture as base64), at most 14 MB. If your store knows the person's name, set `from` in the JSON to it, replacing whatever the device sent; grndwrk believes the commenter in the path, never one in the body.
 - **Read what became of its own comments:** `GET v1/files/status/<commenter>.json`, its own and no other.
 
-Everything else, `changes` included, is `403`. `hello` says `"role": "comment"`.
+Everything else, `changes` included, is `403`. `hello` says `"role": "comment"`. An inbox file's body is a JSON object; anything else is `400`.
+
+For teammates, `inbox/` and `status/` are files like the others: `changes` lists them, a read token reads them, a write token writes and deletes them (that is how grndwrk files a comment and writes the status).
+
+**From a staging site's page.** The Comment button on a staging site calls the store from the browser, so a store that takes comments from one answers CORS for that site's origin, and only on `hello`, `PUT inbox/...` and `GET status/...` with a comment token: `Access-Control-Allow-Origin: <the site>`, the methods `GET, PUT`, the headers `Authorization, Content-Type, If-None-Match`, and the preflight (`OPTIONS`). Never `*`, and never CORS on anything a read or write token does.
 
 grndwrk, on any teammate's machine that syncs, reads new files in `inbox/`, files each one exactly as a comment that came over the Wi-Fi or the relay (marked when it reads like orders to an agent, its words quoted, `from:` the commenter), deletes it from the inbox, and keeps `status/<commenter>.json` up to date. Neither folder is copied into `.grndwrk/`.
 

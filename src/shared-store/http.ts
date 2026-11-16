@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { bytesProblem, checkChanges, checkVersion, CursorGone, type Hello, INBOX, MAX_INBOX, MAX_PICTURE, pathProblem, PROTOCOL, type Read, type Role, StoreBroke, type StoreClient, typeOf, type Written } from './protocol.js'
+import { bytesProblem, checkChanges, checkVersion, CursorGone, type Hello, INBOX, MAX_INBOX, pathProblem, PROTOCOL, type Read, type Role, StoreBroke, type StoreClient, typeOf, type Written } from './protocol.js'
 
 /** A store over HTTP: its address for this project, and this person's token. */
 export class HttpStore implements StoreClient {
