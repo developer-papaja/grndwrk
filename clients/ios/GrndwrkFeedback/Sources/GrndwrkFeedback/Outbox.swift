@@ -208,6 +208,33 @@ enum Outbox {
     return Item(file: file, node: node, text: text, detail: parts.joined(separator: " · "), written: written, state: c["state"] as? String, fix: c["fix"] as? String, screen: c["screen"] as? String, test: c["test"] as? String, steps: (c["steps"] as? [String]) ?? [])
   }
 
+  /// The screen the app shows, as the map has it: what it is for and who it is
+  /// for (each persona's summary and jobs), in lines for the long-press menu.
+  /// Only from grndwrk on this Mac or the Wi-Fi, never through the relay.
+  static func screenAbout(_ screen: Inspector.Screen) async -> String? {
+    guard case .connected = Connection.state, let server = await Locator.url() else { return nil }
+    var ask: [String: String] = ["screen": screen.name]
+    if let component = screen.component { ask["component"] = component }
+    guard let data = try? JSONSerialization.data(withJSONObject: ask) else { return nil }
+    var request = URLRequest(url: server.appendingPathComponent("api/feedback/screen"))
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = data
+    request.timeoutInterval = 5
+    Pairing.sign(&request)
+    guard let (body, response) = try? await URLSession.shared.data(for: request), (response as? HTTPURLResponse)?.statusCode == 200,
+      let found = ((try? JSONSerialization.jsonObject(with: body)) as? [String: Any])?["screen"] as? [String: Any] else { return nil }
+    var lines = ["This screen: \(found["title"] as? String ?? screen.name)"]
+    if let purpose = found["purpose"] as? String, !purpose.isEmpty { lines.append(purpose) }
+    for p in found["personas"] as? [[String: Any]] ?? [] {
+      lines.append("")
+      lines.append("For \(p["name"] as? String ?? "")")
+      if let summary = p["summary"] as? String, !summary.isEmpty { lines.append(summary) }
+      for job in p["jobs"] as? [String] ?? [] { lines.append("\u{2022} \(job)") }
+    }
+    return lines.joined(separator: "\n")
+  }
+
   /// Ask grndwrk what became of the sent comments: their title and status
   /// now. Comments deleted there are dropped here too. Only comments sent to
   /// the project that answers are asked about.

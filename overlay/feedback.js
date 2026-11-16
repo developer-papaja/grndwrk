@@ -146,6 +146,14 @@
       .gmenu button .tick { margin-left: auto; color: #0d99ff; }
       .gmenu button.danger { color: #ff8a80; }
       .gmenu .g-hint { padding: 4px 8px 2px; color: rgba(232,230,227,.4); font-size: 11px; }
+      .gmenu.wide { width: 320px; }
+      .gmenu .g-screen { max-height: 40vh; overflow-y: auto; padding: 4px 8px 6px; color: rgba(232,230,227,.75); font-size: 12px; line-height: 1.4; }
+      .gmenu .g-screen .g-label { color: rgba(232,230,227,.45); font-size: 11px; }
+      .gmenu .g-screen .g-title { color: #e8e6e3; font-weight: 600; }
+      .gmenu .g-screen .g-who { margin-top: 8px; }
+      .gmenu .g-screen .g-who b { color: #e8e6e3; font-weight: 600; }
+      .gmenu .g-screen ul { margin: 3px 0 0; padding-left: 16px; }
+      .gmenu .g-screen li + li { margin-top: 1px; }
       .jcard { position: fixed; right: 16px; bottom: 64px; width: 300px; pointer-events: auto; padding: 12px; border-radius: 10px; background: #2c2c2c;
         border: 1px solid rgba(255,255,255,.12); box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; }
       .jcard p { margin: 0 0 8px; }
@@ -1282,6 +1290,8 @@
       head = reach === 'on' ? 'Connected to grndwrk' : reach === 'ask' ? 'Allow this site in grndwrk' : 'grndwrk is not answering'
       lines.push(reach === 'on' ? `Comments from ${location.host} go to the map.` : reach === 'ask' ? 'Send a comment, then allow it in the map once.' : 'Start grndwrk on your Mac. Comments wait here until then.')
     }
+    // The screen this page is in the map: what it is for and who it is for. Not through the relay yet.
+    const here = !relay && reach === 'on' ? await loadScreen() : null
     if (waiting) lines.push(`${waiting} ${waiting === 1 ? 'comment waits' : 'comments wait'} to be sent.`)
     if (tests.length) lines.push(`${tests.length} ${tests.length === 1 ? 'fix is' : 'fixes are'} ready to test.`)
 
@@ -1341,7 +1351,9 @@
     const hint = document.createElement('div')
     hint.className = 'g-hint'
     hint.textContent = `${ALT}+C comments, and brings a hidden button back.`
-    gmenu.replaceChildren(status, lineBox, document.createElement('hr'), ...items, hint)
+    const about = here ? [document.createElement('hr'), screenBlock(here)] : []
+    gmenu.classList.toggle('wide', !!here)
+    gmenu.replaceChildren(status, lineBox, ...about, document.createElement('hr'), ...items, hint)
 
     // Next to wherever the button is.
     gmenu.style.display = 'block'
@@ -1352,6 +1364,41 @@
     const top = r.top - h - 8 >= 8 ? r.top - h - 8 : Math.min(window.innerHeight - h - 8, r.bottom + 8)
     Object.assign(gmenu.style, { left: `${left}px`, top: `${top}px` })
     gmenu.querySelector('button')?.focus()
+  }
+  /** The screen of this page, from the map: { title, purpose, personas: [{ name, summary, jobs }] }, or null. */
+  async function loadScreen() {
+    try {
+      const res = await fetch(`${base}/__grndwrk/screen?path=${encodeURIComponent(location.pathname)}`, { cache: 'no-store' })
+      return res.ok ? (await res.json()).screen || null : null
+    } catch {
+      return null
+    }
+  }
+  /** The screen as text only: its title, its purpose, and each persona it is for with their summary and jobs. */
+  function screenBlock(sc) {
+    const box = document.createElement('div')
+    box.className = 'g-screen'
+    const el = (tag, cls, text) => {
+      const e = document.createElement(tag)
+      if (cls) e.className = cls
+      if (text) e.textContent = text
+      return e
+    }
+    box.append(el('div', 'g-label', 'This screen'), el('div', 'g-title', sc.title || 'Untitled'))
+    box.append(el('div', '', sc.purpose || 'No purpose written yet.'))
+    for (const p of sc.personas || []) {
+      const who = el('div', 'g-who')
+      who.append(el('div', 'g-label', 'For'), el('b', '', p.name))
+      if (p.summary) who.append(el('div', '', p.summary))
+      if (p.jobs && p.jobs.length) {
+        const ul = el('ul')
+        for (const j of p.jobs) ul.append(el('li', '', j))
+        who.append(el('div', 'g-label', 'Jobs'), ul)
+      }
+      box.append(who)
+    }
+    if (!(sc.personas || []).length) box.append(el('div', 'g-label', 'Nobody named as who it is for yet.'))
+    return box
   }
   /** Out of the way in this tab, until Alt+C or a new tab. Comments that wait stay. */
   const HIDDEN = 'grndwrk.hidden'

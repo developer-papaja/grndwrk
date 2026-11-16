@@ -11,6 +11,9 @@ import type { NodeSync } from './events.js'
 import { createFeedback, parseFeedback, testedOnWeb, webTestId, webTests } from './feedback.js'
 import { openOnMac } from './comments.js'
 import type { Sites } from './sites.js'
+import { listScreens } from '../store/screens.js'
+import { listPersonas } from '../store/personas.js'
+import { screenContext } from '../shared/screen-context.js'
 
 /**
  * Sits in front of the product's dev server and adds the comment overlay to
@@ -90,7 +93,7 @@ export async function handleOverlay(req: IncomingMessage, res: ServerResponse, c
     // Testing built fixes on the page they were made on. Only for the page's
     // own server (the proxy) or a site the person allowed, never asking, and
     // only that site's own comments that are ready to test.
-    if (['tests', 'tested', 'show'].includes(name) && req.method !== 'OPTIONS') {
+    if (['tests', 'tested', 'show', 'screen'].includes(name) && req.method !== 'OPTIONS') {
       await handleTests(req, res, ctx, name, origin, sameOrigin, cors)
       return true
     }
@@ -167,6 +170,13 @@ async function handleTests(req: IncomingMessage, res: ServerResponse, ctx: Overl
     return
   }
   if (name === 'tests' && req.method === 'GET') return reply(200, { tests: await webTests(ctx.store, site) })
+  // The screen the page is, for the button's menu: its purpose and who it is for, from the map.
+  if (name === 'screen' && req.method === 'GET') {
+    const path = new URL(req.url ?? '/', 'http://x').searchParams.get('path') ?? '/'
+    if (!path.startsWith('/') || path.length > 2000) return reply(400, { error: 'A path on this site' })
+    const [screens, personas] = await Promise.all([listScreens(ctx.gwDir), listPersonas(ctx.gwDir)])
+    return reply(200, { screen: screenContext(path, screens, personas) })
+  }
   if (req.method !== 'POST' || !(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(415, { error: 'Send JSON' })
   const body = JSON.parse((await readAll(req, 20_000)).toString('utf8'))
   if (name === 'tested') {

@@ -8,6 +8,7 @@ altitude: 3
 links: [n_kk4fxs]
 status: open
 created: 2026-11-16
+built: 2026-11-16
 ---
 I would like to read what a screen is for, and who it is for (its personas), when looking at different screens in grndwrk. It would help testing, and understanding feedback: knowing what you are looking at on a given page, and whether a comment or a fix fits what the screen is meant to do and for whom.
 

@@ -70,7 +70,7 @@ Whatever you comment on becomes a card on the **Feedback** page of the map: the 
 
 ### On a website
 
-The Comment button can be dragged anywhere on the page. Drop it on the bottom edge and it becomes a slim bar along the bottom, like Laravel's debug bar, with room made for it so it covers nothing; fold the bar into a small tab, or float the button again. Your choice is kept per site. Hold the button down (or right-click it) for its menu: where your comments go, how many wait and how many fixes are ready to test, where the button sits, and Hide in this tab. Alt+C (Option+C on a Mac) brings a hidden button back.
+The Comment button can be dragged anywhere on the page. Drop it on the bottom edge and it becomes a slim bar along the bottom, like Laravel's debug bar, with room made for it so it covers nothing; fold the bar into a small tab, or float the button again. Your choice is kept per site. Hold the button down (or right-click it) for its menu: where your comments go, how many wait and how many fixes are ready to test, what the screen you are on is for and who it is for (from the map's sitemap and personas, so you know what you are looking at while you test), where the button sits, and Hide in this tab. The iOS button's long press shows the same. Alt+C (Option+C on a Mac) brings a hidden button back.
 
 There are two ways. Pick one per project.
 

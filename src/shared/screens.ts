@@ -107,6 +107,13 @@ export function commentsForScreen(screen: Screen, nodes: GNode[]): GNode[] {
   })
 }
 
+/** Whether the running app's name for a screen (its title or view, like BookingView) is this screen. */
+export function knownAs(screen: Screen, ...names: string[]): boolean {
+  const given = names.map((n) => n.trim()).filter(Boolean)
+  if (given.some((n) => n.toLowerCase() === screen.title.trim().toLowerCase())) return true
+  return known(screen).length > 0 && overlaps(known(screen), given)
+}
+
 /** Everything a screen is known by in the running product: its code, and the names the app shows. */
 function known(screen: Screen): string[] {
   return [...screen.code, ...(screen.seen_as ?? [])]

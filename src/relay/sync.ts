@@ -178,7 +178,7 @@ export class RelaySync {
   private async handle(plain: Buffer | undefined, device: string, phone: Phone, seen: Record<string, Record<string, number>>, now: number) {
     if (!plain) throw new BadInput('it was changed on the way, or sealed with another key, and is dropped')
     const { path, body, id, at } = JSON.parse(plain.toString('utf8')) as { path?: unknown; body?: unknown; id?: unknown; at?: unknown }
-    if (typeof path !== 'string' || !COMMENT_PATHS.includes(path) || path === '/api/feedback/status') throw new BadInput('not something a phone sends')
+    if (typeof path !== 'string' || !COMMENT_PATHS.includes(path) || path === '/api/feedback/status' || path === '/api/feedback/screen') throw new BadInput('not something a phone sends')
     if (typeof id !== 'string' || !/^[A-Za-z0-9-]{16,64}$/.test(id) || typeof at !== 'number') throw new BadInput('it has no id and time from the phone')
     if (seen[device]?.[id] || at < now - FRESH || at > now + 5 * 60_000) throw new BadInput('it was handled before, or is too old: the relay handed it over again')
     // A phone acts only on the comments it sent itself, whatever keys it knows.

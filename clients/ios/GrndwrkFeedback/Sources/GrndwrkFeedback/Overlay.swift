@@ -476,6 +476,13 @@ final class OverlayController: UIViewController {
     sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     sheet.popoverPresentationController?.sourceView = button
     present(sheet, animated: true)
+    // What this screen is for and who it is for, from the map, added once grndwrk answers.
+    guard let window = appWindow() else { return }
+    let screen = Inspector.screen(of: window)
+    Task { [weak sheet] in
+      guard let about = await Outbox.screenAbout(screen), let sheet else { return }
+      sheet.message = [sheet.message ?? "", about].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
   }
 
   /// The connection in words.

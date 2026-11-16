@@ -5,6 +5,9 @@ import type { ServerEvent } from '../shared/types.js'
 import { createFeedback, feedbackStatus, ownComments, parseFeedback, removeFeedback, testedOnDevice } from './feedback.js'
 import { saveIosShot, type ShotAbout } from '../store/shots.js'
 import { openTarget } from '../opener.js'
+import { listScreens } from '../store/screens.js'
+import { listPersonas } from '../store/personas.js'
+import { contextOf, screenForName } from '../shared/screen-context.js'
 
 export interface CommentsCtx {
   gwDir: string
@@ -29,6 +32,7 @@ export interface CommentsCtx {
  * - POST /api/feedback/remove: delete comments the device sent, by id and key
  * - POST /api/feedback/show: open a comment the device sent in the map on the Mac
  * - POST /api/feedback/tested: the person tested a proposed fix on the device: fixed, or back to incoming with a note
+ * - POST /api/feedback/screen: the screen the app shows, by its name: its purpose and who it is for, for the long-press menu
  * - POST /api/screenshot: a picture of the screen the app shows, for the sitemap
  * Returns false for anything else.
  */
@@ -52,11 +56,18 @@ export async function handleComments(req: IncomingMessage, res: ServerResponse, 
   }
 }
 
-export const COMMENT_PATHS = ['/api/feedback', '/api/feedback/status', '/api/feedback/remove', '/api/feedback/tested', '/api/feedback/show', '/api/screenshot']
+export const COMMENT_PATHS = ['/api/feedback', '/api/feedback/status', '/api/feedback/remove', '/api/feedback/tested', '/api/feedback/show', '/api/feedback/screen', '/api/screenshot']
 
 /** One request from a device, already read and checked: the same over localhost, `--lan` and the relay. */
 export async function commentRequest(path: string, body: unknown, ctx: CommentsCtx): Promise<{ status: number; body: Record<string, unknown> }> {
   if (path === '/api/feedback/status') return { status: 200, body: { comments: await feedbackStatus(ctx.store, body) } }
+  if (path === '/api/feedback/screen') {
+    // Reads the map only. Names come from the app: short strings, nothing more.
+    const b = (body ?? {}) as { screen?: unknown; component?: unknown }
+    const name = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 120) : '')
+    const [screens, personas] = await Promise.all([listScreens(ctx.gwDir), listPersonas(ctx.gwDir)])
+    return { status: 200, body: { screen: contextOf(screenForName(name(b.screen), name(b.component), screens), personas) } }
+  }
   if (path === '/api/screenshot') {
     const { about, data } = parseScreenshot(body)
     const key = await saveIosShot(ctx.gwDir, about, data)
