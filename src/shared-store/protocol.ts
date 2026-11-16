@@ -24,11 +24,11 @@ export const TYPES: Record<string, string> = { md: 'text/markdown', json: 'appli
 
 /**
  * Comments straight to the store: a commenter (a phone, a staging page)
- * drops one comment as `inbox/<id>.json`, and reads what became of its own
+ * drops one comment as `inbox/<commenter>/<id>.json`, and reads what became of its own
  * comments in `status/<commenter>.json`. grndwrk turns inbox files into
  * cards and writes the status; neither folder is synced into `.grndwrk/`.
  */
-export const INBOX = /^inbox\/[A-Za-z0-9_-]{8,64}\.json$/
+export const INBOX = /^inbox\/([A-Za-z0-9_-]{8,64})\/[A-Za-z0-9_-]{8,64}\.json$/
 export const STATUS = /^status\/[A-Za-z0-9_-]{8,64}\.json$/
 
 /** Whether a path is mirrored into `.grndwrk/` (the map), not one of the comment folders. */

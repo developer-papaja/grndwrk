@@ -125,7 +125,9 @@ describe('comments straight to the store', () => {
     fetch(new URL(`v1/files/${path}`, url), { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'If-None-Match': '*' }, body })
 
   it('lets a commenter leave a comment in the inbox, and nothing else', async () => {
-    expect((await put('inbox/c_00000001.json', 'phone')).status).toBe(201)
+    expect((await put('inbox/dev_phone01/c_00000001.json', 'phone')).status).toBe(201)
+    // Never under another commenter's name.
+    expect((await put('inbox/dev_other01/c_00000002.json', 'phone')).status).toBe(403)
     expect((await new HttpStore(url, 'phone').hello()).role).toBe('comment')
     // Never the map: not a card, not the changes, not someone else's status.
     expect((await put('nodes/n_phone1.md', 'phone', 'x')).status).toBe(403)

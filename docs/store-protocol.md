@@ -82,8 +82,8 @@ With a store, the Comment button on a staging site and the iOS package can leave
 
 A comment token may do exactly two things:
 
-- **Leave a comment:** `PUT v1/files/inbox/<id>.json` with `If-None-Match: *`, where `<id>` is 8 to 64 letters, digits, `_` or `-`, new for each comment. The body is the same JSON the button sends to grndwrk's `/api/feedback` (words, the page or screen, the element, a picture as base64), at most 14 MB.
-- **Read what became of its own comments:** `GET v1/files/status/<commenter>.json`, where `<commenter>` is the id your store gave this person or device when it handed out the token. Nothing else under `status/`.
+- **Leave a comment:** `PUT v1/files/inbox/<commenter>/<id>.json` with `If-None-Match: *`. `<commenter>` is the id your store gave this person or device when it handed out the token, and the store refuses any other; `<id>` is new for each comment. Both are 8 to 64 letters, digits, `_` or `-`. The body is the same JSON the button sends to grndwrk's `/api/feedback` (words, the page or screen, the element, a picture as base64), at most 14 MB. If your store knows the person's name, set `from` in the JSON to it, replacing whatever the device sent; grndwrk believes the commenter in the path, never one in the body.
+- **Read what became of its own comments:** `GET v1/files/status/<commenter>.json`, its own and no other.
 
 Everything else, `changes` included, is `403`. `hello` says `"role": "comment"`.
 

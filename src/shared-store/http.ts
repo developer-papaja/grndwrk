@@ -124,7 +124,8 @@ export function storeHandler(client: StoreClient, token: (bearer: string) => Rol
           res.writeHead(200, { 'Content-Type': f.type, ETag: `"${f.version}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }).end(Buffer.from(f.bytes))
           return
         }
-        if (!(req.method === 'PUT' && INBOX.test(path) && req.headers['if-none-match'] === '*')) return send(403, { error: 'This token may only leave comments' })
+        // Only under its own name: grndwrk knows who left a comment by its path, never by what the device wrote in it.
+        if (!(req.method === 'PUT' && INBOX.exec(path)?.[1] === commenter && req.headers['if-none-match'] === '*')) return send(403, { error: 'This token may only leave comments' })
       }
       if (route === 'changes' && req.method === 'GET') {
         const since = url.searchParams.get('since') ?? undefined
