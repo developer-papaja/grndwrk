@@ -71,7 +71,7 @@ The new bytes, with `Content-Type`, and exactly one of:
 - `If-None-Match: *` to create it: `201 { "version": "..." }`, or `412 { "version": "<the one there>" }` when it exists.
 - `If-Match: "<version>"` to replace that version: `200 { "version": "..." }`, or `412 { "version": "<the one there>" }` when someone changed it meanwhile (or `null` when it is gone).
 
-A write without either is `428`. A write never silently overwrites someone else's change: that is what keeps two people's maps from losing words.
+A write without either is `428`; one that sends both is taken as a create. A write never silently overwrites someone else's change: that is what keeps two people's maps from losing words.
 
 ### `DELETE v1/files/<path>`
 
@@ -90,7 +90,7 @@ Everything else, `changes` included, is `403`. `hello` says `"role": "comment"`.
 
 For teammates, `inbox/` and `status/` are files like the others: `changes` lists them, a read token reads them, a write token writes and deletes them (that is how grndwrk files a comment and writes the status).
 
-**From a staging site's page.** The Comment button on a staging site calls the store from the browser, so a store that takes comments from one answers CORS for that site's origin, and only on `hello`, `PUT inbox/...` and `GET status/...` with a comment token: `Access-Control-Allow-Origin: <the site>`, the methods `GET, PUT`, the headers `Authorization, Content-Type, If-None-Match`, and the preflight (`OPTIONS`). Never `*`, and never CORS on anything a read or write token does.
+**From a staging site's page.** The Comment button on a staging site calls the store from the browser, so a store that takes comments from one answers CORS for that site's origin, and only on `hello`, `PUT inbox/...` and `GET status/...` with a comment token: `Access-Control-Allow-Origin: <the site>`, the methods `GET, PUT`, the headers `Authorization, Content-Type, If-None-Match`, and the preflight (`OPTIONS`). Never `*`, and never CORS on anything a read or write token does. A `401` or `403` on those three calls carries the same headers, so the page can tell the person to log in again.
 
 grndwrk, on any teammate's machine that syncs, reads new files in `inbox/`, files each one exactly as a comment that came over the Wi-Fi or the relay (marked when it reads like orders to an agent, its words quoted, `from:` the commenter), deletes it from the inbox, and keeps `status/<commenter>.json` up to date. Neither folder is copied into `.grndwrk/`.
 
