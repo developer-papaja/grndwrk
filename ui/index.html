@@ -4001,6 +4001,21 @@
         </div>
       </form>
     </div>
+    <!-- A sign-in handed over in a link (#token=): taken only when the person says so, since anyone can send such a link. -->
+    <div x-cloak x-show="!$store.gw.onMac && $store.gw.session.handed" id="handed-sign-in" class="fixed inset-0 z-[61] grid place-items-center bg-shade/40 px-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="handed-title" class="w-full max-w-sm rounded-xl border border-line bg-panel p-5 shadow-lg shadow-shade/25">
+        <h1 id="handed-title" class="mb-1 text-title font-semibold text-fog" x-text="$store.gw.session.handed?.name ? 'Sign in as ' + $store.gw.session.handed.name + '?' : 'Sign in with this link?'"></h1>
+        <p class="mb-2 text-body text-fog/60">
+          The link you opened signs you in to <span class="font-medium text-fog" x-text="$store.gw.session.handed?.project"></span><span x-show="$store.gw.session.handed?.name"> as <span class="font-medium text-fog" x-text="$store.gw.session.handed?.name"></span></span>. What you add here is written under that sign-in.
+        </p>
+        <p class="mb-2 text-body text-fog/60">Say yes only when it came from your team's own login, not from a link someone sent you.</p>
+        <p x-show="$store.gw.session.handed?.replaces" class="mb-2 text-body text-fog/60">You are signed in here already. Yes replaces your sign-in in this tab.</p>
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" class="rounded-md px-3 py-1.5 text-body text-fog/70 hover:bg-tint/5" @click="$store.gw.declineHanded()">No</button>
+          <button type="button" class="rounded-md bg-accent px-3 py-1.5 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-60" :disabled="$store.gw.signingIn" @click="$store.gw.acceptHanded()">Sign in</button>
+        </div>
+      </div>
+    </div>
     <!-- A sign-in that may only read: said once, at the top. -->
     <div x-cloak x-show="!$store.gw.onMac && $store.gw.session.signedIn && !$store.gw.session.writable" id="read-only" class="pointer-events-none fixed inset-x-0 top-2 z-30 flex justify-center px-4">
       <p class="rounded-full border border-line bg-panel px-3 py-1 text-body text-fog/70 shadow-sm">You can read this map. Your sign-in may not change it.</p>

@@ -67,6 +67,8 @@ describe('All projects, on the page on a store', () => {
   let server: Server
   let sub: { close(): void } | null = null
   const storage = new TabStorage()
+  /** Every token that reached a path, to check none goes where it should not. */
+  const sent: { path: string; token: string }[] = []
 
   beforeAll(async () => {
     for (const [mem, files] of [[clinic, CLINIC], [admin, ADMIN]] as const) {
@@ -74,6 +76,8 @@ describe('All projects, on the page on a store', () => {
     }
     server = createServer((req, res) => {
       const url = new URL(req.url ?? '/', root)
+      const carried = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1]
+      if (carried) sent.push({ path: url.pathname, token: carried })
       if (url.pathname === '/v1/projects') {
         const bearer = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1] ?? ''
         const mine = tokens[bearer]
@@ -98,15 +102,31 @@ describe('All projects, on the page on a store', () => {
     await new Promise((r) => server.close(r))
   })
 
-  it('finds the projects the store lists for this sign-in, this one first', async () => {
+  it('finds the projects the store lists for this sign-in, this one first, and sends this one\'s token to none of the others', async () => {
+    sent.length = 0
     const list = await api.teamProjects()
     expect(list).toEqual([
       { name: 'Clinic app', url: `${root}clinic/`, current: true, signedIn: true },
-      { name: 'Clinic admin', url: `${root}clinic-admin/`, current: false, signedIn: true },
+      { name: 'Clinic admin', url: `${root}clinic-admin/`, current: false, signedIn: false },
     ])
+    // Listed, not signed in there: reading it asks for a sign-in, and nothing went to its address.
+    await expect(api.readTeamProject(`${root}clinic-admin/`)).rejects.toBeInstanceOf(api.SignInThere)
+    expect(sent.filter((s) => s.path.startsWith('/clinic-admin/'))).toEqual([])
+    expect(sent.every((s) => s.path === '/v1/projects' || s.path.startsWith('/clinic/'))).toBe(true)
+  })
+
+  it('takes a project\'s address only as a project root on this store', () => {
+    expect(api.projectUrl(`${root}clinic-admin/`)).toBe(`${root}clinic-admin/`)
+    expect(api.projectUrl('/clinic-admin/')).toBe(`${root}clinic-admin/`)
+    for (const bad of [`${root}v1/`, `${root}`, `${root}clinic/v1/`, `${root}clinic/files/n_book01/`, `${root}clinic-admin`, `${root}clinic/../v1/`, `${root}%2e%2e/`, `${root}clinic-admin/?a=1`, 'https://other.example/clinic/', `http://user:pw@127.0.0.1:${PORT}/clinic/`]) {
+      expect(api.projectUrl(bad), bad).toBe('')
+    }
   })
 
   it('counts what waits in each project from its own files', async () => {
+    // Signed in there with its own token, as the person does on its card.
+    expect(await api.signInToProject(`${root}clinic-admin/`, 'gwt-both')).toBe('')
+    sent.length = 0
     const [here, there] = await Promise.all([api.readTeamProject(`${root}clinic/`), api.readTeamProject(`${root}clinic-admin/`)])
     expect(here.name).toBe('Clinic app')
     // Two questions on a thought, one guess to confirm, one on a screen.
@@ -119,6 +139,8 @@ describe('All projects, on the page on a store', () => {
     })
     expect(there.name).toBe('Clinic admin')
     expect(there.overview).toEqual({ questions: 1, blocking: 0, focus: null, stories: { done: 0, partly: 0, all: 0 }, toTest: 0 })
+    // Each project's token went to that project's address only.
+    expect(sent.filter((s) => s.path.startsWith('/clinic-admin/')).every((s) => s.token === storage.getItem('grndwrk.token:/clinic-admin/'))).toBe(true)
   })
 
   it('searches thought titles and notes across them, each hit naming its thought', async () => {

@@ -17,13 +17,14 @@ import { markSeen as postSeen } from './api'
 import { isPrinciple, PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
 import { fetchProject, fetchWaiting, saveWaiting, savePersonalInfo, type WaitingState } from './api'
-import { PAGE, session, signIn, signOut, fetchViews, createView, updateView, deleteView, teamProjects, readTeamProject, signInToProject, openProjectPage, SignInThere, type TeamProject, type TeamProjectRead } from './api'
+import { PAGE, session, signIn, signOut, acceptHanded, declineHanded, fetchViews, createView, updateView, deleteView, teamProjects, readTeamProject, signInToProject, openProjectPage, SignInThere, type TeamProject, type TeamProjectRead } from './api'
 import { searchThoughts } from '../../src/shared/overview'
 import { sameSettings, type SavedView, type ViewSettings } from '../../src/shared/views'
 import { splitQuestions } from '../../src/shared/thread'
 import { waitingKey } from '../../src/shared/waiting'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { picturePath } from './pictures'
 import { ALTITUDE_WORDS, displayName, topicColumns, topicKey } from './layout'
 import { TYPE_COLORS } from './palette'
 import { flatten, groupForList, type ListGroup } from './list'
@@ -153,6 +154,17 @@ export const state = Alpine.reactive({
     signOut()
     this.nodes = {}
     this.closePanel()
+  },
+  /** Yes or no to a sign-in a link handed over (session.handed). */
+  async acceptHanded() {
+    this.signingIn = true
+    this.signInError = await acceptHanded()
+    this.signingIn = false
+    // Still signed in as before: the sign-in form is not in view to say why.
+    if (this.signInError && session.signedIn) this.flash(this.signInError)
+  },
+  declineHanded() {
+    declineHanded()
   },
   project: {} as Record<string, unknown>,
   nodes: {} as Record<string, GNode>,
@@ -4080,15 +4092,20 @@ const SANITIZE = {
   ALLOW_DATA_ATTR: false,
 }
 
-/** A picture from this server: a relative path, or /files/ and /shots/. */
-const LOCAL_SRC = /^(?:\.{0,2}\/)?(?:files|shots)\/[^:]*$|^\/(?:files|shots)\/[^:]*$/i
 
 DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
   // Alpine's own attributes: x-data, x-init, :href, @click.
   if (/^(x-|:|@)/i.test(data.attrName)) data.keepAttr = false
 })
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-  if (node.tagName === 'IMG' && !LOCAL_SRC.test(node.getAttribute('src') ?? '')) node.removeAttribute('src')
+  if (node.tagName === 'IMG') {
+    // Only one exact picture of the map (pictures.ts), as one canonical path; anything else loads nothing.
+    const path = picturePath(node.getAttribute('src') ?? '', { shots: !PAGE })
+    node.removeAttribute('src')
+    // On the page the picture is read with the token (watchPictures): no address for the browser to ask with its cookies.
+    if (path && PAGE) node.setAttribute('data-store-src', path)
+    else if (path) node.setAttribute('src', `/${path}`)
+  }
   if (node.tagName === 'A') {
     const href = node.getAttribute('href') ?? ''
     // A path starting with a backslash after the slash is read as '//host' by browsers: outside too.
