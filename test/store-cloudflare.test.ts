@@ -243,3 +243,109 @@ describe('Cloudflare Access, as an option', () => {
     expect(() => access({ team: 'evil.example.com', aud: AUD, roles }, certs)).toThrow(/cloudflareaccess/)
   })
 })
+
+describe('a staging site, with CORS', () => {
+  const SITE = 'https://staging.clinic.example'
+  async function setup() {
+    const d = deploy({ COMMENT_ORIGINS: `${SITE}, http://not-https.example` })
+    const writer = (await d.mint('clinic', { role: 'write' })).token
+    const reader = (await d.mint('clinic', { role: 'read' })).token
+    const phone = (await d.mint('clinic', { role: 'comment', commenter: 'dev_phone01' })).token
+    const call = (method: string, path: string, token: string | null, origin = SITE, headers: Record<string, string> = {}, body?: string) =>
+      d.fetcher(`${BASE}/clinic/v1/${path}`, { method, body, headers: { Origin: origin, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers } })
+    const put = (path: string, token: string | null, origin = SITE, body = '{"text":"The weight field is too small"}') =>
+      call('PUT', `files/${path}`, token, origin, { 'Content-Type': 'application/json', 'If-None-Match': '*' }, body)
+    return { writer, reader, phone, call, put }
+  }
+  const allowed = (res: Response) => res.headers.get('access-control-allow-origin')
+
+  it('answers the three comment calls from a listed site, with the exact origin', async () => {
+    const { call, put, phone, writer } = await setup()
+    const hello = await call('GET', 'hello', phone)
+    expect(allowed(hello)).toBe(SITE)
+    expect(hello.headers.get('access-control-allow-methods')).toBe('GET, PUT')
+    expect(hello.headers.get('access-control-allow-headers')).toBe('Authorization, Content-Type, If-None-Match')
+    expect(hello.headers.get('access-control-expose-headers')).toBe('ETag')
+    expect(hello.headers.get('vary')).toBe('Origin')
+    const left = await put('inbox/dev_phone01/c_00000001.json', phone)
+    expect(left.status).toBe(201)
+    expect(allowed(left)).toBe(SITE)
+    await put('status/dev_phone01.json', writer, SITE, '{"comments":[]}')
+    const status = await call('GET', 'files/status/dev_phone01.json', phone)
+    expect(status.status).toBe(200)
+    expect(allowed(status)).toBe(SITE)
+  })
+
+  it('gives another site, a site that is not https, and other calls no CORS', async () => {
+    const { call, put, phone } = await setup()
+    expect(allowed(await call('GET', 'hello', phone, 'https://elsewhere.example'))).toBeNull()
+    expect(allowed(await call('GET', 'hello', phone, 'http://not-https.example'))).toBeNull()
+    const changes = await call('GET', 'changes', phone)
+    expect(changes.status).toBe(403)
+    expect(allowed(changes)).toBeNull()
+    expect(allowed(await put('nodes/n_phone1.md', phone, SITE, 'x'))).toBeNull()
+  })
+
+  it('never gives CORS to a read or write token, even from the listed site', async () => {
+    const { call, put, reader, writer } = await setup()
+    for (const t of [reader, writer]) {
+      expect(allowed(await call('GET', 'hello', t))).toBeNull()
+      expect(allowed(await call('GET', 'files/status/dev_phone01.json', t))).toBeNull()
+    }
+    expect(allowed(await put('inbox/dev_phone01/c_00000009.json', writer))).toBeNull()
+  })
+
+  it('lets the page read a 401 or 403 on those calls, so it can ask the person to log in again', async () => {
+    const { call, put, phone } = await setup()
+    const none = await call('GET', 'hello', null)
+    expect(none.status).toBe(401)
+    expect(allowed(none)).toBe(SITE)
+    const revoked = await put('inbox/dev_phone01/c_00000002.json', 'gws_revoked')
+    expect(revoked.status).toBe(401)
+    expect(allowed(revoked)).toBe(SITE)
+    const other = await put('inbox/dev_other01/c_00000002.json', phone)
+    expect(other.status).toBe(403)
+    expect(allowed(other)).toBe(SITE)
+    const theirs = await call('GET', 'files/status/dev_other01.json', phone)
+    expect(theirs.status).toBe(403)
+    expect(allowed(theirs)).toBe(SITE)
+  })
+
+  it('answers the preflight for those calls from a listed site only', async () => {
+    const { call } = await setup()
+    const pre = (path: string, method: string, origin = SITE) =>
+      call('OPTIONS', path, null, origin, { 'Access-Control-Request-Method': method, 'Access-Control-Request-Headers': 'authorization, content-type, if-none-match' })
+    for (const [path, method] of [['hello', 'GET'], ['files/inbox/dev_phone01/c_00000001.json', 'PUT'], ['files/status/dev_phone01.json', 'GET']]) {
+      const res = await pre(path, method)
+      expect(res.status).toBe(204)
+      expect(allowed(res)).toBe(SITE)
+    }
+    for (const [path, method, origin] of [['hello', 'GET', 'https://elsewhere.example'], ['changes', 'GET', SITE], ['files/nodes/n_x00001.md', 'PUT', SITE], ['files/inbox/dev_phone01/c_00000001.json', 'DELETE', SITE]]) {
+      const res = await pre(path, method, origin)
+      expect(res.status).toBe(403)
+      expect(allowed(res)).toBeNull()
+    }
+  })
+})
+
+describe('from the protocol', () => {
+  it('takes a write with both If-Match and If-None-Match: * as a create', async () => {
+    const { fetcher, mint } = deploy()
+    const { token } = await mint('clinic', { role: 'write' })
+    const put = (body: string) =>
+      fetcher(`${BASE}/clinic/v1/files/nodes/n_both01.md`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*', 'If-Match': '"v1"' }, body })
+    expect((await put('one')).status).toBe(201)
+    expect((await put('two')).status).toBe(412)
+  })
+
+  it('refuses an inbox body that is not a JSON object, from any token', async () => {
+    const { fetcher, mint } = deploy()
+    const writer = (await mint('clinic', { role: 'write' })).token
+    const phone = (await mint('clinic', { role: 'comment', commenter: 'dev_phone01' })).token
+    let n = 0
+    for (const [token, body] of [[writer, '[1]'], [writer, 'not json'], [phone, '"words"'], [phone, 'null']]) {
+      const res = await fetcher(`${BASE}/clinic/v1/files/inbox/dev_phone01/c_0000000${++n}.json`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*' }, body })
+      expect(res.status).toBe(400)
+    }
+  })
+})

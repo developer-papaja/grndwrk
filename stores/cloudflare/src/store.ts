@@ -7,6 +7,7 @@
  *   GET    v1/hello, v1/changes?since=&wait=, v1/files/<path>
  *   PUT    v1/files/<path>   with If-None-Match: * or If-Match: "<version>"
  *   DELETE v1/files/<path>   with If-Match: "<version>"
+ *   OPTIONS                  the preflight for a staging site in COMMENT_ORIGINS, on the comment calls only
  * Whoever deployed it (Bearer OWNER_AUTH):
  *   POST   admin/tokens {role, commenter?, name?, label?}  a new token, shown once
  *   GET    admin/tokens         the tokens, without their secrets
@@ -89,6 +90,19 @@ const random = (n: number) => btoa(String.fromCharCode(...crypto.getRandomValues
 /** Equal without saying where they differ: both sides are hashes of the same length. */
 const same = (a: string, b: string) => a.length === b.length && [...a].reduce((d, c, i) => d | (c.charCodeAt(0) ^ b.charCodeAt(i)), 0) === 0
 
+/** The three calls a staging site's Comment button makes: hello, leaving a comment, reading its status. */
+const commentCall = (route: string, method: string) =>
+  (route === 'hello' && method === 'GET') || (route.startsWith('files/inbox/') && method === 'PUT') || (route.startsWith('files/status/') && method === 'GET')
+const cors = (site: string) => ({
+  'Access-Control-Allow-Origin': site,
+  'Access-Control-Allow-Methods': 'GET, PUT',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, If-None-Match',
+  'Access-Control-Expose-Headers': 'ETag',
+  Vary: 'Origin',
+})
+/** COMMENT_ORIGINS: https origins, exactly as a browser sends them, separated by commas or spaces. */
+export const parseOrigins = (value = '') => value.split(/[\s,]+/).filter((o) => /^https:\/\/[a-z0-9.-]+(:\d{1,5})?$/.test(o))
+
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } })
 const error = (status: number, words: string) => json(status, { error: words })
@@ -101,7 +115,7 @@ export class Store {
 
   constructor(
     private storage: Storage,
-    private options: { ownerAuth?: string; identify?: Identify } = {},
+    private options: { ownerAuth?: string; identify?: Identify; origins?: string[] } = {},
   ) {}
 
   private locked<T>(work: () => Promise<T>): Promise<T> {
@@ -117,7 +131,19 @@ export class Store {
       const route = url.pathname.slice(project.length + 2)
       if (route === 'admin/tokens' || route.startsWith('admin/tokens/')) return await this.admin(req, route.slice(12))
       if (!route.startsWith('v1/')) return error(404, 'Not found')
-      return await this.protocol(req, url, route.slice(3), project)
+      const origin = req.headers.get('origin') ?? ''
+      const site = this.options.origins?.includes(origin) ? origin : ''
+      if (req.method === 'OPTIONS') {
+        // A preflight carries no token: allow the three calls a staging page makes, for a listed site, and nothing else.
+        const ok = site && commentCall(route.slice(3), req.headers.get('access-control-request-method') ?? '')
+        return ok ? new Response(null, { status: 204, headers: { ...cors(site), 'Access-Control-Max-Age': '600' } }) : error(403, 'Not allowed from this site')
+      }
+      const seen: { who?: Who } = {}
+      const res = await this.protocol(req, url, route.slice(3), project, (w) => (seen.who = w))
+      // CORS only for a comment token, or for no token at all (a 401 the page must be able to read), never for read or write tokens.
+      const role = seen.who?.role
+      if (site && commentCall(route.slice(3), req.method) && (!role || role === 'comment')) for (const [k, v] of Object.entries(cors(site))) res.headers.set(k, v)
+      return res
     } catch (err) {
       return error(500, err instanceof Error ? err.message : String(err))
     }
@@ -132,9 +158,10 @@ export class Store {
     return this.options.identify ? this.options.identify(req, project) : null
   }
 
-  private async protocol(req: Request, url: URL, route: string, project: string): Promise<Response> {
+  private async protocol(req: Request, url: URL, route: string, project: string, seen: (who: Who) => void): Promise<Response> {
     const who = await this.who(req, project)
     if (!who) return error(401, 'A valid token is required')
+    seen(who)
     if (route === 'hello' && req.method === 'GET') return json(200, { protocol: 1, project, writable: who.role === 'write', role: who.role })
     let path = ''
     if (route.startsWith('files/')) {
@@ -164,8 +191,8 @@ export class Store {
       let bytes = new Uint8Array(await req.arrayBuffer())
       const problem = bytesProblem(path, bytes)
       if (problem) return error(...problem)
-      // grndwrk believes the commenter in the path; the name the store knows replaces whatever the device wrote.
-      if (who.role === 'comment' && who.name) {
+      // A comment is a JSON object, whoever writes it; grndwrk believes the commenter in the path, and the name the store knows replaces whatever the device wrote.
+      if (INBOX.test(path)) {
         let body: unknown
         try {
           body = JSON.parse(new TextDecoder().decode(bytes))
@@ -173,8 +200,10 @@ export class Store {
           return error(400, 'A comment is a JSON object')
         }
         if (!body || typeof body !== 'object' || Array.isArray(body)) return error(400, 'A comment is a JSON object')
-        bytes = new TextEncoder().encode(JSON.stringify({ ...body, from: who.name }))
-        if (bytes.length > LIMITS.inbox) return error(413, 'A comment is at most 14 MB')
+        if (who.role === 'comment' && who.name) {
+          bytes = new TextEncoder().encode(JSON.stringify({ ...body, from: who.name }))
+          if (bytes.length > LIMITS.inbox) return error(413, 'A comment is at most 14 MB')
+        }
       }
       return this.write(path, bytes, create ? null : (match as string), create)
     }
