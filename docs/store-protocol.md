@@ -15,7 +15,7 @@ A store holds files by **path**, relative to `.grndwrk/`, like `nodes/n_k2m4ab.m
 
 - A path is one to eight parts joined by `/`. Each part starts with a letter or digit and holds only letters, digits, `.`, `_` and `-`. At most 300 characters in all. No `..`, no leading `/`, no backslash.
 - Two folders hold comments on their way in and their status on the way out, `inbox/` and `status/` (see Comments straight to the store); they are never copied into `.grndwrk/`.
-- Only these are synced: `project.md`, and anything under `nodes/`, `threads/`, `stories/`, `screens/`, `personas/`, `segments/`, `waiting/`, `files/`, `readiness/` and `outputs/`. Everything else in `.grndwrk/` belongs to one machine or one repository (`local.json`, `lan-code`, `lan-devices.json`, `shots/`, `store.json`, the agent rules and command lists) and never goes to a store. A store refuses any other path with `400`.
+- Only these are synced: `project.md`, and anything under `nodes/`, `threads/`, `stories/`, `screens/`, `personas/`, `segments/`, `waiting/`, `files/`, `readiness/`, `outputs/` and `views/` (views of the map saved for everyone). Everything else in `.grndwrk/` belongs to one machine or one repository (`local.json`, `lan-code`, `lan-devices.json`, `shots/`, `store.json`, the agent rules and command lists) and never goes to a store. A store refuses any other path with `400`.
 - The path decides a file's type; a `Content-Type` sent with a write is only a hint and never overrides it.
 - Types, by the path's extension: `.md` is `text/markdown`, `.json` is `application/json`, `.png` is `image/png`, `.jpg` and `.jpeg` are `image/jpeg`. A store refuses anything else with `415`, and refuses a picture whose bytes are not a PNG or a JPEG.
 - Sizes: text up to 1 MB, pictures up to 10 MB. Larger is `413`.
@@ -76,6 +76,16 @@ A write without either is `428`; one that sends both is taken as a create. A wri
 ### `DELETE v1/files/<path>`
 
 With `If-Match: "<version>"`: `200 {}`, `412 { "version": ... }` when it changed meanwhile, `404` when it is gone already.
+
+### `GET <store>/v1/projects` (optional)
+
+At the store's own root, not a project's: the projects this token may see, for an overview across a team's apps.
+
+```json
+{ "projects": [ { "name": "Clinic app", "url": "https://maps.example.com/clinic/" }, { "name": "Clinic admin", "url": "https://maps.example.com/clinic-admin/" } ] }
+```
+
+A store without it answers `404`; grndwrk then shows only the project it was given. Each `url` is a project's address on the same store, reached with the same token.
 
 ## Comments straight to the store
 

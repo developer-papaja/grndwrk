@@ -13,7 +13,7 @@ final class Protocol
 {
     public const VERSION = 1;
     public const SYNCED_FILES = ['project.md'];
-    public const SYNCED_FOLDERS = ['nodes', 'threads', 'stories', 'screens', 'personas', 'segments', 'waiting', 'files', 'readiness', 'outputs'];
+    public const SYNCED_FOLDERS = ['nodes', 'threads', 'stories', 'screens', 'personas', 'segments', 'waiting', 'files', 'readiness', 'outputs', 'views'];
     public const MAX_PATH = 300;
     public const MAX_TEXT = 1_000_000;
     public const MAX_PICTURE = 10_000_000;

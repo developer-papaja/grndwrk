@@ -9,7 +9,7 @@ export const PROTOCOL = 1
 
 /** The top of `.grndwrk/` that is synced: a file, or a folder and everything under it. */
 export const SYNCED_FILES = ['project.md']
-export const SYNCED_FOLDERS = ['nodes', 'threads', 'stories', 'screens', 'personas', 'segments', 'waiting', 'files', 'readiness', 'outputs']
+export const SYNCED_FOLDERS = ['nodes', 'threads', 'stories', 'screens', 'personas', 'segments', 'waiting', 'files', 'readiness', 'outputs', 'views']
 
 const PART = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 export const MAX_PATH = 300

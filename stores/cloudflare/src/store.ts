@@ -44,7 +44,7 @@ interface Token { id: string; role: Role; commenter?: string; name?: string; lab
 
 // The protocol's rules, as in src/shared-store/protocol.ts.
 const SYNCED_FILES = ['project.md']
-const SYNCED_FOLDERS = ['nodes', 'threads', 'stories', 'screens', 'personas', 'segments', 'waiting', 'files', 'readiness', 'outputs']
+const SYNCED_FOLDERS = ['nodes', 'threads', 'stories', 'screens', 'personas', 'segments', 'waiting', 'files', 'readiness', 'outputs', 'views']
 const PART = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const INBOX = /^inbox\/([A-Za-z0-9_-]{8,64})\/[A-Za-z0-9_-]{8,64}\.json$/
 const STATUS = /^status\/[A-Za-z0-9_-]{8,64}\.json$/

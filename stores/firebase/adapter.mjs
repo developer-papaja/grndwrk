@@ -25,7 +25,7 @@ import { randomBytes } from 'node:crypto'
 
 export const PROTOCOL = 1
 const SYNCED_FILES = ['project.md']
-const SYNCED_FOLDERS = ['nodes', 'threads', 'stories', 'screens', 'personas', 'segments', 'waiting', 'files', 'readiness', 'outputs']
+const SYNCED_FOLDERS = ['nodes', 'threads', 'stories', 'screens', 'personas', 'segments', 'waiting', 'files', 'readiness', 'outputs', 'views']
 const PART = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 export const MAX_TEXT = 1_000_000
 export const MAX_PICTURE = 10_000_000
