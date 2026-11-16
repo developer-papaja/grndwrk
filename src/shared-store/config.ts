@@ -147,8 +147,10 @@ const hashOf = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex
 export function adapterImportProblem(source: string): string {
   const one = 'an adapter is one file, and may import installed packages only'
   const named = (name: string) => {
-    if (/^(\.|\/|\\|#|[a-z][a-z0-9+.-]*:)/i.test(name) && !/^node:[a-z_/]+$/.test(name)) return `it imports ${name}: ${one}`
     if (/^(node:)?(child_process|vm|module|worker_threads|cluster|inspector|wasi)(\/|$)/.test(name)) return `it imports ${name}, which can run other code`
+    if (/^node:[a-z_/]+$/.test(name)) return ''
+    // A package's name, then plain folder names: no '.', '..', '%' or '\', which could climb out of node_modules into the repository.
+    if (!/^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$/i.test(name) || name.split('/').some((s) => s === '.' || s === '..')) return `it imports ${name}: ${one}`
     return ''
   }
   // Every specifier written after import or from, whatever surrounds it.
@@ -177,7 +179,7 @@ export function adapterImportProblem(source: string): string {
 export async function allowAdapter(projectRoot: string, adapter: string): Promise<string> {
   const full = await adapterPath(projectRoot, adapter)
   const bytes = await readPlain(full)
-  const problem = adapterImportProblem(bytes.toString('utf8'))
+  const problem = adapterImportProblem(bytes.toString('utf8')) || (await packagesInMap(projectRoot))
   if (problem) throw new StoreBroke(`${adapter} cannot be allowed: ${problem}`)
   const hash = hashOf(bytes)
   const file = join(dir(), 'store-allowed.json')
@@ -198,6 +200,17 @@ export async function adapterState(projectRoot: string, adapter: string): Promis
 export class AdapterNotAllowed extends Error {}
 
 /**
+ * The adapter runs from a copy in .grndwrk/, so Node would look for its
+ * packages in .grndwrk/node_modules before the project's: a commit to the
+ * map alone could then change what an allowed adapter runs. Refused while
+ * one is there.
+ */
+async function packagesInMap(projectRoot: string): Promise<string> {
+  const there = await lstat(join(projectRoot, '.grndwrk', 'node_modules')).then(() => true, () => false)
+  return there ? '.grndwrk/node_modules would change which packages the adapter imports: remove it' : ''
+}
+
+/**
  * Load an allowed adapter. Refused when it was never allowed on this machine
  * or the file changed since: grndwrk never runs code from the repository the
  * person has not seen and allowed.
@@ -209,7 +222,7 @@ export async function loadAdapter(projectRoot: string, adapter: string, project:
   if (!allowed) throw new AdapterNotAllowed(`The store adapter ${adapter} is not allowed on this machine yet. Read it, then run: grndwrk store allow`)
   const hash = hashOf(bytes)
   if (hash !== allowed) throw new AdapterNotAllowed(`The store adapter ${adapter} changed since it was allowed. Read what changed (git diff), then run: grndwrk store allow`)
-  const problem = adapterImportProblem(bytes.toString('utf8'))
+  const problem = adapterImportProblem(bytes.toString('utf8')) || (await packagesInMap(projectRoot))
   if (problem) throw new AdapterNotAllowed(`${adapter} is not loaded: ${problem}`)
   // Run exactly the bytes that were hashed, never the file read again a moment later. The copy sits
   // in .grndwrk/, so installed packages resolve from the project as from the adapter; it goes at once.
@@ -219,6 +232,9 @@ export async function loadAdapter(projectRoot: string, adapter: string, project:
   const copy = join(copyDir, `adapter-${hash.slice(0, 16)}.mjs`)
   let mod: { default?: unknown }
   try {
+    // A package of its own without a name: an import can never mean .grndwrk/package.json or the
+    // project's own package.json (Node's self-reference), only a package installed in node_modules.
+    await writeGuarded(join(copyDir, 'package.json'), Buffer.from('{"type":"module"}\n'), { mode: 0o600, flag: 'wx' })
     await writeGuarded(copy, bytes, { mode: 0o600, flag: 'wx' })
     mod = (await import(pathToFileURL(copy).href)) as { default?: unknown }
   } finally {

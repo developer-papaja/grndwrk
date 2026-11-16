@@ -200,7 +200,7 @@ A team that would rather reach its own database directly, without a server in be
 grndwrk store allow
 ```
 
-grndwrk runs an adapter only after you allowed that exact file, at a terminal. When it changes (a pull, another branch), grndwrk stops syncing and asks again, so a pull request cannot run code on your machine unseen. An adapter is one file: it may import installed packages, never another file of the repository.
+grndwrk runs an adapter only after you allowed that exact file, at a terminal. When it changes (a pull, another branch), grndwrk stops syncing and asks again, so a pull request cannot run code on your machine unseen. An adapter is one file: it may import installed packages, never another file of the repository, the project's own package, or a package planted in `.grndwrk/` (a `node_modules` there stops it).
 
 ### The page, for people without the repository
 

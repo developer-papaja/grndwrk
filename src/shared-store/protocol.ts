@@ -96,6 +96,10 @@ export interface Hello {
   commenter?: string
   /** The person, when the store knows: written as `by:` on what they add from the page. */
   name?: string
+  /** The store sets `from` on every comment itself, so the sync may show it as the sender. */
+  names?: boolean
+  /** The staging site comments come from (an https origin): a comment's page address is kept only on it. */
+  site?: string
 }
 
 export interface Read {

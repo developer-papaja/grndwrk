@@ -153,9 +153,17 @@ enum Outbox {
   /// Keep a sent comment, without its picture. The last 200.
   private static var pictures: URL { base.appendingPathComponent("pictures", isDirectory: true) }
 
+  /// A card id as grndwrk makes them (n_ and four to twelve letters or digits). Ids come back
+  /// from the store or the relay, where a teammate's write could put anything; only such an id
+  /// is ever used as a file name, so a picture never goes outside its folder.
+  static func isNodeId(_ s: String) -> Bool {
+    s.range(of: "^n_[a-z0-9]{4,12}$", options: .regularExpression) != nil
+  }
+
   /// The picture taken with a sent comment, to show when testing its fix.
   static func picture(node: String) -> UIImage? {
-    UIImage(contentsOfFile: pictures.appendingPathComponent("\(node).png").path)
+    guard isNodeId(node) else { return nil }
+    return UIImage(contentsOfFile: pictures.appendingPathComponent("\(node).png").path)
   }
 
   /// The picture of a waiting comment, from the comment itself.
@@ -169,7 +177,8 @@ enum Outbox {
   static func remember(_ data: Data, id: String, project: String?, relayed: Bool = false) {
     guard var entry = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
     // The picture stays on the phone, beside the list, to show when testing a fix.
-    let name = id.isEmpty ? (entry["key"] as? String).map { "key-\($0)" } : id
+    let id = isNodeId(id) ? id : ""
+    let name = id.isEmpty ? (entry["key"] as? String).flatMap { $0.range(of: "^[A-Za-z0-9-]{16,64}$", options: .regularExpression) != nil ? "key-\($0)" : nil } : id
     if let image = entry["image"] as? String, let comma = image.firstIndex(of: ","), let bytes = Data(base64Encoded: String(image[image.index(after: comma)...])), let name {
       try? FileManager.default.createDirectory(at: pictures, withIntermediateDirectories: true)
       try? bytes.write(to: pictures.appendingPathComponent("\(name).png"))
@@ -300,7 +309,7 @@ enum Outbox {
     let before = Set(read(sentFile).filter { $0["state"] as? String == "ready" }.compactMap { $0["node"] as? String })
     var next: [[String: Any]] = []
     for var c in read(sentFile) {
-      guard c["relay"] as? Bool == true, let key = c["key"] as? String, let a = now[key], let id = a["id"] as? String, !id.isEmpty else {
+      guard c["relay"] as? Bool == true, let key = c["key"] as? String, let a = now[key], let id = a["id"] as? String, isNodeId(id) else {
         next.append(c)
         continue
       }
@@ -353,7 +362,7 @@ enum Outbox {
     let list = read(sentFile)
     guard let entry = list.first(where: { $0["node"] as? String == node }) else { return .onlyHere }
     write(list.filter { $0["node"] as? String != node }, to: sentFile)
-    try? FileManager.default.removeItem(at: pictures.appendingPathComponent("\(node).png"))
+    if isNodeId(node) { try? FileManager.default.removeItem(at: pictures.appendingPathComponent("\(node).png")) }
     // Sent before comments had keys: grndwrk would not know it is ours.
     guard let key = entry["key"] as? String else { return .onlyHere }
     var deletes = read(deletesFile)

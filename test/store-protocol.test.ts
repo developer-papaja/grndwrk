@@ -61,6 +61,23 @@ describe('over HTTP', () => {
     await expect(store.write('nodes/n_rdonly.md', new TextEncoder().encode('x'), { type: 'text/markdown', create: true })).rejects.toThrow(/403/)
   })
 
+  it('passes on what the store says of names and its staging site', async () => {
+    const handle = storeHandler(new MemoryStore('Clinic', true, 500, { names: true, site: 'https://staging.clinic.example' }), (t) => (t === 'writer' ? 'write' : null))
+    const named = createServer((req, res) => void handle(req, res, '/clinic/'))
+    await new Promise<void>((done) => named.listen(0, '127.0.0.1', done))
+    try {
+      const hello = await new HttpStore(`http://127.0.0.1:${(named.address() as AddressInfo).port}/clinic/`, 'writer').hello()
+      expect(hello.names).toBe(true)
+      expect(hello.site).toBe('https://staging.clinic.example')
+    } finally {
+      await new Promise<void>((done) => named.close(() => done()))
+    }
+    // A store that says nothing of them: nothing is made up.
+    const plain = await new HttpStore(url, 'writer').hello()
+    expect(plain.names).toBeUndefined()
+    expect(plain.site).toBeUndefined()
+  })
+
   it('never sends a token in the clear to another machine', () => {
     expect(() => new HttpStore('http://maps.example.com/clinic/', 't')).toThrow(/https/)
     expect(() => new HttpStore('https://user:pw@maps.example.com/', 't')).toThrow(/token/)
@@ -220,5 +237,79 @@ describe('a token from the environment', () => {
     } finally {
       for (const [k, v] of [['GRNDWRK_STORE_TOKEN', before.t], ['GRNDWRK_STORE_URL', before.u], ['GRNDWRK_STORE_DIR', before.d]] as const) v === undefined ? delete process.env[k] : (process.env[k] = v)
     }
+  })
+})
+
+// What the security audit of 2026-11-16 got past the allow: imports that resolve to files
+// of the repository the allow never covered. A project of its own for each, so Node's
+// resolution cache from one cannot hide another.
+describe('what an allowed adapter may import', () => {
+  const stateDirBefore = process.env.GRNDWRK_STORE_DIR
+  const roots: string[] = []
+  const project = async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gw-adapter-imports-'))
+    roots.push(root)
+    process.env.GRNDWRK_STORE_DIR = join(root, 'state')
+    await mkdir(join(root, 'tools'))
+    await mkdir(join(root, '.grndwrk'))
+    ;(globalThis as Record<string, unknown>).__testStore = (p: string) => new MemoryStore(p)
+    return root
+  }
+  afterAll(async () => {
+    if (stateDirBefore === undefined) delete process.env.GRNDWRK_STORE_DIR
+    else process.env.GRNDWRK_STORE_DIR = stateDirBefore
+    for (const root of roots) await rm(root, { recursive: true, force: true })
+  })
+  const pkg = async (dir: string, json: object, files: Record<string, string>) => {
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'package.json'), JSON.stringify(json))
+    for (const [name, src] of Object.entries(files)) await writeFile(join(dir, name), src)
+  }
+
+  it('refuses a package path that climbs out of the package', async () => {
+    const root = await project()
+    for (const spec of ['oldpkg/../../scripts/later.mjs', 'oldpkg/%2E%2E/%2e%2e/scripts/later.mjs', 'oldpkg/./x.mjs', 'oldpkg\\..\\x.mjs']) {
+      await writeFile(join(root, 'tools', 'climb.mjs'), `import x from '${spec}'\nexport default async () => x\n`)
+      await expect(allowAdapter(root, 'tools/climb.mjs'), spec).rejects.toThrow(/cannot be allowed/)
+    }
+    // A scoped package and a plain subpath are still installed packages.
+    await writeFile(join(root, 'tools', 'scoped.mjs'), "import { a } from '@vet/clinic-sdk/firestore'\nexport default async () => a\n")
+    await expect(allowAdapter(root, 'tools/scoped.mjs')).resolves.toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('imports the installed package, never one a commit to .grndwrk/ names the same', async () => {
+    const root = await project()
+    await pkg(join(root, 'node_modules', 'clinicdb'), { name: 'clinicdb', exports: './index.mjs' }, { 'index.mjs': "export default 'installed'\n" })
+    await writeFile(join(root, 'tools', 'store.mjs'), "import from from 'clinicdb'\nexport default async ({ project }) => { globalThis.__adapterSaw = from; return globalThis.__testStore(project) }\n")
+    await allowAdapter(root, 'tools/store.mjs')
+    // Then a pull request that only touches the map.
+    await pkg(join(root, '.grndwrk'), { name: 'clinicdb', exports: './hijack.mjs' }, { 'hijack.mjs': "export default 'hijacked'\n" })
+    expect(await adapterState(root, 'tools/store.mjs')).toBe('allowed')
+    await loadAdapter(root, 'tools/store.mjs', 'Clinic')
+    expect((globalThis as Record<string, unknown>).__adapterSaw).toBe('installed')
+  })
+
+  it("never resolves an import to the project's own package", async () => {
+    const root = await project()
+    await pkg(root, { name: 'vetapp', exports: { './later': './scripts/later.mjs' } }, {})
+    await mkdir(join(root, 'scripts'))
+    await writeFile(join(root, 'scripts', 'later.mjs'), "globalThis.__laterRan = true\nexport default 1\n")
+    await writeFile(join(root, 'tools', 'self.mjs'), "import x from 'vetapp/later'\nexport default async ({ project }) => globalThis.__testStore(project)\n")
+    await allowAdapter(root, 'tools/self.mjs')
+    await expect(loadAdapter(root, 'tools/self.mjs', 'Clinic')).rejects.toThrow(/vetapp/)
+    expect((globalThis as Record<string, unknown>).__laterRan).toBeUndefined()
+  })
+
+  it('refuses to allow or load while .grndwrk/ holds node_modules', async () => {
+    const root = await project()
+    await writeFile(join(root, 'tools', 'store.mjs'), "import x from 'clinicdb'\nexport default async ({ project }) => globalThis.__testStore(project)\n")
+    await pkg(join(root, '.grndwrk', 'node_modules', 'clinicdb'), { name: 'clinicdb', exports: './index.mjs' }, { 'index.mjs': "globalThis.__plantedRan = true\nexport default 1\n" })
+    await expect(allowAdapter(root, 'tools/store.mjs')).rejects.toThrow(/node_modules/)
+    await rm(join(root, '.grndwrk', 'node_modules'), { recursive: true })
+    await pkg(join(root, 'node_modules', 'clinicdb'), { name: 'clinicdb', exports: './index.mjs' }, { 'index.mjs': 'export default 1\n' })
+    await allowAdapter(root, 'tools/store.mjs')
+    await pkg(join(root, '.grndwrk', 'node_modules', 'clinicdb'), { name: 'clinicdb', exports: './index.mjs' }, { 'index.mjs': "globalThis.__plantedRan = true\nexport default 1\n" })
+    await expect(loadAdapter(root, 'tools/store.mjs', 'Clinic')).rejects.toThrow(/node_modules/)
+    expect((globalThis as Record<string, unknown>).__plantedRan).toBeUndefined()
   })
 })

@@ -49,7 +49,10 @@ export class HttpStore implements StoreClient {
     const commenter = role === 'comment' && typeof b.commenter === 'string' && COMMENTER.test(b.commenter) ? { commenter: b.commenter } : {}
     // A name from the store is shown in the map: one line of plain text, no control characters.
     const name = typeof b.name === 'string' && b.name.trim() ? { name: b.name.replace(/\p{Cc}/gu, '').trim().slice(0, 120) } : {}
-    return { protocol: PROTOCOL, project: typeof b.project === 'string' ? b.project.slice(0, 200) : '', writable: b.writable === true, role, ...commenter, ...name }
+    // names and site are passed on as they are: StoreSync decides what they are worth (an https origin only).
+    const names = b.names === true ? { names: true } : {}
+    const site = typeof b.site === 'string' && b.site.length <= 300 ? { site: b.site } : {}
+    return { protocol: PROTOCOL, project: typeof b.project === 'string' ? b.project.slice(0, 200) : '', writable: b.writable === true, role, ...commenter, ...name, ...names, ...site }
   }
 
   async changes({ since, wait = 0 }: { since?: string; wait?: number } = {}) {
