@@ -154,9 +154,11 @@ export const savePersonalInfo = (value: 'yes' | 'no') => request<WaitingState>('
  * nobody signs in, the server is this machine.
  */
 export const PAGE = false
-export const session = { signedIn: true, checking: false, writable: true, project: '', name: '', problem: '' }
+export const session = { signedIn: true, checking: false, writable: true, project: '', name: '', problem: '', handed: null as { project: string; name: string; replaces: boolean } | null }
 export const onSession = (_f: () => void) => {}
 export const signIn = async (_token: string) => ''
+export const acceptHanded = async () => ''
+export const declineHanded = () => {}
 export const signOut = () => {}
 /** Pictures load by their path from grndwrk itself. */
 export const watchPictures = (_root: Element) => {}

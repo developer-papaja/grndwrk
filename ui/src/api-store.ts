@@ -34,6 +34,7 @@ import { createView as saveNewView, deleteView as dropView, listViews, updateVie
 import type { ViewSettings } from '../../src/shared/views'
 import { overviewOf, type MapFiles, type ProjectOverview } from '../../src/shared/overview'
 import * as vfs from './page/vfs'
+import { picturePath } from './pictures'
 
 /** The page, not grndwrk on a Mac: the one flag the UI reads to leave out what only works there. */
 export const PAGE = true
@@ -56,6 +57,12 @@ export const session = {
   name: '',
   /** Why the sign-in screen shows: a token not taken, or run out. */
   problem: '',
+  /**
+   * A sign-in handed over in the address (`#token=`), waiting for the person
+   * to say yes: whose it is and for which project, as the store's hello says,
+   * and whether it would replace the sign-in this tab has.
+   */
+  handed: null as { project: string; name: string; replaces: boolean } | null,
 }
 const listeners: (() => void)[] = []
 export function onSession(f: () => void) {
@@ -104,15 +111,83 @@ if (typeof location !== 'undefined') {
   }
   configure({ base: location.href, storage: s })
   // A store's own login may hand the token over once, in the address's fragment
-  // (never sent to a server). Kept for this project in this tab, and taken out
-  // of the address at once, so it is not in the history or a copied link.
-  const handed = /(?:^#|&)token=([^&]+)/.exec(location.hash)
+  // (never sent to a server). It is taken out of the address at once, so it is
+  // not in the history or a copied link, and taken only when the person says so.
+  const handed = takeHanded(location.hash)
   if (handed) {
     history.replaceState(null, '', location.pathname + location.search)
-    token = decodeURIComponent(handed[1])
-    keep(token)
-    session.checking = true
+    // Without a sign-in kept here, "Signing in…" rather than the empty form while the store is asked.
+    if (!token) session.checking = true
+    void offerHanded(handed)
   }
+}
+
+/** The token in an address's fragment (`#token=...`), or ''. */
+export function takeHanded(hash: string): string {
+  const m = /(?:^#|&)token=([^&]+)/.exec(hash)
+  if (!m) return ''
+  try {
+    return decodeURIComponent(m[1]).trim().slice(0, 4000)
+  } catch {
+    return ''
+  }
+}
+
+/** The token a link handed over, until the person takes it or not. Never kept. */
+let handedToken = ''
+
+/**
+ * A link handed this page a token. Anyone can send such a link, and what the
+ * person writes would then go under the sender's sign-in, so it is never taken
+ * without asking: the store says whose it is and for which project, and the
+ * page asks ("Sign in as Vet on duty?"). A token kept from before stays until
+ * the person says yes.
+ */
+export async function offerHanded(t: string): Promise<void> {
+  const next = t.trim()
+  const alone = !token
+  const done = (problem = '') => {
+    if (alone) Object.assign(session, { checking: false, problem })
+    told()
+  }
+  if (!next || next === token) return done()
+  const hello = await helloOf(next).catch(() => null)
+  if (hello?.status !== 200 || hello.body.protocol !== 1) return done('The sign-in in that link was not taken. Paste the token your store gave you.')
+  if (hello.body.role === 'comment') return done('The sign-in in that link may only leave comments. The page needs one that may read the map.')
+  handedToken = next
+  session.handed = {
+    project: plainName(hello.body.project) || nameOfUrl(base),
+    name: plainName(hello.body.name).slice(0, 80),
+    replaces: !!token,
+  }
+  done()
+}
+
+/** Yes to the sign-in a link handed over: it replaces the one this tab had. Returns why not, or ''. */
+export async function acceptHanded(): Promise<string> {
+  const next = handedToken
+  handedToken = ''
+  session.handed = null
+  if (!next) {
+    told()
+    return ''
+  }
+  // The same project's map, so what this tab holds stays; the store is asked with the new token from now on.
+  return signIn(next)
+}
+
+/** No to it: the link's token is forgotten, and the sign-in this tab had stays. */
+export function declineHanded() {
+  handedToken = ''
+  session.handed = null
+  told()
+}
+
+/** What the store's hello says to a token, without keeping it. */
+async function helloOf(t: string): Promise<{ status: number; body: Record<string, unknown> }> {
+  const res = await fetch(new URL('v1/hello', base), { headers: { Authorization: `Bearer ${t}` }, redirect: 'error' })
+  const body = ((await res.json().catch(() => null)) ?? {}) as Record<string, unknown>
+  return { status: res.status, body: typeof body === 'object' ? body : {} }
 }
 
 let client: HttpStore | null = null
@@ -713,9 +788,9 @@ export const savePersonalInfo = (value: 'yes' | 'no') => change(async () => (awa
 /**
  * A picture in the map (`../files/<id>/<name>`) is in the store, behind the
  * token, so an <img> cannot load it by its path. Its bytes are read with the
- * token and shown from a blob: URL; nothing else is ever loaded.
+ * token and shown from a blob: URL; nothing else is ever loaded. Which paths
+ * are pictures is pictures.ts's to say, exactly as on the Mac.
  */
-const FILE_SRC = /^(?:\.\.\/)*\/?files\/([A-Za-z0-9_-]{1,64})\/([A-Za-z0-9][A-Za-z0-9._-]{0,100}\.(?:png|jpe?g))$/i
 const pictures = new Map<string, { version: string; url: string }>()
 function forgetPictures() {
   for (const p of pictures.values()) URL.revokeObjectURL(p.url)
@@ -738,15 +813,21 @@ async function pictureUrl(path: string): Promise<string | null> {
 /** Show the map's pictures under `root` from the store, now and as the page changes. */
 export function watchPictures(root: Element) {
   const swap = (img: HTMLImageElement) => {
-    const src = img.getAttribute('src') ?? ''
-    const m = FILE_SRC.exec(src)
-    if (!m) return
-    const path = `files/${m[1]}/${m[2]}`
-    // Never ask the store's address for it without the token: nothing loads until the bytes are here.
-    img.removeAttribute('src')
-    img.dataset.storeSrc = path
+    const src = img.getAttribute('src')
+    const named = img.getAttribute('data-store-src')
+    // What the page made itself, or a picture already read: left as it is.
+    if (src && /^(?:blob|data):/i.test(src)) return
+    if (src === null && named === null) return
+    const path = picturePath(src ?? named ?? '')
+    // Never ask the store's address for it without the token, and never for any other path: nothing loads until the bytes are here.
+    if (src !== null) img.removeAttribute('src')
+    if (!path) {
+      img.removeAttribute('data-store-src')
+      return
+    }
+    if (named !== path) img.setAttribute('data-store-src', path)
     void pictureUrl(path).then((url) => {
-      if (url && img.dataset.storeSrc === path && !img.getAttribute('src')) img.setAttribute('src', url)
+      if (url && img.getAttribute('data-store-src') === path && !img.getAttribute('src')) img.setAttribute('src', url)
     })
   }
   for (const img of root.querySelectorAll('img')) swap(img)
@@ -758,7 +839,7 @@ export function watchPictures(root: Element) {
         else if (n instanceof Element) for (const img of n.querySelectorAll('img')) swap(img)
       }
     }
-  }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['src'] })
+  }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['src', 'data-store-src'] })
 }
 
 // A team's other projects on the same store, for All projects
@@ -783,7 +864,11 @@ export interface TeamProjectRead {
 /** fetch called as itself: a browser refuses window.fetch called as another object's method. */
 const browserFetch: typeof fetch = (input, init) => fetch(input, init)
 
-/** Tokens the store said reach another project (`v1/projects`: the same token), by its address. */
+/**
+ * Tokens signed in to another project in this tab, by its address, for when
+ * storage is blocked. Only a token given for that project: the store's list
+ * of projects never hands this project's token to another one.
+ */
 const reaches = new Map<string, string>()
 const keyFor = (url: string) => `grndwrk.token:${new URL(url).pathname}`
 function tokenAt(url: string): string {
@@ -795,15 +880,22 @@ function tokenAt(url: string): string {
   }
 }
 
-/** A project's address as the store gave it: on this store's own origin only, so a token never goes elsewhere. */
-function projectUrl(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 500) return ''
+/**
+ * A project's address as the store gave it, or '' when it is none: a project's
+ * root on this store's own origin (`<store>/<project>/`, one plain name under
+ * the store's root), so a token never goes elsewhere, nor to another path there.
+ */
+export function projectUrl(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 500 || !base) return ''
   try {
     const u = new URL(value, base)
-    if (u.origin !== new URL(base).origin || u.username || u.password) return ''
-    u.hash = ''
-    u.search = ''
-    return u.pathname.endsWith('/') ? u.toString() : ''
+    const root = new URL('../', base)
+    if (u.origin !== root.origin || u.username || u.password || u.search || u.hash) return ''
+    if (!u.pathname.startsWith(root.pathname)) return ''
+    const name = u.pathname.slice(root.pathname.length)
+    // One name and its slash: never v1/, a file, or anything encoded.
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\/$/.test(name) || name === 'v1/' || name.includes('..')) return ''
+    return u.toString()
   } catch {
     return ''
   }
@@ -825,8 +917,8 @@ export async function teamProjects(): Promise<TeamProject[]> {
     for (const p of Array.isArray(body?.projects) ? body.projects.slice(0, 200) : []) {
       const url = projectUrl((p as { url?: unknown })?.url)
       if (!url) continue
+      // Listed only: this project's token is never sent there. A project without its own sign-in asks for one.
       if (!found.get(url)) found.set(url, plainName((p as { name?: unknown }).name))
-      if (url !== base) reaches.set(url, token)
     }
   } catch {
     // No list from the store: the projects this tab knows are enough.
