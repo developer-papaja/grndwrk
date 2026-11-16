@@ -4,6 +4,7 @@ import { HttpStore } from '../src/shared-store/http.js'
 import { CursorGone, pathProblem as grndwrkPathProblem, bytesProblem as grndwrkBytesProblem, INBOX, MAX_INBOX, MAX_PICTURE, MAX_TEXT, type StoreClient } from '../src/shared-store/protocol.js'
 import { bytesProblem, INLINE, pathProblem, storeOver, MAX_INBOX as FB_MAX_INBOX, MAX_PICTURE as FB_MAX_PICTURE, MAX_TEXT as FB_MAX_TEXT, INBOX as FB_INBOX } from '../stores/firebase/adapter.mjs'
 import { keyHash, storeFunction } from '../stores/firebase/functions.mjs'
+import { expectServesPage, PAGE_FILES } from './page-fixture.js'
 
 type Doc = Record<string, unknown>
 
@@ -67,7 +68,8 @@ const text = (s: string) => new TextEncoder().encode(s)
 /** A function over a fake Firebase, with members, reached through fetch as grndwrk reaches it. */
 function setup() {
   const fb = fakeFirebase()
-  const handle = storeFunction({ backend: fb, verify: async (t) => (t.startsWith('idtoken-') ? { uid: t.slice(8) } : null) })
+  const page = async (name: string) => PAGE_FILES[name] ?? null
+  const handle = storeFunction({ backend: fb, verify: async (t) => (t.startsWith('idtoken-') ? { uid: t.slice(8) } : null), page })
   const members: Record<string, Doc> = {
     uid_writer01: { role: 'write' },
     uid_reader01: { role: 'read' },
@@ -82,6 +84,13 @@ function setup() {
 }
 
 describe('the Firebase store keeps the same rules as grndwrk', () => {
+  it('serves the page at the map\'s address, and the Comment button to its staging site only', async () => {
+    const { fetcher, url } = setup()
+    await expectServesPage((path, referer) => fetcher(`${url.replace(/\/$/, '')}${path}`, { headers: referer ? { Referer: referer, 'X-Forwarded-Host': new URL(url).host } : {} }), 'clinic', url, 'https://staging.vetclinic.example')
+    // A map that does not exist has no page.
+    expect((await fetcher(url.replace('/clinic/', '/nowhere/'))).status).toBe(404)
+  })
+
   it('has the same paths, types and sizes as src/shared-store/protocol.ts', () => {
     const paths = ['project.md', 'nodes/n_abc123.md', 'files/n_abc123/plan.png', 'files/n_x/p.JPEG', 'inbox/dev_phone01/c_00000001.json', 'status/dev_phone01.json', 'inbox/short/c_00000001.json', 'local.json', 'store.json', 'nodes/../local.json', '/nodes/x.md', 'nodes/.hidden.md', 'nodes\\x.md', 'nodes/x.svg', `nodes/${'a'.repeat(300)}.md`, 'a/b/c/d/e/f/g/h/i.md', '']
     for (const p of paths) expect(pathProblem(p), p).toBe(grndwrkPathProblem(p))

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { checkStore } from '../src/shared-store/check.js'
 import { HttpStore } from '../src/shared-store/http.js'
+import { expectServesPage, writeFakePage } from './page-fixture.js'
 
 // The PHP example in stores/php, checked against the protocol like any store. Skipped without php.
 const php = (() => {
@@ -37,7 +38,8 @@ describe.skipIf(!php)('the PHP store', () => {
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'gw-store-php-'))
     // A small page, so following the changes has to use `more`.
-    await writeFile(join(dir, 'config.php'), `<?php return ['dsn' => 'sqlite:' . ${JSON.stringify(join(dir, 'store.sqlite'))}, 'page' => 2, 'origins' => ['${site}']];\n`)
+    await writeFile(join(dir, 'config.php'), `<?php return ['dsn' => 'sqlite:' . ${JSON.stringify(join(dir, 'store.sqlite'))}, 'page' => 2, 'origins' => ['${site}'], 'assets' => ${JSON.stringify(join(dir, 'page'))}];\n`)
+    await writeFakePage(join(dir, 'page'))
     admin('project', 'add', 'clinic', 'Clinic')
     admin('project', 'add', 'other')
     writer = mint('clinic', 'write')
@@ -176,6 +178,12 @@ describe.skipIf(!php)('the PHP store', () => {
     expect((await preflight('v1/files/nodes/n_x.md', site)).status).toBe(403)
     expect((await preflight('v1/changes', site)).status).toBe(403)
     expect(allowed(await preflight('v1/hello', 'https://elsewhere.example'))).toBeNull()
+  })
+
+  it('serves the page at the project\'s address, and the Comment button to the staging site only', async () => {
+    await expectServesPage((path, referer) => fetch(`${base}clinic${path}`, { redirect: 'manual', headers: referer ? { Referer: referer } : {} }), 'clinic', url, site)
+    // A project the store does not have gets no page.
+    expect((await fetch(`${base}nowhere/`)).status).toBe(404)
   })
 
   it('keeps projects apart', async () => {

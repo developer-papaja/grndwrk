@@ -1,4 +1,9 @@
+import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pageAnswer } from '../src/shared-store/page.js'
+import { expectServesPage, writeFakePage } from './page-fixture.js'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { MemoryStore } from '../src/shared-store/memory.js'
 import { storeHandler } from '../src/shared-store/http.js'
@@ -114,5 +119,20 @@ describe('the page on a store (api-store.ts)', () => {
     api.session.writable = false
     expect((await mem.changes({})).changes.length).toBe(before)
     expect((await api.fetchNodes()).some((n) => n.title === 'Not allowed')).toBe(false)
+  })
+})
+
+describe('the page as grndwrk hosts it (src/shared-store/page.ts)', () => {
+  it('serves the page and, for the staging site only, the Comment button', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gw-page-'))
+    await writeFakePage(dir)
+    const url = 'https://maps.example.com/clinic/'
+    const site = 'https://staging.clinic.example'
+    const get = async (path: string, referer?: string) => {
+      const a = await pageAnswer(dir, path, url, referer, [site])
+      return a ? new Response(a.status === 301 ? null : a.body, { status: a.status, headers: a.headers }) : new Response(null, { status: 404 })
+    }
+    await expectServesPage(get, 'clinic', url, site)
+    await rm(dir, { recursive: true, force: true })
   })
 })

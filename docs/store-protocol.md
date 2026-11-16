@@ -127,6 +127,39 @@ grndwrk, on any teammate's machine that syncs, reads new files in `inbox/`, file
 - Run, render or interpret the files. They are text and pictures written by people and agents, and comments in them come from whoever used the product.
 - Hand a token to the page's scripts in a way another site could read.
 
+## The page
+
+Colleagues who never clone the repository read the map in a browser: grndwrk's own map, built to talk to the store from the page with the person's token. It works on every store, because it only makes the calls above.
+
+```
+grndwrk store assets <dir>
+```
+
+writes everything a store hosts into one folder:
+
+```
+index.html, assets/...   the page
+overlay/store.js         the Comment button's store mode
+overlay/feedback.js      the Comment button
+screenshot.js            what draws a comment's picture, wrapped as the relay wraps it
+```
+
+Serve it at each project's address, so the page's calls to `v1/...` go to the same origin and need no CORS:
+
+- `GET <project>/` is `index.html`; `GET <project>/assets/<name>` the page's scripts and styles. Only `index.html` and names under `assets/` ending in `.js`, `.css`, `.woff2`, `.svg` or `.png`; nothing else from the folder. `<project>` without the slash redirects to it (the page finds its files next to itself).
+- `GET <project>/store.js` and `GET <project>/screenshot.js`: the Comment button, for a page on the staging site only (see Comments straight to the store).
+- Headers: the type by extension (`text/html`, `text/javascript`, `text/css`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and this Content-Security-Policy, so nothing the page shows loads from or talks to another server and no other site frames it:
+
+  ```
+  default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'
+  ```
+
+  (The page has no inline script; `'unsafe-eval'` is for Alpine's expressions.) `assets/` names change with each build, so they may be cached for good; `index.html` is checked each time.
+
+The page holds no data and is served to anyone. It asks for a token that may read (or write) and checks it with `hello`; a comment token is not enough. It keeps the token in that browser tab's `sessionStorage`, for that project only, never in `localStorage`, a query string or a log, and sends it only in the `Authorization` header to its own address. Your login may hand the token over once in the address's fragment, `<project>/#token=<token>`, which is never sent to a server; the page takes it and removes it from the address at once. A `401` brings the sign-in back. `hello` may also say `"name"`, the person's name, which the page writes as `by:` on thoughts they add.
+
+What the page writes follows the rules above: an answer or a remark is a new thread entry file (`If-None-Match: *`), a new thought a new node file, a changed card, screen or story a `PUT` with `If-Match`. On `412` it shows the other person's version and asks to make the change again. Pictures in notes and threads are read with the token and shown from the page's own memory, so the store never serves a file to an `<img>`. Sites, colleagues, pairing, Documents and pictures of screens stay in grndwrk on a Mac.
+
 ## As an adapter
 
 A module, `.mjs`, anywhere in your repository. Point `.grndwrk/store.json` at it:

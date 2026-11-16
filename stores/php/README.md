@@ -95,6 +95,16 @@ To let the Comment button on a staging site reach the store from the browser, li
 
 For teammates, `inbox/` and `status/` are files like the others: `changes` lists them, read tokens read them, write tokens write and delete them. That is how grndwrk files each comment and writes the status. An inbox file must be a JSON object (400 otherwise), whoever writes it.
 
+## The page
+
+Colleagues without the repository read the map, answer the agent's questions and add thoughts in a browser, at the project's address (`https://maps.example.com/clinic/`). Write the page next to `src/`, outside the web root:
+
+```
+grndwrk store assets page
+```
+
+`Api.php` serves it from there (or from the folder `'assets'` names in `config.php`): `index.html` and `assets/...` to anyone, with a strict Content-Security-Policy and `nosniff`; `store.js` (the Comment button, put together with its config) and `screenshot.js` only to a page on a site listed in `'origins'`, by its `Referer`. Nothing else in the folder is served. Run the command again after updating grndwrk. The page asks for a read or write token; hand one to a person however you hand out tokens, or after your own login send them to `https://maps.example.com/clinic/#token=<token>`. See [The page](../../docs/store-protocol.md#the-page).
+
 ## Check it
 
 From a project with grndwrk, with a write token:

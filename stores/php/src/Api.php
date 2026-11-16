@@ -36,7 +36,7 @@ final class Api
         $base = $this->config['base'] ?? (PHP_SAPI === 'cli-server' ? '' : rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/'));
         if ($base !== '' && str_starts_with($path, "$base/")) $path = substr($path, strlen($base));
         // The page: the map in a browser, for colleagues without the repository (see page()).
-        if (($method === 'GET' || $method === 'HEAD') && preg_match('#^/([a-z0-9][a-z0-9-]{0,63})(/(?!v1/).*)?$#sD', $path, $p) && $this->page($p[1], $p[2] ?? '')) {
+        if (($method === 'GET' || $method === 'HEAD') && preg_match('#^/([a-z0-9][a-z0-9-]{0,63})(/(?!v1/).*)?$#sD', $path, $p) && $this->page($p[1], $p[2] ?? '', $base)) {
             return;
         }
         if (!preg_match('#^/([a-z0-9][a-z0-9-]{0,63})/v1/(.*)$#sD', $path, $m)) {
@@ -199,11 +199,12 @@ final class Api
     /**
      * The page at the project's address, from the folder `grndwrk store assets` wrote
      * (config 'assets', page/ next to src/ by default): the map in a browser, which
-     * signs in with a token and calls v1/... on this same address. Only the names
-     * PAGE_FILE allows, as in src/shared-store/page.ts. False when there is no such
-     * file or project, so the request is answered as any other.
+     * signs in with a token and calls v1/... on this same address; and the Comment
+     * button for a staging site (store.js, screenshot.js). The rules of
+     * src/shared-store/page.ts. False when there is no such file or project, so
+     * the request is answered as any other.
      */
-    private function page(string $project, string $rest): bool
+    private function page(string $project, string $rest, string $base): bool
     {
         $dir = $this->config['assets'] ?? dirname(__DIR__) . '/page';
         if (!is_string($dir) || !is_file("$dir/index.html") || !$this->db->project($project)) return false;
@@ -214,21 +215,51 @@ final class Api
             return true;
         }
         $name = $rest === '/' ? 'index.html' : substr($rest, 1);
-        if (!preg_match(self::PAGE_FILE, $name) || !is_file("$dir/$name")) return false;
+        $page = preg_match(self::PAGE_FILE, $name) === 1;
+        if (!$page && $name !== 'store.js' && $name !== 'screenshot.js') return false;
+        $site = '';
+        if (!$page) {
+            // The Comment button, only for a page on a staging site named in the config (by Referer).
+            $parts = parse_url((string) ($_SERVER['HTTP_REFERER'] ?? ''));
+            $origin = isset($parts['scheme'], $parts['host']) ? "{$parts['scheme']}://{$parts['host']}" . (isset($parts['port']) ? ":{$parts['port']}" : '') : '';
+            $site = in_array($origin, (array) ($this->config['origins'] ?? []), true) ? $origin : '';
+            if ($site === '') {
+                http_response_code(403);
+                header('Content-Type: text/plain; charset=utf-8');
+                header('X-Content-Type-Options: nosniff');
+                echo 'Only for the staging site';
+                return true;
+            }
+        }
+        $file = $name === 'store.js' ? "$dir/overlay/store.js" : "$dir/$name";
+        if (!is_file($file) || ($name === 'store.js' && !is_file("$dir/overlay/feedback.js"))) return false;
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
         http_response_code(200);
         header('Content-Type: ' . (self::PAGE_TYPES[$ext] ?? 'application/octet-stream'));
         header('X-Content-Type-Options: nosniff');
         header('Content-Security-Policy: ' . self::PAGE_CSP);
         header('Referrer-Policy: no-referrer');
-        // Scripts and styles carry a hash in their names; the page itself is checked each time.
+        // Scripts and styles carry a hash in their names; the rest is checked each time.
         header('Cache-Control: ' . (str_starts_with($name, 'assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'));
-        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'HEAD') readfile("$dir/$name");
+        if (!$page) header('Vary: Referer');
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') return true;
+        if ($name === 'store.js') {
+            // One script: its config (the project's address, the site), the store mode, then the button.
+            $https = ($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off';
+            $url = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $base . "/$project/";
+            echo 'window.__grndwrkStoreConfig = ' . json_encode(['url' => $url, 'site' => $site], JSON_UNESCAPED_SLASHES) . ";\n";
+            readfile($file);
+            echo "\n";
+            readfile("$dir/overlay/feedback.js");
+            echo "\n";
+            return true;
+        }
+        readfile($file);
         return true;
     }
 
     // The page's rules, as in src/shared-store/page.ts. Keep them the same.
-    private const PAGE_FILE = '#^(?:index\.html|feedback\.js|store\.js|screenshot\.js|assets/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:js|css|woff2|svg|png))$#D';
+    private const PAGE_FILE = '#^(?:index\.html|assets/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:js|css|woff2|svg|png))$#D';
     private const PAGE_TYPES = ['html' => 'text/html; charset=utf-8', 'js' => 'text/javascript; charset=utf-8', 'css' => 'text/css; charset=utf-8', 'woff2' => 'font/woff2', 'svg' => 'image/svg+xml', 'png' => 'image/png'];
     private const PAGE_CSP = "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'";
 

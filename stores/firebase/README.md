@@ -101,6 +101,17 @@ grndwrk store check https://europe-west1-<your project>.cloudfunctions.net/store
 
 `grndwrk store check` writes and deletes a few files under `nodes/` whose ids start `n_check`. Run it before the map holds anything that matters.
 
+## The page
+
+Colleagues without the repository read the map, answer the agent's questions and add thoughts in a browser, at the map's address (`.../store/clinic/`). Before deploying, write the page and the Comment button into `page/` here (git ignored):
+
+```
+grndwrk store assets page
+firebase deploy --only functions
+```
+
+The folder is deployed with the function, which serves it (`index.mjs` reads it, `functions.mjs` decides): `index.html` and `assets/...` under each map that exists, with a strict Content-Security-Policy and `nosniff`; `store.js` (put together with its config) and `screenshot.js` only to a page on the map's `site`, by its `Referer`; nothing else. Through the function rather than Hosting, so the page and its calls to `v1/...` share one address and need no CORS. The config in `store.js` names the map's address from the request's host (`X-Forwarded-Host` behind Hosting): open `store.js` once from the staging site and check it. See [The page](../../docs/store-protocol.md#the-page).
+
 ## The adapter
 
 For people who have access to the Firebase project itself. grndwrk loads `adapter.mjs` and reaches Firestore and Storage with firebase-admin, as the function does.

@@ -16,7 +16,7 @@
  * The token lives in this tab's sessionStorage, per project, and only goes
  * to the store's own address in the Authorization header.
  */
-import type { GNode, NodeInput, PairRequest, Persona, PersonaInSegment, PersonaList, PersonaSection, Readiness, Screen, Segment, ServerEvent, Story } from '../../src/shared/types'
+import type { GNode, NodeInput, PairRequest, Persona, PersonaInSegment, PersonaList, PersonaSection, Screen, Segment, ServerEvent } from '../../src/shared/types'
 import { HttpStore } from '../../src/shared-store/http'
 import { CursorGone, isMapPath, isPicture, typeOf } from '../../src/shared-store/protocol'
 import { NodeStore } from '../../src/store/nodes'
@@ -131,7 +131,7 @@ function store(): HttpStore {
   return client
 }
 
-let waiters: (() => void)[] = []
+const waiters: (() => void)[] = []
 
 /** Check a token with the store and keep it for this project. Returns why not, or '' when signed in. */
 export async function signIn(t: string): Promise<string> {

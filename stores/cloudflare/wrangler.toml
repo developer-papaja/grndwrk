@@ -5,6 +5,16 @@ main = "src/worker.ts"
 compatibility_date = "2026-10-01"
 workers_dev = true
 
+# The page and the Comment button: run `grndwrk store assets page` here before
+# deploying. The Worker answers every request first (page.ts picks the names and
+# sets the headers), so nothing in the folder is served any other way.
+[assets]
+directory = "./page"
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "none"
+not_found_handling = "none"
+
 [[durable_objects.bindings]]
 name = "STORE"
 class_name = "StoreObject"

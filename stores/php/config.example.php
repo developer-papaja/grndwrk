@@ -27,4 +27,8 @@ return [
     // only, and only on hello, PUT inbox/... and GET status/... with a comment
     // token; never for read or write tokens. grndwrk itself never needs this.
     'origins' => [],
+
+    // The folder `grndwrk store assets` wrote: the page at each project's address, and
+    // the Comment button for the sites above. null: page/ next to src/. Outside the web root.
+    'assets' => null,
 ];

@@ -4,6 +4,7 @@ import { HttpStore } from '../src/shared-store/http.js'
 import { access } from '../stores/cloudflare/src/access.js'
 import { CHUNK, type Storage } from '../stores/cloudflare/src/store.js'
 import worker, { type Env, StoreObject } from '../stores/cloudflare/src/worker.js'
+import { expectServesPage, PAGE_FILES } from './page-fixture.js'
 
 /** A Durable Object's storage, in memory: keys listed in order, values copied as structured clone does. */
 class MemoryStorage implements Storage {
@@ -51,6 +52,19 @@ function deploy(extra: Partial<Env> = {}) {
 const text = (s: string) => new TextEncoder().encode(s)
 
 describe('the Cloudflare store', () => {
+  it('serves the page from its static assets, and the Comment button to the staging site only', async () => {
+    // Workers static assets with html_handling "none": each file by its own name.
+    const ASSETS = { fetch: async (req: Request) => {
+      const name = new URL(req.url).pathname.slice(1)
+      return name in PAGE_FILES ? new Response(PAGE_FILES[name]) : new Response('Not found', { status: 404 })
+    } }
+    const site = 'https://staging.clinic.example'
+    const { fetcher } = deploy({ ASSETS, COMMENT_ORIGINS: site })
+    await expectServesPage((path, referer) => fetcher(`${BASE}/clinic${path}`, { headers: referer ? { Referer: referer } : {} }), 'clinic', `${BASE}/clinic/`, site)
+    // The protocol is still the protocol.
+    expect((await fetcher(`${BASE}/clinic/v1/hello`)).status).toBe(401)
+  })
+
   it('keeps every rule of the protocol, the HTTP ones too', async () => {
     const { fetcher, mint } = deploy()
     const { token } = await mint('clinic', { role: 'write' })
