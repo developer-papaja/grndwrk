@@ -1,0 +1,14 @@
+{
+  "name": "grndwrk-store-firebase",
+  "private": true,
+  "description": "A grndwrk store on Firebase: a Cloud Function over Firestore and Storage, and an adapter that reaches them directly. An example to copy and change.",
+  "type": "module",
+  "main": "index.mjs",
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "firebase-admin": "14.5.0",
+    "firebase-functions": "7.4.0"
+  }
+}

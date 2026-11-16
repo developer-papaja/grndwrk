@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Large files of the map are reached only through the store's Cloud Function
+// and the adapter (firebase-admin, which these rules do not apply to).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
