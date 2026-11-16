@@ -4,6 +4,8 @@ import { picturePath } from '../ui/src/pictures.js'
 
 // The page's build points the store code's file calls at the in-memory map; so does this test.
 vi.mock('../src/store/fs.js', async () => await import('../ui/src/page/vfs.js'))
+// As the page build does (vite.config.ts): forward slashes in the map kept in memory, on Windows too.
+vi.mock('node:path', async () => await import('../ui/src/page/path.js'))
 
 const api = await import('../ui/src/api-store.js')
 

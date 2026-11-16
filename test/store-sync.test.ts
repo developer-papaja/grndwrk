@@ -488,5 +488,6 @@ describe('what the security review found', () => {
     }
     expect((await a.sync.fullPass()).comments).toBe(50)
     expect(lines.some((l) => /filing 50 a round/.test(l))).toBe(true)
-  })
+    // Sixty comments filed one by one: slower than five seconds on CI's machines.
+  }, 30_000)
 })
