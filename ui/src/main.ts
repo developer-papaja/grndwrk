@@ -44,17 +44,17 @@ Alpine.effect(() => {
 // unread messages, so it is seen from another tab: "(1) Allow to send comments · Clinic".
 // Its name is the project's, so several maps open at once can be told apart.
 // The icon is the project's badge (its initials and color, as on the rail),
-// grey while grndwrk is not connected, with a red count of who waits to be allowed.
+// grey while grndwrk is not connected, with a red dot while someone waits to be
+// allowed (a number was too small to read at a tab's size; the title has the count).
 const xml = (text: string) => text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`)
 function badgeIcon(initials: string, color: string, connected: boolean, waiting: number): string {
   const letters = initials.slice(0, 3)
   const size = letters.length > 2 ? 11 : letters.length > 1 ? 14 : 18
-  const count = waiting > 9 ? '9+' : String(waiting)
   const svg = [
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">',
     `<rect x="1" y="1" width="30" height="30" rx="8" fill="${xml(connected ? color : '#9ca3af')}"/>`,
     `<text x="16" y="16.5" text-anchor="middle" dominant-baseline="central" font-family="-apple-system,system-ui,sans-serif" font-weight="700" font-size="${size}" fill="${connected ? '#fff' : '#f3f4f6'}">${xml(letters)}</text>`,
-    waiting ? `<circle cx="24" cy="8" r="8" fill="#f24822" stroke="#fff" stroke-width="1.5"/><text x="24" y="8.5" text-anchor="middle" dominant-baseline="central" font-family="-apple-system,system-ui,sans-serif" font-weight="700" font-size="${count.length > 1 ? 8 : 10}" fill="#fff">${count}</text>` : '',
+    waiting ? '<circle cx="25" cy="7" r="7" fill="#f24822" stroke="#fff" stroke-width="2"/>' : '',
     '</svg>',
   ].join('')
   return `data:image/svg+xml,${encodeURIComponent(svg)}`

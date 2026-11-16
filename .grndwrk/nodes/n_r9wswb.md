@@ -8,5 +8,6 @@ altitude: 2
 links: []
 status: open
 created: 2026-11-09
+built: 2026-11-16
 ---
 The blue dot where the favicon sits in the browser: it would be nice if it showed whether grndwrk is connected or not. It would also be nice to have the initials and the background color set for that project in it.

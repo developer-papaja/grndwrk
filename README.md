@@ -95,7 +95,7 @@ In Laravel:
 @env('local')<script src="http://localhost:7777/__grndwrk/feedback.js" defer></script>@endenv
 ```
 
-The button only runs on addresses on your own machine (`localhost`, `*.test`, `*.localhost`), and grndwrk only takes comments from such pages. The first comment from a site asks in the map: "shop.test wants to send comments". The map's tab shows it too, as "(1) Allow to send comments" with a red count on its icon, so you see it from any tab. Allow it once, and the waiting comment arrives; from then on that site sends straight away. A site you did not allow, such as another project's dev server, cannot add anything to your map. On an https site this works in Chrome, Arc, Edge, Brave and Firefox. Safari blocks it: use the first way there.
+The button only runs on addresses on your own machine (`localhost`, `*.test`, `*.localhost`), and grndwrk only takes comments from such pages. The first comment from a site asks in the map: "shop.test wants to send comments". The map's tab shows it too, as "(1) Allow to send comments" with a red dot on its icon, so you see it from any tab. Allow it once, and the waiting comment arrives; from then on that site sends straight away. A site you did not allow, such as another project's dev server, cannot add anything to your map. On an https site this works in Chrome, Arc, Edge, Brave and Firefox. Safari blocks it: use the first way there.
 
 ### In an iOS app
 
