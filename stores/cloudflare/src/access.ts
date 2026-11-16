@@ -30,8 +30,9 @@ export function access(
   if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(options.team)) throw new Error('ACCESS_TEAM is <team>.cloudflareaccess.com')
   const roles = JSON.parse(options.roles) as Record<string, Record<string, Role>>
   let keys: { at: number; list: Jwk[] } | null = null
-  const certs = async (): Promise<Jwk[]> => {
-    if (keys && now() - keys.at < 3_600_000) return keys.list
+  // `fresh`: a key id not seen yet, maybe a rotated key; fetched again at most once a minute, so a stranger's tokens cannot make it fetch on every request.
+  const certs = async (fresh = false): Promise<Jwk[]> => {
+    if (keys && now() - keys.at < 3_600_000 && !(fresh && now() - keys.at >= 60_000)) return keys.list
     const res = await fetcher(`https://${options.team}/cdn-cgi/access/certs`)
     if (!res.ok) throw new Error(`Access certs: ${res.status}`)
     keys = { at: now(), list: ((await res.json()) as { keys: Jwk[] }).keys }
@@ -51,12 +52,14 @@ export function access(
       return null
     }
     if (header.alg !== 'RS256') return null
-    const jwk = (await certs()).find((k) => k.kid === header.kid)
+    const jwk = (await certs()).find((k) => k.kid === header.kid) ?? (await certs(true)).find((k) => k.kid === header.kid)
     if (!jwk) return null
     const key = await crypto.subtle.importKey('jwk', { kty: jwk.kty, n: jwk.n, e: jwk.e }, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'])
     if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64url(sig), new TextEncoder().encode(`${head}.${body}`)))) return null
     const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
     if (!aud.includes(options.aud) || claims.iss !== `https://${options.team}` || typeof claims.exp !== 'number' || claims.exp * 1000 < now()) return null
+    // Not before: a token made for later is no token yet.
+    if (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf * 1000 > now())) return null
     const email = typeof claims.email === 'string' ? claims.email.toLowerCase() : ''
     const allowed = roles[project] ?? {}
     const role = allowed[email] ?? allowed[`*@${email.split('@')[1]}`]

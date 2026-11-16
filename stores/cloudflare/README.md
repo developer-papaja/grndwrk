@@ -48,7 +48,20 @@ curl -X POST https://grndwrk-store.<you>.workers.dev/clinic/admin/tokens \
 
 The answer holds `id` and `token`. `GET .../clinic/admin/tokens` lists them without their secrets; `DELETE .../clinic/admin/tokens/<id>` revokes one at once.
 
-A comment token may only `PUT inbox/<its commenter>/<id>.json` with `If-None-Match: *` and `GET status/<its commenter>.json`; everything else is `403`. When the token has a name, the store writes it as `from` in the comment, whatever the device sent.
+A comment token may only `PUT inbox/<its commenter>/<id>.json` with `If-None-Match: *` and `GET status/<its commenter>.json`; everything else is `403`. The store always sets `from` in the comment: the token's name, or, when it has none, it takes away whatever `from` the device sent. `hello` tells read and write tokens so (`"names": true`), and names the staging site comments come from (`"site"`, the first origin in `COMMENT_ORIGINS` when there are several).
+
+## Limits on comments
+
+A comment token may sit in a staging page, where any script on that page can read it, so it must never be able to fill the store. Per commenter, the store takes at most 60 inbox files and 100 MB an hour, and at most 500 of its files waiting to be filed; the whole project holds at most 5,000 waiting. Beyond that it answers `429` with plain words, and the button and the phone try again later. Read and write tokens are not held to these. Change them with variables (whole numbers, in `wrangler.toml` under `[vars]` or the dashboard):
+
+```
+INBOX_FILES_PER_HOUR = "60"
+INBOX_MB_PER_HOUR = "100"
+INBOX_WAITING = "500"
+INBOX_TOTAL = "5000"
+```
+
+Every body is read with a running count and stopped at the size limit (`413`), whether or not it says its `Content-Length`. A failure answers `500` with "Something went wrong" and nothing more; the detail goes to the Worker's log (`wrangler tail`).
 
 ## A staging site's Comment button
 
@@ -74,7 +87,7 @@ If your team already signs in through Cloudflare Access, put the Worker behind a
 - `ACCESS_AUD`: the application's audience tag
 - `ACCESS_ROLES`: per project, emails (or `*@domain`) and their role, as JSON: `{"clinic": {"vet@clinic.example": "write", "*@clinic.example": "read"}}`
 
-A request without a token is then let in by the JWT Access signs (`Cf-Access-Jwt-Assertion`), checked against your team's keys and audience. The store never believes the `Cf-Access-Authenticated-User-Email` header on its own: a Worker is often reachable on workers.dev too, where anyone can send it. A `comment` role through Access names the commenter after a hash of the email and shows the email as its name. grndwrk on a Mac still needs a token, since it cannot sign in to Access itself.
+A request without a token is then let in by the JWT Access signs (`Cf-Access-Jwt-Assertion`), checked against your team's keys, audience, expiry and `nbf`. A key id the Worker has not seen yet (Access rotated its keys) makes it fetch the keys again, at most once a minute. The store never believes the `Cf-Access-Authenticated-User-Email` header on its own: a Worker is often reachable on workers.dev too, where anyone can send it. A `comment` role through Access names the commenter after a hash of the email and shows the email as its name. grndwrk on a Mac still needs a token, since it cannot sign in to Access itself.
 
 ## Check it
 
@@ -91,4 +104,4 @@ Run it against a project with nothing in it that matters yet. The same check run
 - `src/worker.ts`: the Worker; each request goes to its project's Durable Object.
 - `wrangler.toml`, `package.json`, `package-lock.json`: the Worker's settings and the exact wrangler to deploy with.
 
-Not here, and worth adding for real use: limits per token on how much a commenter may send, and pruning deletions from the log after a while (then answer older cursors with `410`).
+Not here, and worth adding for real use: pruning deletions from the log after a while (then answer older cursors with `410`).

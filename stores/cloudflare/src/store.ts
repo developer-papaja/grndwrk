@@ -21,6 +21,7 @@
  *   clock              the last number handed out; versions are v<clock>, cursors c_<clock>
  *   token:<sha256>     {id, role, commenter?, name?, label?, created}, only a hash of the token
  *   tokenid:<id>       the hash, to revoke by id
+ *   rate:<commenter>   [at, bytes] of each comment this commenter left in the last hour
  *
  * The protocol's rules come from grndwrk itself (src/shared-store/protocol.ts),
  * copied here so this folder deploys on its own. Keep them the same.
@@ -51,6 +52,24 @@ const STATUS = /^status\/[A-Za-z0-9_-]{8,64}\.json$/
 const COMMENTER = /^[A-Za-z0-9_-]{8,64}$/
 const TYPES: Record<string, string> = { md: 'text/markdown', json: 'application/json', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }
 export const LIMITS = { text: 1_000_000, picture: 10_000_000, inbox: 14_000_000, path: 300, wait: 25, page: 500 }
+/**
+ * What one commenter may leave in the inbox. A comment token may sit in a staging
+ * page, where any script on it can read it, so it must never be able to fill the store.
+ * Beyond these, 429. Only comment tokens are held to them; teammates file and delete.
+ */
+export interface InboxLimits {
+  /** Inbox files one commenter may leave in an hour. */
+  filesPerHour: number
+  /** Bytes one commenter may leave in an hour. */
+  bytesPerHour: number
+  /** Inbox files of one commenter waiting to be filed, at most. */
+  waiting: number
+  /** Inbox files of the whole project waiting to be filed, at most. */
+  total: number
+}
+export const INBOX_LIMITS: InboxLimits = { filesPerHour: 60, bytesPerHour: 100_000_000, waiting: 500, total: 5000 }
+const HOUR = 3_600_000
+
 /** Durable Object storage keeps at most 128 KiB per value (the SQLite backend more), so files go in chunks below that. */
 export const CHUNK = 120 * 1024
 
@@ -103,6 +122,35 @@ const cors = (site: string) => ({
 /** COMMENT_ORIGINS: https origins, exactly as a browser sends them, separated by commas or spaces. */
 export const parseOrigins = (value = '') => value.split(/[\s,]+/).filter((o) => /^https:\/\/[a-z0-9.-]+(:\d{1,5})?$/.test(o))
 
+/**
+ * The request's bytes, read as they come with a running count, or null once
+ * there are more than `max`, whether or not Content-Length said so.
+ */
+async function bodyUpTo(req: Request, max: number): Promise<Uint8Array | null> {
+  if (Number(req.headers.get('content-length') ?? 0) > max) return null
+  if (!req.body) return new Uint8Array(0)
+  const reader = req.body.getReader()
+  const parts: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > max) {
+      await reader.cancel().catch(() => {})
+      return null
+    }
+    parts.push(value)
+  }
+  const bytes = new Uint8Array(size)
+  let at = 0
+  for (const p of parts) {
+    bytes.set(p, at)
+    at += p.byteLength
+  }
+  return bytes
+}
+
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } })
 const error = (status: number, words: string) => json(status, { error: words })
@@ -115,8 +163,12 @@ export class Store {
 
   constructor(
     private storage: Storage,
-    private options: { ownerAuth?: string; identify?: Identify; origins?: string[] } = {},
+    private options: { ownerAuth?: string; identify?: Identify; origins?: string[]; limits?: Partial<InboxLimits>; now?: () => number } = {},
   ) {}
+
+  private get limits(): InboxLimits {
+    return { ...INBOX_LIMITS, ...this.options.limits }
+  }
 
   private locked<T>(work: () => Promise<T>): Promise<T> {
     const run = this.queue.then(work, work)
@@ -145,7 +197,9 @@ export class Store {
       if (site && commentCall(route.slice(3), req.method) && (!role || role === 'comment')) for (const [k, v] of Object.entries(cors(site))) res.headers.set(k, v)
       return res
     } catch (err) {
-      return error(500, err instanceof Error ? err.message : String(err))
+      // Never the exception's own words: they can say how the store is built. The log has them.
+      console.error('grndwrk store:', err)
+      return error(500, 'Something went wrong')
     }
   }
 
@@ -163,7 +217,12 @@ export class Store {
     if (!who) return error(401, 'A valid token is required')
     seen(who)
     // A comment token learns its commenter here: the folder its comments go in, and its status file.
-    if (route === 'hello' && req.method === 'GET') return json(200, { protocol: 1, project, writable: who.role === 'write', role: who.role, ...(who.role === 'comment' ? { commenter: who.commenter } : {}) })
+    // Teammates learn that this store vouches for `from` on every comment, and the staging site comments come from (the first listed).
+    if (route === 'hello' && req.method === 'GET') {
+      const site = this.options.origins?.[0]
+      const team = who.role === 'comment' ? { commenter: who.commenter } : { names: true, ...(site ? { site } : {}) }
+      return json(200, { protocol: 1, project, writable: who.role === 'write', role: who.role, ...team })
+    }
     let path = ''
     if (route.startsWith('files/')) {
       try {
@@ -188,8 +247,9 @@ export class Store {
     if (req.method === 'PUT') {
       if (!create && match === undefined) return error(428, 'Send If-Match or If-None-Match: *')
       const max = INBOX.test(path) ? LIMITS.inbox : isPicture(typeOf(path)) ? LIMITS.picture : LIMITS.text
-      if (Number(req.headers.get('content-length') ?? 0) > max) return error(413, 'Too large')
-      let bytes = new Uint8Array(await req.arrayBuffer())
+      const read = await bodyUpTo(req, max)
+      if (!read) return error(413, 'Too large')
+      let bytes = read
       const problem = bytesProblem(path, bytes)
       if (problem) return error(...problem)
       // A comment is a JSON object, whoever writes it; grndwrk believes the commenter in the path, and the name the store knows replaces whatever the device wrote.
@@ -201,12 +261,15 @@ export class Store {
           return error(400, 'A comment is a JSON object')
         }
         if (!body || typeof body !== 'object' || Array.isArray(body)) return error(400, 'A comment is a JSON object')
-        if (who.role === 'comment' && who.name) {
-          bytes = new TextEncoder().encode(JSON.stringify({ ...body, from: who.name }))
+        // From a comment token, `from` is always the store's word: the name it knows, or none at all, never the device's own.
+        if (who.role === 'comment') {
+          const rest: Record<string, unknown> = { ...body }
+          delete rest.from
+          bytes = new TextEncoder().encode(JSON.stringify(who.name ? { ...rest, from: who.name } : rest))
           if (bytes.length > LIMITS.inbox) return error(413, 'A comment is at most 14 MB')
         }
       }
-      return this.write(path, bytes, create ? null : (match as string), create)
+      return this.write(path, bytes, create ? null : (match as string), create, who.role === 'comment' ? who.commenter : undefined)
     }
     if (req.method === 'DELETE') {
       if (match === undefined) return error(428, 'Send If-Match')
@@ -274,10 +337,17 @@ export class Store {
     })
   }
 
-  private write(path: string, bytes: Uint8Array, ifVersion: string | null, create: boolean): Promise<Response> {
+  /** `commenter`: a comment token's write, held to the inbox limits. */
+  private write(path: string, bytes: Uint8Array, ifVersion: string | null, create: boolean, commenter?: string): Promise<Response> {
     return this.locked(async () => {
       const there = await this.storage.get<Meta>(`meta:${path}`)
       if (create ? there : !there || there.version !== ifVersion) return json(412, { version: there?.version ?? null })
+      // Inside the lock, so two comments at once cannot both slip under a limit.
+      const recent = commenter ? await this.recent(commenter) : []
+      if (commenter) {
+        const refused = await this.overLimit(commenter, recent, bytes.length)
+        if (refused) return error(429, refused)
+      }
       const at = await this.tick()
       const version = `v${at}`
       const chunks = Math.max(1, Math.ceil(bytes.length / CHUNK))
@@ -286,8 +356,31 @@ export class Store {
       await this.storage.put(`meta:${path}`, { version, type: typeOf(path), size: bytes.length, chunks } satisfies Meta)
       if (there) await this.dropBlob(there)
       await this.record(at, { path, version })
+      if (commenter) await this.storage.put(`rate:${commenter}`, [...recent, [this.now(), bytes.length]])
       return json(create ? 201 : 200, { version })
     })
+  }
+
+  private now() {
+    return (this.options.now ?? Date.now)()
+  }
+
+  /** What this commenter left in the last hour: [at, bytes] each. */
+  private async recent(commenter: string): Promise<[number, number][]> {
+    const since = this.now() - HOUR
+    return ((await this.storage.get<[number, number][]>(`rate:${commenter}`)) ?? []).filter(([at]) => at > since)
+  }
+
+  /** Why a commenter may not leave this many bytes now, in plain words, or ''. */
+  private async overLimit(commenter: string, recent: [number, number][], size: number): Promise<string> {
+    const l = this.limits
+    if (recent.length + 1 > l.filesPerHour) return `At most ${l.filesPerHour} comments an hour: try again later`
+    if (recent.reduce((sum, [, b]) => sum + b, 0) + size > l.bytesPerHour) return `At most ${Math.round(l.bytesPerHour / 1_000_000)} MB of comments an hour: try again later`
+    const waiting = await this.storage.list({ prefix: `meta:inbox/${commenter}/`, limit: l.waiting })
+    if (waiting.size >= l.waiting) return `${l.waiting} of your comments are still waiting to be read: try again later`
+    const all = await this.storage.list({ prefix: 'meta:inbox/', limit: l.total })
+    if (all.size >= l.total) return 'Too many comments are waiting to be read: try again later'
+    return ''
   }
 
   private remove(path: string, ifVersion: string): Promise<Response> {

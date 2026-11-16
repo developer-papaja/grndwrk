@@ -23,7 +23,8 @@ config.example.php   copy to config.php
 1. Copy `stores/php/` to the server, for example to `/srv/grndwrk-store/`.
 2. Point the site's web root at `public/`. Everything else (the code, `config.php`, the database in `data/`) must stay out of reach of the web. If your host cannot move the web root, the `.htaccess` in this folder refuses every request outside `public/`, so the store answers under `/public/` instead; check that `https://<your site>/data/` and `https://<your site>/config.php` give 403 or 404.
 3. Copy `config.example.php` to `config.php` and change what you need. Without a `config.php`, the store uses SQLite in `data/store.sqlite`. The folder must be writable by PHP, and by you when you run `admin.php`.
-4. Make a project for the map, named the way its address will read:
+4. Set `base_url` in `config.php` to the store's own address, like `'https://maps.example.com/'`. `store.js` and `GET /v1/projects` name every address from it, never from the request's `Host` header, which whoever sends a request chooses; without it, `store.js` answers 503 and `/v1/projects` 404.
+5. Make a project for the map, named the way its address will read:
 
    ```
    php admin.php project add clinic "Clinic"
@@ -75,6 +76,8 @@ php admin.php project add clinic "Clinic"
 php -S 127.0.0.1:8080 public/index.php
 ```
 
+with `'base_url' => 'http://127.0.0.1:8080/'` in `config.php` (http is taken only for localhost and 127.0.0.1).
+
 ## Tokens
 
 ```
@@ -89,7 +92,11 @@ The token is printed once; the database keeps only its SHA-256 hash. A person ke
 
 - **write** reads and changes the map. Every teammate who syncs needs one.
 - **read** reads the map; writes get 403.
-- **comment** may only leave comments in `inbox/<commenter>/` and read `status/<commenter>.json`, for the Comment button on a staging site or the iOS package. Everything else is 403. Each comment token has a commenter id (`--commenter`, or one is made up), and the store puts its `--name` in each comment's `from`, whatever the device sent.
+- **comment** may only leave comments in `inbox/<commenter>/` and read `status/<commenter>.json`, for the Comment button on a staging site or the iOS package. Everything else is 403. Each comment token has a commenter id (`--commenter`, or one is made up). The store always sets each comment's `from`: the token's `--name`, or, when it has none, it takes away whatever `from` the device sent. `hello` tells read and write tokens so (`"names": true`), and names the staging site comments come from (`"site"`, the first of `'origins'` when there are several).
+
+### Limits on comments
+
+A comment token may sit in a staging page, where any script on that page can read it, so it must never be able to fill the store. Per commenter, the store takes at most 60 comments and 100 MB an hour, and at most 500 of its comments waiting to be filed; a project holds at most 5,000 waiting. Beyond that it answers 429 with plain words. Read and write tokens are not held to these. Change them in `config.php` under `'inbox'` (`files_per_hour`, `mb_per_hour`, `waiting`, `total`). What each commenter left in the last hour is kept in the table `inbox_log`; after updating the store from an older copy, run `php admin.php projects` once so it is made.
 
 To let the Comment button on a staging site reach the store from the browser, list the site's origin in `config.php`, `'origins' => ['https://staging.clinic.example']`. The store then answers CORS for that origin only (never `*`), and only on `hello`, `PUT inbox/...` and `GET status/...` with a comment token, with the preflight; read and write tokens never get CORS.
 

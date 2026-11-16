@@ -20,11 +20,12 @@ Both can be used at once: the adapter on the machines of people with access to t
 ## How the map is kept
 
 ```
-projects/{map}                  { name, counter, site?, floor? }
+projects/{map}                  { name, counter, inbox, site?, floor? }
 projects/{map}/files/{key}      { path, version, type, size, at, data | blob }
 projects/{map}/changes/{key}    { path, at, version, deleted }
 projects/{map}/members/{uid}    { role, commenter?, name? }
 projects/{map}/keys/{sha256}    { uid, created }
+projects/{map}/commenters/{id}  { waiting, recent: [{ at, size }] }
 Storage: projects/{map}/blobs/{random}
 ```
 
@@ -38,7 +39,7 @@ Storage: projects/{map}/blobs/{random}
 The Bearer token is one of two things:
 
 - **A Firebase Auth ID token**, for an app of yours that signs people in with Firebase. It lasts an hour, so it suits a page or app that refreshes it.
-- **A store key** (`gk_...`), for grndwrk on a Mac and for phones and test devices, which keep one token for good. Only its SHA-256 is kept, in `keys/`. `node members.mjs clinic key vet@example.com` prints one, once.
+- **A store key** (`gk_<map>.<secret>`), for grndwrk on a Mac and for phones and test devices, which keep one token for good. Only its SHA-256 is kept, in `keys/`. `node members.mjs clinic key vet@example.com` prints one, once. The map in front lets `GET /v1/projects` find the key without looking through every map; keys made before have none, work as before on their map, and get `404` there.
 
 Either names a user. What that user may do on a map is `projects/{map}/members/{uid}`:
 
@@ -49,7 +50,9 @@ Either names a user. What that user may do on a map is `projects/{map}/members/{
 { role: 'comment', commenter: 'dev_staging1' }          the same, under that commenter id
 ```
 
-A commenter writes only `inbox/<commenter>/<id>.json` (with `If-None-Match: *`) and reads only `status/<commenter>.json`; `<commenter>` is its `commenter`, or its uid. Everything else is `403`. When the member has a `name`, the function writes it as `from` in the comment, whatever the device sent. A token of no member is `401`.
+A commenter writes only `inbox/<commenter>/<id>.json` (with `If-None-Match: *`) and reads only `status/<commenter>.json`; `<commenter>` is its `commenter`, or its uid. Everything else is `403`. The function always sets `from` in the comment: the member's `name`, or, when it has none, it takes away whatever `from` the device sent. `hello` tells read and write members so (`"names": true`), and names the map's staging `site`. A token of no member is `401`.
+
+**Limits on comments.** A comment token may sit in a staging page, where any script on that page can read it, so it must never be able to fill the store. Per commenter, the function takes at most 60 inbox files and 100 MB an hour, and at most 500 of its files waiting to be filed; the whole map holds at most 5,000 waiting. Beyond that it answers `429` with plain words. The counts are kept in the same transaction as the write (`inbox` on the map, `commenters/{id}`), so two comments at once cannot both slip under a limit, and filing a comment counts it off. Read and write members are not held to these. Change them in `.env` next to `index.mjs`, as whole numbers: `INBOX_FILES_PER_HOUR`, `INBOX_MB_PER_HOUR`, `INBOX_WAITING`, `INBOX_TOTAL`. A map whose comments came before these counts starts at nothing waiting.
 
 ```
 node members.mjs clinic add vet@example.com write
@@ -91,6 +94,14 @@ Pick the region your Firestore is in (`region` in `index.mjs`). The store's addr
 https://europe-west1-<your project>.cloudfunctions.net/store/clinic/
 ```
 
+Tell the function its own address, in `.env` next to `index.mjs` (deployed with it), https and without the map:
+
+```
+GRNDWRK_STORE_URL=https://europe-west1-<your project>.cloudfunctions.net/store/
+```
+
+`store.js` and `GET /v1/projects` name every address from this setting, never from the request's `Host` or `X-Forwarded-Host`, which whoever sends a request chooses. Behind Hosting, give the Hosting address. Without it, `store.js` answers `503` and `/v1/projects` `404`.
+
 Then add yourself (`members.mjs` needs credentials, see below), make a key, and point grndwrk at it:
 
 ```
@@ -110,9 +121,9 @@ grndwrk store assets page
 firebase deploy --only functions
 ```
 
-The folder is deployed with the function, which serves it (`index.mjs` reads it, `functions.mjs` decides): `index.html` and `assets/...` under each map that exists, with a strict Content-Security-Policy and `nosniff`; `store.js` (put together with its config) and `screenshot.js` only to a page on the map's `site`, by its `Referer`; nothing else. Through the function rather than Hosting, so the page and its calls to `v1/...` share one address and need no CORS. The config in `store.js` names the map's address from the request's host (`X-Forwarded-Host` behind Hosting): open `store.js` once from the staging site and check it. See [The page](../../docs/store-protocol.md#the-page).
+The folder is deployed with the function, which serves it (`index.mjs` reads it, `functions.mjs` decides): `index.html` and `assets/...` under each map that exists, with a strict Content-Security-Policy and `nosniff`; `store.js` (put together with its config) and `screenshot.js` only to a page on the map's `site`, by its `Referer`; nothing else. Through the function rather than Hosting, so the page and its calls to `v1/...` share one address and need no CORS. The config in `store.js` names the map's address from `GRNDWRK_STORE_URL`: open `store.js` once from the staging site and check it. See [The page](../../docs/store-protocol.md#the-page).
 
-`GET .../store/v1/projects`, at the function's root rather than a map's, answers the maps this person may read, for All projects on the page. Read only (`405` for anything but `GET`). A Firebase ID token reaches every map its user is a member of, so it lists each one where the member's role is `read` or `write`, with the map's `name`; a store key belongs to one map, so it lists that one. A request under an existing map's address always goes to that map, so a map may have any name.
+`GET .../store/v1/projects`, at the function's root rather than a map's, answers the maps this person may read, for All projects on the page. Read only (`405` for anything but `GET`). It checks the token before it lists or reads any map. A Firebase ID token reaches every map its user is a member of, so it lists each one where the member's role is `read` or `write`, with the map's `name`; a store key says its one map, so it lists that one. A request under an existing map's address always goes to that map, so a map may have any name.
 
 ## The adapter
 
@@ -137,4 +148,4 @@ The adapter reaches every map in the project with your credentials; the members 
 
 ## Not here
 
-Limits on how much one commenter may send, rotating keys (remove the member and add it again), pruning deleted files from `changes`, and holding `changes?wait=` open (the function answers at once, which the protocol allows).
+Rotating keys (remove the member and add it again), pruning deleted files from `changes`, and holding `changes?wait=` open (the function answers at once, which the protocol allows).

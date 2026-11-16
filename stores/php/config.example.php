@@ -14,6 +14,22 @@ return [
     // address (a rewrite from elsewhere). '' for the root, null to work it out.
     'base' => null,
 
+    // The store's own address, as people and staging sites reach it: each project is
+    // <base_url><project>/. store.js and GET /v1/projects name addresses from this,
+    // never from the request's Host header, which whoever sends a request chooses.
+    // Without it, store.js answers 503 and /v1/projects 404.
+    'base_url' => 'https://maps.example.com/',
+
+    // What one comment token may leave in the inbox. A comment token may sit in a
+    // staging page, where any script on it can read it, so it must never fill the
+    // store. Beyond these, 429. Teammates' tokens are never held to them.
+    'inbox' => [
+        'files_per_hour' => 60,   // comments one commenter may leave in an hour
+        'mb_per_hour' => 100,     // megabytes one commenter may leave in an hour
+        'waiting' => 500,         // one commenter's comments not filed yet, at most
+        'total' => 5000,          // the project's comments not filed yet, at most
+    ],
+
     // How many changes one answer holds at most.
     'page' => 500,
 

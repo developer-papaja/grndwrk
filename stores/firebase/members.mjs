@@ -54,7 +54,8 @@ if (action === 'site') {
   console.log(`${who} may ${role === 'comment' ? 'leave comments on' : role} ${map}`)
 } else if (action === 'key') {
   const uid = await uidOf(who)
-  const key = `gk_${randomBytes(32).toString('base64url')}`
+  // The map in front, so the store's root knows where to look it up (GET /v1/projects); the secret is the rest.
+  const key = `gk_${map}.${randomBytes(32).toString('base64url')}`
   await db.doc(`projects/${map}/keys/${keyHash(key)}`).set({ uid, created: new Date().toISOString() })
   console.log(`A store key for ${who}. It is shown once; only its hash is kept.\n\n${key}\n`)
 } else {

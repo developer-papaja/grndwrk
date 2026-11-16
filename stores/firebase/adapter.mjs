@@ -10,11 +10,12 @@
  * imported would change unseen.
  *
  * Layout (docs: README.md):
- *   projects/{map}                 { name?, counter, floor? }
+ *   projects/{map}                 { name?, counter, inbox?, floor? }   inbox: files waiting there
  *   projects/{map}/files/{key}     { path, version, type, size, at, data? | blob? }
  *   projects/{map}/changes/{key}   { path, at, version? , deleted }
  *   projects/{map}/members/{uid}   { role, commenter?, name? }   (read by the function only)
  *   projects/{map}/keys/{sha256}   { uid }                       (read by the function only)
+ *   projects/{map}/commenters/{id} { waiting, recent: [{ at, size }] }   for the inbox limits
  *   Storage: projects/{map}/blobs/{random}, one object per version of a large file
  * {key} is the path with encodeURIComponent, so it is one document id.
  */
@@ -35,6 +36,18 @@ const TYPES = { md: 'text/markdown', json: 'application/json', png: 'image/png',
 export const INBOX = /^inbox\/([A-Za-z0-9_-]{8,64})\/[A-Za-z0-9_-]{8,64}\.json$/
 export const STATUS = /^status\/[A-Za-z0-9_-]{8,64}\.json$/
 export const COMMENTER = /^[A-Za-z0-9_-]{8,64}$/
+/**
+ * What one commenter may leave in the inbox through a comment token. Such a
+ * token may sit in a staging page, where any script on it can read it, so it
+ * must never be able to fill the store. Beyond these, the function answers 429.
+ * @typedef {{ filesPerHour: number, bytesPerHour: number, waiting: number, total: number }} InboxLimits
+ *   filesPerHour and bytesPerHour: what one commenter may leave in an hour; waiting: its files
+ *   not filed yet, at most; total: the whole map's inbox files not filed yet, at most.
+ */
+/** @type {InboxLimits} */
+export const INBOX_LIMITS = { filesPerHour: 60, bytesPerHour: 100_000_000, waiting: 500, total: 5000 }
+const HOUR = 3_600_000
+
 /** A Firestore document holds at most 1 MiB: anything larger goes to Storage. */
 export const INLINE = 900_000
 /** How many changes one answer holds at most. */
@@ -79,6 +92,22 @@ export function bytesProblem(path, bytes) {
   }
   if (INBOX.test(path)) return bytes.length > MAX_INBOX ? `A comment is at most ${MAX_INBOX / 1_000_000} MB` : ''
   if (bytes.length > MAX_TEXT) return `A text file is at most ${MAX_TEXT / 1_000_000} MB`
+  return ''
+}
+
+/**
+ * Why a commenter may not leave this many bytes now, in plain words, or ''.
+ * @param {InboxLimits} l
+ * @param {{ at: number, size: number }[]} recent what it left in the last hour
+ * @param {number} size
+ * @param {number} waiting its inbox files not filed yet
+ * @param {number} total the map's inbox files not filed yet
+ */
+export function overLimit(l, recent, size, waiting, total) {
+  if (recent.length + 1 > l.filesPerHour) return `At most ${l.filesPerHour} comments an hour: try again later`
+  if (recent.reduce((sum, r) => sum + r.size, 0) + size > l.bytesPerHour) return `At most ${Math.round(l.bytesPerHour / 1_000_000)} MB of comments an hour: try again later`
+  if (waiting >= l.waiting) return `${l.waiting} of your comments are still waiting to be read: try again later`
+  if (total >= l.total) return 'Too many comments are waiting to be read: try again later'
   return ''
 }
 
@@ -129,6 +158,7 @@ export function storeOver(backend, map, options = {}) {
   const root = `projects/${map}`
   const fileDoc = (/** @type {string} */ path) => `${root}/files/${keyOf(path)}`
   const changeDoc = (/** @type {string} */ path) => `${root}/changes/${keyOf(path)}`
+  const commenterDoc = (/** @type {string} */ commenter) => `${root}/commenters/${commenter}`
 
   return {
     async hello() {
@@ -170,29 +200,43 @@ export function storeOver(backend, map, options = {}) {
     /**
      * @param {string} path
      * @param {Uint8Array} bytes
-     * @param {{ type: string, create?: boolean, ifVersion?: string }} o
+     * @param {{ type: string, create?: boolean, ifVersion?: string, limits?: InboxLimits, now?: number }} o
+     *   `limits`: a comment token's write, held to them inside the transaction; refused as `{ ok: false, limited: '<why>' }`.
      */
-    async write(path, bytes, { create, ifVersion }) {
+    async write(path, bytes, { create, ifVersion, limits, now = Date.now() }) {
       const problem = pathProblem(path) || bytesProblem(path, bytes) || (INBOX.test(path) && !isObject(bytes) ? 'An inbox file is a JSON object' : '')
       if (problem) throw new Error(problem)
       const type = typeOf(path)
       // A large file goes to Storage under a name of its own before the transaction, so a refused write never touches what is there.
       const blob = bytes.length > INLINE ? `${root}/blobs/${randomBytes(12).toString('hex')}` : null
       if (blob) await backend.save(blob, bytes, type)
+      const commenter = INBOX.exec(path)?.[1]
+      /** @type {{ ok: boolean, version: string | null, old: string | null, limited?: string }} */
       const done = await backend.transaction(async (tx) => {
         const p = await tx.get(root)
         const there = await tx.get(fileDoc(path))
+        const c = commenter ? await tx.get(commenterDoc(commenter)) : null
         if (create ? there : !there || there.version !== ifVersion) return { ok: false, version: there ? String(there.version) : null, old: null }
+        // Inside the transaction, so two comments at once cannot both slip under a limit.
+        /** @type {{ at: number, size: number }[]} */
+        const recent = (Array.isArray(c?.recent) ? c.recent : []).filter((/** @type {any} */ r) => typeof r?.at === 'number' && typeof r?.size === 'number' && r.at > now - HOUR)
+        if (limits && commenter) {
+          const limited = overLimit(limits, recent, bytes.length, c?.waiting ?? 0, p?.inbox ?? 0)
+          if (limited) return { ok: false, version: null, old: null, limited }
+        }
         const at = (p?.counter ?? 0) + 1
         const version = `v${at}`
-        tx.set(root, { ...p, counter: at })
+        const fresh = commenter && !there
+        tx.set(root, { ...p, counter: at, ...(fresh ? { inbox: (p?.inbox ?? 0) + 1 } : {}) })
         tx.set(fileDoc(path), { path, version, type, size: bytes.length, at, ...(blob ? { blob } : { data: new Uint8Array(bytes) }) })
         tx.set(changeDoc(path), { path, version, at, deleted: false })
+        if (commenter) tx.set(commenterDoc(commenter), { waiting: (c?.waiting ?? 0) + (fresh ? 1 : 0), recent: limits ? [...recent, { at: now, size: bytes.length }] : recent })
         return { ok: true, version, old: there?.blob ? String(there.blob) : null }
       })
       if (!done.ok && blob) await backend.drop(blob).catch(() => {})
       if (done.ok && done.old) await backend.drop(done.old).catch(() => {})
-      return done.ok ? { ok: /** @type {const} */ (true), version: done.version } : { ok: /** @type {const} */ (false), version: done.version }
+      if (done.limited) return { ok: /** @type {const} */ (false), version: null, limited: done.limited }
+      return done.ok ? { ok: /** @type {const} */ (true), version: /** @type {string} */ (done.version) } : { ok: /** @type {const} */ (false), version: done.version }
     },
 
     /**
@@ -202,13 +246,17 @@ export function storeOver(backend, map, options = {}) {
     async remove(path, ifVersion) {
       const problem = pathProblem(path)
       if (problem) throw new Error(problem)
+      const commenter = INBOX.exec(path)?.[1]
       const done = await backend.transaction(async (tx) => {
         const p = await tx.get(root)
         const there = await tx.get(fileDoc(path))
+        const c = commenter ? await tx.get(commenterDoc(commenter)) : null
         if (!there) return { ok: false, gone: true, version: null, old: null }
         if (there.version !== ifVersion) return { ok: false, gone: false, version: String(there.version), old: null }
         const at = (p?.counter ?? 0) + 1
-        tx.set(root, { ...p, counter: at })
+        // A filed comment no longer counts as waiting.
+        tx.set(root, { ...p, counter: at, ...(commenter ? { inbox: Math.max(0, (p?.inbox ?? 0) - 1) } : {}) })
+        if (commenter) tx.set(commenterDoc(commenter), { ...c, waiting: Math.max(0, (c?.waiting ?? 0) - 1) })
         tx.delete(fileDoc(path))
         tx.set(changeDoc(path), { path, at, deleted: true })
         return { ok: true, gone: false, version: '', old: there.blob ? String(there.blob) : null }

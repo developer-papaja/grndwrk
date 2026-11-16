@@ -16,10 +16,11 @@
  * A 401 or 403 on those calls carries it too, so the page can say why.
  */
 import { createHash } from 'node:crypto'
-import { bytesProblem, COMMENTER, CursorGone, INBOX, MAX_INBOX, pathProblem, storeOver, typeOf } from './adapter.mjs'
+import { bytesProblem, COMMENTER, CursorGone, INBOX, INBOX_LIMITS, MAX_INBOX, pathProblem, storeOver, typeOf } from './adapter.mjs'
 
 /**
  * @typedef {import('./adapter.mjs').Backend} Backend
+ * @typedef {import('./adapter.mjs').InboxLimits} InboxLimits
  * @typedef {(token: string) => Promise<{ uid: string } | null>} Verify
  *   Who a Firebase ID token belongs to (firebase-admin's verifyIdToken), or null.
  */
@@ -33,10 +34,32 @@ export const keyHash = (key) => createHash('sha256').update(key).digest('hex')
  */
 
 /**
- * @param {{ backend: Backend, verify: Verify, page?: PageRead }} options
+ * The store's own address, where its maps are `<base>/<map>/`: an https address
+ * ending in `/`, or '' when it is not one. Never worked out from a request's
+ * Host or X-Forwarded-Host, which whoever sends the request chooses.
+ * @param {string | undefined} value
+ */
+export function baseUrlOf(value) {
+  if (!value) return ''
+  try {
+    const u = new URL(value)
+    if (u.protocol !== 'https:' || u.search || u.hash || u.username || u.password) return ''
+    return u.href.endsWith('/') ? u.href : `${u.href}/`
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * @param {{ backend: Backend, verify: Verify, page?: PageRead, baseUrl?: string, limits?: Partial<InboxLimits>, now?: () => number }} options
+ *   baseUrl: the store's address (GRNDWRK_STORE_URL in index.mjs), for store.js and GET /v1/projects.
+ *   limits: what one comment token may leave (adapter.mjs, INBOX_LIMITS).
  * @returns {(request: Request) => Promise<Response>}
  */
-export function storeFunction({ backend, verify, page }) {
+export function storeFunction({ backend, verify, page, baseUrl: base, limits: own, now = Date.now }) {
+  const baseUrl = baseUrlOf(base)
+  /** @type {InboxLimits} */
+  const limits = { ...INBOX_LIMITS, ...own }
   /**
    * @param {number} status
    * @param {unknown} body
@@ -70,16 +93,17 @@ export function storeFunction({ backend, verify, page }) {
 
   /**
    * @param {Request} request
+   * @param {{ role?: string }} seen the role of the token, once known
    * @returns {Promise<Response>}
    */
-  const answer = async (request) => {
+  const answer = async (request, seen) => {
     const url = new URL(request.url)
-    const shown = page && (request.method === 'GET' || request.method === 'HEAD') ? await pageAnswer(page, request, url, async (map) => backend.get(`projects/${map}`)) : null
+    const shown = page && (request.method === 'GET' || request.method === 'HEAD') ? await pageAnswer(page, request, url, async (map) => backend.get(`projects/${map}`), baseUrl) : null
     if (shown) return shown
     const m = ROUTE.exec(url.pathname)
     // The store's own root, not a map's (a map may be named anything, so one that exists keeps its route).
     const listing = PROJECTS.exec(url.pathname)
-    if (listing && !(m && (await backend.get(`projects/${m[1]}`)))) return projects(request, url, listing[1])
+    if (listing && !(m && (await backend.get(`projects/${m[1]}`)))) return projects(request)
     if (!m) return json(404, { error: 'Not found' })
     const [, map, route] = m
     // The preflight carries no token: answer it for the comment calls only, and only for the map's site.
@@ -96,11 +120,17 @@ export function storeFunction({ backend, verify, page }) {
       /** @type {'read' | 'write' | 'comment' | null} */
       const may = member && ['read', 'write', 'comment'].includes(member.role) ? member.role : null
       if (!user || !may) return json(401, { error: 'A valid token of a member of this map is required' })
+      seen.role = may
       const commenter = may !== 'comment' ? '' : typeof member?.commenter === 'string' ? member.commenter : user.uid
       const store = storeOver(backend, map)
       const method = request.method
 
-      if (route === 'hello' && method === 'GET') return withSite(json(200, { ...(await store.hello()), writable: may === 'write', role: may, ...(may === 'comment' ? { commenter } : {}) }), may === 'comment' ? await siteOf(map, request) : '')
+      if (route === 'hello' && method === 'GET') {
+        if (may === 'comment') return withSite(json(200, { ...(await store.hello()), writable: false, role: may, commenter }), await siteOf(map, request))
+        // Teammates learn that this store vouches for `from` on every comment, and the staging site comments come from.
+        const site = (await backend.get(`projects/${map}`))?.site
+        return json(200, { ...(await store.hello()), writable: may === 'write', role: may, names: true, ...(typeof site === 'string' && isHttpsOrigin(site) ? { site } : {}) })
+      }
 
       let path = ''
       if (route.startsWith('files/')) {
@@ -124,12 +154,14 @@ export function storeFunction({ backend, verify, page }) {
         if (!body) return withSite(json(413, { error: 'Too large' }), site)
         const comment = commentOf(body)
         if (!comment) return withSite(json(400, { error: 'A comment is a JSON object' }), site)
-        // The name the store knows wins over whatever the device wrote.
+        // `from` is always the store's word: the name it knows, or none at all, never the device's own.
+        delete comment.from
         if (typeof member?.name === 'string' && member.name) comment.from = member.name
         const bytes = new TextEncoder().encode(JSON.stringify(comment))
         const problem = bytesProblem(path, bytes)
         if (problem) return withSite(json(413, { error: problem }), site)
-        const w = await store.write(path, bytes, { type: 'application/json', create: true })
+        const w = await store.write(path, bytes, { type: 'application/json', create: true, limits, now: now() })
+        if ('limited' in w && w.limited) return withSite(json(429, { error: w.limited }), site)
         return withSite(w.ok ? json(201, { version: w.version }) : json(412, { version: w.version }), site)
       }
 
@@ -175,39 +207,36 @@ export function storeFunction({ backend, verify, page }) {
   }
   /**
    * GET /v1/projects: the maps this person may read, for All projects on the
-   * page. Read only. A Firebase ID token reaches every map its user is a
-   * member of, so all of those where the role is read or write; a store key
-   * belongs to one map, so that one.
+   * page. Read only. The token is checked before any map is listed or read.
+   * A Firebase ID token reaches every map its user is a member of, so all of
+   * those where the role is read or write; a store key says its one map
+   * (`gk_<map>.<secret>`; older keys do not, and get 404, as a store without
+   * the call), so that one. The addresses come from the configured baseUrl;
+   * without one, 404 too.
    * @param {Request} request
-   * @param {URL} url
-   * @param {string} prefix
    */
-  const projects = async (request, url, prefix) => {
+  const projects = async (request) => {
     if (request.method !== 'GET') return json(405, { error: 'Not allowed' })
     const bearer = /^Bearer (\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1] ?? ''
     if (!bearer) return json(401, { error: 'A valid token is required' })
-    if (!backend.maps) return json(404, { error: 'Not found' })
+    if (!backend.maps || !baseUrl) return json(404, { error: 'Not found' })
     try {
-      const maps = (await backend.maps()).filter((id) => /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/.test(id)).slice(0, 500)
       /** @type {{ uid: string, only?: string } | null} */
       let user = null
       if (bearer.startsWith('gk_')) {
-        for (const map of maps) {
-          const k = await backend.get(`projects/${map}/keys/${keyHash(bearer)}`)
-          if (typeof k?.uid === 'string') {
-            user = { uid: k.uid, only: map }
-            break
-          }
-        }
+        const only = /^gk_([A-Za-z0-9][A-Za-z0-9_-]{0,62})\./.exec(bearer)?.[1]
+        if (!only) return json(404, { error: 'This key does not say its map. A new one does.' })
+        const k = await backend.get(`projects/${only}/keys/${keyHash(bearer)}`)
+        if (typeof k?.uid === 'string') user = { uid: k.uid, only }
       } else user = await verify(bearer).catch(() => null)
       if (!user) return json(401, { error: 'A valid token is required' })
-      const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? url.host
+      const maps = user.only ? [user.only] : (await backend.maps()).filter((id) => /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/.test(id)).slice(0, 500)
       const out = []
-      for (const map of user.only ? [user.only] : maps) {
+      for (const map of maps) {
         const member = await backend.get(`projects/${map}/members/${user.uid}`)
         if (member?.role !== 'read' && member?.role !== 'write') continue
         const doc = await backend.get(`projects/${map}`)
-        out.push({ name: typeof doc?.name === 'string' && doc.name ? doc.name : map, url: `https://${host}/${prefix}${map}/` })
+        out.push({ name: typeof doc?.name === 'string' && doc.name ? doc.name : map, url: `${baseUrl}${map}/` })
       }
       return json(200, { projects: out })
     } catch (err) {
@@ -217,8 +246,12 @@ export function storeFunction({ backend, verify, page }) {
   }
 
   return async (request) => {
-    const res = await answer(request)
+    /** @type {{ role?: string }} */
+    const seen = {}
+    const res = await answer(request, seen)
     if ((res.status !== 401 && res.status !== 403) || request.method === 'OPTIONS' || res.headers.has('access-control-allow-origin')) return res
+    // A refusal the staging page must read: on the three comment calls, for a comment token or no valid token, never a teammate's.
+    if (seen.role && seen.role !== 'comment') return res
     const m = ROUTE.exec(new URL(request.url).pathname)
     if (!m || !commentCall(m[2], request.method)) return res
     return withSite(res, await siteOf(m[1], request).catch(() => ''))
@@ -239,12 +272,13 @@ const PAGE_CSP =
  * @param {Request} request
  * @param {URL} url
  * @param {(map: string) => Promise<Record<string, unknown> | null | undefined>} mapOf
+ * @param {string} baseUrl the store's configured address, or ''
  * @returns {Promise<Response | null>}
  */
-async function pageAnswer(read, request, url, mapOf) {
+async function pageAnswer(read, request, url, mapOf, baseUrl) {
   const m = PAGE_ROUTE.exec(url.pathname)
   if (!m) return null
-  const [, prefix, map, rest] = m
+  const [, , map, rest] = m
   const doc = await mapOf(map).catch(() => null)
   if (!doc) return null
   if (rest === '') return new Response(null, { status: 301, headers: { Location: `${map}/` } })
@@ -273,9 +307,9 @@ async function pageAnswer(read, request, url, mapOf) {
   }
   const [store, feedback] = [body(await read('overlay/store.js')), body(await read('overlay/feedback.js'))]
   if (store === null || feedback === null) return null
-  // The map's address as the staging page reaches it; behind Hosting or another host name, the forwarded host.
-  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? url.host
-  const config = { url: `https://${host}/${prefix}${map}/`, site }
+  // The map's address from the store's own setting, never from the request's Host or X-Forwarded-Host.
+  if (!baseUrl) return new Response('Set GRNDWRK_STORE_URL, the address of the store, first', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } })
+  const config = { url: `${baseUrl}${map}/`, site }
   return new Response(`window.__grndwrkStoreConfig = ${JSON.stringify(config)};\n${store}\n${feedback}\n`, { headers: { ...headers, Vary: 'Referer' } })
 }
 

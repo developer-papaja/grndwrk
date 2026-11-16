@@ -67,10 +67,10 @@ function asGrndwrk(store: ReturnType<typeof storeOver>): StoreClient {
 const text = (s: string) => new TextEncoder().encode(s)
 
 /** A function over a fake Firebase, with members, reached through fetch as grndwrk reaches it. */
-function setup() {
+function setup(options: Partial<Parameters<typeof storeFunction>[0]> = {}) {
   const fb = fakeFirebase()
   const page = async (name: string) => PAGE_FILES[name] ?? null
-  const handle = storeFunction({ backend: fb, verify: async (t) => (t.startsWith('idtoken-') ? { uid: t.slice(8) } : null), page })
+  const handle = storeFunction({ backend: fb, verify: async (t) => (t.startsWith('idtoken-') ? { uid: t.slice(8) } : null), page, baseUrl: 'https://europe-west1-vet-clinic.cloudfunctions.net/store', ...options })
   const members: Record<string, Doc> = {
     uid_writer01: { role: 'write' },
     uid_reader01: { role: 'read' },
@@ -187,9 +187,11 @@ describe('the Cloud Function', () => {
     expect(await (await list('idtoken-uid_writer01')).json()).toEqual({ projects: [{ name: 'Clinic', url }, { name: 'clinic-admin', url: url.replace('/clinic/', '/clinic-admin/') }] })
     expect(await (await list('idtoken-uid_phone001')).json()).toEqual({ projects: [] })
     // A store key belongs to one map.
-    fb.docs.set(`projects/clinic-admin/keys/${keyHash('gk_admindesk')}`, { uid: 'uid_writer01' })
-    expect(await (await list('gk_admindesk')).json()).toEqual({ projects: [{ name: 'clinic-admin', url: url.replace('/clinic/', '/clinic-admin/') }] })
-    expect((await list('gk_nobody')).status).toBe(401)
+    fb.docs.set(`projects/clinic-admin/keys/${keyHash('gk_clinic-admin.admindesk')}`, { uid: 'uid_writer01' })
+    expect(await (await list('gk_clinic-admin.admindesk')).json()).toEqual({ projects: [{ name: 'clinic-admin', url: url.replace('/clinic/', '/clinic-admin/') }] })
+    expect((await list('gk_clinic.nobody')).status).toBe(401)
+    // A key from before says no map: as a store without the call.
+    expect((await list('gk_nobody')).status).toBe(404)
     expect((await list()).status).toBe(401)
     expect((await list('idtoken-uid_writer01', 'PUT')).status).toBe(405)
     // A map's own address is still the map's.
@@ -248,9 +250,9 @@ describe('the Cloud Function', () => {
       expect(comment).toEqual({ text: 'The weight field is too small', from: 'Front desk iPad' })
       // The same id again is refused, as for any create.
       expect((await put(fetcher, url, 'inbox/uid_phone001/c_00000001.json', 'idtoken-uid_phone001')).status).toBe(412)
-      // A member with a commenter id of its own writes under that id, never its uid; without a known name, from stays as sent.
+      // A member with a commenter id of its own writes under that id, never its uid; without a known name, the device's from is taken away.
       expect((await put(fetcher, url, 'inbox/dev_staging1/c_00000002.json', 'idtoken-uid_web00001')).status).toBe(201)
-      expect(JSON.parse(new TextDecoder().decode((await as('idtoken-uid_writer01').read('inbox/dev_staging1/c_00000002.json'))?.bytes)).from).toBe('Someone else')
+      expect(JSON.parse(new TextDecoder().decode((await as('idtoken-uid_writer01').read('inbox/dev_staging1/c_00000002.json'))?.bytes))).toEqual({ text: 'The weight field is too small' })
       expect((await put(fetcher, url, 'inbox/uid_web00001/c_00000003.json', 'idtoken-uid_web00001')).status).toBe(403)
     })
 
@@ -341,5 +343,93 @@ describe('the Cloud Function', () => {
       expect(fb.blobs.size).toBe(1)
       expect((await put(fetcher, url, 'inbox/uid_phone001/c_0000big2.json', 'idtoken-uid_phone001', JSON.stringify({ image: 'a'.repeat(MAX_INBOX) }))).status).toBe(413)
     })
+  })
+})
+
+describe('the Cloud Function, after the security review', () => {
+  const site = 'https://staging.vetclinic.example'
+  const put = (fetcher: typeof fetch, url: string, path: string, token: string, body = '{"text":"The weight field is too small"}', origin?: string) =>
+    fetcher(new URL(`v1/files/${path}`, url), { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*', ...(origin ? { Origin: origin } : {}) }, body })
+
+  it('takes at most so many comments and bytes an hour from one commenter, then 429 with plain words', async () => {
+    let now = Date.UTC(2026, 10, 16, 9)
+    const { fetcher, url } = setup({ limits: { filesPerHour: 3, bytesPerHour: 1000, waiting: 100, total: 100 }, now: () => now })
+    for (let i = 1; i <= 3; i++) expect((await put(fetcher, url, `inbox/uid_phone001/c_0000000${i}.json`, 'idtoken-uid_phone001')).status).toBe(201)
+    const refused = await put(fetcher, url, 'inbox/uid_phone001/c_00000004.json', 'idtoken-uid_phone001', undefined, site)
+    expect(refused.status).toBe(429)
+    expect(refused.headers.get('access-control-allow-origin')).toBe(site)
+    expect(((await refused.json()) as { error: string }).error).toMatch(/an hour/)
+    // Bytes, for another commenter.
+    expect((await put(fetcher, url, 'inbox/dev_staging1/c_00000001.json', 'idtoken-uid_web00001', JSON.stringify({ text: 'x'.repeat(900) }))).status).toBe(201)
+    expect((await put(fetcher, url, 'inbox/dev_staging1/c_00000002.json', 'idtoken-uid_web00001', JSON.stringify({ text: 'x'.repeat(200) }))).status).toBe(429)
+    now += 3_600_001
+    expect((await put(fetcher, url, 'inbox/uid_phone001/c_00000004.json', 'idtoken-uid_phone001')).status).toBe(201)
+  })
+
+  it('keeps at most so many waiting per commenter and in the whole map, and counts a filed one off', async () => {
+    const { fetcher, url, as } = setup({ limits: { waiting: 2, total: 3 } })
+    const writer = as('idtoken-uid_writer01')
+    expect((await put(fetcher, url, 'inbox/uid_phone001/c_00000001.json', 'idtoken-uid_phone001')).status).toBe(201)
+    expect((await put(fetcher, url, 'inbox/uid_phone001/c_00000002.json', 'idtoken-uid_phone001')).status).toBe(201)
+    expect((await put(fetcher, url, 'inbox/uid_phone001/c_00000003.json', 'idtoken-uid_phone001')).status).toBe(429)
+    expect((await put(fetcher, url, 'inbox/dev_staging1/c_00000001.json', 'idtoken-uid_web00001')).status).toBe(201)
+    // Three wait in all: the map's inbox is full for every commenter, not for teammates.
+    expect((await put(fetcher, url, 'inbox/dev_staging1/c_00000002.json', 'idtoken-uid_web00001')).status).toBe(429)
+    expect((await writer.write('inbox/dev_staging1/c_00000009.json', text('{}'), { type: 'application/json', create: true })).ok).toBe(true)
+    // grndwrk files two: there is room again.
+    for (const p of ['inbox/uid_phone001/c_00000001.json', 'inbox/dev_staging1/c_00000009.json']) expect((await writer.remove(p, (await writer.read(p))!.version)).ok).toBe(true)
+    expect((await put(fetcher, url, 'inbox/uid_phone001/c_00000003.json', 'idtoken-uid_phone001')).status).toBe(201)
+  })
+
+  it('checks the token before it lists or reads any map', async () => {
+    const { fb, fetcher, url } = setup()
+    const touched: string[] = []
+    const get = fb.get
+    fb.get = async (p: string) => (touched.push(p), get(p))
+    fb.maps = async () => (touched.push('maps'), ['clinic'])
+    const root = url.replace('/clinic/', '/')
+    for (const token of ['not-a-token', 'gk_nobody', 'gk_clinic.nobody']) {
+      touched.length = 0
+      const res = await fetcher(`${root}v1/projects`, { headers: { Authorization: `Bearer ${token}` } })
+      expect([401, 404]).toContain(res.status)
+      // Only whether the address's names are maps (a page, or a map named store, keeps its route), and the key itself.
+      expect(touched.filter((p) => p !== 'projects/store' && p !== 'projects/projects' && !p.includes('/keys/'))).toEqual([])
+    }
+  })
+
+  it('builds addresses from its setting, never from the request', async () => {
+    const { fetcher, url } = setup()
+    const base = url.replace(/\/$/, '')
+    const forged = { 'X-Forwarded-Host': 'evil.example', Host: 'evil.example' }
+    const button = await fetcher(`${base}/store.js`, { headers: { Referer: `${site}/visits/42`, ...forged } })
+    expect(await button.text()).toContain(JSON.stringify({ url, site }))
+    const list = await fetcher(url.replace('/clinic/', '/v1/projects'), { headers: { Authorization: 'Bearer idtoken-uid_writer01', ...forged } })
+    expect(JSON.stringify(await list.json())).not.toContain('evil')
+    // Without the setting, no store.js and no list, rather than a guess.
+    const none = setup({ baseUrl: undefined })
+    expect((await none.fetcher(`${base}/store.js`, { headers: { Referer: `${site}/` } })).status).toBe(503)
+    expect((await none.fetcher(url.replace('/clinic/', '/v1/projects'), { headers: { Authorization: 'Bearer idtoken-uid_writer01' } })).status).toBe(404)
+  })
+
+  it('gives CORS on a refusal only to a comment token or none, never to a teammate on the comment calls', async () => {
+    const { fetcher, url } = setup()
+    const refused = await put(fetcher, url, 'inbox/uid_phone001/c_00000001.json', 'idtoken-uid_reader01', undefined, site)
+    expect(refused.status).toBe(403)
+    expect(refused.headers.get('access-control-allow-origin')).toBeNull()
+    const none = await put(fetcher, url, 'inbox/uid_phone001/c_00000001.json', 'idtoken-uid_stranger', undefined, site)
+    expect([none.status, none.headers.get('access-control-allow-origin')]).toEqual([401, site])
+    const read = await fetcher(new URL('v1/files/nodes/n_none01.md', url), { headers: { Authorization: 'Bearer idtoken-uid_stranger', Origin: site } })
+    expect(read.headers.get('access-control-allow-origin')).toBeNull()
+  })
+
+  it('tells teammates it vouches for from, and names the staging site; a commenter learns neither', async () => {
+    const { fb, fetcher, url } = setup()
+    const hello = async (token: string) => (await fetcher(new URL('v1/hello', url), { headers: { Authorization: `Bearer ${token}` } })).json()
+    expect(await hello('idtoken-uid_writer01')).toMatchObject({ names: true, site })
+    expect(await hello('idtoken-uid_reader01')).toMatchObject({ names: true, site })
+    const phone = (await hello('idtoken-uid_phone001')) as Record<string, unknown>
+    expect([phone.names, phone.site]).toEqual([undefined, undefined])
+    fb.docs.set('projects/clinic', { name: 'Clinic', site: null })
+    expect(await hello('idtoken-uid_writer01')).toEqual({ protocol: 1, project: 'Clinic', writable: true, role: 'write', names: true })
   })
 })

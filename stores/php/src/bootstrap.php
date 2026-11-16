@@ -25,5 +25,7 @@ function config(): array
         'page' => 500,
         'wait' => 0,
         'origins' => [],
-    ], is_array($own) ? $own : []);
+        'base_url' => null,
+        'inbox' => [],
+    ],is_array($own) ? $own : []);
 }
