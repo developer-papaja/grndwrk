@@ -1,0 +1,4 @@
+# Only public/ is meant to be reached over the web. If this whole folder ended
+# up under the web root, this keeps the database, the config and the code out
+# (public/.htaccess lets its own requests through).
+Require all denied

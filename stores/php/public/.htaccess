@@ -1,0 +1,10 @@
+# Every request goes to index.php, which answers the store protocol.
+Require all granted
+Options -Indexes
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # PHP behind CGI or FastCGI does not see Authorization unless it is passed on.
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.php [L]
+</IfModule>
