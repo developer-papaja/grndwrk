@@ -43,11 +43,41 @@ describe('init', () => {
     expect(await readFile(join(root, '.agents', 'skills', 'import', 'SKILL.md'), 'utf8')).toContain('Mine.')
   })
 
-  it('tells Codex users how to give it the map rules when the project has an AGENTS.md', async () => {
+  it('without a terminal, prints the map rules for the root CLAUDE.md and writes nothing there', async () => {
     await writeFile(join(root, 'AGENTS.md'), '# Agents\n')
     const log = vi.spyOn(console, 'log')
     await init(root)
-    expect(log.mock.calls.flat().join('\n')).toContain('follow .grndwrk/AGENTS.md')
+    expect(log.mock.calls.flat().join('\n')).toContain('Read `.grndwrk/CLAUDE.md` before you change anything')
+    await expect(readFile(join(root, 'CLAUDE.md'), 'utf8')).rejects.toThrow()
+    expect(await readFile(join(root, 'AGENTS.md'), 'utf8')).toBe('# Agents\n')
+  })
+
+  it('adds the map rules to the root CLAUDE.md and AGENTS.md on a yes, keeps them up to date, and leaves a changed block alone', async () => {
+    await writeFile(join(root, 'CLAUDE.md'), '# Clinic app\n\nOur own rules.\n')
+    await writeFile(join(root, 'AGENTS.md'), '# Agents\n')
+    const yes = async (q: string) => (/map's rules/.test(q) ? 'y' : 'n')
+    await init(root, { ask: yes })
+    const claude = await readFile(join(root, 'CLAUDE.md'), 'utf8')
+    expect(claude).toMatch(/^# Clinic app\n\nOur own rules\.\n\n<!-- grndwrk/)
+    expect(claude).toContain('Read `.grndwrk/CLAUDE.md`')
+    expect(await readFile(join(root, 'AGENTS.md'), 'utf8')).toContain('Read `.grndwrk/AGENTS.md`')
+    // Run again: nothing asked, nothing doubled.
+    const asked: string[] = []
+    await init(root, { ask: async (q) => (asked.push(q), 'y') })
+    expect(asked.filter((q) => /map's rules/.test(q))).toEqual([])
+    expect((await readFile(join(root, 'CLAUDE.md'), 'utf8')).match(/## grndwrk/g)).toHaveLength(1)
+    // The person's own words in the block are kept.
+    await writeFile(join(root, 'CLAUDE.md'), claude.replace('Tick the stories', 'Always tick the stories'))
+    await init(root, { ask: yes })
+    expect(await readFile(join(root, 'CLAUDE.md'), 'utf8')).toContain('Always tick the stories')
+  })
+
+  it('asks once about the root rules, and a no is kept', async () => {
+    const asked: string[] = []
+    await init(root, { ask: async (q) => (asked.push(q), 'n') })
+    await init(root, { ask: async (q) => (asked.push(q), 'n') })
+    expect(asked.filter((q) => /map's rules/.test(q))).toHaveLength(1)
+    await expect(readFile(join(root, 'CLAUDE.md'), 'utf8')).rejects.toThrow()
   })
 
   it('makes a skill whose description YAML reads back as written', () => {
@@ -198,9 +228,10 @@ describe('new or existing', () => {
     expect(asked[0]).toMatch(/has code/)
     expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
     await init(root, { ask: async (q) => (asked.push(q), 'y') })
-    // New or existing, and whether the map may hold names: each asked once.
-    expect(asked).toHaveLength(2)
+    // New or existing, whether the map may hold names, and the rules for the root CLAUDE.md: each asked once.
+    expect(asked).toHaveLength(3)
     expect(asked[1]).toMatch(/people's names/)
+    expect(asked[2]).toMatch(/map's rules/)
     expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^personal_info: "?no"?$/m)
   })
 

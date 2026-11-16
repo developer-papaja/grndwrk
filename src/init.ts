@@ -76,15 +76,92 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   const rules = await readFile(join(templates, 'CLAUDE.md'), 'utf8')
   for (const file of ['CLAUDE.md', 'AGENTS.md']) await install(join(gw, file), rules, `.grndwrk/${file}`, 'review')
   await install(join(projectRoot, '.agents', 'skills', 'grndwrk-map', 'SKILL.md'), asSkill('grndwrk-map', rules, true), '.agents/skills/grndwrk-map', 'review')
+  await addRootRules(projectRoot, installed, say, options.ask)
   await writeFile(manifestPath, JSON.stringify(installed, null, 2) + '\n')
 
-  const rootAgents = await readFile(join(projectRoot, 'AGENTS.md'), 'utf8').catch(() => null)
-  if (rootAgents !== null && !rootAgents.includes('.grndwrk')) {
-    console.log('\n  Codex reads AGENTS.md only from the root down. To give it the map rules every time, add this line to AGENTS.md:')
-    console.log('    When you work with anything in .grndwrk/, or fix something a comment or story there asks for, follow .grndwrk/AGENTS.md.')
-  }
-
   console.log(`\n${nextSteps(start)}\n\nAfter updating grndwrk, run \`grndwrk init\` again to update the commands and skills.`)
+}
+
+const ROOT_START = '<!-- grndwrk: the map, for your agent. grndwrk init keeps this block up to date unless you change it. -->'
+const ROOT_END = '<!-- /grndwrk -->'
+
+/**
+ * The block for the project's own CLAUDE.md (and AGENTS.md). The map's rules
+ * sit in `.grndwrk/CLAUDE.md`, which Claude Code reads only once it opens a
+ * file in `.grndwrk/`: in an ordinary chat about the code it never would, and
+ * never learn the map is there. This puts the map in front of it in every chat.
+ */
+export function rootRules(rulesFile: string): string {
+  return [
+    ROOT_START,
+    '## grndwrk',
+    '',
+    `This project has a grndwrk map in \`.grndwrk/\`: thoughts, screens, stories, and comments people made in the running product. Read \`.grndwrk/${rulesFile}\` before you change anything in the project, and follow it whatever you were asked:`,
+    '',
+    '- Mark what you build or fix as built, with steps to test. Never settle it yourself.',
+    '- Put every question you ask the person into the map, as a question in a thread, never only in the chat.',
+    '- Tick the stories you build against, and cite their ids in commit messages.',
+    '- Before you start on a screen or a feature, say the first item in `.grndwrk/readiness/focus/` that is not set aside.',
+    '',
+    'At the end of a piece of work, ask once whether to write the decisions from it into the map (`/decisions`), and write them only if the person says yes.',
+    ROOT_END,
+    '',
+  ].join('\n')
+}
+
+/**
+ * Asks once whether to put the map's rules in the project's root CLAUDE.md
+ * (and AGENTS.md, when there is one): the only files outside `.grndwrk/` and
+ * the agent folders grndwrk writes, and only after a yes. A block written
+ * before is updated while it reads as written; one the person changed stays.
+ * Without a terminal, or after a no, the block is printed to add by hand.
+ */
+async function addRootRules(projectRoot: string, installed: Record<string, string>, say: (verb: string, path: string) => void, ask?: (question: string) => Promise<string>): Promise<void> {
+  const files: { name: string; rules: string }[] = [{ name: 'CLAUDE.md', rules: 'CLAUDE.md' }]
+  if ((await readFile(join(projectRoot, 'AGENTS.md'), 'utf8').catch(() => null)) !== null) files.push({ name: 'AGENTS.md', rules: 'AGENTS.md' })
+  const missing: { name: string; rules: string; text: string | null }[] = []
+  for (const f of files) {
+    const path = join(projectRoot, f.name)
+    // Never written through a link: it could point anywhere.
+    if ((await lstat(path).catch(() => null))?.isSymbolicLink()) continue
+    const text = await readFile(path, 'utf8').catch(() => null)
+    const shipped = rootRules(f.rules)
+    const at = text?.indexOf(ROOT_START) ?? -1
+    if (text !== null && at >= 0) {
+      const end = text.indexOf(ROOT_END, at)
+      const block = end >= 0 ? text.slice(at, end + ROOT_END.length) + '\n' : ''
+      // Updated only while it reads exactly as grndwrk wrote it.
+      if (block && block !== shipped && hash(block) === installed[`root:${f.name}`]) {
+        await writeFile(path, text.slice(0, at) + shipped + text.slice(end + ROOT_END.length + 1))
+        say('updated', path)
+      }
+      if (block === shipped || hash(block) === installed[`root:${f.name}`]) installed[`root:${f.name}`] = hash(shipped)
+      continue
+    }
+    missing.push({ ...f, text })
+  }
+  if (!missing.length) return
+  const names = missing.map((f) => f.name).join(' and ')
+  const prompt = ask ?? (process.stdin.isTTY ? askInTerminal : undefined)
+  let yes = false
+  if (prompt && installed['root:answer'] !== 'no') {
+    const answer = (await prompt(`Add the map's rules to ${names} at the root of the project, so your agent follows them in every chat, not only when it opens .grndwrk/? [Y/n] `)).trim().toLowerCase()
+    console.log('')
+    yes = answer === '' || answer.startsWith('y')
+    installed['root:answer'] = yes ? 'yes' : 'no'
+  }
+  if (!yes) {
+    console.log(`\n  Your agent sees the map's rules only when it opens a file in .grndwrk/. To have them in every chat, add this to ${names} at the root:\n`)
+    console.log(rootRules(missing[0].rules).replace(/^/gm, '    '))
+    return
+  }
+  for (const f of missing) {
+    const path = join(projectRoot, f.name)
+    const shipped = rootRules(f.rules)
+    await writeFile(path, f.text === null ? shipped : `${f.text.replace(/\s*$/, '')}\n\n${shipped}`)
+    installed[`root:${f.name}`] = hash(shipped)
+    say(f.text === null ? 'created' : 'updated', path)
+  }
 }
 
 /**
