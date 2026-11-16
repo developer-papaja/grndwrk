@@ -94,6 +94,8 @@ export interface Hello {
   role?: Role
   /** For a comment token: the commenter its comments go under (`inbox/<commenter>/`) and whose status it reads. */
   commenter?: string
+  /** The person, when the store knows: written as `by:` on what they add from the page. */
+  name?: string
 }
 
 export interface Read {

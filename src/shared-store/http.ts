@@ -47,7 +47,9 @@ export class HttpStore implements StoreClient {
     if (b.protocol !== PROTOCOL) throw new StoreBroke(`hello: protocol ${String(b.protocol)}, grndwrk speaks ${PROTOCOL}`)
     const role = b.role === 'read' || b.role === 'write' || b.role === 'comment' ? b.role : b.writable === true ? 'write' : 'read'
     const commenter = role === 'comment' && typeof b.commenter === 'string' && COMMENTER.test(b.commenter) ? { commenter: b.commenter } : {}
-    return { protocol: PROTOCOL, project: typeof b.project === 'string' ? b.project.slice(0, 200) : '', writable: b.writable === true, role, ...commenter }
+    // A name from the store is shown in the map: one line of plain text, no control characters.
+    const name = typeof b.name === 'string' && b.name.trim() ? { name: b.name.replace(/\p{Cc}/gu, '').trim().slice(0, 120) } : {}
+    return { protocol: PROTOCOL, project: typeof b.project === 'string' ? b.project.slice(0, 200) : '', writable: b.writable === true, role, ...commenter, ...name }
   }
 
   async changes({ since, wait = 0 }: { since?: string; wait?: number } = {}) {

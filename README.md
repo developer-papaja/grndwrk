@@ -10,7 +10,7 @@ grndwrk lives inside your project. It keeps everything as plain markdown files i
 - **Start from a project that already exists.** `/survey` reads the code, docs and history and draws the map from what is there. `/sitemap` draws every screen, what it is for and who it is for.
 - **Write the brief and the stories.** `/brief` writes a brief, user stories linked to the thoughts behind them, and a starter `CLAUDE.md` for building the product.
 - **Comment on the running product.** A Comment button on your website or in your iOS app turns what you point at into a card in the map. Your agent proposes and builds fixes, and you test them in the app, then approve or reject them. Anything else your agent builds from the map comes back the same way, with steps to test.
-- **Share the map with a team, your way.** Keep it in git, or in a store the team hosts itself (on Cloudflare, Firebase, a PHP server or anything that speaks a few HTTP calls). Colleagues who never clone the repository then comment from a staging site or a phone, straight into the store.
+- **Share the map with a team, your way.** Keep it in git, or in a store the team hosts itself (on Cloudflare, Firebase, a PHP server or anything that speaks a few HTTP calls). Colleagues who never clone the repository then answer questions and add thoughts on a page the store serves, and comment from a staging site or a phone, straight into the store.
 
 ## Requirements
 
@@ -201,6 +201,22 @@ grndwrk store allow
 ```
 
 grndwrk runs an adapter only after you allowed that exact file, at a terminal. When it changes (a pull, another branch), grndwrk stops syncing and asks again, so a pull request cannot run code on your machine unseen. An adapter is one file: it may import installed packages, never another file of the repository.
+
+### The page, for people without the repository
+
+A store also serves the map itself as a page, at the project's own address (`https://maps.example.com/clinic/`), so colleagues who never clone the repository can take part. They sign in with a token from your store (it is kept in that browser tab only, until they sign out or close it), and then:
+
+- answer your agent's questions in the Inbox, with the same options, remarks and undo as on your Mac
+- read the map, the sitemap, the personas, Status and the deliverables
+- add thoughts and change them, unless their token may only read
+
+What they do is written to the store at once, the way grndwrk writes it on your Mac, and reaches your `.grndwrk/` with the next sync. If two people change the same thought at once, the second is told plainly and shown the other's version, never overwriting it. Parts that only make sense on a Mac (sites, pairing phones, the project's documents) are not on the page.
+
+To put it on your store, write its files to a folder and deploy them with the store; each example in `stores/` says where:
+
+```
+grndwrk store assets ./store-files
+```
 
 ### Colleagues through the store
 
