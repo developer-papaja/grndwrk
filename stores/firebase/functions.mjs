@@ -28,10 +28,15 @@ import { bytesProblem, COMMENTER, CursorGone, INBOX, MAX_INBOX, pathProblem, sto
 export const keyHash = (key) => createHash('sha256').update(key).digest('hex')
 
 /**
- * @param {{ backend: Backend, verify: Verify }} options
+ * @typedef {(name: string) => Promise<string | Uint8Array | null>} PageRead
+ *   A file of the folder `grndwrk store assets page` wrote, by its name there, or null.
+ */
+
+/**
+ * @param {{ backend: Backend, verify: Verify, page?: PageRead }} options
  * @returns {(request: Request) => Promise<Response>}
  */
-export function storeFunction({ backend, verify }) {
+export function storeFunction({ backend, verify, page }) {
   /**
    * @param {number} status
    * @param {unknown} body
@@ -69,6 +74,8 @@ export function storeFunction({ backend, verify }) {
    */
   const answer = async (request) => {
     const url = new URL(request.url)
+    const shown = page && (request.method === 'GET' || request.method === 'HEAD') ? await pageAnswer(page, request, url, async (map) => backend.get(`projects/${map}`)) : null
+    if (shown) return shown
     const m = ROUTE.exec(url.pathname)
     if (!m) return json(404, { error: 'Not found' })
     const [, map, route] = m
@@ -170,6 +177,60 @@ export function storeFunction({ backend, verify }) {
     if (!m || !commentCall(m[2], request.method)) return res
     return withSite(res, await siteOf(m[1], request).catch(() => ''))
   }
+}
+
+// The page and the Comment button, as grndwrk's src/shared-store/page.ts serves them. Keep them the same.
+const PAGE_ROUTE = /^\/((?:[^/]+\/)*?)([A-Za-z0-9][A-Za-z0-9_-]{0,62})(|\/|\/index\.html|\/assets\/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:js|css|woff2|svg|png)|\/store\.js|\/screenshot\.js)$/
+const PAGE_TYPES = /** @type {Record<string, string>} */ ({ html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', woff2: 'font/woff2', svg: 'image/svg+xml', png: 'image/png' })
+const PAGE_CSP =
+  "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'"
+
+/**
+ * The page at a map's address, and store.js and screenshot.js for a page on
+ * the map's staging site (by Referer). Null when the request is none of these,
+ * or the map does not exist.
+ * @param {PageRead} read
+ * @param {Request} request
+ * @param {URL} url
+ * @param {(map: string) => Promise<Record<string, unknown> | null | undefined>} mapOf
+ * @returns {Promise<Response | null>}
+ */
+async function pageAnswer(read, request, url, mapOf) {
+  const m = PAGE_ROUTE.exec(url.pathname)
+  if (!m) return null
+  const [, prefix, map, rest] = m
+  const doc = await mapOf(map).catch(() => null)
+  if (!doc) return null
+  if (rest === '') return new Response(null, { status: 301, headers: { Location: `${map}/` } })
+  const name = rest === '/' ? 'index.html' : rest.slice(1)
+  const headers = {
+    'Content-Type': PAGE_TYPES[/\.([a-z0-9]+)$/.exec(name)?.[1] ?? ''] ?? 'application/octet-stream',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': PAGE_CSP,
+    'Referrer-Policy': 'no-referrer',
+    'Cache-Control': name.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+  }
+  const body = (/** @type {string | Uint8Array | null} */ b) => (b === null ? null : typeof b === 'string' ? b : new TextDecoder().decode(b))
+  if (name !== 'store.js' && name !== 'screenshot.js') {
+    const b = await read(name)
+    return b === null ? null : new Response(request.method === 'HEAD' ? null : typeof b === 'string' ? b : new Uint8Array(b), { headers })
+  }
+  let referer = ''
+  try {
+    referer = new URL(request.headers.get('referer') ?? '').origin
+  } catch {}
+  const site = typeof doc.site === 'string' && isHttpsOrigin(doc.site) && doc.site === referer ? doc.site : ''
+  if (!site) return new Response('Only for the staging site', { status: 403, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } })
+  if (name === 'screenshot.js') {
+    const js = body(await read(name))
+    return js === null ? null : new Response(js, { headers: { ...headers, Vary: 'Referer' } })
+  }
+  const [store, feedback] = [body(await read('overlay/store.js')), body(await read('overlay/feedback.js'))]
+  if (store === null || feedback === null) return null
+  // The map's address as the staging page reaches it; behind Hosting or another host name, the forwarded host.
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? url.host
+  const config = { url: `https://${host}/${prefix}${map}/`, site }
+  return new Response(`window.__grndwrkStoreConfig = ${JSON.stringify(config)};\n${store}\n${feedback}\n`, { headers: { ...headers, Vary: 'Referer' } })
 }
 
 /** The map's id is the part before the first /v1/: .../store/clinic/v1/hello */

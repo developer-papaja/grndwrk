@@ -36,11 +36,11 @@
     "node": ">=20.16"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && vite build && node scripts/vendor.mjs",
+    "build": "tsc -p tsconfig.json && vite build && vite build --mode page && node scripts/vendor.mjs",
     "dev": "mkdir -p playground && cd playground && tsx ../src/cli.ts init >/dev/null && tsx watch --clear-screen=false --exclude \"../node_modules/**\" --exclude \"../ui/**\" ../src/cli.ts start --dev --no-open",
     "lint": "biome lint .",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit && tsc -p relay/tsconfig.json && tsc -p stores/cloudflare/tsconfig.json && tsc -p stores/firebase/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit && tsc -p ui/tsconfig.page.json --noEmit && tsc -p relay/tsconfig.json && tsc -p stores/cloudflare/tsconfig.json && tsc -p stores/firebase/tsconfig.json",
     "prepack": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {

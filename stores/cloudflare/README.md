@@ -22,6 +22,7 @@ On your own account, from this folder:
 ```
 npm ci
 npx wrangler login
+grndwrk store assets page               # the page and the Comment button, see below
 npx wrangler deploy
 npx wrangler secret put OWNER_AUTH      # a long random string; keep it, it mints tokens
 ```
@@ -58,6 +59,10 @@ COMMENT_ORIGINS = "https://staging.clinic.example"
 ```
 
 A listed site gets CORS (its exact origin, never `*`; `GET, PUT`; `Authorization, Content-Type, If-None-Match`; `ETag` exposed; `Vary: Origin`) on three calls only: `hello`, `PUT inbox/...` and `GET status/...`, with a comment token, or with no valid token, so the page can read a `401` or `403` and ask the person to log in again. The preflight (`OPTIONS`) answers `204` for those calls from a listed site and `403` otherwise. A read or write token never gets CORS, from any site. Anything not https, or not an exact origin, is ignored.
+
+## The page
+
+Colleagues without the repository read the map, answer the agent's questions and add thoughts in a browser, at the project's address (`https://<worker>/clinic/`). `grndwrk store assets page` writes the page and the Comment button into `page/` here (git ignored), and `wrangler deploy` uploads it as the Worker's static assets (`[assets]` in `wrangler.toml`). The Worker runs first for every request (`run_worker_first`), so `page.ts` decides what is served: `index.html` and `assets/...` under each project's address, with a strict Content-Security-Policy and `nosniff`; `store.js` (put together with its config) and `screenshot.js` only to a page on a site in `COMMENT_ORIGINS`, by its `Referer`; nothing else. Static assets rather than files embedded in the code, so the page is updated by running the command again and deploying, and its size never counts against the Worker's. Deploy needs the folder: run the command first. See [The page](../../docs/store-protocol.md#the-page).
 
 ## Cloudflare Access (an option)
 

@@ -140,3 +140,16 @@ export interface WaitingState { personal_info: 'yes' | 'no' | null; people: stri
 export const fetchWaiting = () => request<WaitingState>('GET', '/api/waiting')
 export const saveWaiting = (input: { on: string; question: string; for?: string | null; clear?: boolean }) => request<WaitingState>('POST', '/api/waiting', input)
 export const savePersonalInfo = (value: 'yes' | 'no') => request<WaitingState>('POST', '/api/waiting/personal-info', { value })
+
+/**
+ * grndwrk on a Mac. The page on a team's store is built with api-store.ts in
+ * this module's place, where PAGE is true and these sign the person in; here
+ * nobody signs in, the server is this machine.
+ */
+export const PAGE = false
+export const session = { signedIn: true, checking: false, writable: true, project: '', name: '', problem: '' }
+export const onSession = (_f: () => void) => {}
+export const signIn = async (_token: string) => ''
+export const signOut = () => {}
+/** Pictures load by their path from grndwrk itself. */
+export const watchPictures = (_root: Element) => {}

@@ -17,6 +17,7 @@ import { markSeen as postSeen } from './api'
 import { isPrinciple, PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
 import { fetchProject, fetchWaiting, saveWaiting, savePersonalInfo, type WaitingState } from './api'
+import { PAGE, session, signIn, signOut } from './api'
 import { splitQuestions } from '../../src/shared/thread'
 import { waitingKey } from '../../src/shared/waiting'
 import { marked } from 'marked'
@@ -129,6 +130,28 @@ function readProgressFilter(): ProgressFilter {
 
 export const state = Alpine.reactive({
   live: false,
+  /**
+   * grndwrk on the Mac, not the page on a team's store. The one flag for what
+   * only works there: Sites, colleagues and pairing, Documents, Open in
+   * editor, pictures of screens (src/shared-store, ui/src/api-store.ts).
+   */
+  onMac: !PAGE,
+  /** On the page: who is signed in, and whether this sign-in may change the map. */
+  session: { ...session },
+  signInToken: '',
+  signInError: '',
+  signingIn: false,
+  async signIn() {
+    this.signingIn = true
+    this.signInError = await signIn(this.signInToken)
+    this.signingIn = false
+    if (!this.signInError) this.signInToken = ''
+  },
+  signOut() {
+    signOut()
+    this.nodes = {}
+    this.closePanel()
+  },
   project: {} as Record<string, unknown>,
   nodes: {} as Record<string, GNode>,
   selectedId: null as string | null,
@@ -147,7 +170,7 @@ export const state = Alpine.reactive({
   sending: false,
   readiness: null as Readiness | null,
   /** Which view the rail shows: focus, the map, readiness, or deliverables. */
-  view: readStored<View>('grndwrk.view', 'map'),
+  view: ((v: View) => (v === 'docs' && PAGE ? 'map' : v))(readStored<View>('grndwrk.view', 'map')),
   /** How the map draws its cards: as a board, or as an outline. */
   mapLayout: readStored<MapLayout>('grndwrk.mapLayout', 'board') === 'outline' ? ('outline' as MapLayout) : ('board' as MapLayout),
   mapLayouts: MAP_LAYOUTS,
@@ -2952,8 +2975,9 @@ export const state = Alpine.reactive({
   setView(view: View) {
     // Leaving focus for another page closes the card focus had open. The map keeps it, to see it in place.
     if (this.view === 'focus' && view !== 'focus' && view !== 'map') this.closePanel()
-    this.view = view
-    store('grndwrk.view', view)
+    // Documents are the product's own files, on the Mac: the page on a store has none.
+    this.view = view === 'docs' && !this.onMac ? 'map' : view
+    store('grndwrk.view', this.view)
     if (view === 'map') revealSelection()
     if (view === 'docs') void this.loadDocs()
   },

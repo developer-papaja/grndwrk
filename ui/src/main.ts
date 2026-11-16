@@ -1,6 +1,6 @@
 import './rename'
 import Alpine from 'alpinejs'
-import { fetchNodes, fetchProject, subscribe } from './api'
+import { fetchNodes, fetchProject, onSession, PAGE, session, subscribe, watchPictures } from './api'
 import type { ServerEvent } from '../../src/shared/types'
 import { bindKeys } from './keys'
 import { applyTheme, state } from './state'
@@ -30,6 +30,15 @@ bindKeys(() => document.querySelector<HTMLTextAreaElement>('#capture'), {
   layout: () => state.cycleLayout(),
 })
 Alpine.start()
+
+// The page on a store: signing in, and pictures read from the store with the token.
+if (PAGE) {
+  onSession(() => {
+    state.session = { ...session }
+    if (!session.signedIn) state.live = false
+  })
+  watchPictures(document.body)
+}
 
 // Remember where the details were opened, so another view in the rail does not show them (detailsVisible).
 let openedKey = ''
@@ -186,7 +195,7 @@ const handlers = {
  * so a handful of open tabs would leave none for loading or saving.
  * A tab coming back into view reconnects and reloads everything.
  */
-let source: EventSource | null = null
+let source: { close(): void } | null = null
 let authorsTimer: ReturnType<typeof setTimeout> | undefined
 function connect() {
   if (!source) source = subscribe(handlers)
@@ -201,7 +210,7 @@ document.addEventListener('visibilitychange', () => (document.hidden ? disconnec
 // opening another one. (Browsers slow down background timers; often enough.)
 // Its answer also keeps the tab's icon honest: grey once grndwrk stops answering.
 function stillOpen() {
-  if (!document.hidden) return
+  if (!document.hidden || PAGE) return
   fetch('/api/tab', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
     .then((r) => (state.live = r.ok))
     .catch(() => (state.live = false))
@@ -211,6 +220,6 @@ stillOpen()
 window.addEventListener('pagehide', (e) => {
   disconnect()
   // Closed, not kept for going back: grndwrk opens a new tab next time instead of waiting for this one.
-  if (!e.persisted) navigator.sendBeacon('/api/tab?gone=1')
+  if (!e.persisted && !PAGE) navigator.sendBeacon('/api/tab?gone=1')
 })
 if (!document.hidden) connect()

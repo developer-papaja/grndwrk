@@ -592,7 +592,7 @@
     </div>
 
     <!-- A phone on the network asks to send comments: allow it here, and it gets the pairing code -->
-    <div x-cloak x-show="$store.gw.pairRequests.length || $store.gw.siteRequests.length || $store.gw.relay.waiting?.length" id="pair-requests" class="pointer-events-none fixed inset-x-0 top-16 z-40 flex flex-col items-center gap-2 px-4">
+    <div x-cloak x-show="$store.gw.onMac && ($store.gw.pairRequests.length || $store.gw.siteRequests.length || $store.gw.relay.waiting?.length)" id="pair-requests" class="pointer-events-none fixed inset-x-0 top-16 z-40 flex flex-col items-center gap-2 px-4">
       <template x-for="p in $store.gw.pairRequests" :key="p.id">
         <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-body shadow-xl shadow-shade/40" x-transition.opacity>
           <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
@@ -721,7 +721,7 @@
           <p class="mt-2 text-body text-fog/45">Saved in project.md, so everyone on the project sees it.</p>
         </form>
       </div>
-      <template x-for="v in [['focus', 'Inbox: your agent\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['personas', 'Personas: who the product is for', 'i-users'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']]" :key="v[0]">
+      <template x-for="v in [['focus', 'Inbox: your agent\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['personas', 'Personas: who the product is for', 'i-users'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']].filter((v) => $store.gw.onMac || v[0] !== 'docs')" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
           :class="$store.gw.view === v[0] ? 'bg-tint/10 text-fog' : 'text-fog/55 hover:bg-tint/5 hover:text-fog'"
@@ -782,7 +782,18 @@
         </div>
       </div>
       <!-- Sites: which local sites may send comments from the Comment button they load. A site asks the first time; here it can be taken off. -->
-      <div class="relative mb-3" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false">
+      <!-- On the page on a store: who is signed in, and signing out. -->
+      <button
+        x-show="!$store.gw.onMac"
+        id="rail-signout"
+        class="mb-3 grid size-10 place-items-center rounded-lg text-fog/55 hover:bg-tint/5 hover:text-fog"
+        :title="($store.gw.session.name ? 'Signed in as ' + $store.gw.session.name + '. ' : '') + 'Sign out of this map'"
+        aria-label="Sign out"
+        @click="$store.gw.signOut()"
+      >
+        <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
+      </button>
+      <div x-show="$store.gw.onMac" class="relative mb-3" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false">
         <button
           id="rail-sites"
           class="relative grid size-10 place-items-center rounded-lg"
@@ -1097,7 +1108,7 @@
     </div>
 
     <!-- Toolbar: add a thought, act on the open card, frame the map -->
-    <div x-show="$store.gw.view === 'map'" class="pointer-events-none fixed bottom-5 flex justify-center px-4" :style="$store.gw.mapArea">
+    <div x-show="$store.gw.view === 'map' && $store.gw.session.writable" class="pointer-events-none fixed bottom-5 flex justify-center px-4" :style="$store.gw.mapArea">
       <form
         class="pointer-events-auto flex max-w-full items-end gap-1 rounded-2xl border border-line bg-panel p-1.5 shadow-lg shadow-shade/25"
         @submit.prevent="$store.gw.submitCapture()"
@@ -1405,7 +1416,7 @@
                   <span x-show="$store.gw.unknownVariants($store.gw.screen).length" class="text-question" x-text="'Not a variant in project.md: ' + $store.gw.unknownVariants($store.gw.screen).join(', ')"></span>
                 </div>
                 <p x-show="!$store.gw.openUrl($store.gw.screen) && $store.gw.needsExample($store.gw.screen)" class="mt-1 text-body text-fog/45">Its route needs a value, like an id, to open. Run /sitemap, or add <code>open: [/booking/42]</code> to the screen file.</p>
-                <p x-show="!$store.gw.runtime.app && $store.gw.screen.code.some((c) => c.startsWith('/'))" class="mt-1 text-body text-fog/45">Start grndwrk with <code>--app</code> and your dev server's address to open screens from here.</p>
+                <p x-show="$store.gw.onMac && !$store.gw.runtime.app && $store.gw.screen.code.some((c) => c.startsWith('/'))" class="mt-1 text-body text-fog/45">Start grndwrk with <code>--app</code> and your dev server's address to open screens from here.</p>
 
                 <!-- What it looks like: from grndwrk screenshots on the web, from the Comment button on iOS -->
                 <div id="screen-shots" class="mt-4">
@@ -1422,7 +1433,7 @@
                       </div>
                     </template>
                   </div>
-                  <p x-show="!$store.gw.shotsOf($store.gw.screen).length" class="text-body text-fog/45">No picture yet. For the web, run <code>grndwrk screenshots</code>. For iOS, open this screen in the app with the Comment button on.</p>
+                  <p x-show="$store.gw.onMac && !$store.gw.shotsOf($store.gw.screen).length" class="text-body text-fog/45">No picture yet. For the web, run <code>grndwrk screenshots</code>. For iOS, open this screen in the app with the Comment button on.</p>
                 </div>
 
                 <div class="mt-5 space-y-4">
@@ -3811,5 +3822,25 @@
     </aside>
 
     <script type="module" src="/src/main.ts"></script>
+
+    <!-- The page on a store: a token to read the map (and to change it, when it may). -->
+    <div x-cloak x-show="!$store.gw.onMac && !$store.gw.session.signedIn" id="sign-in" class="fixed inset-0 z-[60] grid place-items-center bg-ink px-4">
+      <p x-show="$store.gw.session.checking" class="text-body text-fog/60">Signing in…</p>
+      <form x-show="!$store.gw.session.checking" class="w-full max-w-sm rounded-xl border border-line bg-panel p-5 shadow-lg shadow-shade/25" @submit.prevent="$store.gw.signIn()">
+        <h1 class="mb-1 text-title font-semibold text-fog">Sign in to the map</h1>
+        <p class="mb-4 text-body text-fog/60">Paste the token your team's store gave you. It is kept in this tab only, for this project, until you sign out or close it.</p>
+        <p x-show="$store.gw.session.problem" class="mb-3 rounded-md bg-rose-500/10 px-2.5 py-1.5 text-body text-rose-500" x-text="$store.gw.session.problem"></p>
+        <label class="label" for="sign-in-token">Token</label>
+        <input id="sign-in-token" type="password" autocomplete="off" spellcheck="false" x-model="$store.gw.signInToken" class="field mb-2 w-full" />
+        <p x-show="$store.gw.signInError" class="mb-2 text-body text-rose-500" x-text="$store.gw.signInError"></p>
+        <div class="flex justify-end">
+          <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-60" :disabled="$store.gw.signingIn || !$store.gw.signInToken.trim()">Sign in</button>
+        </div>
+      </form>
+    </div>
+    <!-- A sign-in that may only read: said once, at the top. -->
+    <div x-cloak x-show="!$store.gw.onMac && $store.gw.session.signedIn && !$store.gw.session.writable" id="read-only" class="pointer-events-none fixed inset-x-0 top-2 z-30 flex justify-center px-4">
+      <p class="rounded-full border border-line bg-panel px-3 py-1 text-body text-fog/70 shadow-sm">You can read this map. Your sign-in may not change it.</p>
+    </div>
   </body>
 </html>

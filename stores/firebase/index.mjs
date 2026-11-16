@@ -9,6 +9,7 @@ import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
 import { onRequest } from 'firebase-functions/https'
+import { readFile } from 'node:fs/promises'
 import { firebaseBackend } from './adapter.mjs'
 import { storeFunction } from './functions.mjs'
 
@@ -18,6 +19,8 @@ const handle = storeFunction({
   backend: firebaseBackend(getFirestore(), () => getStorage().bucket()),
   // checkRevoked: a member signed out everywhere (or disabled) is refused at once.
   verify: async (token) => ({ uid: (await getAuth().verifyIdToken(token, true)).uid }),
+  // The page and the Comment button: the folder `grndwrk store assets page` wrote here, deployed with the function.
+  page: (name) => readFile(new URL(`./page/${name}`, import.meta.url)).catch(() => null),
 })
 
 // https://<region>-<firebase project>.cloudfunctions.net/store/<map>/ is the address grndwrk is given.

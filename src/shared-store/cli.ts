@@ -3,6 +3,7 @@ import { basename, join } from 'node:path'
 import { type CheckResult, checkStore } from './check.js'
 import { adapterState, allowAdapter, loadAdapter, openStore, readStoreConfig, saveToken, type StoreConfig, tokenFor, writeStoreConfig } from './config.js'
 import { HttpStore } from './http.js'
+import { writePageAssets } from './page.js'
 
 export const STORE_HELP = `Usage:
   grndwrk store use <url | adapter.mjs> [--token <t>]
@@ -20,6 +21,10 @@ export const STORE_HELP = `Usage:
                          on this machine, never in the project
   grndwrk store allow    allow the project's store adapter as it is now, on this
                          machine; asked again whenever the file changes
+  grndwrk store assets <dir>
+                         write what a store hosts into <dir>: the page that lets
+                         colleagues read the map and answer in a browser, and the
+                         Comment button for a staging site; copy it to your store
 `
 
 async function ask(question: string): Promise<string> {
@@ -56,6 +61,19 @@ export async function storeCommand(args: string[], root: string | null, token?: 
     const failed = results.filter((r) => !r.ok).length
     console.log(failed ? `\n${failed} of ${results.length} rules failed. docs/store-protocol.md says what each one means.` : `\nAll ${results.length} rules kept. This store speaks the protocol.`)
     return void (process.exitCode = failed ? 1 : 0)
+  }
+
+  if (sub === 'assets') {
+    if (!target) return void console.error('Usage: grndwrk store assets <dir>')
+    try {
+      const names = await writePageAssets(target)
+      console.log(`Wrote ${names.length} files to ${target}: the page (index.html, assets/), ${names.filter((n) => !n.startsWith('assets/') && n !== 'index.html').join(', ')}.`)
+      console.log('Your store serves this folder at each project\'s address, <store>/<project>/ (see its README and docs/store-protocol.md, The page).')
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exitCode = 1
+    }
+    return
   }
 
   if (!root || !gwDir) return void console.error('Run this inside a project with a .grndwrk folder.')

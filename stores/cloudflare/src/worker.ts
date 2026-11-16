@@ -5,8 +5,10 @@
  *
  *   https://<worker>/<project>/v1/...         the protocol
  *   https://<worker>/<project>/admin/tokens   tokens, for whoever deployed it
+ *   https://<worker>/<project>/               the page, and store.js for the staging site (page.ts)
  */
 import { access } from './access.js'
+import { type Assets, page } from './page.js'
 import { parseOrigins, type Storage, Store } from './store.js'
 
 export interface Env {
@@ -17,6 +19,8 @@ export interface Env {
   ACCESS_TEAM?: string
   ACCESS_AUD?: string
   ACCESS_ROLES?: string
+  /** The folder `grndwrk store assets page` wrote, as the Worker's static assets (wrangler.toml). */
+  ASSETS?: Assets
   STORE: { idFromName(name: string): unknown; get(id: unknown): { fetch(req: Request): Promise<Response> } }
 }
 
@@ -40,6 +44,10 @@ export default {
     const url = new URL(req.url)
     // https only, so a token never travels in the clear; http just on this machine, for `wrangler dev`.
     if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return Response.json({ error: 'https only' }, { status: 400 })
+    // The page and the button: anything under the project's address but the protocol and admin.
+    const under = /^\/([a-z0-9][a-z0-9-]{0,62})(?:$|\/(?!v1\/|admin\/))/.exec(url.pathname)?.[1]
+    const shown = under ? await page(req, env.ASSETS, under, parseOrigins(env.COMMENT_ORIGINS)) : null
+    if (shown) return shown
     const project = PROJECT.exec(url.pathname)?.[1]
     if (!project) return Response.json({ error: 'Not found' }, { status: 404 })
     return env.STORE.get(env.STORE.idFromName(project)).fetch(req)
