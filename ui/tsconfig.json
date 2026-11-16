@@ -9,5 +9,6 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "../src/shared"]
+  "include": ["src", "../src/shared"],
+  "exclude": ["src/api-store.ts", "src/page"]
 }
