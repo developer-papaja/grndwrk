@@ -34,11 +34,11 @@ export const PAGE_TYPES: Record<string, string> = {
 /**
  * Nothing the page shows loads from or talks to another server: its own
  * scripts and styles, pictures it made itself (blob: from the store's bytes),
- * requests to its own address only. Alpine needs 'unsafe-eval' for its
+ * requests to its own address only. Alpine needs for its
  * expressions; there is no inline script. Never framed by another site.
  */
 export const PAGE_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'"
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'"
 
 /** The headers a store sends with one of these files. */
 export function pageHeaders(name: string): Record<string, string> {

@@ -320,7 +320,7 @@ final class Api
     // The page's rules, as in src/shared-store/page.ts. Keep them the same.
     private const PAGE_FILE = '#^(?:index\.html|assets/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:js|css|woff2|svg|png))$#D';
     private const PAGE_TYPES = ['html' => 'text/html; charset=utf-8', 'js' => 'text/javascript; charset=utf-8', 'css' => 'text/css; charset=utf-8', 'woff2' => 'font/woff2', 'svg' => 'image/svg+xml', 'png' => 'image/png'];
-    private const PAGE_CSP = "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'";
+    private const PAGE_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'";
 
     private function headers(int $status, string $type, array $extra = []): void
     {

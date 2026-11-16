@@ -155,10 +155,10 @@ Serve it at each project's address, so the page's calls to `v1/...` go to the sa
 - Headers: the type by extension (`text/html`, `text/javascript`, `text/css`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and this Content-Security-Policy, so nothing the page shows loads from or talks to another server and no other site frames it:
 
   ```
-  default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'
+  default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'
   ```
 
-  (The page has no inline script; `'unsafe-eval'` is for Alpine's expressions.) `assets/` names change with each build, so they may be cached for good; `index.html` is checked each time.
+  (The page has no inline script and needs no eval: it is built with Alpine's CSP build, which reads its expressions without one.) `assets/` names change with each build, so they may be cached for good; `index.html` is checked each time.
 
 The page holds no data and is served to anyone. It asks for a token that may read (or write) and checks it with `hello`; a comment token is not enough. It keeps the token in that browser tab's `sessionStorage`, for that project only, never in `localStorage`, a query string or a log, and sends it only in the `Authorization` header to its own address. Your login may hand the token over once in the address's fragment, `<project>/#token=<token>`, which is never sent to a server; the page removes it from the address at once, and takes it only when the person says yes. Anyone can send such a link, and what the person writes would then go under the sender's sign-in, so the page asks first, with the project's name and, when `hello` says `"name"`, whose sign-in it is ("Sign in as Vet on duty?"). A token the tab already keeps is never replaced without that yes. A `401` brings the sign-in back. `hello` may also say `"name"`, the person's name, which the page writes as `by:` on thoughts they add.
 

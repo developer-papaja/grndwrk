@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Nothing in the map loads from or sends to another server: pictures, requests, frames and forms stay on this one. -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'" />
     <title>grndwrk</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%225%22 fill=%22%230d99ff%22/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style.css" />
@@ -58,7 +58,7 @@
       :style="$store.gw.mapArea"
       @click.self="$store.gw.clickBackground()"
     >
-      <div x-show="!$store.gw.board.columns.some((c) => c.items.length)" class="max-w-xl px-8 text-fog/50" :style="{ paddingTop: $store.gw.mapTop + 32 + 'px' }">
+      <div x-show="!$store.gw.boardHasCards()" class="max-w-xl px-8 text-fog/50" :style="{ paddingTop: $store.gw.mapTop + 32 + 'px' }">
         <template x-if="$store.gw.scopeScreen">
           <div>
             <p class="text-title font-semibold text-fog" x-text="$store.gw.scopeScreen.title"></p>
@@ -73,7 +73,7 @@
         </template>
         <p x-show="!$store.gw.scopeScreen">Nothing on this page yet. Add a thought below.</p>
       </div>
-      <div x-show="$store.gw.board.columns.some((c) => c.items.length)" class="flex min-h-full w-max items-stretch gap-3 px-4 pb-32" @click.self="$store.gw.clickBackground()">
+      <div x-show="$store.gw.boardHasCards()" class="flex min-h-full w-max items-stretch gap-3 px-4 pb-32" @click.self="$store.gw.clickBackground()">
         <template x-for="col in $store.gw.board.columns" :key="col.key">
           <section
             class="flex w-[236px] shrink-0 flex-col rounded-lg"
@@ -99,7 +99,7 @@
                   class="card-section flex flex-col gap-1.5 rounded-md"
                   :class="$store.gw.dragId && $store.gw.board.cardGroup !== 'level' && $store.gw.dropCell === col.key && $store.gw.dropSection === sec.key && 'bg-accent/10'"
                   :data-section="sec.key"
-                  @dragover.prevent.stop="$store.gw.dragId && ($store.gw.dropCell = col.key, $store.gw.dropSection = sec.key)"
+                  @dragover.prevent.stop="$store.gw.dragOver(col.key, sec.key)"
                   @drop.prevent.stop="$store.gw.moveCard($store.gw.dragId, col.key, undefined, $store.gw.board.cardGroup === 'level' ? undefined : sec.key)"
                 >
                   <div x-show="$store.gw.board.cardGroup !== 'level' && (col.sections.length > 1 || sec.key)" class="mt-2 flex items-center gap-1.5 px-1 text-body first:mt-0">
@@ -117,7 +117,7 @@
                       <input
                         class="field min-w-0 flex-1 py-0.5 text-body"
                         :value="sec.name"
-                        x-init="$nextTick(() => { $el.focus(); $el.select() })"
+                        x-init="$focusSoon(true)"
                         @keydown.enter.prevent="$event.target.blur()"
                         @keydown.escape.stop="$store.gw.renamingFeature = ''"
                         @blur="$store.gw.renamingFeature && $store.gw.renameFeature(col.screen, sec.name, $event.target.value)"
@@ -128,7 +128,7 @@
                   </div>
                   <template x-for="it in sec.items" :key="it.id">
                     <div
-                      @dragover.prevent.stop="$store.gw.dragId && ($store.gw.dropCell = col.key, $store.gw.dropSection = sec.key)"
+                      @dragover.prevent.stop="$store.gw.dragOver(col.key, sec.key)"
                       @drop.prevent.stop="$store.gw.moveCard($store.gw.dragId, col.key, it.altitude, $store.gw.board.cardGroup === 'level' ? undefined : sec.key)"
                     >
                       <template x-if="it.kind === 'node'">
@@ -148,8 +148,8 @@
                           :style="{ '--type': $store.gw.typeColors[it.node.type] }"
                           :title="it.node.type + (it.node.status !== 'open' ? ', ' + it.node.status : '') + ($store.gw.authorLine(it.node) ? ', ' + $store.gw.authorLine(it.node) : '')"
                           @click="$store.gw.clickCard(it.id)"
-                          @dragstart="$store.gw.dragId = it.id; $event.dataTransfer.setData('text/plain', it.id); $event.dataTransfer.effectAllowed = 'move'"
-                          @dragend="$store.gw.dragId = null; $store.gw.dropCell = ''"
+                          @dragstart="$store.gw.dragStart(it.id, $event)"
+                          @dragend="$store.gw.dragEnd()"
                         >
                           <span class="mb-0.5 flex gap-1.5 text-tag tracking-wide">
                             <span class="text-fog/40" :title="'Level ' + it.altitude + ': ' + $store.gw.altitudeWords[it.altitude]" x-text="$store.gw.label($store.gw.altitudeWords[it.altitude])"></span>
@@ -195,7 +195,7 @@
                     <input
                       class="field w-full py-1 text-body"
                       placeholder="Name of the feature"
-                      x-init="$nextTick(() => $el.focus())"
+                      x-init="$focusSoon()"
                       @keydown.enter.prevent="$event.target.blur()"
                       @keydown.escape.stop="$store.gw.addingFeature = ''"
                       @blur="$store.gw.addingFeature && $store.gw.addFeature(col.screen, $event.target.value)"
@@ -328,7 +328,7 @@
             />
           </div>
           <ul id="scope-options" class="flex-1 overflow-y-auto p-1">
-            <template x-for="(o, i) in $store.gw.scopeOptions" :key="o.id ?? 'all'">
+            <template x-for="(o, i) in $store.gw.scopeOptions" :key="o.id || 'all'">
               <li>
                 <button
                   class="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left"
@@ -350,8 +350,8 @@
             <li x-show="!$store.gw.scopeOptions.length" class="px-3 py-2 text-body text-fog/45">No screen matches.</li>
           </ul>
           <div x-show="$store.gw.scopeScreen" class="border-t border-line p-2 text-body">
-            <p class="px-1 text-fog/60" x-text="$store.gw.scopeScreen?.purpose || 'No purpose written yet.'"></p>
-            <button class="mt-1.5 rounded-md px-1.5 py-1 text-accent hover:bg-tint/5" @click="$store.gw.scopeOpen = false; $store.gw.selectScreen($store.gw.scope); $store.gw.setView('sitemap')">Open in the Sitemap</button>
+            <p class="px-1 text-fog/60" x-text="($store.gw.scopeScreen && $store.gw.scopeScreen.purpose) || 'No purpose written yet.'"></p>
+            <button class="mt-1.5 rounded-md px-1.5 py-1 text-accent hover:bg-tint/5" @click="$store.gw.openScopeInSitemap()">Open in the Sitemap</button>
           </div>
         </div>
       </div>
@@ -469,7 +469,7 @@
             <button x-show="$store.gw.viewPanel !== 'main'" class="icon-btn -ml-0.5" title="Back" @click="$store.gw.viewPanel = 'main'">
               <svg class="size-4"><use href="#i-arrow-left" /></svg>
             </button>
-            <span class="flex-1 font-semibold text-fog" x-text="$store.gw.viewPanel === 'main' ? 'View settings' : ($store.gw.viewRows.find((r) => r.key === $store.gw.viewPanel)?.name ?? '')"></span>
+            <span class="flex-1 font-semibold text-fog" x-text="$store.gw.viewPanelTitle()"></span>
             <button class="icon-btn" title="Close ( Esc )" @click="$store.gw.viewPanel = ''">
               <svg class="size-4"><use href="#i-close" /></svg>
             </button>
@@ -525,7 +525,7 @@
         title="Show details"
         @click="$store.gw.setDetailsMinimized(false)"
       >
-        <span class="truncate" x-text="$store.gw.reportOpen ? 'Readiness report' : $store.gw.selectedGap ? 'Missing: ' + $store.gw.selectedGap.title : $store.gw.selectedStory ? 'Story: ' + $store.gw.selectedStory.title : $store.gw.selected?.title"></span>
+        <span class="truncate" x-text="$store.gw.panelTitle()"></span>
         <svg class="size-4 shrink-0 text-fog/55"><use href="#i-panel-right" /></svg>
       </button>
       </div>
@@ -533,7 +533,7 @@
       <div
         x-show="$store.gw.filterRowShown"
         id="filters"
-        x-init="new ResizeObserver(() => ($store.gw.filterRowHeight = $el.offsetHeight)).observe($el)"
+        x-init="$trackHeight('filterRowHeight')"
         class="pointer-events-auto relative z-[1] -mt-2 flex w-full flex-wrap items-center gap-1 border-b border-line bg-panel/95 px-3 py-1.5 text-body backdrop-blur"
         @keydown.escape.stop="$store.gw.filterOpen = ''"
       >
@@ -612,7 +612,7 @@
         x-show="$store.gw.principles.length"
         id="principles"
         aria-label="Guiding principles"
-        x-init="new ResizeObserver(() => ($store.gw.principlesHeight = $el.offsetHeight)).observe($el)"
+        x-init="$trackHeight('principlesHeight')"
         class="pointer-events-auto relative -mt-2 w-full border-b border-line bg-panel/95 px-3 text-body backdrop-blur"
         @keydown.escape.stop="$store.gw.principleMenu = ''"
       >
@@ -626,7 +626,7 @@
           <svg class="size-3.5 shrink-0 transition-transform" :class="$store.gw.principlesOpen && 'rotate-90'"><use href="#i-chevron" /></svg>
           <span class="shrink-0 font-medium text-fog/80">Guiding principles</span>
           <span class="shrink-0 text-fog/45" x-text="$store.gw.principles.length"></span>
-          <span x-show="!$store.gw.principlesOpen" class="min-w-0 truncate" x-text="$store.gw.principles.map((p) => p.title).join(' · ')"></span>
+          <span x-show="!$store.gw.principlesOpen" class="min-w-0 truncate" x-text="$store.gw.principleTitles()"></span>
         </button>
         <ol x-show="$store.gw.principlesOpen" class="max-h-[40vh] overflow-y-auto pb-2 pl-5.5">
           <template x-for="p in $store.gw.principles" :key="p.id">
@@ -646,7 +646,7 @@
                 <svg class="size-4" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="18" cy="12" r="1.5" /></svg>
               </button>
               <div x-show="$store.gw.principleMenu === p.id" @click.outside="$store.gw.principleMenu = ''" class="menu-pop left-auto right-0 top-7">
-                <button class="menu-item" @click="$store.gw.principleMenu = ''; $store.gw.select(p.id)">
+                <button class="menu-item" @click="$store.gw.changePrinciple(p.id)">
                   <svg class="size-4 text-fog/55"><use href="#i-pencil" /></svg> Change it
                 </button>
                 <button class="menu-item" @click="$store.gw.setPrinciple(p.id, false)">
@@ -660,7 +660,7 @@
     </div>
 
     <!-- A phone on the network asks to send comments: allow it here, and it gets the pairing code -->
-    <div x-cloak x-show="$store.gw.onMac && ($store.gw.pairRequests.length || $store.gw.siteRequests.length || $store.gw.relay.waiting?.length)" id="pair-requests" class="pointer-events-none fixed inset-x-0 top-16 z-40 flex flex-col items-center gap-2 px-4">
+    <div x-cloak x-show="$store.gw.onMac && ($store.gw.pairRequests.length || $store.gw.siteRequests.length || $store.gw.relayWaiting().length)" id="pair-requests" class="pointer-events-none fixed inset-x-0 top-16 z-40 flex flex-col items-center gap-2 px-4">
       <template x-for="p in $store.gw.pairRequests" :key="p.id">
         <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-body shadow-xl shadow-shade/40" x-transition.opacity>
           <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
@@ -673,7 +673,7 @@
         </div>
       </template>
       <!-- A colleague's phone joined with their invite, through the relay: allow it when it shows the same digits -->
-      <template x-for="w in $store.gw.relay.waiting ?? []" :key="w.invite">
+      <template x-for="w in $store.gw.relayWaiting()" :key="w.invite">
         <div class="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-accent/50 bg-panel py-2.5 pl-3.5 pr-2.5 text-body shadow-xl shadow-shade/40" x-transition.opacity>
           <svg class="size-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
           <span class="min-w-0 flex-1">
@@ -729,9 +729,9 @@
       <div
         x-show="$store.gw.projectLabel"
         class="relative mb-1 w-full border-b border-line px-1 pb-2.5"
-        x-data="{ open: false, name: '', initials: '', color: '', edit() { this.open = true; this.name = String($store.gw.project.name ?? ''); this.initials = String($store.gw.project.initials ?? ''); this.color = String($store.gw.project.color ?? ''); $nextTick(() => $refs.badgeName.focus()) } }"
-        @keydown.escape.stop="open = false; $store.gw.projectMenu = false"
-        @click.outside="open = false; $store.gw.projectMenu = false"
+        x-data="badge"
+        @keydown.escape.stop="close()"
+        @click.outside="close()"
       >
         <button
           id="rail-project"
@@ -739,7 +739,7 @@
           :class="$store.gw.view === 'projects' && 'bg-tint/10'"
           :title="'Project: ' + $store.gw.projectLabel + ($store.gw.onMac ? '. Click to change its name, letters or color' : '. Click for your other projects and All projects')"
           :aria-expanded="$store.gw.onMac ? open : $store.gw.projectMenu"
-          @click="if ($store.gw.onMac) { open ? (open = false) : edit() } else { open = false; $store.gw.toggleProjectMenu() }"
+          @click="press()"
         >
           <span class="grid size-9 place-items-center rounded-lg text-body font-semibold text-white" :style="{ background: $store.gw.projectColor }" x-text="$store.gw.projectInitials"></span>
           <span class="line-clamp-2 w-full break-words text-center text-tag font-medium leading-tight text-fog/80" x-text="$store.gw.projectLabel"></span>
@@ -761,7 +761,7 @@
               <svg class="size-4 shrink-0 text-fog/55"><use href="#i-columns" /></svg>
               <span class="flex-1">All projects</span>
             </button>
-            <button x-show="$store.gw.session.writable" class="menu-item" @click="$store.gw.projectMenu = false; edit()">
+            <button x-show="$store.gw.session.writable" class="menu-item" @click="editFromMenu()">
               <svg class="size-4 shrink-0 text-fog/55"><use href="#i-pencil" /></svg>
               <span class="flex-1">Name, letters and color</span>
             </button>
@@ -772,18 +772,18 @@
           x-transition.opacity
           id="badge-editor"
           class="absolute left-full top-0 z-30 ml-2 w-64 rounded-lg border border-line bg-panel p-3 text-body shadow-lg shadow-shade/30"
-          @submit.prevent="$store.gw.saveBadge({ name, initials, color }).then((ok) => { if (ok) open = false })"
+          @submit.prevent="save()"
         >
           <div class="mb-3 flex items-center gap-2.5">
             <span
               class="grid size-9 shrink-0 place-items-center rounded-lg text-body font-semibold text-white"
-              :style="{ background: color || $store.gw.autoColor(name.trim() || String($store.gw.project.folder ?? '')) }"
-              x-text="(initials.trim() || (name.trim() || String($store.gw.project.folder ?? '')).split(/[\s_.-]+/).filter(Boolean).reduce((a, w, i, all) => all.length > 1 ? (i < 2 ? a + w[0] : a) : w.slice(0, 2), '')).toUpperCase()"
+              :style="{ background: color || autoColor }"
+              x-text="letters"
             ></span>
-            <span class="min-w-0 truncate font-medium text-fog" x-text="name.trim() || String($store.gw.project.folder ?? '')"></span>
+            <span class="min-w-0 truncate font-medium text-fog" x-text="label"></span>
           </div>
           <label class="label" for="badge-name">Name</label>
-          <input id="badge-name" x-ref="badgeName" x-model="name" maxlength="80" class="field mb-2.5 w-full" :placeholder="String($store.gw.project.folder ?? '')" />
+          <input id="badge-name" x-ref="badgeName" x-model="name" maxlength="80" class="field mb-2.5 w-full" :placeholder="folder" />
           <label class="label" for="badge-initials">Letters</label>
           <input id="badge-initials" x-model="initials" maxlength="3" class="field mb-2.5 w-20 uppercase" placeholder="Auto" />
           <span class="label">Color</span>
@@ -793,7 +793,7 @@
               class="grid size-6 place-items-center rounded-md border text-tag text-fog/70"
               :class="color === '' ? 'border-accent ring-2 ring-accent/40' : 'border-line'"
               title="Auto: a color from the name"
-              :style="{ background: $store.gw.autoColor(name.trim() || String($store.gw.project.folder ?? '')) }"
+              :style="{ background: autoColor }"
               @click="color = ''"
             ><span class="font-semibold text-white">A</span></button>
             <template x-for="c in $store.gw.badgeColors" :key="c">
@@ -815,7 +815,7 @@
           <p class="mt-2 text-body text-fog/45">Saved in project.md, so everyone on the project sees it.</p>
         </form>
       </div>
-      <template x-for="v in [['focus', 'Inbox: your agent\'s questions', 'i-inbox'], ['map', 'Map', 'i-map'], ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'], ['personas', 'Personas: who the product is for', 'i-users'], ['readiness', 'Status: what is done and what is left', 'i-check'], ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'], ['deliverables', 'Deliverables', 'i-doc']].filter((v) => $store.gw.onMac || v[0] !== 'docs')" :key="v[0]">
+      <template x-for="v in $store.gw.railViews()" :key="v[0]">
         <button
           class="relative grid size-10 place-items-center rounded-lg"
           :class="$store.gw.view === v[0] ? 'bg-tint/10 text-fog' : 'text-fog/55 hover:bg-tint/5 hover:text-fog'"
@@ -867,7 +867,7 @@
         </button>
         <div id="theme" x-cloak x-show="open" x-transition.opacity.duration.100ms class="menu-pop bottom-0 left-12 top-auto w-48">
           <template x-for="t in [['system', 'As the system', 'i-appearance'], ['light', 'Light', 'i-sun'], ['dark', 'Dark', 'i-moon']]" :key="t[0]">
-            <button class="menu-item" :data-option="t[0]" @click="$store.gw.setTheme(t[0]); open = false">
+            <button class="menu-item" :data-option="t[0]" @click="$do($store.gw.setTheme(t[0]), open = false)">
               <svg class="size-4 shrink-0 text-fog/60"><use :href="'#' + t[2]" /></svg>
               <span class="min-w-0 flex-1" x-text="t[1]"></span>
               <svg x-show="$store.gw.theme === t[0]" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
@@ -895,7 +895,7 @@
           title="Sites: which sites can send comments"
           aria-label="Sites: which sites can send comments"
           :aria-expanded="open"
-          @click="open = !open; open && ($store.gw.loadSiteRequests(), $store.gw.loadRelay())"
+          @click="$do(open = !open, open && $do($store.gw.loadSiteRequests(), $store.gw.loadRelay()))"
         >
           <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" /></svg>
           <span
@@ -928,7 +928,7 @@
               <div>
                 <p x-show="$store.gw.relay.error" class="mt-1 text-body text-rose-300" x-text="'The relay: ' + $store.gw.relay.error"></p>
                 <!-- Each colleague opens on a click: an invite with its QR code and link, a joined device with what it sent -->
-                <template x-for="p in $store.gw.relay.phones ?? []" :key="p.id">
+                <template x-for="p in $store.gw.relayPhones()" :key="p.id">
                   <div class="mt-1 rounded-md" :class="$store.gw.colleagueOpen === p.id && 'bg-tint/[0.04] ring-1 ring-line'">
                     <button class="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-body hover:bg-tint/5" :aria-expanded="$store.gw.colleagueOpen === p.id" @click.stop="$store.gw.openColleague('phones', p.id)">
                       <span class="size-1.5 shrink-0 rounded-full bg-emerald-400"></span>
@@ -945,7 +945,7 @@
                     </div>
                   </div>
                 </template>
-                <template x-for="v in $store.gw.relay.invites ?? []" :key="v.id">
+                <template x-for="v in $store.gw.relayInvites()" :key="v.id">
                   <div class="mt-1 rounded-md" :class="$store.gw.colleagueOpen === v.id && 'bg-tint/[0.04] ring-1 ring-line'">
                     <button class="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-body hover:bg-tint/5" :aria-expanded="$store.gw.colleagueOpen === v.id" @click.stop="$store.gw.openColleague('invites', v.id)">
                       <span class="size-1.5 shrink-0 rounded-full border border-fog/40"></span>
@@ -953,7 +953,7 @@
                       <span class="shrink-0 text-body text-fog/40">invited</span>
                     </button>
                     <div x-show="$store.gw.colleagueOpen === v.id" class="px-1.5 pb-2 pl-5 text-body leading-snug text-fog/60">
-                      <p>Not joined yet. In the app: long press the grndwrk button, Join with an invite, then scan this or paste the link<span x-show="$store.gw.relay.site">. On the staging site: press Comment and paste the link</span>. Works once, until <span x-text="new Date(v.expires).toLocaleDateString()"></span>.</p>
+                      <p>Not joined yet. In the app: long press the grndwrk button, Join with an invite, then scan this or paste the link<span x-show="$store.gw.relay.site">. On the staging site: press Comment and paste the link</span>. Works once, until <span x-text="$store.gw.dateOf(v.expires)"></span>.</p>
                       <template x-if="$store.gw.colleagueInvite && $store.gw.colleagueInvite.id === v.id">
                         <div>
                           <svg class="mx-auto mt-2 size-40 rounded bg-white p-2" :view-box.camel="'0 0 ' + $store.gw.colleagueInvite.qr.split('|')[0] + ' ' + $store.gw.colleagueInvite.qr.split('|')[0]" shape-rendering="crispEdges" role="img" :aria-label="'QR code with the invite for ' + v.name"><path fill="#000" :d="$store.gw.colleagueInvite.qr.split('|')[1]" /></svg>
@@ -967,12 +967,12 @@
                     </div>
                   </div>
                 </template>
-                <div x-show="!($store.gw.relay.phones ?? []).length && !($store.gw.relay.invites ?? []).length" class="mt-1 text-body text-fog/45">Nobody yet.</div>
+                <div x-show="!$store.gw.relayPhones().length && !$store.gw.relayInvites().length" class="mt-1 text-body text-fog/45">Nobody yet.</div>
                 <div class="mt-1 text-body leading-snug text-fog/45">
                   <span x-show="$store.gw.relay.site">Also from the staging site, <span class="font-mono text-fog/70" x-text="$store.gw.relay.site"></span>.</span>
                   <span x-show="!$store.gw.relay.site">From a staging site too: <code class="rounded bg-tint/8 px-1 text-fog/75">grndwrk relay site https://…</code> in your terminal.</span>
                 </div>
-                <form class="mt-2 flex gap-1.5" @submit.prevent="name.trim() && $store.gw.invite(name).then(() => { name = '' })">
+                <form class="mt-2 flex gap-1.5" @submit.prevent="$store.gw.inviteFrom($data)">
                   <input x-model="name" class="field min-w-0 flex-1 py-1 text-body" placeholder="Their name" aria-label="Who the invite is for" maxlength="80" />
                   <button type="submit" class="shrink-0 rounded-md bg-accent px-2.5 py-1 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!name.trim()">Invite</button>
                 </form>
@@ -1037,7 +1037,7 @@
 
       <div class="flex items-center justify-between px-4 pb-1 pt-3">
         <span class="font-semibold text-fog">Pages</span>
-        <button class="icon-btn -mr-1.5" title="Add a page" @click="$store.gw.addingPage = true; $nextTick(() => document.getElementById('new-page').focus())">
+        <button class="icon-btn -mr-1.5" title="Add a page" @click="$do($store.gw.addingPage = true, $focusId('new-page'))">
           <svg class="size-[18px]"><use href="#i-plus" /></svg>
         </button>
       </div>
@@ -1045,7 +1045,7 @@
         <svg class="size-4 shrink-0 text-accent"><use href="#i-screens" /></svg>
         <span class="min-w-0 flex-1">
           <span class="block text-body text-accent">Working on one part</span>
-          <span class="block truncate font-medium text-fog" x-text="$store.gw.scopeScreen?.title"></span>
+          <span class="block truncate font-medium text-fog" x-text="$store.gw.scopeScreen && $store.gw.scopeScreen.title"></span>
         </span>
         <button class="icon-btn shrink-0" title="Back to the whole product" @click="$store.gw.setScope(null)">
           <svg class="size-4"><use href="#i-close" /></svg>
@@ -1076,7 +1076,7 @@
             id="new-page"
             x-model="$store.gw.newPage"
             @blur="$store.gw.addPage()"
-            @keydown.escape.prevent.stop="$store.gw.newPage = ''; $store.gw.addingPage = false"
+            @keydown.escape.prevent.stop="$do($store.gw.newPage = '', $store.gw.addingPage = false)"
             autocomplete="off"
             placeholder="Page name"
             class="field w-full"
@@ -1121,7 +1121,7 @@
           <button class="icon-btn" :class="$store.gw.searchOpen && 'text-fog'" title="Search ( / )" @click="$store.gw.searchOpen ? $store.gw.leaveSearch() : $store.gw.openList()">
             <svg class="size-[18px]"><use href="#i-search" /></svg>
           </button>
-          <button class="icon-btn" title="Add a thought ( N )" @click="document.getElementById('capture').focus()">
+          <button class="icon-btn" title="Add a thought ( N )" @click="$focusId('capture')">
             <svg class="size-[18px]"><use href="#i-plus" /></svg>
           </button>
         </span>
@@ -1135,7 +1135,7 @@
           @keydown.down.prevent="$store.gw.moveList(1)"
           @keydown.up.prevent="$store.gw.moveList(-1)"
           @keydown.enter.prevent="$store.gw.chooseRow()"
-          @keydown.escape.prevent.stop="$store.gw.leaveSearch(); $event.target.blur()"
+          @keydown.escape.prevent.stop="$do($store.gw.leaveSearch(), $event.target.blur())"
           autocomplete="off"
           spellcheck="false"
           placeholder="Search titles, notes and topics"
@@ -1164,15 +1164,7 @@
             <template x-for="n in $store.gw.isCollapsed(group.key) ? [] : group.nodes" :key="n.id">
               <button
                 class="flex h-8 w-full items-center gap-2 rounded-md pl-6 pr-2 text-left"
-                :class="
-                  $store.gw.selectedId === n.id
-                    ? 'bg-accent/25 text-fog'
-                    : $store.gw.listRows[$store.gw.listIndex]?.id === n.id && $store.gw.query
-                      ? 'bg-tint/10 text-fog'
-                      : $store.gw.freshIds.includes(n.id)
-                        ? 'bg-tint/10 text-fog'
-                        : 'text-fog/70 hover:bg-tint/5'
-                "
+                :class="$store.gw.listRowClass(n.id)"
                 @click="$store.gw.chooseRow(n.id)"
               >
                 <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[n.type] }"></span>
@@ -1210,14 +1202,14 @@
         <!-- What Enter adds: a thought, or a story (from the open thought, or a new one).
              As tall as a one line field; with a longer thought it stays by its last line, like the tools. -->
         <div class="flex h-10 shrink-0 rounded-xl bg-tint/5 p-1 text-body" role="group" aria-label="Add a thought or a story">
-          <button type="button" id="capture-thought" class="flex items-center rounded-lg px-3" :class="$store.gw.captureKind === 'thought' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a thought" @click="$store.gw.setCaptureKind('thought'); $refs.capture.focus()">Thought</button>
-          <button type="button" id="capture-story" class="flex items-center rounded-lg px-3" :class="$store.gw.captureKind === 'story' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a story: from the open thought, or with a new thought it comes from" @click="$store.gw.setCaptureKind('story'); $refs.capture.focus()">Story</button>
+          <button type="button" id="capture-thought" class="flex items-center rounded-lg px-3" :class="$store.gw.captureKind === 'thought' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a thought" @click="$do($store.gw.setCaptureKind('thought'), $refs.capture.focus())">Thought</button>
+          <button type="button" id="capture-story" class="flex items-center rounded-lg px-3" :class="$store.gw.captureKind === 'story' ? 'bg-tint/12 text-fog' : 'text-fog/55 hover:text-fog'" title="Add a story: from the open thought, or with a new thought it comes from" @click="$do($store.gw.setCaptureKind('story'), $refs.capture.focus())">Story</button>
         </div>
         <div class="flex min-w-0 items-center gap-2 rounded-xl bg-tint/5 px-3 py-1.5 focus-within:bg-tint/10">
           <template x-if="$store.gw.selected && !$store.gw.selected.error && $store.gw.captureLinked">
             <span class="flex max-w-[150px] shrink-0 items-center gap-1 rounded-md bg-tint/10 py-0.5 pl-2 pr-0.5 text-body text-fog/70">
               <span class="truncate" x-text="$store.gw.selected.title"></span>
-              <button type="button" class="rounded p-0.5 text-fog/50 hover:bg-tint/10 hover:text-fog" title="Add without linking" @click="$store.gw.captureLinked = false; $refs.capture.focus()">
+              <button type="button" class="rounded p-0.5 text-fog/50 hover:bg-tint/10 hover:text-fog" title="Add without linking" @click="$do($store.gw.captureLinked = false, $refs.capture.focus())">
                 <svg class="size-3.5"><use href="#i-close" /></svg>
               </button>
             </span>
@@ -1232,7 +1224,7 @@
             spellcheck="false"
             :placeholder="$store.gw.captureKind === 'story' ? 'Add a story: what someone can do' : $store.gw.count === 0 ? 'Add your first thought' : 'Add a thought'"
             :title="$store.gw.captureKind === 'story' ? 'A story the open thought leads to, or a new one with its own thought' : 'Start with ? for a question or ! for a decision'"
-            x-init="$watch('$store.gw.capture', () => $nextTick(() => fitCapture($el)))"
+            x-effect="$fitCapture($store.gw.capture)"
             @keydown.enter.prevent="!$event.isComposing && $el.form.requestSubmit()"
             class="block w-[260px] max-h-[calc(5*1.25rem+0.5rem)] min-w-0 resize-none bg-transparent py-1 text-body leading-5 text-fog placeholder:text-fog/40 focus:outline-none"
           ></textarea>
@@ -1329,10 +1321,10 @@
                     id="sitemap-zoom"
                     class="w-8 bg-transparent text-right tabular-nums text-fog/80 outline-none"
                     inputmode="numeric"
-                    :value="Math.round($store.gw.sitemapZoom * 100)"
-                    @keydown.enter.prevent="$store.gw.zoomSitemap(parseFloat($event.target.value)); $event.target.value = Math.round($store.gw.sitemapZoom * 100); $event.target.blur()"
-                    @keydown.escape.prevent.stop="$event.target.value = Math.round($store.gw.sitemapZoom * 100); $event.target.blur()"
-                    @blur="$event.target.value = Math.round($store.gw.sitemapZoom * 100)"
+                    :value="$store.gw.zoomPercent()"
+                    @keydown.enter.prevent="$store.gw.zoomFromField($event.target)"
+                    @keydown.escape.prevent.stop="$store.gw.resetZoomField($event.target, true)"
+                    @blur="$store.gw.resetZoomField($event.target)"
                     @focus="$event.target.select()"
                   /><span class="text-fog/50">%</span>
                 </label>
@@ -1347,7 +1339,7 @@
               <p class="mb-2 text-body text-fog/55">Drag a picture onto the screen it shows. Or run /sitemap, which reads what each one shows.</p>
               <div class="flex gap-3 overflow-x-auto pb-1">
                 <template x-for="shot in $store.gw.unplacedShots" :key="shot.url">
-                  <div class="shrink-0 cursor-grab active:cursor-grabbing" draggable="true" :data-shot="shot.file" :title="shot.texts?.length ? 'It shows: ' + shot.texts.slice(0, 8).join(' · ') : shot.key" @dragstart="$store.gw.dragShot(shot, $event)" @dragend="$store.gw.endDragShot()">
+                  <div class="shrink-0 cursor-grab active:cursor-grabbing" draggable="true" :data-shot="shot.file" :title="$store.gw.shotTitle(shot)" @dragstart="$store.gw.dragShot(shot, $event)" @dragend="$store.gw.endDragShot()">
                     <button class="block cursor-zoom-in" @click="$store.gw.viewShot(shot, $store.gw.unplacedShots)">
                       <img :src="shot.url" alt="" draggable="false" class="h-32 w-auto rounded-md border border-line object-cover object-top hover:border-tint/30" />
                     </button>
@@ -1359,29 +1351,24 @@
 
             <!-- Drawn: the top-level screens on top, each screen under the one it opens from -->
             <div x-show="$store.gw.sitemapLayout === 'drawn'" id="sitemap-drawn" class="flex-1 overflow-auto"
-              x-data="{ pan: null }"
-              :class="pan?.moved ? 'cursor-grabbing select-none' : 'cursor-grab'"
-              @pointerdown="if ($event.button === 0 && $event.pointerType === 'mouse') pan = { x: $event.clientX, y: $event.clientY, l: $el.scrollLeft, t: $el.scrollTop, moved: false }"
-              @pointermove.window="if (pan) { const dx = $event.clientX - pan.x, dy = $event.clientY - pan.y; if (!pan.moved && Math.hypot(dx, dy) > 4) pan.moved = true; if (pan.moved) { $el.scrollLeft = pan.l - dx; $el.scrollTop = pan.t - dy } }"
-              @pointerup.window="if (pan?.moved) { const stop = (e) => { e.stopPropagation(); e.preventDefault() }; window.addEventListener('click', stop, { capture: true, once: true }); setTimeout(() => window.removeEventListener('click', stop, true), 0) } pan = null"
+              x-data="sitemapPan"
+              :class="panClass"
+              @pointerdown="down($event, $el)"
+              @pointermove.window="move($event, $el)"
+              @pointerup.window="up()"
               @pointercancel.window="pan = null"
-              @wheel="if ($event.ctrlKey || $event.metaKey) { $event.preventDefault(); $store.gw.pinchSitemap($event, $el) }">
+              @wheel="wheel($event, $el)">
               <!-- Drag anywhere to move around, as in a design tool; a click without moving still opens a screen -->
               <!-- Zoom moves and sizes the boxes, never the text: zoomed out, a box shows less instead of smaller letters -->
               <div class="relative" :style="{ width: $store.gw.sitemapDrawing.width * $store.gw.sitemapZoom + 'px', height: $store.gw.sitemapDrawing.height * $store.gw.sitemapZoom + 'px' }">
                 <div class="absolute inset-0">
-                  <svg class="pointer-events-none absolute inset-0" :width="$store.gw.sitemapDrawing.width * $store.gw.sitemapZoom" :height="$store.gw.sitemapDrawing.height * $store.gw.sitemapZoom" x-html="'<g transform=&quot;scale(' + $store.gw.sitemapZoom + ')&quot;>' + $store.gw.sitemapDrawing.svg + '</g>'"></svg>
+                  <svg class="pointer-events-none absolute inset-0" :width="$store.gw.sitemapDrawing.width * $store.gw.sitemapZoom" :height="$store.gw.sitemapDrawing.height * $store.gw.sitemapZoom" x-markup="'<g transform=&quot;scale(' + $store.gw.sitemapZoom + ')&quot;>' + $store.gw.sitemapDrawing.svg + '</g>'"></svg>
                   <template x-for="b in $store.gw.sitemapDrawing.boxes" :key="'b' + b.id">
                     <div class="absolute" :style="{ left: b.x * $store.gw.sitemapZoom + 'px', top: b.y * $store.gw.sitemapZoom + 'px', width: $store.gw.box.width * $store.gw.sitemapZoom + 'px', height: $store.gw.box.height * $store.gw.sitemapZoom + 'px' }">
                       <template x-if="b.screen">
                         <button
                           class="flex h-full w-full overflow-hidden rounded-lg border bg-panel text-left shadow-sm shadow-shade/30"
-                          :class="[
-                            $store.gw.sitemapCompact ? 'flex-col gap-1 px-1.5 py-1' : 'gap-2 px-3 py-2',
-                            $store.gw.dropOn === b.id ? 'border-accent ring-2 ring-accent' : $store.gw.screen?.id === b.id ? 'border-accent ring-1 ring-accent' : $store.gw.screen?.leads_to.includes(b.id) ? 'border-accent/50' : 'border-line hover:border-tint/25',
-                            b.screen.status === 'planned' && 'border-dashed',
-                            $store.gw.hiddenIds.has(b.id) && 'opacity-50'
-                          ]"
+                          :class="$store.gw.sitemapBoxClass(b)"
                           :data-screen="b.id"
                           @click="$store.gw.selectScreen(b.id)"
                           @dragover="$store.gw.overScreen(b.id, $event)"
@@ -1412,7 +1399,7 @@
                               draggable="false"
                               class="rounded border border-line object-cover object-top"
                               :class="$store.gw.sitemapCompact ? 'min-h-0 w-full flex-1' : 'h-full shrink-0'"
-                              :style="$store.gw.sitemapCompact ? '' : 'width: ' + Math.round(($store.gw.shotsOf(b.screen)[0].platform === 'ios' ? 38 : 64) * Math.min(1, $store.gw.sitemapZoom)) + 'px'"
+                              :style="$store.gw.sitemapShotStyle(b.screen)"
                             />
                           </template>
                         </button>
@@ -1428,7 +1415,7 @@
                 <li>
                   <button
                     class="flex w-full items-start gap-2 rounded-md py-2 pr-2 text-left"
-                    :class="[$store.gw.dropOn === row.screen.id ? 'bg-accent/20 ring-1 ring-accent' : $store.gw.screen?.id === row.screen.id ? 'bg-tint/10' : 'hover:bg-tint/5', $store.gw.hiddenIds.has(row.screen.id) && 'opacity-50']"
+                    :class="$store.gw.sitemapRowClass(row.screen.id)"
                     :style="{ paddingLeft: (10 + row.depth * 18) + 'px' }"
                     :data-screen="row.screen.id"
                     @click="$store.gw.selectScreen(row.screen.id)"
@@ -1510,7 +1497,7 @@
                   <span x-show="$store.gw.unknownVariants($store.gw.screen).length" class="text-question" x-text="'Not a variant in project.md: ' + $store.gw.unknownVariants($store.gw.screen).join(', ')"></span>
                 </div>
                 <p x-show="!$store.gw.openUrl($store.gw.screen) && $store.gw.needsExample($store.gw.screen)" class="mt-1 text-body text-fog/45">Its route needs a value, like an id, to open. Run /sitemap, or add <code>open: [/booking/42]</code> to the screen file.</p>
-                <p x-show="$store.gw.onMac && !$store.gw.runtime.app && $store.gw.screen.code.some((c) => c.startsWith('/'))" class="mt-1 text-body text-fog/45">Start grndwrk with <code>--app</code> and your dev server's address to open screens from here.</p>
+                <p x-show="$store.gw.onMac && !$store.gw.runtime.app && $store.gw.screenHasRoute()" class="mt-1 text-body text-fog/45">Start grndwrk with <code>--app</code> and your dev server's address to open screens from here.</p>
 
                 <!-- What it looks like: from grndwrk screenshots on the web, from the Comment button on iOS -->
                 <div id="screen-shots" class="mt-4">
@@ -1546,7 +1533,7 @@
                   <div id="screen-personas">
                     <span class="label">Who it is for</span>
                     <div class="flex flex-wrap items-center gap-1.5 text-body">
-                      <template x-for="a in $store.gw.screen.audience.filter((a) => $store.gw.personaFor(a))" :key="a">
+                      <template x-for="a in $store.gw.screenPersonas()" :key="a">
                         <span class="flex items-center rounded bg-accent/15 text-accent">
                           <button class="flex items-center gap-1 py-0.5 pl-1.5 pr-1 hover:underline" :title="'Open the persona ' + $store.gw.personaFor(a).name" @click="$store.gw.openPersona($store.gw.personaFor(a).id)">
                             <svg class="size-3.5"><use href="#i-users" /></svg>
@@ -1568,9 +1555,9 @@
                           class="field w-44 py-0.5 text-body"
                           placeholder="New persona, like Clinic coordinator"
                           x-model="$store.gw.screenPersona"
-                          x-init="$nextTick(() => $el.focus())"
+                          x-init="$focusSoon()"
                           @keydown.enter.prevent="$store.gw.addPersonaFromScreen()"
-                          @keydown.escape.stop="$store.gw.screenPersonaOpen = false; $store.gw.screenPersona = ''"
+                          @keydown.escape.stop="$do($store.gw.screenPersonaOpen = false, $store.gw.screenPersona = '')"
                           @blur="$store.gw.screenPersona.trim() ? $store.gw.addPersonaFromScreen() : ($store.gw.screenPersonaOpen = false)"
                         />
                       </template>
@@ -1580,9 +1567,9 @@
                       </button>
                       <span x-show="!$store.gw.personas.length && !$store.gw.screenPersonaOpen" class="text-fog/40">or run /personas.</span>
                     </div>
-                    <p x-show="$store.gw.screen.audience.some((a) => !$store.gw.personaFor(a))" class="mt-1.5 text-body text-question">
-                      <span x-text="'Not a persona yet: ' + $store.gw.screen.audience.filter((a) => !$store.gw.personaFor(a)).join(', ') + '. '"></span>
-                      <button class="underline underline-offset-2 hover:text-fog" @click="$store.gw.setView('personas'); $store.gw.showPersonaPane('overview')">Settle it in Personas</button>
+                    <p x-show="$store.gw.looseAudience().length" class="mt-1.5 text-body text-question">
+                      <span x-text="'Not a persona yet: ' + $store.gw.looseAudience().join(', ') + '. '"></span>
+                      <button class="underline underline-offset-2 hover:text-fog" @click="$do($store.gw.setView('personas'), $store.gw.showPersonaPane('overview'))">Settle it in Personas</button>
                     </p>
                   </div>
                   <label class="block">
@@ -1590,7 +1577,7 @@
                     <textarea
                       class="field w-full resize-none"
                       placeholder="One thing per line"
-                      :rows="Math.max(3, $store.gw.screen.tasks.length + 1)"
+                      :rows="$store.gw.rowsFor($store.gw.screen.tasks.length + 1, 3)"
                       :value="$store.gw.screen.tasks.join('\n')"
                       @blur="$store.gw.saveScreen('tasks', $event.target.value)"
                     ></textarea>
@@ -1617,7 +1604,7 @@
                     <span class="label">Leads to</span>
                     <p x-show="!$store.gw.screen.leads_to.length" class="text-fog/40">Nowhere else</p>
                     <template x-for="id in $store.gw.screen.leads_to" :key="id">
-                      <button class="block py-0.5 text-left text-accent hover:underline" @click="$store.gw.selectScreen(id)" x-text="$store.gw.screenById(id)?.title ?? id + ' (missing)'"></button>
+                      <button class="block py-0.5 text-left text-accent hover:underline" @click="$store.gw.selectScreen(id)" x-text="$store.gw.screenTitleOr(id)"></button>
                     </template>
                   </div>
                 </div>
@@ -1631,7 +1618,7 @@
                       <span class="ml-auto shrink-0 text-body text-fog/40" x-text="f.count ? f.count + (f.count === 1 ? ' thought' : ' thoughts') : 'empty'"></span>
                     </button>
                   </template>
-                  <form class="mt-1" @submit.prevent="$store.gw.addFeature($store.gw.screen.id, $event.target.elements.f.value); $event.target.reset()">
+                  <form class="mt-1" @submit.prevent="$store.gw.addFeatureFrom($store.gw.screen.id, $event.target)">
                     <input name="f" class="field w-full py-1 text-body" placeholder="Add a feature, like Pick a day" autocomplete="off" />
                   </form>
                 </div>
@@ -1669,7 +1656,7 @@
 
                 <div class="mt-6" x-show="$store.gw.screenNotesHtml">
                   <span class="label">Notes</span>
-                  <div class="report" @click="$store.gw.openIdLink($event)" x-html="$store.gw.screenNotesHtml"></div>
+                  <div class="report" @click="$store.gw.openIdLink($event)" x-markup="$store.gw.screenNotesHtml"></div>
                 </div>
 
                 <div class="mt-6">
@@ -1694,7 +1681,7 @@
                                     </button>
                                   </template>
                                 </div>
-                                <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }" x-effect="const b = $store.gw.takeBack($store.gw.screen?.id + ':' + q.entry + ':' + q.index); if (b) { picked = b.picked; words = b.words }">
+                                <div x-show="q.open" class="mt-2" x-data="answer('screen')" x-effect="takeBack(q)">
                                   <div x-show="q.options.length" class="flex flex-col gap-1">
                                     <template x-for="(o, j) in q.options" :key="j">
                                       <button
@@ -1704,20 +1691,20 @@
                                         class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body"
                                         :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
                                         title="Pick it; pick more than one if they all hold"
-                                        @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                        @click="toggle(o)"
                                       >
                                         <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
                                         <span x-text="o"></span>
                                       </button>
                                     </template>
                                   </div>
-                                  <form class="mt-1.5" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerScreenQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                                  <form class="mt-1.5" @submit.prevent="send(q)">
                                     <textarea
-                                      @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.screen.id, f).then((md) => { words = $store.gw.withPictures(words, md) }) }"
-                                      @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.screen.id, [...$event.dataTransfer.files]).then((md) => { words = $store.gw.withPictures(words, md) })"
+                                      @paste="pictures($event)"
+                                      @dragover.prevent @drop.prevent="pictures($event)"
                                       rows="1"
                                       x-model="words"
-                                      @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                      @keydown="$store.gw.onEnter($event) && $event.target.form.requestSubmit()"
                                       :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
                                       class="field block min-h-[30px] w-full resize-y text-body"
                                     ></textarea>
@@ -1725,10 +1712,10 @@
                                     <div class="mt-1.5 flex items-center gap-1">
                                       <label class="grid h-[30px] w-[30px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
                                         <svg class="size-4"><use href="#i-photo" /></svg>
-                                        <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.screen.id, [...$event.target.files]).then((md) => { words = $store.gw.withPictures(words, md) }); $event.target.value = ''" />
+                                        <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="pictures($event)" />
                                       </label>
-                                      <div x-show="q.open" x-data="{ get wi() { return $store.gw.threadItem('screen', $store.gw.screen.id, $store.gw.screen.body, q) } }" class="relative" @click.outside="$store.gw.waitingMenu === wi.key && ($store.gw.waitingMenu = '')" @keydown.escape.stop="$store.gw.waitingMenu = ''">
-                                        <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-body" :class="$store.gw.waitingOf(wi) ? 'bg-violet-300/15 text-violet-300' : 'text-fog/45 hover:bg-tint/8 hover:text-fog'" :title="'Mark as waiting for someone else\'s answer'" @click="$store.gw.waitingMenu = $store.gw.waitingMenu === wi.key ? '' : wi.key; $store.gw.waitingName = ''">
+                                      <div x-show="q.open" x-data="waitingItem('screen')" class="relative" @click.outside="$store.gw.waitingMenu === wi.key && ($store.gw.waitingMenu = '')" @keydown.escape.stop="$store.gw.waitingMenu = ''">
+                                        <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-body" :class="$store.gw.waitingOf(wi) ? 'bg-violet-300/15 text-violet-300' : 'text-fog/45 hover:bg-tint/8 hover:text-fog'" :title="'Mark as waiting for someone else\'s answer'" @click="$store.gw.toggleWaitingMenu(wi.key)">
                                           <svg class="size-3.5"><use href="#i-users" /></svg>
                                           <span x-text="$store.gw.waitingLabel(wi) || 'Waiting for…'"></span>
                                         </button>
@@ -1736,7 +1723,7 @@
                                           <template x-for="p in $store.gw.waiting.people" :key="p">
                                             <button class="menu-item" @click="$store.gw.setWaitingFor(wi, p)">
                                               <span class="min-w-0 flex-1 truncate" x-text="p"></span>
-                                              <svg x-show="$store.gw.waitingOf(wi)?.for === p" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+                                              <svg x-show="$store.gw.waitingFor(wi) === p" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
                                             </button>
                                           </template>
                                           <form class="flex gap-1 px-1.5 py-1" @submit.prevent="$store.gw.waitingName.trim() && $store.gw.setWaitingFor(wi, $store.gw.waitingName.trim())">
@@ -1754,16 +1741,16 @@
                                       <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
                                     </div>
                                   </form>
-                                  <div x-show="$store.gw.entryPictures(words ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
-                                    <template x-for="pic in $store.gw.entryPictures(words ?? '')" :key="pic.url">
+                                  <div x-show="$store.gw.entryPictures(words || '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                                    <template x-for="pic in $store.gw.entryPictures(words || '')" :key="pic.url">
                                       <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                                     </template>
                                   </div>
                                 </div>
-                                <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer ?? '')"></p>
-                                <div x-show="$store.gw.entryPictures(q.answer ?? '').length" class="mt-2 flex flex-wrap gap-2">
-                                  <template x-for="pic in $store.gw.entryPictures(q.answer ?? '')" :key="pic.url">
-                                    <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer ?? ''))">
+                                <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer || '')"></p>
+                                <div x-show="$store.gw.entryPictures(q.answer || '').length" class="mt-2 flex flex-wrap gap-2">
+                                  <template x-for="pic in $store.gw.entryPictures(q.answer || '')" :key="pic.url">
+                                    <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer || ''))">
                                       <img :src="pic.url" alt="" class="h-14 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
                                     </button>
                                   </template>
@@ -1778,16 +1765,16 @@
                             <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-text="$store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
                             <!-- Your own entry: change it later; a newer answer crosses this one out -->
                             <template x-if="e.who === 'you' && e.run">
-                              <div class="mt-1" x-data="{ get owner() { return $store.gw.screen.id } }">
-                                <div x-show="$store.gw.entryEdit?.run !== e.run" class="flex items-center justify-between gap-2 text-body">
+                              <div class="mt-1" x-data="entryOwner('screen')">
+                                <div x-show="!$store.gw.editingEntry(e.run)" class="flex items-center justify-between gap-2 text-body">
                                   <span :class="e.retake ? 'text-question' : 'text-fog/40'" x-text="$store.gw.changeLabel(e)"></span>
                                   <button x-show="!e.superseded" type="button" class="grid size-6 shrink-0 place-items-center rounded-md text-fog/40 hover:bg-tint/5 hover:text-fog" title="Change what you wrote" @click="$store.gw.startChange(owner, e)"><svg class="size-3.5"><use href="#i-pencil" /></svg></button>
                                 </div>
-                                <template x-if="$store.gw.entryEdit?.run === e.run">
+                                <template x-if="$store.gw.editingEntry(e.run)">
                                   <div class="mt-1 space-y-1.5">
                                     <div x-show="$store.gw.entryEdit.options.length" class="flex flex-col gap-1">
                                       <template x-for="(o, j) in $store.gw.entryEdit.options" :key="j">
-                                        <button type="button" role="checkbox" :aria-checked="$store.gw.entryEdit.picked.includes(o)" class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'" @click="const p = $store.gw.entryEdit.picked; $store.gw.entryEdit.picked = p.includes(o) ? p.filter((x) => x !== o) : [...p, o]">
+                                        <button type="button" role="checkbox" :aria-checked="$store.gw.entryEdit.picked.includes(o)" class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'" @click="$store.gw.toggleEditPick(o)">
                                           <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="$store.gw.entryEdit.picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
                                           <span x-text="o"></span>
                                         </button>
@@ -1818,17 +1805,17 @@
                   </ol>
                   <form class="mt-2" @submit.prevent="$store.gw.sendScreenReply()">
                     <textarea
-                      @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.screen.id, f).then((md) => { $store.gw.screenReply = $store.gw.withPictures($store.gw.screenReply, md) }) }"
-                      @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.screen.id, [...$event.dataTransfer.files]).then((md) => { $store.gw.screenReply = $store.gw.withPictures($store.gw.screenReply, md) })"
+                      @paste="$store.gw.picturesInto($store.gw, 'screenReply', $store.gw.screen.id, $event)"
+                      @dragover.prevent @drop.prevent="$store.gw.picturesInto($store.gw, 'screenReply', $store.gw.screen.id, $event)"
                       id="screen-reply"
                       rows="2"
                       x-model="$store.gw.screenReply"
-                      @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendScreenReply() }"
-                      :placeholder="$store.gw.screenThread.some((e) => e.open) ? 'A remark: it answers no question, answer those above' : 'Add a comment for the next /sitemap run'"
+                      @keydown="$store.gw.onEnter($event) && $store.gw.sendScreenReply()"
+                      :placeholder="$store.gw.threadHasOpen($store.gw.screenThread) ? 'A remark: it answers no question, answer those above' : 'Add a comment for the next /sitemap run'"
                       class="field w-full resize-none"
                     ></textarea>
-                    <div x-show="$store.gw.entryPictures($store.gw.screenReply ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
-                      <template x-for="pic in $store.gw.entryPictures($store.gw.screenReply ?? '')" :key="pic.url">
+                    <div x-show="$store.gw.entryPictures($store.gw.screenReply || '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                      <template x-for="pic in $store.gw.entryPictures($store.gw.screenReply || '')" :key="pic.url">
                         <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                       </template>
                     </div>
@@ -1837,7 +1824,7 @@
                       <div class="flex shrink-0 items-center gap-1">
                         <label class="grid h-[26px] w-[26px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
                           <svg class="size-4"><use href="#i-photo" /></svg>
-                          <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.screen.id, [...$event.target.files]).then((md) => { $store.gw.screenReply = $store.gw.withPictures($store.gw.screenReply, md) }); $event.target.value = ''" />
+                          <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.picturesInto($store.gw, 'screenReply', $store.gw.screen.id, $event)" />
                         </label>
                         <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.screenReply.trim() || $store.gw.sending">Send</button>
                       </div>
@@ -1875,7 +1862,7 @@
           </li>
           <template x-for="p in $store.gw.personaList" :key="p.id">
             <li>
-              <button class="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left" :class="$store.gw.personaPane === 'persona' && $store.gw.persona?.id === p.id ? 'bg-tint/10 text-fog' : 'text-fog/75 hover:bg-tint/5 hover:text-fog'" :data-persona="p.id" @click="$store.gw.selectPersona(p.id)">
+              <button class="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left" :class="$store.gw.personaPane === 'persona' && ($store.gw.persona && $store.gw.persona.id) === p.id ? 'bg-tint/10 text-fog' : 'text-fog/75 hover:bg-tint/5 hover:text-fog'" :data-persona="p.id" @click="$store.gw.selectPersona(p.id)">
                 <span class="min-w-0 flex-1">
                   <span class="flex items-center gap-1.5">
                     <span class="truncate font-medium" :class="p.error && 'text-rose-300'" x-text="p.name"></span>
@@ -1907,12 +1894,12 @@
                   <div class="mt-2 flex flex-wrap items-center gap-2 border-t border-tint/10 pt-2">
                     <span class="min-w-0 flex-1">
                       <span class="font-medium text-fog/90" x-text="n.name"></span>
-                      <span class="ml-1 text-body text-fog/45" x-text="'on ' + n.screens.map((s) => s.title).join(', ')"></span>
+                      <span class="ml-1 text-body text-fog/45" x-text="'on ' + $store.gw.titlesOf(n.screens)"></span>
                     </span>
                     <button class="rounded-md bg-accent px-2.5 py-1 text-body font-medium text-white hover:bg-accent/90" @click="$store.gw.settle(n.name, 'new')">Make it a persona</button>
-                    <select x-show="$store.gw.personas.length" class="field py-1 text-body" @change="$store.gw.settle(n.name, $event.target.value); $event.target.value = ''">
+                    <select x-show="$store.gw.personas.length" class="field py-1 text-body" @change="$store.gw.settleFrom(n.name, $event.target)">
                       <option value="">Same as...</option>
-                      <template x-for="p in $store.gw.personaList.filter((p) => !p.error)" :key="p.id">
+                      <template x-for="p in $store.gw.readablePersonas()" :key="p.id">
                         <option :value="p.id" x-text="p.name"></option>
                       </template>
                     </select>
@@ -1948,7 +1935,7 @@
                       <template x-for="sg in $store.gw.viewSegments" :key="sg.id">
                         <th>
                           <span class="block text-fog" x-text="sg.name"></span>
-                          <span class="block font-normal text-fog/45" x-text="[sg.type, $store.gw.sizeLabel(sg)].filter(Boolean).join(' · ')"></span>
+                          <span class="block font-normal text-fog/45" x-text="$store.gw.joinDot([sg.type, $store.gw.sizeLabel(sg)])"></span>
                         </th>
                       </template>
                     </template>
@@ -1966,7 +1953,7 @@
                       <th class="sticky left-0 z-10 bg-ink text-left">
                         <button class="text-left hover:text-accent" @click="$store.gw.selectPersona(p.id)">
                           <span class="block text-fog" x-text="p.name"></span>
-                          <span class="block font-normal text-fog/45" x-text="[p.tier, p.technical && p.technical + ' IT', p.frequency].filter(Boolean).join(' · ')"></span>
+                          <span class="block font-normal text-fog/45" x-text="$store.gw.joinDot([p.tier, p.technical && p.technical + ' IT', p.frequency])"></span>
                         </button>
                       </th>
                       <template x-if="$store.gw.overviewTab === 'segments'">
@@ -2004,7 +1991,7 @@
             <template x-if="$store.gw.personaOverview">
               <div class="mt-10 max-w-3xl border-t border-line pt-6">
                 <span class="label">From /personas: what the tables cannot say</span>
-                <div class="report" @click="$store.gw.openIdLink($event)" x-html="$store.gw.personaOverviewHtml"></div>
+                <div class="report" @click="$store.gw.openIdLink($event)" x-markup="$store.gw.personaOverviewHtml"></div>
               </div>
             </template>
           </div>
@@ -2014,7 +2001,7 @@
         <template x-if="$store.gw.personaPane === 'segments'">
           <div class="max-w-3xl px-8 pb-24 pt-8" id="segments">
             <p class="text-fog/60">Kinds of customers: an industry, how they are set up, and how big they are. Each persona says how common it is in each, and who wears the hat there.</p>
-            <template x-for="sg in [...$store.gw.sortedSegments, ...$store.gw.segments.filter((s) => s.error)]" :key="sg.id">
+            <template x-for="sg in $store.gw.segmentCards()" :key="sg.id">
               <div class="mt-4 rounded-lg border border-line bg-panel p-4" :data-segment="sg.id">
                 <div x-show="sg.error" class="mb-2 text-body text-rose-300" x-text="sg.error"></div>
                 <div class="flex items-center gap-2">
@@ -2028,7 +2015,7 @@
                     <span class="label">Kind of customer</span>
                     <select class="field w-full" @change="$store.gw.editSegment(sg.id, { type: $event.target.value })">
                       <option value="">Not said</option>
-                      <template x-for="t in $store.gw.segmentTypes.includes(sg.type) || !sg.type ? $store.gw.segmentTypes : [...$store.gw.segmentTypes, sg.type]" :key="t"><option :value="t" :selected="t === sg.type" x-text="t[0].toUpperCase() + t.slice(1)"></option></template>
+                      <template x-for="t in $store.gw.segmentTypesWith(sg.type)" :key="t"><option :value="t" :selected="t === sg.type" x-text="t[0].toUpperCase() + t.slice(1)"></option></template>
                     </select>
                   </label>
                   <label class="block">
@@ -2048,9 +2035,9 @@
                     <input class="field w-full" :value="sg.admins.join(', ')" placeholder="Practice manager, Head nurse" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.editSegment(sg.id, { admins: $store.gw.words($event.target.value) })" />
                   </label>
                 </div>
-                <div x-show="$store.gw.personaList.some((p) => p.segments[sg.id] && p.segments[sg.id].how !== 'none')" class="mt-3 flex flex-wrap gap-1.5 text-body">
+                <div x-show="$store.gw.personasIn(sg.id).length" class="mt-3 flex flex-wrap gap-1.5 text-body">
                   <span class="text-fog/45">Personas here:</span>
-                  <template x-for="p in $store.gw.personaList.filter((p) => p.segments[sg.id] && p.segments[sg.id].how !== 'none')" :key="p.id">
+                  <template x-for="p in $store.gw.personasIn(sg.id)" :key="p.id">
                     <button class="rounded bg-tint/8 px-1.5 py-0.5 text-fog/75 hover:bg-tint/15 hover:text-fog" @click="$store.gw.selectPersona(p.id)" x-text="p.name + ' · ' + $store.gw.howLabel(p.segments[sg.id].how)"></button>
                   </template>
                 </div>
@@ -2124,7 +2111,7 @@
                 <div>
                   <span class="label">Employed by</span>
                   <div class="flex flex-wrap gap-1">
-                    <template x-for="e in [...new Set([...$store.gw.employers, ...$store.gw.persona.employer])]" :key="e">
+                    <template x-for="e in $store.gw.employerChoices()" :key="e">
                       <button class="chip" :class="$store.gw.persona.employer.includes(e) && 'chip-on'" @click="$store.gw.togglePersona('employer', e)" x-text="$store.gw.valueLabel(e)"></button>
                     </template>
                   </div>
@@ -2169,11 +2156,11 @@
                       <td class="w-36 py-1.5 pr-3">
                         <select class="field w-full py-1 text-body" @change="$store.gw.savePersonaSegment(sg.id, $event.target.value, null)">
                           <option value="">Not said</option>
-                          <template x-for="h in $store.gw.segmentHow" :key="h"><option :value="h" :selected="h === ($store.gw.persona.segments[sg.id]?.how ?? '')" x-text="$store.gw.howLabel(h)"></option></template>
+                          <template x-for="h in $store.gw.segmentHow" :key="h"><option :value="h" :selected="h === $store.gw.personaHow(sg.id)" x-text="$store.gw.howLabel(h)"></option></template>
                         </select>
                       </td>
                       <td class="py-1.5">
-                        <input class="field w-full py-1 text-body" placeholder="Titles that wear the hat here" :value="($store.gw.persona.segments[sg.id]?.titles ?? []).join(', ')" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.savePersonaSegment(sg.id, null, $event.target.value)" />
+                        <input class="field w-full py-1 text-body" placeholder="Titles that wear the hat here" :value="$store.gw.personaTitlesIn(sg.id)" @keydown.enter.prevent="$event.target.blur()" @blur="$store.gw.savePersonaSegment(sg.id, null, $event.target.value)" />
                       </td>
                     </tr>
                   </template>
@@ -2207,7 +2194,7 @@
                       :title="'Edit ' + sec.heading.toLowerCase()"
                       @click="$event.target.closest('a') || $store.gw.editSection(sec.key)"
                       @keydown.enter.prevent="$store.gw.editSection(sec.key)"
-                      x-html="$store.gw.sectionHtml($store.gw.persona[sec.key] || sec.hint)"
+                      x-markup="$store.gw.sectionHtml($store.gw.persona[sec.key] || sec.hint)"
                     ></div>
                   </template>
                   <template x-if="$store.gw.personaEditing === sec.key">
@@ -2217,10 +2204,10 @@
                       rows="2"
                       :placeholder="sec.hint"
                       :value="$store.gw.persona[sec.key]"
-                      x-init="$nextTick(() => { $store.gw.fitField($el); $el.focus() })"
+                      x-init="$do($store.gw.fitFieldSoon($el), $focusSoon())"
                       @input="$store.gw.fitField($el)"
                       @keydown.escape.stop="$el.blur()"
-                      @blur="$store.gw.personaEditing = ''; $store.gw.savePersona(sec.key, $event.target.value)"
+                      @blur="$do($store.gw.personaEditing = '', $store.gw.savePersona(sec.key, $event.target.value))"
                     ></textarea>
                   </template>
                 </div>
@@ -2232,7 +2219,7 @@
               <span class="label">Screens for them</span>
               <p x-show="!$store.gw.screensFor($store.gw.persona).length" class="text-fog/40" x-text="$store.gw.screens.length ? 'No screen names ' + $store.gw.persona.name + ' in who it is for yet.' : 'No sitemap yet. Run /sitemap in your agent.'"></p>
               <template x-for="sc in $store.gw.screensFor($store.gw.persona)" :key="sc.id">
-                <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-tint/5 hover:text-fog" @click="$store.gw.selectScreen(sc.id); $store.gw.setView('sitemap')">
+                <button class="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-fog/80 hover:bg-tint/5 hover:text-fog" @click="$store.gw.openScreen(sc.id)">
                   <span class="truncate" x-text="sc.title"></span>
                   <span class="min-w-0 flex-1 truncate text-body text-fog/45" x-text="sc.purpose"></span>
                 </button>
@@ -2250,13 +2237,13 @@
 
             <div class="mt-6" x-show="$store.gw.personaNotesHtml">
               <span class="label">Notes</span>
-              <div class="report" @click="$store.gw.openIdLink($event)" x-html="$store.gw.personaNotesHtml"></div>
+              <div class="report" @click="$store.gw.openIdLink($event)" x-markup="$store.gw.personaNotesHtml"></div>
             </div>
 
             <div class="mt-6">
               <span class="label">Thread</span>
               <ol class="space-y-2">
-                <template x-for="(e, i) in $store.gw.personaThread" :key="($store.gw.persona?.id ?? '') + ':' + i">
+                <template x-for="(e, i) in $store.gw.personaThread" :key="(($store.gw.persona && $store.gw.persona.id) || '') + ':' + i">
                   <li class="rounded-lg border px-3 py-2" :class="e.open ? 'border-question/50 bg-question/10' : e.who === 'you' ? 'border-transparent bg-tint/5' : 'border-line'">
                     <div class="mb-0.5 flex items-center justify-between text-body">
                       <span class="font-medium" :class="e.open ? 'text-question' : e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="e.who === 'you' ? 'You' : e.who === 'claude-asks' ? (e.open ? 'Agent asks you' : 'Agent asked') : 'Claude'"></span>
@@ -2274,7 +2261,7 @@
                                 </button>
                               </template>
                             </div>
-                            <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }" x-effect="const b = $store.gw.takeBack($store.gw.persona?.id + ':' + q.entry + ':' + q.index); if (b) { picked = b.picked; words = b.words }">
+                            <div x-show="q.open" class="mt-2" x-data="answer('persona')" x-effect="takeBack(q)">
                               <div x-show="q.options.length" class="flex flex-col gap-1">
                                 <template x-for="(o, j) in q.options" :key="j">
                                   <button
@@ -2284,20 +2271,20 @@
                                     class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body"
                                     :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
                                     title="Pick it; pick more than one if they all hold"
-                                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                    @click="toggle(o)"
                                   >
                                     <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
                                     <span x-text="o"></span>
                                   </button>
                                 </template>
                               </div>
-                              <form class="mt-1.5" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerPersonaQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                              <form class="mt-1.5" @submit.prevent="send(q)">
                                 <textarea
-                                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.persona.id, f).then((md) => { words = $store.gw.withPictures(words, md) }) }"
-                                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.persona.id, [...$event.dataTransfer.files]).then((md) => { words = $store.gw.withPictures(words, md) })"
+                                  @paste="pictures($event)"
+                                  @dragover.prevent @drop.prevent="pictures($event)"
                                   rows="1"
                                   x-model="words"
-                                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                  @keydown="$store.gw.onEnter($event) && $event.target.form.requestSubmit()"
                                   :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
                                   class="field block min-h-[30px] w-full resize-y text-body"
                                 ></textarea>
@@ -2305,10 +2292,10 @@
                                 <div class="mt-1.5 flex items-center gap-1">
                                   <label class="grid h-[30px] w-[30px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
                                     <svg class="size-4"><use href="#i-photo" /></svg>
-                                    <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.persona.id, [...$event.target.files]).then((md) => { words = $store.gw.withPictures(words, md) }); $event.target.value = ''" />
+                                    <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="pictures($event)" />
                                   </label>
-                                  <div x-show="q.open" x-data="{ get wi() { return $store.gw.threadItem('persona', $store.gw.persona.id, $store.gw.persona.body, q) } }" class="relative" @click.outside="$store.gw.waitingMenu === wi.key && ($store.gw.waitingMenu = '')" @keydown.escape.stop="$store.gw.waitingMenu = ''">
-                                    <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-body" :class="$store.gw.waitingOf(wi) ? 'bg-violet-300/15 text-violet-300' : 'text-fog/45 hover:bg-tint/8 hover:text-fog'" :title="'Mark as waiting for someone else\'s answer'" @click="$store.gw.waitingMenu = $store.gw.waitingMenu === wi.key ? '' : wi.key; $store.gw.waitingName = ''">
+                                  <div x-show="q.open" x-data="waitingItem('persona')" class="relative" @click.outside="$store.gw.waitingMenu === wi.key && ($store.gw.waitingMenu = '')" @keydown.escape.stop="$store.gw.waitingMenu = ''">
+                                    <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-body" :class="$store.gw.waitingOf(wi) ? 'bg-violet-300/15 text-violet-300' : 'text-fog/45 hover:bg-tint/8 hover:text-fog'" :title="'Mark as waiting for someone else\'s answer'" @click="$store.gw.toggleWaitingMenu(wi.key)">
                                       <svg class="size-3.5"><use href="#i-users" /></svg>
                                       <span x-text="$store.gw.waitingLabel(wi) || 'Waiting for…'"></span>
                                     </button>
@@ -2316,7 +2303,7 @@
                                       <template x-for="p in $store.gw.waiting.people" :key="p">
                                         <button class="menu-item" @click="$store.gw.setWaitingFor(wi, p)">
                                           <span class="min-w-0 flex-1 truncate" x-text="p"></span>
-                                          <svg x-show="$store.gw.waitingOf(wi)?.for === p" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+                                          <svg x-show="$store.gw.waitingFor(wi) === p" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
                                         </button>
                                       </template>
                                       <form class="flex gap-1 px-1.5 py-1" @submit.prevent="$store.gw.waitingName.trim() && $store.gw.setWaitingFor(wi, $store.gw.waitingName.trim())">
@@ -2334,16 +2321,16 @@
                                   <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
                                 </div>
                               </form>
-                              <div x-show="$store.gw.entryPictures(words ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
-                                <template x-for="pic in $store.gw.entryPictures(words ?? '')" :key="pic.url">
+                              <div x-show="$store.gw.entryPictures(words || '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                                <template x-for="pic in $store.gw.entryPictures(words || '')" :key="pic.url">
                                   <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                                 </template>
                               </div>
                             </div>
-                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer ?? '')"></p>
-                            <div x-show="$store.gw.entryPictures(q.answer ?? '').length" class="mt-2 flex flex-wrap gap-2">
-                              <template x-for="pic in $store.gw.entryPictures(q.answer ?? '')" :key="pic.url">
-                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer ?? ''))">
+                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer || '')"></p>
+                            <div x-show="$store.gw.entryPictures(q.answer || '').length" class="mt-2 flex flex-wrap gap-2">
+                              <template x-for="pic in $store.gw.entryPictures(q.answer || '')" :key="pic.url">
+                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer || ''))">
                                   <img :src="pic.url" alt="" class="h-14 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
                                 </button>
                               </template>
@@ -2358,16 +2345,16 @@
                         <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-text="$store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
                         <!-- Your own entry: change it later; a newer answer crosses this one out -->
                         <template x-if="e.who === 'you' && e.run">
-                          <div class="mt-1" x-data="{ get owner() { return $store.gw.persona.id } }">
-                            <div x-show="$store.gw.entryEdit?.run !== e.run" class="flex items-center justify-between gap-2 text-body">
+                          <div class="mt-1" x-data="entryOwner('persona')">
+                            <div x-show="!$store.gw.editingEntry(e.run)" class="flex items-center justify-between gap-2 text-body">
                               <span :class="e.retake ? 'text-question' : 'text-fog/40'" x-text="$store.gw.changeLabel(e)"></span>
                               <button x-show="!e.superseded" type="button" class="grid size-6 shrink-0 place-items-center rounded-md text-fog/40 hover:bg-tint/5 hover:text-fog" title="Change what you wrote" @click="$store.gw.startChange(owner, e)"><svg class="size-3.5"><use href="#i-pencil" /></svg></button>
                             </div>
-                            <template x-if="$store.gw.entryEdit?.run === e.run">
+                            <template x-if="$store.gw.editingEntry(e.run)">
                               <div class="mt-1 space-y-1.5">
                                 <div x-show="$store.gw.entryEdit.options.length" class="flex flex-col gap-1">
                                   <template x-for="(o, j) in $store.gw.entryEdit.options" :key="j">
-                                    <button type="button" role="checkbox" :aria-checked="$store.gw.entryEdit.picked.includes(o)" class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'" @click="const p = $store.gw.entryEdit.picked; $store.gw.entryEdit.picked = p.includes(o) ? p.filter((x) => x !== o) : [...p, o]">
+                                    <button type="button" role="checkbox" :aria-checked="$store.gw.entryEdit.picked.includes(o)" class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'" @click="$store.gw.toggleEditPick(o)">
                                       <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="$store.gw.entryEdit.picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
                                       <span x-text="o"></span>
                                     </button>
@@ -2398,17 +2385,17 @@
               </ol>
               <form class="mt-2" @submit.prevent="$store.gw.sendPersonaReply()" x-show="!$store.gw.persona.error">
                 <textarea
-                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.persona.id, f).then((md) => { $store.gw.personaReply = $store.gw.withPictures($store.gw.personaReply, md) }) }"
-                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.persona.id, [...$event.dataTransfer.files]).then((md) => { $store.gw.personaReply = $store.gw.withPictures($store.gw.personaReply, md) })"
+                  @paste="$store.gw.picturesInto($store.gw, 'personaReply', $store.gw.persona.id, $event)"
+                  @dragover.prevent @drop.prevent="$store.gw.picturesInto($store.gw, 'personaReply', $store.gw.persona.id, $event)"
                   id="persona-reply"
                   rows="2"
                   x-model="$store.gw.personaReply"
-                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendPersonaReply() }"
-                  :placeholder="$store.gw.personaThread.some((e) => e.open) ? 'A remark: it answers no question, answer those above' : 'Add a comment for the next /personas run'"
+                  @keydown="$store.gw.onEnter($event) && $store.gw.sendPersonaReply()"
+                  :placeholder="$store.gw.threadHasOpen($store.gw.personaThread) ? 'A remark: it answers no question, answer those above' : 'Add a comment for the next /personas run'"
                   class="field w-full resize-none"
                 ></textarea>
-                <div x-show="$store.gw.entryPictures($store.gw.personaReply ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
-                  <template x-for="pic in $store.gw.entryPictures($store.gw.personaReply ?? '')" :key="pic.url">
+                <div x-show="$store.gw.entryPictures($store.gw.personaReply || '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                  <template x-for="pic in $store.gw.entryPictures($store.gw.personaReply || '')" :key="pic.url">
                     <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                   </template>
                 </div>
@@ -2417,7 +2404,7 @@
                   <div class="flex shrink-0 items-center gap-1">
                     <label class="grid h-[26px] w-[26px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
                       <svg class="size-4"><use href="#i-photo" /></svg>
-                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.persona.id, [...$event.target.files]).then((md) => { $store.gw.personaReply = $store.gw.withPictures($store.gw.personaReply, md) }); $event.target.value = ''" />
+                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.picturesInto($store.gw, 'personaReply', $store.gw.persona.id, $event)" />
                     </label>
                     <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.personaReply.trim() || $store.gw.sending">Send</button>
                   </div>
@@ -2450,7 +2437,7 @@
                   <span x-show="!d.exists && !d.blocked" class="block text-body text-rose-300/80">Suggested, not written yet</span>
                   <span x-show="d.blocked" class="block text-body text-rose-300/80" :title="d.blocked">Unreadable: a link or a folder, not a file</span>
                 </span>
-                <span x-show="Object.values($store.gw.nodes).some((n) => n.extra?.doc === d.path && n.status !== 'settled')" class="shrink-0 text-body text-fog/45" title="Your open comments" x-text="((c) => c + (c === 1 ? ' comment' : ' comments'))(Object.values($store.gw.nodes).filter((n) => n.extra?.doc === d.path && n.status !== 'settled').length)"></span>
+                <span x-show="$store.gw.openDocComments(d.path)" class="shrink-0 text-body text-fog/45" title="Your open comments" x-text="$store.gw.counted($store.gw.openDocComments(d.path), 'comment', 'comments')"></span>
               </button>
             </li>
           </template>
@@ -2479,12 +2466,12 @@
             </div>
             <p x-show="!$store.gw.doc.exists" class="mt-2 text-fog/65" x-text="$store.gw.doc.draft ? 'Not in the project yet. /readiness suggests writing it; below is its draft. Copy prompt gives your agent a prompt to create it from the draft.' : 'Not in the project yet. Copy prompt gives your agent a prompt to write it.'"></p>
 
-            <template x-if="$store.gw.openDocInfo.findings.filter((f) => f.status !== 'done').length">
+            <template x-if="$store.gw.docFindingsLeft().length">
               <div class="mt-4 rounded-lg border border-question/30 bg-question/5 p-3" id="doc-findings">
                 <span class="label">What the last check found</span>
-                <template x-for="f in $store.gw.openDocInfo.findings.filter((f) => f.status !== 'done')" :key="f.id + (f.section || '')">
+                <template x-for="f in $store.gw.docFindingsLeft()" :key="f.id + (f.section || '')">
                   <div class="mt-2">
-                    <div class="text-fog"><span class="font-medium" x-text="f.title"></span><span x-show="f.section" class="text-fog/55" x-text="' · section ' + (f.section || '').replace(/-/g, ' ')"></span></div>
+                    <div class="text-fog"><span class="font-medium" x-text="f.title"></span><span x-show="f.section" class="text-fog/55" x-text="' · section ' + $store.gw.sectionName(f.section)"></span></div>
                     <ul class="list-disc pl-5 text-fog/75"><template x-for="(m, i) in f.missing" :key="i"><li x-text="m"></li></template></ul>
                   </div>
                 </template>
@@ -2495,7 +2482,7 @@
               <template x-for="n in $store.gw.docComments" :key="n.id">
                 <div class="mb-1.5 flex items-start gap-2 rounded-md border border-line px-3 py-2">
                   <span class="min-w-0 flex-1">
-                    <span x-show="n.extra?.doc_section" class="block text-body text-fog/45" x-text="n.extra?.doc_section"></span>
+                    <span x-show="n.extra && n.extra.doc_section" class="block text-body text-fog/45" x-text="n.extra && n.extra.doc_section"></span>
                     <button class="text-left text-fog/90 hover:underline" @click="$store.gw.goToNode(n.id)" x-text="n.title"></button>
                   </span>
                   <button class="shrink-0 rounded px-1.5 py-0.5 text-body text-emerald-300 hover:bg-emerald-400/15" title="Done: settle this comment" @click="$store.gw.resolveDocComment(n.id)">Done</button>
@@ -2506,12 +2493,12 @@
                   <option value="">Whole document</option>
                   <template x-for="h in $store.gw.docHeadings" :key="h"><option :value="h" x-text="h"></option></template>
                 </select>
-                <textarea class="field min-h-[34px] flex-1 resize-y" rows="1" placeholder="Comment: what should change here" x-model="$store.gw.docComment" @keydown.enter="!$event.shiftKey && ($event.preventDefault(), $store.gw.commentOnDoc())"></textarea>
+                <textarea class="field min-h-[34px] flex-1 resize-y" rows="1" placeholder="Comment: what should change here" x-model="$store.gw.docComment" @keydown.enter="$store.gw.onEnter($event) && $store.gw.commentOnDoc()"></textarea>
                 <button class="shrink-0 rounded-md border border-line px-2.5 py-1.5 text-body text-fog/85 hover:bg-tint/8" @click="$store.gw.commentOnDoc()">Comment</button>
               </div>
             </div>
 
-            <div class="report mt-6" id="doc-body" x-html="$store.gw.docHtml()" x-effect="$store.gw.doc; $store.gw.openDocInfo; $nextTick(() => $store.gw.markDocSections($el))"></div>
+            <div class="report mt-6" id="doc-body" x-markup="$store.gw.docHtml()" x-effect="$store.gw.markDocSectionsSoon($el, $store.gw.doc, $store.gw.openDocInfo)"></div>
           </div>
         </template>
       </section>
@@ -2521,7 +2508,7 @@
     <div x-cloak x-show="$store.gw.prompt" x-transition.opacity.duration.100ms id="prompt" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" @click.self="$store.gw.prompt = null" @keydown.escape.window="$store.gw.prompt && ($store.gw.prompt = null)">
       <div class="flex max-h-full w-full max-w-2xl flex-col rounded-xl border border-line bg-panel p-4 shadow-2xl shadow-shade/50">
         <div class="flex items-center gap-2">
-          <h2 class="min-w-0 flex-1 truncate text-title font-semibold text-fog" x-text="'Prompt: ' + ($store.gw.prompt?.title ?? '')"></h2>
+          <h2 class="min-w-0 flex-1 truncate text-title font-semibold text-fog" x-text="'Prompt: ' + (($store.gw.prompt && $store.gw.prompt.title) || '')"></h2>
           <button class="icon-btn" title="Close ( Esc )" @click="$store.gw.prompt = null"><svg class="size-5"><use href="#i-close" /></svg></button>
         </div>
         <p class="mt-1 text-body text-fog/55">Paste it into your agent in the product. Change anything here first if you like.</p>
@@ -2546,18 +2533,18 @@
       <div class="mx-auto max-w-3xl px-8 pb-24 pt-10">
         <div class="flex items-baseline justify-between gap-4">
           <h1 class="text-heading font-semibold text-fog">Status</h1>
-          <span class="text-body text-fog/40" x-show="$store.gw.readiness?.report" x-text="'Checked ' + ($store.gw.readiness?.report?.checked ?? '')"></span>
+          <span class="text-body text-fog/40" x-show="($store.gw.readiness && $store.gw.readiness.report)" x-text="'Checked ' + $store.gw.reportChecked()"></span>
         </div>
 
         <!-- What to focus on next, above everything: written by /readiness, kept until done or Not now -->
         <section
-          x-show="$store.gw.readiness?.focus?.length"
+          x-show="$store.gw.readinessFocus().length"
           id="focus-box"
           class="mt-6 rounded-lg border border-accent/40 bg-accent/5 p-4"
           x-data="{ showAside: false }"
         >
           <h2 class="text-title font-semibold text-fog">Focus on this next</h2>
-          <p class="mt-1 text-fog/60" x-text="'What matters most for this project now, the most important first. From /readiness' + ($store.gw.readiness?.focusChecked ? ' on ' + $store.gw.readiness.focusChecked : '') + '. Each stays until it is done or you say Not now.'"></p>
+          <p class="mt-1 text-fog/60" x-text="'What matters most for this project now, the most important first. From /readiness' + (($store.gw.readiness && $store.gw.readiness.focusChecked) ? ' on ' + $store.gw.readiness.focusChecked : '') + '. Each stays until it is done or you say Not now.'"></p>
           <ol class="mt-3 space-y-2">
             <template x-for="(f, i) in $store.gw.focusItems" :key="f.id">
               <li class="flex items-start gap-3 rounded-md border border-line bg-panel px-3 py-2.5">
@@ -2595,7 +2582,7 @@
           </h2>
           <p class="mt-1 text-fog/60">Found missing by /readiness, and needed before building. Answer each one here or on its dashed card in the map, then run /readiness again.</p>
           <ul class="mt-3 space-y-1.5">
-            <template x-for="g in $store.gw.openGaps.filter((x) => x.severity === 'blocking')" :key="g.id">
+            <template x-for="g in $store.gw.blockingGaps()" :key="g.id">
               <li>
                 <button class="flex w-full items-start gap-3 rounded-lg border border-line bg-ink px-4 py-3 text-left hover:border-tint/20" :class="$store.gw.selectedGapId === g.id && 'border-accent'" @click="$store.gw.selectGap(g.id)">
                   <span class="mt-1.5 size-2 shrink-0 rounded-full bg-rose-400"></span>
@@ -2649,18 +2636,18 @@
               <li class="min-w-0 flex-1">
                 <button
                   class="flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left"
-                  :class="$store.gw.kickoffShown?.key === st.key ? 'border-accent/70 bg-accent/10' : 'border-line hover:border-tint/20'"
+                  :class="($store.gw.kickoffShown && $store.gw.kickoffShown.key) === st.key ? 'border-accent/70 bg-accent/10' : 'border-line hover:border-tint/20'"
                   :title="st.done ? 'Done on ' + st.done : st.status"
                   @click="$store.gw.kickoffOpen = st.key"
                 >
                   <span
                     class="grid size-5 shrink-0 place-items-center rounded-full text-body font-semibold"
-                    :class="st.done ? 'bg-emerald-400/20 text-emerald-300' : $store.gw.kickoffCurrent?.key === st.key ? 'bg-accent text-white' : 'bg-tint/8 text-fog/50'"
+                    :class="st.done ? 'bg-emerald-400/20 text-emerald-300' : ($store.gw.kickoffCurrent && $store.gw.kickoffCurrent.key) === st.key ? 'bg-accent text-white' : 'bg-tint/8 text-fog/50'"
                   >
                     <template x-if="st.done"><svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg></template>
                     <template x-if="!st.done"><span x-text="i + 1"></span></template>
                   </span>
-                  <span class="truncate text-body" :class="st.done || $store.gw.kickoffCurrent?.key === st.key ? 'text-fog' : 'text-fog/55'" x-text="st.name"></span>
+                  <span class="truncate text-body" :class="st.done || ($store.gw.kickoffCurrent && $store.gw.kickoffCurrent.key) === st.key ? 'text-fog' : 'text-fog/55'" x-text="st.name"></span>
                 </button>
               </li>
             </template>
@@ -2733,13 +2720,13 @@
             <span class="text-body text-fog/50" x-text="$store.gw.projectStatus.done + ' of ' + $store.gw.projectStatus.total + ' in place'"></span>
           </div>
           <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-tint/8">
-            <div class="h-full rounded-full bg-emerald-400/80" :style="{ width: ($store.gw.projectStatus.total ? Math.round($store.gw.projectStatus.done / $store.gw.projectStatus.total * 100) : 0) + '%' }"></div>
+            <div class="h-full rounded-full bg-emerald-400/80" :style="{ width: $store.gw.statusPercent() + '%' }"></div>
           </div>
           <p x-show="$store.gw.projectStatus.unchecked" class="mt-2 text-body text-fog/50" x-text="$store.gw.projectStatus.unchecked + ($store.gw.projectStatus.unchecked === 1 ? ' item is' : ' items are') + ' not checked yet. Run /readiness in your agent: it reads the project and says what each one lacks.'"></p>
           <p x-show="!$store.gw.projectStatus.left.length && !$store.gw.projectStatus.unchecked" class="mt-3 text-emerald-300/90">Everything is in place.</p>
           <!-- What is left, by the kind of work: what it asks of you, one action, the items when opened -->
           <p x-show="$store.gw.projectStatus.left.length" id="status-summary" class="mt-3 text-fog/80">
-            <span x-show="$store.gw.projectStatus.left.filter((r) => r.status === 'missing').length"><span class="font-semibold text-rose-300" x-text="$store.gw.projectStatus.left.filter((r) => r.status === 'missing').length + ' must be done'"></span></span><span x-show="$store.gw.projectStatus.left.filter((r) => r.status === 'missing').length && $store.gw.projectStatus.left.filter((r) => r.status === 'partly').length" class="text-fog/30"> · </span><span x-show="$store.gw.projectStatus.left.filter((r) => r.status === 'partly').length"><span class="font-semibold text-question" x-text="$store.gw.projectStatus.left.filter((r) => r.status === 'partly').length + ' should be done'"></span></span>
+            <span x-show="$store.gw.statusLeft('missing')"><span class="font-semibold text-rose-300" x-text="$store.gw.statusLeft('missing') + ' must be done'"></span></span><span x-show="$store.gw.statusLeft('missing') && $store.gw.statusLeft('partly')" class="text-fog/30"> · </span><span x-show="$store.gw.statusLeft('partly')"><span class="font-semibold text-question" x-text="$store.gw.statusLeft('partly') + ' should be done'"></span></span>
           </p>
           <div class="mt-3 space-y-2" id="status-left">
             <template x-for="k in $store.gw.projectStatus.kinds" :key="k.key">
@@ -2768,7 +2755,7 @@
                         <span x-show="row.detail.length" class="block truncate text-body text-fog/50" x-text="row.detail[0]"></span>
                       </span>
                       <button x-show="row.suggestion" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-body text-fog/80 hover:bg-tint/8 hover:text-fog" title="Copy an instruction for your agent in the product's repo" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy prompt</button>
-                      <button x-show="row.open" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-body text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer them' : 'Show on the map') : row.open?.kind === 'screen' ? 'Open the screen' : 'Write it'"></button>
+                      <button x-show="row.open" class="shrink-0 rounded-md border border-line px-2.5 py-1 text-body text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="$store.gw.statusRowAction(row)"></button>
                     </li>
                   </template>
                 </ul>
@@ -2816,7 +2803,7 @@
                       <div class="flex flex-wrap gap-2" x-show="row.suggestion || row.draft || row.open">
                         <button x-show="row.suggestion" class="rounded-md bg-accent px-3 py-1 text-body font-medium text-white hover:bg-accent/90" @click="$store.gw.showPrompt(row.title, row.suggestion)">Copy prompt</button>
                         <button x-show="row.draft" class="rounded-md border border-line px-3 py-1 text-body text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.copyDraft(row.draft)">Copy the draft</button>
-                        <button x-show="row.open && row.open.kind !== 'purpose'" class="rounded-md border border-line px-3 py-1 text-body text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="row.open?.kind === 'focus' ? ($store.gw.inbox.length ? 'Answer in the Inbox' : 'Show on the map') : 'Open the screen'"></button>
+                        <button x-show="row.open && row.open.kind !== 'purpose'" class="rounded-md border border-line px-3 py-1 text-body text-fog/80 hover:bg-tint/8 hover:text-fog" @click="$store.gw.openStatusRow(row)" x-text="$store.gw.statusRowOpen(row)"></button>
                       </div>
                     </div>
                   </li>
@@ -2829,11 +2816,11 @@
 
         <h2 class="mb-1 mt-10 text-title font-semibold text-fog">The thinking in the map</h2>
         <p class="text-body text-fog/45">What /readiness found in the map itself: the verdict, each area, and the gaps.</p>
-        <template x-if="!$store.gw.readiness?.report">
+        <template x-if="!($store.gw.readiness && $store.gw.readiness.report)">
           <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Not checked yet. Run <code class="text-fog">/readiness</code> in your agent. It judges the map against your checklist and lists what is missing.</p>
         </template>
 
-        <template x-if="$store.gw.readiness?.report">
+        <template x-if="($store.gw.readiness && $store.gw.readiness.report)">
           <div>
             <div class="mt-4 flex flex-wrap items-center gap-2">
               <span
@@ -2873,12 +2860,12 @@
               </ul>
             </template>
             <template x-if="!$store.gw.areas.length">
-              <div class="report" x-html="$store.gw.reportHtml"></div>
+              <div class="report" x-markup="$store.gw.reportHtml"></div>
             </template>
           </div>
         </template>
 
-        <template x-if="$store.gw.readiness?.design?.length">
+        <template x-if="$store.gw.designItems().length">
           <div id="design">
             <h2 class="mb-2 mt-8 text-body font-semibold text-fog">Design foundation</h2>
             <template x-for="g in $store.gw.designGroups" :key="g.platform">
@@ -2916,7 +2903,7 @@
           </div>
         </template>
 
-        <template x-if="$store.gw.readiness?.report">
+        <template x-if="($store.gw.readiness && $store.gw.readiness.report)">
           <div>
             <h2 class="mb-2 mt-8 text-body font-semibold text-fog">Open</h2>
             <p x-show="!$store.gw.openGaps.length" class="text-fog/45">Nothing open.</p>
@@ -2943,7 +2930,7 @@
                   <button class="font-medium text-fog/80 hover:text-fog" @click="$store.gw.selectGap(g.id)" x-text="g.title"></button>
                   <span class="block text-fog/55">
                     Answered by
-                    <button class="text-accent hover:underline" @click="$store.gw.goToNode(g.answered_by)" x-text="$store.gw.nodes[g.answered_by]?.title ?? g.answered_by"></button>
+                    <button class="text-accent hover:underline" @click="$store.gw.goToNode(g.answered_by)" x-text="$store.gw.titleOr(g.answered_by)"></button>
                   </span>
                 </li>
               </template>
@@ -3010,9 +2997,9 @@
 
         <div id="project-cards" class="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
           <template x-for="p in $store.gw.teamProjects" :key="p.url">
-            <section class="flex flex-col rounded-xl border border-line bg-panel p-4" :class="p.current && 'ring-1 ring-accent/40'" :data-project-card="p.url" x-data="{ get c() { return $store.gw.projectCards[p.url] ?? { loading: true } } }">
+            <section class="flex flex-col rounded-xl border border-line bg-panel p-4" :class="p.current && 'ring-1 ring-accent/40'" :data-project-card="p.url" x-data="projectCard">
               <div class="flex items-baseline gap-2">
-                <h2 class="min-w-0 flex-1 truncate text-title font-semibold text-fog" x-text="c.read?.name || p.name"></h2>
+                <h2 class="min-w-0 flex-1 truncate text-title font-semibold text-fog" x-text="(c.read && c.read.name) || p.name"></h2>
                 <span x-show="p.current" class="shrink-0 text-tag text-fog/45">This project</span>
               </div>
               <p x-show="c.loading" class="mt-3 text-fog/45">Reading…</p>
@@ -3035,7 +3022,7 @@
                   <div class="col-span-2 border-t border-line pt-2">
                     <dt class="text-fog/50">Focus on this next</dt>
                     <dd class="text-fog" x-text="c.read.overview.focus ? c.read.overview.focus.title : 'Nothing from /readiness yet'"></dd>
-                    <dd x-show="c.read.overview.focus" class="line-clamp-2 text-fog/55" x-text="c.read.overview.focus?.why"></dd>
+                    <dd x-show="c.read.overview.focus" class="line-clamp-2 text-fog/55" x-text="c.read.overview.focus && c.read.overview.focus.why"></dd>
                   </div>
                 </dl>
               </template>
@@ -3083,8 +3070,8 @@
               <span class="text-body text-fog/40">Run <code class="text-fog/70">/brief</code> again after changing the map.</span>
             </div>
 
-            <div x-show="$store.gw.deliverablesTab === 'survey' && $store.gw.survey" class="report mt-6" id="survey" @click="$store.gw.openIdLink($event)" x-html="$store.gw.surveyHtml"></div>
-            <div x-show="$store.gw.deliverablesTab === 'brief'" class="report mt-6" id="brief" @click="$store.gw.openIdLink($event)" x-html="$store.gw.brief ? $store.gw.briefHtml : '<p>No brief yet.</p>'"></div>
+            <div x-show="$store.gw.deliverablesTab === 'survey' && $store.gw.survey" class="report mt-6" id="survey" @click="$store.gw.openIdLink($event)" x-markup="$store.gw.surveyHtml"></div>
+            <div x-show="$store.gw.deliverablesTab === 'brief'" class="report mt-6" id="brief" @click="$store.gw.openIdLink($event)" x-markup="$store.gw.brief ? $store.gw.briefHtml : '<p>No brief yet.</p>'"></div>
 
             <div x-show="$store.gw.deliverablesTab === 'stories'" class="mt-6 space-y-1.5" id="stories">
               <template x-for="s in $store.gw.stories" :key="s.id">
@@ -3100,12 +3087,12 @@
                   </button>
                   <div x-show="$store.gw.openStoryId === s.id" class="border-t border-line px-4 py-3">
                     <p x-show="s.error" class="mb-2 text-body text-rose-300" x-text="s.error"></p>
-                    <div class="report" x-html="$store.gw.storyHtml(s)"></div>
+                    <div class="report" x-markup="$store.gw.storyHtml(s)"></div>
                     <span class="label mt-3">Came from</span>
                     <template x-for="id in s.from" :key="id">
                       <button class="flex h-7 w-full items-center gap-2 rounded px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.goToNode(id)">
                         <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.nodes[id] ? $store.gw.typeColors[$store.gw.nodes[id].type] : '#666' }"></span>
-                        <span class="truncate" x-text="$store.gw.nodes[id]?.title ?? id + ' (not in the map)'"></span>
+                        <span class="truncate" x-text="$store.gw.titleOr(id, ' (not in the map)')"></span>
                       </button>
                     </template>
                     <p x-show="s.applies_to.length" class="mt-2 text-body text-fog/45" x-text="'Built in: ' + s.applies_to.join(', ')"></p>
@@ -3119,7 +3106,7 @@
                 <span class="text-fog/70">Put this in the product's repository as CLAUDE.md (Claude Code) or AGENTS.md (Codex, Cursor and others). Every session there starts from it.</span>
                 <button id="copy-starter" class="shrink-0 rounded-md bg-accent px-3 py-1 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!$store.gw.starter" @click="$store.gw.copyStarter()" x-text="$store.gw.copied ? 'Copied' : 'Copy'"></button>
               </div>
-              <div class="report" x-html="$store.gw.starter ? $store.gw.starterHtml : '<p>No starter yet.</p>'"></div>
+              <div class="report" x-markup="$store.gw.starter ? $store.gw.starterHtml : '<p>No starter yet.</p>'"></div>
             </div>
           </div>
         </template>
@@ -3130,7 +3117,7 @@
     <div x-cloak x-show="$store.gw.waitingAsk" id="personal-info-ask" class="fixed inset-0 z-50 grid place-items-center bg-shade/50 px-4" @keydown.escape.window="$store.gw.waitingAsk = null" @click.self="$store.gw.waitingAsk = null">
       <div class="w-full max-w-md rounded-xl border border-line bg-panel p-5 text-body shadow-xl shadow-shade/40" role="dialog" aria-modal="true" aria-labelledby="personal-info-title">
         <h2 id="personal-info-title" class="text-title font-semibold text-fog">May the map hold people's names?</h2>
-        <p class="mt-1.5 text-fog/65">The map is committed with the project, so the whole team would see <span class="font-medium text-fog" x-text="$store.gw.waitingAsk?.name"></span> there. Say no if the repository is public: the name then stays on this Mac, and the map says only that the question waits for an answer.</p>
+        <p class="mt-1.5 text-fog/65">The map is committed with the project, so the whole team would see <span class="font-medium text-fog" x-text="($store.gw.waitingAsk && $store.gw.waitingAsk.name)"></span> there. Say no if the repository is public: the name then stays on this Mac, and the map says only that the question waits for an answer.</p>
         <div class="mt-4 flex justify-end gap-2">
           <button class="rounded-md px-3 py-1.5 text-fog/70 hover:bg-tint/8 hover:text-fog" @click="$store.gw.answerPersonalInfo('no')">No, keep names on this Mac</button>
           <button class="rounded-md bg-accent px-3 py-1.5 font-medium text-white hover:bg-accent/85" @click="$store.gw.answerPersonalInfo('yes')">Yes, it is private</button>
@@ -3142,7 +3129,7 @@
     <main x-cloak x-show="$store.gw.view === 'focus'" id="focus" class="fixed inset-y-0 left-16 right-0 overflow-y-auto bg-ink text-body">
       <div class="mx-auto max-w-2xl px-8 pb-24 pt-8">
         <div class="flex items-baseline justify-between gap-4">
-          <h1 class="text-heading font-semibold text-fog">Inbox<span x-show="$store.gw.scopeScreen" class="font-normal text-fog/50" x-text="' · ' + ($store.gw.scopeScreen?.title ?? '')"></span></h1>
+          <h1 class="text-heading font-semibold text-fog">Inbox<span x-show="$store.gw.scopeScreen" class="font-normal text-fog/50" x-text="' · ' + (($store.gw.scopeScreen && $store.gw.scopeScreen.title) || '')"></span></h1>
           <span id="focus-count" class="text-body text-fog/45" x-text="$store.gw.inbox.length ? $store.gw.inbox.length + ($store.gw.inbox.length === 1 ? ' question' : ' questions') : ''"></span>
         </div>
         <p class="mt-1 text-body text-fog/50">What your agent asked you. Answer here; it reads the answer the next time a command runs.</p>
@@ -3183,9 +3170,9 @@
               </div>
               <h2 class="mt-2 text-title font-medium leading-snug text-fog" x-text="item.kind === 'guess' ? item.about : item.question || item.about"></h2>
               <p x-show="item.kind === 'guess' && item.question" class="mt-1.5 text-fog/70" x-text="item.question"></p>
-              <div x-show="$store.gw.entryPictures(item.text ?? '').length" class="mt-2 flex flex-wrap gap-2">
-                <template x-for="pic in $store.gw.entryPictures(item.text ?? '')" :key="pic.url">
-                  <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(item.text ?? ''))">
+              <div x-show="$store.gw.entryPictures(item.text || '').length" class="mt-2 flex flex-wrap gap-2">
+                <template x-for="pic in $store.gw.entryPictures(item.text || '')" :key="pic.url">
+                  <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(item.text || ''))">
                     <img :src="pic.url" alt="" class="h-24 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
                   </button>
                 </template>
@@ -3213,7 +3200,7 @@
                     <p x-show="d.audience.length" class="text-fog/55" x-text="'For ' + d.audience.join(', ')"></p>
                     <p x-show="d.tasks.length" class="text-fog/55" x-text="'They ' + d.tasks.join(', ')"></p>
                   </div>
-                  <div x-show="d.notesHtml" class="report text-body" @click="$store.gw.openIdLink($event)" x-html="d.notesHtml"></div>
+                  <div x-show="d.notesHtml" class="report text-body" @click="$store.gw.openIdLink($event)" x-markup="d.notesHtml"></div>
                   <div x-show="d.earlier.length">
                     <span class="label">Before the question</span>
                     <template x-for="(e, j) in d.earlier" :key="j">
@@ -3231,12 +3218,12 @@
                     </template>
                   </div>
                   <div x-show="d.links.length" class="text-fog/55">
-                    <span>Linked to </span><span x-text="d.links.map((l) => l.title).join(', ')"></span>
+                    <span>Linked to </span><span x-text="$store.gw.titlesOf(d.links)"></span>
                   </div>
                   <p x-show="!d.notesHtml && !d.earlier.length && !d.purpose && !d.links.length" class="text-fog/45">Nothing more is written about it yet.</p>
                 </div>
               </template>
-              <div x-data="{ picked: [] }" x-effect="const b = $store.gw.takeBack('inbox:' + item.id + ':' + item.entry + ':' + item.index); if (b) picked = b.picked">
+              <div x-data="inboxAnswer" x-effect="takeBack(item)">
               <div x-show="item.options.length" class="mt-3 flex flex-col gap-1">
                 <template x-for="(o, j) in item.options" :key="j">
                   <button
@@ -3246,20 +3233,20 @@
                     class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body"
                     :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
                     title="Pick it; pick more than one if they all hold"
-                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                    @click="toggle(o)"
                   >
                     <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
                     <span x-text="o"></span>
                   </button>
                 </template>
               </div>
-              <form class="mt-2" @submit.prevent="$store.gw.answerInbox(item, $store.gw.answerText(item.options, picked, $store.gw.inboxDrafts[item.key] ?? '')).then(() => (picked = []))">
+              <form class="mt-2" @submit.prevent="send(item)">
                 <textarea
-                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures(item.id, f).then((md) => { $store.gw.inboxDrafts[item.key] = $store.gw.withPictures($store.gw.inboxDrafts[item.key], md) }) }"
-                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures(item.id, [...$event.dataTransfer.files]).then((md) => { $store.gw.inboxDrafts[item.key] = $store.gw.withPictures($store.gw.inboxDrafts[item.key], md) })"
+                  @paste="$store.gw.picturesInto($store.gw.inboxDrafts, item.key, item.id, $event)"
+                  @dragover.prevent @drop.prevent="$store.gw.picturesInto($store.gw.inboxDrafts, item.key, item.id, $event)"
                   rows="1"
                   x-model="$store.gw.inboxDrafts[item.key]"
-                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerInbox(item) }"
+                  @keydown="$store.gw.onEnter($event) && $store.gw.answerInbox(item)"
                   :placeholder="item.kind === 'guess' ? 'Not quite: ...' : item.options.length ? 'Your own answer, alone or with what you picked' : 'A sentence is enough'"
                   class="field block min-h-[34px] w-full resize-y"
                 ></textarea>
@@ -3267,10 +3254,10 @@
                 <div class="mt-1.5 flex items-center gap-1">
                   <label class="grid h-[34px] w-[34px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
                     <svg class="size-4"><use href="#i-photo" /></svg>
-                    <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures(item.id, [...$event.target.files]).then((md) => { $store.gw.inboxDrafts[item.key] = $store.gw.withPictures($store.gw.inboxDrafts[item.key], md) }); $event.target.value = ''" />
+                    <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.picturesInto($store.gw.inboxDrafts, item.key, item.id, $event)" />
                   </label>
                   <div x-show="item.entry >= 0" class="relative" @click.outside="$store.gw.waitingMenu === item.key && ($store.gw.waitingMenu = '')" @keydown.escape.stop="$store.gw.waitingMenu = ''">
-                    <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-body" :class="$store.gw.waitingOf(item) ? 'bg-violet-300/15 text-violet-300' : 'text-fog/45 hover:bg-tint/8 hover:text-fog'" :title="'Mark as waiting for someone else\'s answer'" @click="$store.gw.waitingMenu = $store.gw.waitingMenu === item.key ? '' : item.key; $store.gw.waitingName = ''">
+                    <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-body" :class="$store.gw.waitingOf(item) ? 'bg-violet-300/15 text-violet-300' : 'text-fog/45 hover:bg-tint/8 hover:text-fog'" :title="'Mark as waiting for someone else\'s answer'" @click="$store.gw.toggleWaitingMenu(item.key)">
                       <svg class="size-3.5"><use href="#i-users" /></svg>
                       <span x-text="$store.gw.waitingLabel(item) || 'Waiting for…'"></span>
                     </button>
@@ -3278,7 +3265,7 @@
                       <template x-for="p in $store.gw.waiting.people" :key="p">
                         <button class="menu-item" @click="$store.gw.setWaitingFor(item, p)">
                           <span class="min-w-0 flex-1 truncate" x-text="p"></span>
-                          <svg x-show="$store.gw.waitingOf(item)?.for === p" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+                          <svg x-show="$store.gw.waitingFor(item) === p" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
                         </button>
                       </template>
                       <form class="flex gap-1 px-1.5 py-1" @submit.prevent="$store.gw.waitingName.trim() && $store.gw.setWaitingFor(item, $store.gw.waitingName.trim())">
@@ -3293,11 +3280,11 @@
                     </div>
                   </div>
                   <span class="flex-1"></span>
-                  <button type="submit" class="h-[34px] rounded-md bg-accent px-3 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="(!picked.length && !($store.gw.inboxDrafts[item.key] ?? '').trim()) || $store.gw.inboxSending === item.key">Answer</button>
+                  <button type="submit" class="h-[34px] rounded-md bg-accent px-3 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="(!picked.length && !($store.gw.inboxDrafts[item.key] || '').trim()) || $store.gw.inboxSending === item.key">Answer</button>
                 </div>
               </form>
-              <div x-show="$store.gw.entryPictures($store.gw.inboxDrafts[item.key] ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
-                <template x-for="pic in $store.gw.entryPictures($store.gw.inboxDrafts[item.key] ?? '')" :key="pic.url">
+              <div x-show="$store.gw.entryPictures($store.gw.inboxDrafts[item.key] || '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                <template x-for="pic in $store.gw.entryPictures($store.gw.inboxDrafts[item.key] || '')" :key="pic.url">
                   <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                 </template>
               </div>
@@ -3322,7 +3309,7 @@
       title="Show details"
       @click="$store.gw.setDetailsMinimized(false)"
     >
-      <span class="truncate text-fog/85" x-text="$store.gw.reportOpen ? 'Readiness report' : $store.gw.selectedGap ? 'Missing: ' + $store.gw.selectedGap.title : $store.gw.selectedStory ? 'Story: ' + $store.gw.selectedStory.title : $store.gw.selected?.title"></span>
+      <span class="truncate text-fog/85" x-text="$store.gw.panelTitle()"></span>
       <span class="icon-btn"><svg class="size-5"><use href="#i-panel-right" /></svg></span>
     </button>
 
@@ -3345,10 +3332,10 @@
       <div class="border-t border-line"></div>
 
       <div class="flex-1 overflow-y-auto p-4">
-        <template x-if="$store.gw.reportOpen && $store.gw.readiness?.report">
+        <template x-if="$store.gw.reportOpen && ($store.gw.readiness && $store.gw.readiness.report)">
           <div id="report">
             <p class="mb-3 text-body text-fog/45" x-text="'Checked ' + $store.gw.readiness.report.checked + ' · ' + $store.gw.readiness.gaps.length + ' gaps'"></p>
-            <div class="report" x-html="$store.gw.reportHtml"></div>
+            <div class="report" x-markup="$store.gw.reportHtml"></div>
             <p class="mt-4 text-body text-fog/40">Run /readiness in your agent to check again, or /challenge for questions on the thinnest parts.</p>
           </div>
         </template>
@@ -3372,7 +3359,7 @@
 
             <!-- Partly met: what is missing, and what to do about it -->
             <div x-show="$store.gw.selectedStory.status === 'partial' && !$store.gw.selectedStory.later" id="story-partial" class="rounded-lg border border-question/30 bg-question/5 p-3">
-              <p class="text-fog/85" x-text="$store.gw.criteria($store.gw.selectedStory).length ? ($store.gw.criteria($store.gw.selectedStory).filter((c) => !c.met).length + ' of ' + $store.gw.criteria($store.gw.selectedStory).length + ' criteria not met yet. Build the rest, call it enough as it is, or set it aside for now.') : 'Partially done, without criteria saying what is left. Add them with Edit, or decide it is enough.'"></p>
+              <p class="text-fog/85" x-text="$store.gw.storyLeftText()"></p>
               <div class="mt-2 flex flex-wrap gap-1.5">
                 <button class="rounded-md bg-accent px-2.5 py-1 text-body font-medium text-white hover:bg-accent/90" title="Copies an instruction for your agent: build exactly what is not met yet" @click="$store.gw.storyBuildRest()">Build the rest</button>
                 <button class="rounded-md border border-line px-2.5 py-1 text-body text-fog/85 hover:bg-tint/8" title="Mark it done; what is not met becomes a parked thought, so it is not lost" @click="$store.gw.storyEnough()">Enough as it is</button>
@@ -3400,7 +3387,7 @@
                 <span class="label mb-0 flex-1">The story</span>
                 <button x-show="!$store.gw.storyEditing" class="rounded-md px-2 py-0.5 text-body text-accent hover:bg-accent/15" @click="$store.gw.editStoryText()">Edit</button>
               </div>
-              <div x-show="!$store.gw.storyEditing" class="report mt-1" x-html="$store.gw.storyHtml($store.gw.selectedStory)"></div>
+              <div x-show="!$store.gw.storyEditing" class="report mt-1" x-markup="$store.gw.storyHtml($store.gw.selectedStory)"></div>
               <template x-if="$store.gw.storyEditing">
                 <div class="mt-1">
                   <textarea id="story-text" class="field min-h-[220px] w-full font-mono text-body" x-model="$store.gw.storyText" @keydown.escape.stop="$store.gw.storyEditing = false"></textarea>
@@ -3417,7 +3404,7 @@
               <template x-for="id in $store.gw.selectedStory.from" :key="id">
                 <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.goToNode(id)">
                   <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.nodes[id] ? $store.gw.typeColors[$store.gw.nodes[id].type] : '#666' }"></span>
-                  <span class="truncate" x-text="$store.gw.nodes[id]?.title ?? id + ' (not in the map)'"></span>
+                  <span class="truncate" x-text="$store.gw.titleOr(id, ' (not in the map)')"></span>
                 </button>
               </template>
             </div>
@@ -3447,9 +3434,9 @@
               <span class="label">Why it matters</span>
               <p class="text-fog/80" x-text="$store.gw.selectedGap.why"></p>
             </div>
-            <div x-show="$store.gw.selectedGap.near.some((id) => $store.gw.nodes[id])">
+            <div x-show="$store.gw.gapNear().length">
               <span class="label">Near</span>
-              <template x-for="id in $store.gw.selectedGap.near.filter((id) => $store.gw.nodes[id])" :key="id">
+              <template x-for="id in $store.gw.gapNear()" :key="id">
                 <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.select(id)">
                   <span class="size-1.5 shrink-0 rounded-full" :style="{ background: $store.gw.typeColors[$store.gw.nodes[id].type] }"></span>
                   <span class="truncate" x-text="$store.gw.nodes[id].title"></span>
@@ -3459,14 +3446,14 @@
             <template x-if="$store.gw.selectedGap.answered_by">
               <div class="rounded-lg border border-line px-3 py-2 text-fog/70">
                 <span class="label mb-1" x-text="$store.gw.selectedGap.enough ? 'Accepted for now' : 'Answered by'"></span>
-                <button class="block w-full text-left text-accent hover:underline" @click="$store.gw.select($store.gw.selectedGap.answered_by)" x-text="$store.gw.nodes[$store.gw.selectedGap.answered_by]?.title ?? $store.gw.selectedGap.answered_by"></button>
+                <button class="block w-full text-left text-accent hover:underline" @click="$store.gw.select($store.gw.selectedGap.answered_by)" x-text="$store.gw.titleOr($store.gw.selectedGap.answered_by)"></button>
                 <p x-show="!$store.gw.selectedGap.enough" class="mt-1.5 text-body text-fog/45">Run /readiness in your agent to check whether this closes the gap.</p>
               </div>
             </template>
-            <div x-show="!$store.gw.selectedGap.answered_by && $store.gw.selectedGap.suggestions?.length">
+            <div x-show="!$store.gw.selectedGap.answered_by && $store.gw.gapSuggestions().length">
               <span class="label">Start from one of these</span>
               <div class="flex flex-col gap-1.5">
-                <template x-for="s in $store.gw.selectedGap.suggestions ?? []" :key="s.title">
+                <template x-for="s in $store.gw.gapSuggestions()" :key="s.title">
                   <button class="rounded-lg border border-line px-3 py-2 text-left text-fog/85 hover:border-accent/60 hover:bg-accent/10" :title="s.why" @click="$store.gw.pickOption(s.title)" x-text="s.title"></button>
                 </template>
               </div>
@@ -3477,7 +3464,7 @@
                 id="gap-answer"
                 rows="3"
                 x-model="$store.gw.gapAnswer"
-                @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.answerGap(true) }"
+                @keydown="$store.gw.onEnter($event) && $store.gw.answerGap(true)"
                 placeholder="For example: Inter, 13px base, 1.25 scale"
                 class="field w-full resize-none"
               ></textarea>
@@ -3490,7 +3477,7 @@
           </div>
         </template>
 
-        <template x-if="$store.gw.selected?.error">
+        <template x-if="($store.gw.selected && $store.gw.selected.error)">
           <div class="space-y-3">
             <h2 class="font-medium text-rose-200" x-text="$store.gw.selected.id + '.md cannot be read'"></h2>
             <p class="text-body text-fog/60" x-text="$store.gw.selected.error"></p>
@@ -3515,10 +3502,10 @@
                   id="field-title"
                   rows="3"
                   x-model="$store.gw.draft.title"
-                  x-init="$nextTick(() => { $el.focus(); $store.gw.selectTitle ? $el.select() : $el.setSelectionRange($el.value.length, $el.value.length); $store.gw.selectTitle = false })"
+                  x-init="$store.gw.focusTitleSoon($el)"
                   @input="$store.gw.edit('title')"
                   @focus="$store.gw.focusField('title')"
-                  @blur="$store.gw.blurField('title'); $store.gw.editingTitle = false"
+                  @blur="$do($store.gw.blurField('title'), $store.gw.editingTitle = false)"
                   @keydown.enter.prevent="$event.target.blur()"
                   class="field w-full resize-none text-title font-semibold leading-snug"
                 ></textarea>
@@ -3600,12 +3587,12 @@
             </div>
             <p x-show="$store.gw.selected.status === 'principle'" id="principle-note" class="-mt-1 text-body text-fog/55">
               A guiding principle: read above the board, not on it, and by your agent before it builds.
-              <span x-show="$store.gw.selected.extra?.changed" x-text="'Changed ' + $store.gw.selected.extra?.changed + '.'"></span>
+              <span x-show="$store.gw.selected.extra && $store.gw.selected.extra.changed" x-text="'Changed ' + $store.gw.selected.extra.changed + '.'"></span>
             </p>
 
             <!-- Stories this thought leads to, and a new one from it -->
             <div id="thought-stories">
-              <template x-for="st in $store.gw.stories.filter((x) => x.from.includes($store.gw.selected.id))" :key="st.id">
+              <template x-for="st in $store.gw.storiesFromSelected()" :key="st.id">
                 <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.selectStory(st.id)">
                   <span class="shrink-0 rounded bg-tint/8 px-1 text-tag text-fog/55">Story</span>
                   <span class="min-w-0 flex-1 truncate" x-text="st.title"></span>
@@ -3643,7 +3630,7 @@
                 placeholder="No topic yet"
                 class="field w-full"
               />
-              <span x-show="$store.gw.selected.extra?.topic_by === 'claude'" class="mt-1 block text-body text-fog/40">Suggested by your agent</span>
+              <span x-show="$store.gw.selected.extra && $store.gw.selected.extra.topic_by === 'claude'" class="mt-1 block text-body text-fog/40">Suggested by your agent</span>
               <datalist id="topic-names">
                 <template x-for="t in $store.gw.topicNames" :key="t"><option :value="t"></option></template>
               </datalist>
@@ -3677,7 +3664,7 @@
                     :class="$store.gw.draft.altitude === a ? 'bg-tint/15 text-fog' : 'text-fog/50 hover:text-fog/80'"
                     :data-altitude="a"
                     :title="'Altitude ' + a"
-                    @click="$store.gw.draft.altitude = a; $store.gw.edit('altitude', true)"
+                    @click="$do($store.gw.draft.altitude = a, $store.gw.edit('altitude', true))"
                     x-text="$store.gw.altitudeWords[a]"
                   ></button>
                 </template>
@@ -3690,9 +3677,9 @@
                 id="field-body"
                 :value="$store.gw.notesText"
                 @input="$store.gw.setNotes($event.target.value)"
-                @paste="const f = [...$event.clipboardData.files]; if (f.some((x) => x.type.startsWith('image/'))) { $event.preventDefault(); $store.gw.attachImages(f, $el) }"
+                @paste="$store.gw.attachFrom($event, $el)"
                 @dragover.prevent
-                @drop.prevent="$store.gw.attachImages([...$event.dataTransfer.files], $el)"
+                @drop.prevent="$store.gw.attachFrom($event, $el)"
                 @focus="$store.gw.focusField('body')"
                 @blur="$store.gw.blurField('body')"
                 placeholder="Thoughts, references, half formed questions. Paste or drop images here"
@@ -3737,7 +3724,7 @@
                                 </button>
                               </template>
                             </div>
-                            <div x-show="q.open" class="mt-2" x-data="{ picked: [], words: '' }" x-effect="const b = $store.gw.takeBack($store.gw.selectedId + ':' + q.entry + ':' + q.index); if (b) { picked = b.picked; words = b.words }">
+                            <div x-show="q.open" class="mt-2" x-data="answer('thought')" x-effect="takeBack(q)">
                               <div x-show="q.options.length" class="flex flex-col gap-1">
                                 <template x-for="(o, j) in q.options" :key="j">
                                   <button
@@ -3747,20 +3734,20 @@
                                     class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body"
                                     :class="picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'"
                                     title="Pick it; pick more than one if they all hold"
-                                    @click="picked = picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]"
+                                    @click="toggle(o)"
                                   >
                                     <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
                                     <span x-text="o"></span>
                                   </button>
                                 </template>
                               </div>
-                              <form class="mt-1.5" @submit.prevent="if (picked.length || words.trim()) $store.gw.answerQuestion(q, $store.gw.answerText(q.options, picked, words)).then(() => { picked = []; words = '' })">
+                              <form class="mt-1.5" @submit.prevent="send(q)">
                                 <textarea
-                                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.selectedId, f).then((md) => { words = $store.gw.withPictures(words, md) }) }"
-                                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.selectedId, [...$event.dataTransfer.files]).then((md) => { words = $store.gw.withPictures(words, md) })"
+                                  @paste="pictures($event)"
+                                  @dragover.prevent @drop.prevent="pictures($event)"
                                   rows="1"
                                   x-model="words"
-                                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $event.target.form.requestSubmit() }"
+                                  @keydown="$store.gw.onEnter($event) && $event.target.form.requestSubmit()"
                                   :placeholder="q.options.length ? 'Your own answer, alone or with what you picked' : 'Your answer'"
                                   class="field block min-h-[30px] w-full resize-y text-body"
                                 ></textarea>
@@ -3768,10 +3755,10 @@
                                 <div class="mt-1.5 flex items-center gap-1">
                                   <label class="grid h-[30px] w-[30px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
                                     <svg class="size-4"><use href="#i-photo" /></svg>
-                                    <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.selectedId, [...$event.target.files]).then((md) => { words = $store.gw.withPictures(words, md) }); $event.target.value = ''" />
+                                    <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="pictures($event)" />
                                   </label>
-                                  <div x-show="q.open" x-data="{ get wi() { return $store.gw.threadItem('question', $store.gw.selectedId, $store.gw.draft.body, q) } }" class="relative" @click.outside="$store.gw.waitingMenu === wi.key && ($store.gw.waitingMenu = '')" @keydown.escape.stop="$store.gw.waitingMenu = ''">
-                                    <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-body" :class="$store.gw.waitingOf(wi) ? 'bg-violet-300/15 text-violet-300' : 'text-fog/45 hover:bg-tint/8 hover:text-fog'" :title="'Mark as waiting for someone else\'s answer'" @click="$store.gw.waitingMenu = $store.gw.waitingMenu === wi.key ? '' : wi.key; $store.gw.waitingName = ''">
+                                  <div x-show="q.open" x-data="waitingItem('thought')" class="relative" @click.outside="$store.gw.waitingMenu === wi.key && ($store.gw.waitingMenu = '')" @keydown.escape.stop="$store.gw.waitingMenu = ''">
+                                    <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-body" :class="$store.gw.waitingOf(wi) ? 'bg-violet-300/15 text-violet-300' : 'text-fog/45 hover:bg-tint/8 hover:text-fog'" :title="'Mark as waiting for someone else\'s answer'" @click="$store.gw.toggleWaitingMenu(wi.key)">
                                       <svg class="size-3.5"><use href="#i-users" /></svg>
                                       <span x-text="$store.gw.waitingLabel(wi) || 'Waiting for…'"></span>
                                     </button>
@@ -3779,7 +3766,7 @@
                                       <template x-for="p in $store.gw.waiting.people" :key="p">
                                         <button class="menu-item" @click="$store.gw.setWaitingFor(wi, p)">
                                           <span class="min-w-0 flex-1 truncate" x-text="p"></span>
-                                          <svg x-show="$store.gw.waitingOf(wi)?.for === p" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+                                          <svg x-show="$store.gw.waitingFor(wi) === p" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
                                         </button>
                                       </template>
                                       <form class="flex gap-1 px-1.5 py-1" @submit.prevent="$store.gw.waitingName.trim() && $store.gw.setWaitingFor(wi, $store.gw.waitingName.trim())">
@@ -3797,16 +3784,16 @@
                                   <button type="submit" class="h-[30px] shrink-0 rounded-md bg-accent px-3 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-40" :disabled="!picked.length && !words.trim()">Answer</button>
                                 </div>
                               </form>
-                              <div x-show="$store.gw.entryPictures(words ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
-                                <template x-for="pic in $store.gw.entryPictures(words ?? '')" :key="pic.url">
+                              <div x-show="$store.gw.entryPictures(words || '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                                <template x-for="pic in $store.gw.entryPictures(words || '')" :key="pic.url">
                                   <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                                 </template>
                               </div>
                             </div>
-                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer ?? '')"></p>
-                            <div x-show="$store.gw.entryPictures(q.answer ?? '').length" class="mt-2 flex flex-wrap gap-2">
-                              <template x-for="pic in $store.gw.entryPictures(q.answer ?? '')" :key="pic.url">
-                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer ?? ''))">
+                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer || '')"></p>
+                            <div x-show="$store.gw.entryPictures(q.answer || '').length" class="mt-2 flex flex-wrap gap-2">
+                              <template x-for="pic in $store.gw.entryPictures(q.answer || '')" :key="pic.url">
+                                <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer || ''))">
                                   <img :src="pic.url" alt="" class="h-14 w-auto max-w-full rounded-md border border-line object-cover object-top hover:border-tint/30" />
                                 </button>
                               </template>
@@ -3816,21 +3803,21 @@
                       </div>
                     </template>
                     <template x-if="e.who !== 'claude-asks'">
-                      <div x-data="{ get steps() { return e.who === 'claude' ? $store.gw.testSteps(e.text) : { fix: '', steps: [] } } }">
+                      <div x-data="entrySteps">
                         <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-body text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
                         <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-text="steps.steps.length ? steps.fix : $store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
                         <!-- Your own entry: change it later; a newer answer crosses this one out -->
                         <template x-if="e.who === 'you' && e.run">
-                          <div class="mt-1" x-data="{ get owner() { return $store.gw.selectedId } }">
-                            <div x-show="$store.gw.entryEdit?.run !== e.run" class="flex items-center justify-between gap-2 text-body">
+                          <div class="mt-1" x-data="entryOwner('thought')">
+                            <div x-show="!$store.gw.editingEntry(e.run)" class="flex items-center justify-between gap-2 text-body">
                               <span :class="e.retake ? 'text-question' : 'text-fog/40'" x-text="$store.gw.changeLabel(e)"></span>
                               <button x-show="!e.superseded" type="button" class="grid size-6 shrink-0 place-items-center rounded-md text-fog/40 hover:bg-tint/5 hover:text-fog" title="Change what you wrote" @click="$store.gw.startChange(owner, e)"><svg class="size-3.5"><use href="#i-pencil" /></svg></button>
                             </div>
-                            <template x-if="$store.gw.entryEdit?.run === e.run">
+                            <template x-if="$store.gw.editingEntry(e.run)">
                               <div class="mt-1 space-y-1.5">
                                 <div x-show="$store.gw.entryEdit.options.length" class="flex flex-col gap-1">
                                   <template x-for="(o, j) in $store.gw.entryEdit.options" :key="j">
-                                    <button type="button" role="checkbox" :aria-checked="$store.gw.entryEdit.picked.includes(o)" class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'" @click="const p = $store.gw.entryEdit.picked; $store.gw.entryEdit.picked = p.includes(o) ? p.filter((x) => x !== o) : [...p, o]">
+                                    <button type="button" role="checkbox" :aria-checked="$store.gw.entryEdit.picked.includes(o)" class="flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-body" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent/70 bg-accent/15 text-fog' : 'border-line bg-shade/20 text-fog/85 hover:border-accent/60 hover:bg-accent/10'" @click="$store.gw.toggleEditPick(o)">
                                       <span class="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border" :class="$store.gw.entryEdit.picked.includes(o) ? 'border-accent bg-accent text-white' : 'border-tint/30'"><svg x-show="$store.gw.entryEdit.picked.includes(o)" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg></span>
                                       <span x-text="o"></span>
                                     </button>
@@ -3852,7 +3839,7 @@
                           <div class="flex items-center gap-1.5 border-b border-tint/8 px-2.5 py-1.5 text-body">
                             <svg class="size-3.5" :class="$store.gw.testableEntry === i ? 'text-violet-300' : 'text-fog/40'"><use href="#i-check" /></svg>
                             <span class="font-medium" :class="$store.gw.testableEntry === i ? 'text-violet-200' : 'text-fog/60'">To test</span>
-                            <span class="ml-auto text-fog/45" x-show="$store.gw.testableEntry === i" x-text="steps.steps.filter((_, n) => $store.gw.stepMark(i, n) === 'ok').length + ' of ' + steps.steps.length + ' work'"></span>
+                            <span class="ml-auto text-fog/45" x-show="$store.gw.testableEntry === i" x-text="working(i)"></span>
                             <!-- An earlier round: how it went -->
                             <span class="ml-auto" x-show="$store.gw.testableEntry !== i && $store.gw.pastTest(i, steps.steps.length).result" :class="$store.gw.pastTest(i, steps.steps.length).result === 'works' ? 'text-emerald-300/80' : 'text-rose-300/80'" x-text="$store.gw.pastTest(i, steps.steps.length).result === 'works' ? 'Worked' : $store.gw.pastTest(i, steps.steps.length).marks.includes('bad') ? 'Sent back' : 'Sent back, no step marked'" :title="$store.gw.pastTest(i, steps.steps.length).result === 'fails' && !$store.gw.pastTest(i, steps.steps.length).marks.includes('bad') ? 'No step was marked No: what was wrong is in the note below' : ''"></span>
                           </div>
@@ -3860,22 +3847,22 @@
                             <template x-for="(step, n) in steps.steps" :key="n">
                               <li class="flex flex-wrap items-start gap-x-2 gap-y-1.5 px-2.5 py-2" :class="$store.gw.stepShown(i, n, steps.steps.length) === 'bad' && ($store.gw.testableEntry === i ? 'bg-rose-400/[0.07]' : 'bg-rose-400/[0.04]')">
                                 <span class="mt-px grid size-[18px] shrink-0 place-items-center rounded-full text-tag font-semibold"
-                                  :class="{ ok: 'bg-emerald-400/20 text-emerald-300', bad: 'bg-rose-400/20 text-rose-300' }[$store.gw.stepShown(i, n, steps.steps.length)] ?? 'bg-tint/8 text-fog/60'"
-                                  :title="{ ok: 'Worked', bad: 'Did not work' }[$store.gw.stepShown(i, n, steps.steps.length)] ?? ''"
-                                  x-text="{ ok: '✓', bad: '✕' }[$store.gw.stepShown(i, n, steps.steps.length)] ?? n + 1"></span>
+                                  :class="stepClass(i, n)"
+                                  :title="stepTitle(i, n)"
+                                  x-text="stepLabel(i, n)"></span>
                                 <span class="min-w-0 flex-1 text-body leading-snug" :class="$store.gw.stepShown(i, n, steps.steps.length) === 'ok' ? 'text-fog/55' : 'text-fog/85'" x-text="step"></span>
                                 <span x-show="$store.gw.testableEntry === i" class="flex shrink-0 gap-0.5">
                                   <button type="button" class="rounded px-1.5 py-0.5 text-body" :class="$store.gw.stepMark(i, n) === 'ok' ? 'bg-emerald-400/20 text-emerald-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'ok'" title="This step works" @click="$store.gw.markStep(i, n, 'ok')">Works</button>
-                                  <button type="button" class="rounded px-1.5 py-0.5 text-body" :class="$store.gw.stepMark(i, n) === 'bad' ? 'bg-rose-400/20 text-rose-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'bad'" title="This step does not work" @click="$store.gw.markStep(i, n, 'bad'); if ($store.gw.stepMark(i, n) === 'bad') $nextTick(() => document.getElementById('step-note-' + i + '-' + n)?.focus())">No</button>
+                                  <button type="button" class="rounded px-1.5 py-0.5 text-body" :class="$store.gw.stepMark(i, n) === 'bad' ? 'bg-rose-400/20 text-rose-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'bad'" title="This step does not work" @click="fails(i, n)">No</button>
                                 </span>
                                 <!-- A comment on this step, sent with it when it stays No -->
                                 <div x-show="$store.gw.testableEntry === i && $store.gw.stepMark(i, n) === 'bad'" class="ml-[26px] basis-full">
                                   <textarea :id="'step-note-' + i + '-' + n" rows="2" class="field w-full resize-y text-body" placeholder="What goes wrong here? Paste or drop a picture too"
-                                    :value="$store.gw.testNote(i).steps?.[n] ?? ''" @input="$store.gw.setTestNote(i, { step: [n, $event.target.value] })"
-                                    @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.selectedId, f).then((md) => $store.gw.setTestNote(i, { step: [n, $store.gw.withPictures($store.gw.testNote(i).steps?.[n] ?? '', md)] })) }"
-                                    @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.selectedId, [...$event.dataTransfer.files]).then((md) => $store.gw.setTestNote(i, { step: [n, $store.gw.withPictures($store.gw.testNote(i).steps?.[n] ?? '', md)] }))"></textarea>
-                                  <div x-show="$store.gw.entryPictures($store.gw.testNote(i).steps?.[n] ?? '').length" class="mt-1 flex flex-wrap gap-1.5">
-                                    <template x-for="pic in $store.gw.entryPictures($store.gw.testNote(i).steps?.[n] ?? '')" :key="pic.url">
+                                    :value="$store.gw.stepNote(i, n)" @input="$store.gw.setTestNote(i, { step: [n, $event.target.value] })"
+                                    @paste="$store.gw.testNotePictures(i, n, $event)"
+                                    @dragover.prevent @drop.prevent="$store.gw.testNotePictures(i, n, $event)"></textarea>
+                                  <div x-show="$store.gw.entryPictures($store.gw.stepNote(i, n)).length" class="mt-1 flex flex-wrap gap-1.5">
+                                    <template x-for="pic in $store.gw.entryPictures($store.gw.stepNote(i, n))" :key="pic.url">
                                       <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                                     </template>
                                   </div>
@@ -3887,27 +3874,27 @@
                             <div x-show="$store.gw.testFailing(i, steps.steps.length)" class="mb-2">
                               <!-- Anything else, on the whole, with pictures: pasted, dropped or picked, like an answer -->
                               <div class="flex items-start gap-1.5">
-                                <textarea :id="'test-note-' + i" rows="2" class="field min-w-0 flex-1 resize-y text-body" :placeholder="steps.steps.some((_, n) => $store.gw.stepMark(i, n) === 'bad') ? 'Anything else? Optional' : 'What is still wrong? Paste or drop a picture too. Your agent reads this next'"
-                                  :value="$store.gw.testNote(i).general ?? ''" @input="$store.gw.setTestNote(i, { general: $event.target.value })"
-                                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.selectedId, f).then((md) => $store.gw.setTestNote(i, { general: $store.gw.withPictures($store.gw.testNote(i).general ?? '', md) })) }"
-                                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.selectedId, [...$event.dataTransfer.files]).then((md) => $store.gw.setTestNote(i, { general: $store.gw.withPictures($store.gw.testNote(i).general ?? '', md) }))"></textarea>
+                                <textarea :id="'test-note-' + i" rows="2" class="field min-w-0 flex-1 resize-y text-body" :placeholder="anyBad(i) ? 'Anything else? Optional' : 'What is still wrong? Paste or drop a picture too. Your agent reads this next'"
+                                  :value="$store.gw.testNote(i).general || ''" @input="$store.gw.setTestNote(i, { general: $event.target.value })"
+                                  @paste="$store.gw.testNotePictures(i, null, $event)"
+                                  @dragover.prevent @drop.prevent="$store.gw.testNotePictures(i, null, $event)"></textarea>
                                 <label class="grid size-[30px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
                                   <svg class="size-4"><use href="#i-photo" /></svg>
-                                  <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.selectedId, [...$event.target.files]).then((md) => { $store.gw.setTestNote(i, { general: $store.gw.withPictures($store.gw.testNote(i).general ?? '', md) }); $event.target.value = '' })" />
+                                  <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.testNotePictures(i, null, $event)" />
                                 </label>
                               </div>
-                              <div x-show="$store.gw.entryPictures($store.gw.testNote(i).general ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
-                                <template x-for="pic in $store.gw.entryPictures($store.gw.testNote(i).general ?? '')" :key="pic.url">
+                              <div x-show="$store.gw.entryPictures($store.gw.testNote(i).general || '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                                <template x-for="pic in $store.gw.entryPictures($store.gw.testNote(i).general || '')" :key="pic.url">
                                   <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                                 </template>
                               </div>
                             </div>
                             <div class="flex items-center justify-end gap-1.5">
-                              <span x-show="!$store.gw.testFailing(i, steps.steps.length)" class="mr-auto text-body text-fog/45" x-text="steps.steps.every((_, n) => $store.gw.stepMark(i, n) === 'ok') ? 'Every step works.' : ($store.gw.selected?.extra?.source === 'app' ? 'Go through the steps in the app.' : 'Go through the steps.')"></span>
-                              <button type="button" x-show="!$store.gw.testFailing(i, steps.steps.length)" class="rounded-md px-2.5 py-1 text-body text-fog/70 hover:bg-tint/8 hover:text-fog" @click="$store.gw.setTestNote(i, { open: true }); $nextTick(() => document.getElementById('test-note-' + i)?.focus())">Doesn't work</button>
-                              <button type="button" x-show="$store.gw.testNote(i).open && !steps.steps.some((_, n) => $store.gw.stepMark(i, n) === 'bad')" class="rounded-md px-2.5 py-1 text-body text-fog/70 hover:bg-tint/8 hover:text-fog" title="Back, without sending (what you wrote is kept)" @click="$store.gw.setTestNote(i, { open: false })">Back</button>
+                              <span x-show="!$store.gw.testFailing(i, steps.steps.length)" class="mr-auto text-body text-fog/45" x-text="summary(i)"></span>
+                              <button type="button" x-show="!$store.gw.testFailing(i, steps.steps.length)" class="rounded-md px-2.5 py-1 text-body text-fog/70 hover:bg-tint/8 hover:text-fog" @click="openNote(i)">Doesn't work</button>
+                              <button type="button" x-show="$store.gw.testNote(i).open && !anyBad(i)" class="rounded-md px-2.5 py-1 text-body text-fog/70 hover:bg-tint/8 hover:text-fog" title="Back, without sending (what you wrote is kept)" @click="$store.gw.setTestNote(i, { open: false })">Back</button>
                               <button type="button" x-show="$store.gw.testFailing(i, steps.steps.length)" class="rounded-md bg-rose-500/80 px-2.5 py-1 text-body font-medium text-white hover:bg-rose-500 disabled:opacity-40" :disabled="!$store.gw.composedTestNote(i, steps.steps)" @click="$store.gw.testedHere(false, $store.gw.composedTestNote(i, steps.steps))">Send back to the agent</button>
-                              <button type="button" x-show="!$store.gw.testFailing(i, steps.steps.length)" class="rounded-md px-2.5 py-1 text-body font-medium" :class="steps.steps.every((_, n) => $store.gw.stepMark(i, n) === 'ok') ? 'bg-emerald-500/85 text-white hover:bg-emerald-500' : 'bg-tint/10 text-fog/85 hover:bg-tint/15'" @click="$store.gw.testedHere(true)" x-text="$store.gw.selected?.extra?.source === 'app' ? 'Works, mark fixed' : 'Works, mark done'"></button>
+                              <button type="button" x-show="!$store.gw.testFailing(i, steps.steps.length)" class="rounded-md px-2.5 py-1 text-body font-medium" :class="allWork(i) ? 'bg-emerald-500/85 text-white hover:bg-emerald-500' : 'bg-tint/10 text-fog/85 hover:bg-tint/15'" @click="$store.gw.testedHere(true)" x-text="$store.gw.selectedIsComment() ? 'Works, mark fixed' : 'Works, mark done'"></button>
                             </div>
                           </div>
                         </div>
@@ -3925,17 +3912,17 @@
               </ol>
               <form class="mt-2" @submit.prevent="$store.gw.sendReply()">
                 <textarea
-                  @paste="const f = [...$event.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { $event.preventDefault(); $store.gw.uploadPictures($store.gw.selectedId, f).then((md) => { $store.gw.reply = $store.gw.withPictures($store.gw.reply, md) }) }"
-                  @dragover.prevent @drop.prevent="$store.gw.uploadPictures($store.gw.selectedId, [...$event.dataTransfer.files]).then((md) => { $store.gw.reply = $store.gw.withPictures($store.gw.reply, md) })"
+                  @paste="$store.gw.picturesInto($store.gw, 'reply', $store.gw.selectedId, $event)"
+                  @dragover.prevent @drop.prevent="$store.gw.picturesInto($store.gw, 'reply', $store.gw.selectedId, $event)"
                   id="reply"
                   rows="2"
                   x-model="$store.gw.reply"
-                  @keydown="if ($event.key === 'Enter' && !$event.shiftKey && !$event.isComposing) { $event.preventDefault(); $store.gw.sendReply() }"
+                  @keydown="$store.gw.onEnter($event) && $store.gw.sendReply()"
                   :placeholder="$store.gw.openCount($store.gw.draft.body) ? 'A remark: it answers no question, answer those above' : 'Add a comment'"
                   class="field w-full resize-none"
                 ></textarea>
-                <div x-show="$store.gw.entryPictures($store.gw.reply ?? '').length" class="mt-1.5 flex flex-wrap gap-1.5">
-                  <template x-for="pic in $store.gw.entryPictures($store.gw.reply ?? '')" :key="pic.url">
+                <div x-show="$store.gw.entryPictures($store.gw.reply || '').length" class="mt-1.5 flex flex-wrap gap-1.5">
+                  <template x-for="pic in $store.gw.entryPictures($store.gw.reply || '')" :key="pic.url">
                     <img :src="pic.url" alt="" class="h-14 w-auto rounded border border-line object-cover" />
                   </template>
                 </div>
@@ -3949,7 +3936,7 @@
                   <div class="flex shrink-0 items-center gap-1">
                     <label class="grid h-[26px] w-[26px] shrink-0 cursor-pointer place-items-center rounded-md text-fog/55 hover:bg-tint/5 hover:text-fog" title="Add a picture (or paste or drop one in the box)">
                       <svg class="size-4"><use href="#i-photo" /></svg>
-                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.uploadPictures($store.gw.selectedId, [...$event.target.files]).then((md) => { $store.gw.reply = $store.gw.withPictures($store.gw.reply, md) }); $event.target.value = ''" />
+                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="$store.gw.picturesInto($store.gw, 'reply', $store.gw.selectedId, $event)" />
                     </label>
                     <button
                     id="reply-send"
@@ -4004,12 +3991,12 @@
     <!-- A sign-in handed over in a link (#token=): taken only when the person says so, since anyone can send such a link. -->
     <div x-cloak x-show="!$store.gw.onMac && $store.gw.session.handed" id="handed-sign-in" class="fixed inset-0 z-[61] grid place-items-center bg-shade/40 px-4">
       <div role="dialog" aria-modal="true" aria-labelledby="handed-title" class="w-full max-w-sm rounded-xl border border-line bg-panel p-5 shadow-lg shadow-shade/25">
-        <h1 id="handed-title" class="mb-1 text-title font-semibold text-fog" x-text="$store.gw.session.handed?.name ? 'Sign in as ' + $store.gw.session.handed.name + '?' : 'Sign in with this link?'"></h1>
+        <h1 id="handed-title" class="mb-1 text-title font-semibold text-fog" x-text="$store.gw.handedName() ? 'Sign in as ' + $store.gw.handedName() + '?' : 'Sign in with this link?'"></h1>
         <p class="mb-2 text-body text-fog/60">
-          The link you opened signs you in to <span class="font-medium text-fog" x-text="$store.gw.session.handed?.project"></span><span x-show="$store.gw.session.handed?.name"> as <span class="font-medium text-fog" x-text="$store.gw.session.handed?.name"></span></span>. What you add here is written under that sign-in.
+          The link you opened signs you in to <span class="font-medium text-fog" x-text="$store.gw.session.handed && $store.gw.session.handed.project"></span><span x-show="$store.gw.handedName()"> as <span class="font-medium text-fog" x-text="$store.gw.handedName()"></span></span>. What you add here is written under that sign-in.
         </p>
         <p class="mb-2 text-body text-fog/60">Say yes only when it came from your team's own login, not from a link someone sent you.</p>
-        <p x-show="$store.gw.session.handed?.replaces" class="mb-2 text-body text-fog/60">You are signed in here already. Yes replaces your sign-in in this tab.</p>
+        <p x-show="$store.gw.session.handed && $store.gw.session.handed.replaces" class="mb-2 text-body text-fog/60">You are signed in here already. Yes replaces your sign-in in this tab.</p>
         <div class="mt-4 flex justify-end gap-2">
           <button type="button" class="rounded-md px-3 py-1.5 text-body text-fog/70 hover:bg-tint/5" @click="$store.gw.declineHanded()">No</button>
           <button type="button" class="rounded-md bg-accent px-3 py-1.5 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-60" :disabled="$store.gw.signingIn" @click="$store.gw.acceptHanded()">Sign in</button>

@@ -262,7 +262,7 @@ export function storeFunction({ backend, verify, page, baseUrl: base, limits: ow
 const PAGE_ROUTE = /^\/((?:[^/]+\/)*?)([A-Za-z0-9][A-Za-z0-9_-]{0,62})(|\/|\/index\.html|\/assets\/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:js|css|woff2|svg|png)|\/store\.js|\/screenshot\.js)$/
 const PAGE_TYPES = /** @type {Record<string, string>} */ ({ html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', woff2: 'font/woff2', svg: 'image/svg+xml', png: 'image/png' })
 const PAGE_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'"
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; frame-ancestors 'none'"
 
 /**
  * The page at a map's address, and store.js and screenshot.js for a page on

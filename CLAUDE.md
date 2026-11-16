@@ -80,6 +80,7 @@ The tests, type check, lint and build run on macOS and Windows in GitHub Actions
 - Node + TypeScript
 - Vite for the UI
 - UI panels: Alpine.js + Tailwind (preferred), no heavy framework
+- Alpine is its CSP build (`@alpinejs/csp`), so the map's page runs under a Content-Security-Policy without `'unsafe-eval'` (in `ui/index.html` and on every store's page). Its expressions are a subset of JavaScript: no arrow functions, statements or `;`, `?.`, `??`, template literals, spread, `typeof`, globals (`Math`, `document`, `window`...) or assignments to an element's properties. What needs more is a method on the store (`ui/src/state.ts`, under "page helpers") or an `Alpine.data` component (`ui/src/components.ts`, for state of its own such as an answer box); several things in one handler are `$do(a, b)`; `$focusSoon()`, `$focusId(id)` and `$trackHeight(field)` are magics in `ui/src/main.ts`. Markup goes in with `x-markup` (only what `md()` sanitized, or the sitemap's lines), never `x-html`, which the CSP build refuses. `test/ui-csp.test.ts` reads every expression with the CSP build's own parser and fails on any of these.
 - `gray-matter` for frontmatter, `chokidar` for file watching
 
 ## Working together in git

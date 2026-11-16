@@ -1,9 +1,10 @@
 import './rename'
-import Alpine from 'alpinejs'
+import Alpine from '@alpinejs/csp'
 import { fetchNodes, fetchProject, onSession, PAGE, session, subscribe, watchPictures } from './api'
 import type { ServerEvent } from '../../src/shared/types'
 import { bindKeys } from './keys'
 import { applyTheme, state } from './state'
+import './components'
 
 applyTheme(state.theme)
 
@@ -14,16 +15,43 @@ Object.assign(window, { grndwrk: { state } })
 // limit, then a line at a time up to five (its max-height), then it scrolls.
 // Growing smoothly, never in a step, so the text does not jump.
 const measure = document.createElement('canvas').getContext('2d')
-Object.assign(window, {
-  fitCapture(el: HTMLTextAreaElement) {
-    if (measure) {
-      measure.font = getComputedStyle(el).font
-      const text = measure.measureText(el.value.replace(/\s+/g, ' ')).width
-      el.style.width = `${Math.min(420, Math.max(260, Math.ceil(text) + 4))}px`
-    }
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-  },
+function fitCapture(el: HTMLTextAreaElement) {
+  if (measure) {
+    measure.font = getComputedStyle(el).font
+    const text = measure.measureText(el.value.replace(/\s+/g, ' ')).width
+    el.style.width = `${Math.min(420, Math.max(260, Math.ceil(text) + 4))}px`
+  }
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+
+// Helpers the page's expressions call, since Alpine's CSP build reads no arrow functions or statements:
+// $focusSoon() focuses the element once it is drawn, $focusSoon(true) selects its text too;
+// $trackHeight('name') keeps the element's height in the store's field of that name;
+// $focusId('id') focuses the element with that id once drawn; $fitCapture(text) fits the Add bar to it;
+// $do(a, b, c) runs its arguments in order (they are evaluated as it is called), for a handler that does several things.
+Alpine.magic('focusSoon', (el) => (select = false) =>
+  Alpine.nextTick(() => {
+    ;(el as HTMLElement).focus()
+    if (select) (el as HTMLInputElement).select?.()
+  }),
+)
+
+Alpine.magic('focusId', () => (id: string) => Alpine.nextTick(() => document.getElementById(id)?.focus()))
+Alpine.magic('fitCapture', (el) => () => Alpine.nextTick(() => fitCapture(el as HTMLTextAreaElement)))
+// x-markup puts markup into the element, as x-html did; the CSP build refuses x-html. Its values
+// are only what md() made (Markdown sanitized with DOMPurify, no Alpine attributes) or the
+// sitemap's lines drawn from numbers, so nothing in it is set up as Alpine.
+Alpine.directive('markup', (el, { expression }, { effect, evaluateLater }) => {
+  const read = evaluateLater(expression)
+  effect(() => read((value) => {
+    el.innerHTML = String(value ?? '')
+  }))
+})
+Alpine.magic('do', () => (...done: unknown[]) => done[done.length - 1])
+Alpine.magic('trackHeight', (el) => (field: string) => {
+  const set = () => Object.assign(state, { [field]: (el as HTMLElement).offsetHeight })
+  new ResizeObserver(set).observe(el)
 })
 
 bindKeys(() => document.querySelector<HTMLTextAreaElement>('#capture'), {

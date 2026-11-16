@@ -1,4 +1,4 @@
-import Alpine from 'alpinejs'
+import Alpine from '@alpinejs/csp'
 import { cached } from './reactivity'
 import type { DesignCheck, FocusItem, Foundation, Gap, GNode, NodeInput, NodeType, PairRequest, Persona, PersonaList, Readiness, Screen, Segment, Status, Story } from '../../src/shared/types'
 import { NODE_TYPES, PERSONA_CHOICES, PERSONA_DEVICES, PERSONA_EMPLOYERS, PERSONA_TIERS, SEGMENT_HOW, SEGMENT_TYPES, SIZE_BANDS, STATUSES } from '../../src/shared/types'
@@ -129,6 +129,21 @@ function readProgressFilter(): ProgressFilter {
   const kept = readStored<string>('grndwrk.progressFilter', '')
   if (kept === '' || kept === 'all' || (PROGRESS as string[]).includes(kept)) return kept as ProgressFilter
   return ''
+}
+
+/** The pictures a paste, a drop or the file button brings. A paste of pictures is not typed into the box too. */
+function picturesOf(e: Event): File[] {
+  const images = (list?: FileList | null) => [...(list ?? [])].filter((f) => f.type.startsWith('image/'))
+  if (e instanceof ClipboardEvent) {
+    const files = images(e.clipboardData?.files)
+    if (files.length) e.preventDefault()
+    return files
+  }
+  if (e instanceof DragEvent) return images(e.dataTransfer?.files)
+  const input = e.target as HTMLInputElement
+  const files = images(input.files)
+  input.value = ''
+  return files
 }
 
 export const state = Alpine.reactive({
@@ -3368,6 +3383,346 @@ export const state = Alpine.reactive({
   addingFeature: '',
   /** The section a dragged card is over, with dropCell for its column. */
   dropSection: '',
+  /** Whether any column of the board has a card in view. */
+  boardHasCards(): boolean {
+    return this.board.columns.some((c) => c.items.length)
+  },
+  dragStart(id: string, e: DragEvent) {
+    this.dragId = id
+    e.dataTransfer?.setData('text/plain', id)
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+  },
+  /** A dragged card over a section of a column. */
+  dragOver(column: string, section: string) {
+    if (!this.dragId) return
+    this.dropCell = column
+    this.dropSection = section
+  },
+  dragEnd() {
+    this.dragId = null
+    this.dropCell = ''
+  },
+  // Called by the page's expressions, which Alpine's CSP build reads without eval: no arrow
+  // functions, statements, ?. or ?? there, so what needs them is a method here.
+  // ++ page helpers ++
+  /** Focus the element with this id once it is drawn. */
+  focusIdSoon(id: string) {
+    void Alpine.nextTick(() => document.getElementById(id)?.focus())
+  },
+  /** The note on one step of a test, or ''. */
+  stepNote(i: number, n: number): string {
+    return this.testNote(i).steps?.[n] ?? ''
+  },
+  /** Whether the open card is a comment from the running product. */
+  selectedIsComment(): boolean {
+    return this.selected?.extra?.source === 'app'
+  },
+  /** What a partly done story still lacks, in words. */
+  storyLeftText(): string {
+    const all = this.selectedStory ? this.criteria(this.selectedStory) : []
+    if (!all.length) return 'Partially done, without criteria saying what is left. Add them with Edit, or decide it is enough.'
+    return `${all.filter((c) => !c.met).length} of ${all.length} criteria not met yet. Build the rest, call it enough as it is, or set it aside for now.`
+  },
+  /** The thoughts near the open gap that are on the map. */
+  gapNear(): string[] {
+    return this.selectedGap?.near.filter((id) => this.nodes[id]) ?? []
+  },
+  gapSuggestions() {
+    return this.selectedGap?.suggestions ?? []
+  },
+  /** The title field, focused once drawn: all of it selected when just made, else the cursor at the end. */
+  focusTitleSoon(el: HTMLTextAreaElement) {
+    void Alpine.nextTick(() => {
+      el.focus()
+      if (this.selectTitle) el.select()
+      else el.setSelectionRange(el.value.length, el.value.length)
+      this.selectTitle = false
+    })
+  },
+  /** The stories that came from the open card. */
+  storiesFromSelected() {
+    const id = this.selected?.id
+    return id ? this.stories.filter((x) => x.from.includes(id)) : []
+  },
+  /** Pictures pasted or dropped into the open card's notes. A paste of text stays text. */
+  attachFrom(e: ClipboardEvent | DragEvent, el: HTMLTextAreaElement) {
+    const files = [...((e instanceof ClipboardEvent ? e.clipboardData?.files : e.dataTransfer?.files) ?? [])]
+    if (!files.some((x) => x.type.startsWith('image/'))) return
+    e.preventDefault()
+    return this.attachImages(files, el)
+  },
+  /** The name in a sign-in link handed over, when it gives one. */
+  handedName(): string {
+    return this.session.handed?.name ?? ''
+  },
+  statusRowOpen(row: { open?: { kind?: string } }): string {
+    if (row.open?.kind === 'focus') return this.inbox.length ? 'Answer in the Inbox' : 'Show on the map'
+    return 'Open the screen'
+  },
+  designItems() {
+    return this.readiness?.design ?? []
+  },
+  /** A thought's title, or its id (and what to add) when it is not in the map. */
+  titleOr(id: string, missing = ''): string {
+    return this.nodes[id]?.title ?? id + missing
+  },
+  /** Comments on a document that are not done yet. */
+  openDocComments(path: string): number {
+    return Object.values(this.nodes).filter((n) => n.extra?.doc === path && n.status !== 'settled').length
+  },
+  /** A number with its noun: 1 comment, 2 comments. */
+  counted(n: number, one: string, many: string): string {
+    return `${n} ${n === 1 ? one : many}`
+  },
+  docFindingsLeft() {
+    return this.openDocInfo?.findings.filter((f) => f.status !== 'done') ?? []
+  },
+  /** A section's anchor as words. */
+  sectionName(section: string | undefined): string {
+    return (section || '').replace(/-/g, ' ')
+  },
+  /** Mark the sections a check is about once the document is drawn (doc and info only make it run again). */
+  markDocSectionsSoon(el: HTMLElement, _doc?: unknown, _info?: unknown) {
+    void Alpine.nextTick(() => this.markDocSections(el))
+  },
+  reportChecked(): string {
+    return String(this.readiness?.report?.checked || '')
+  },
+  readinessFocus() {
+    return this.readiness?.focus ?? []
+  },
+  blockingGaps() {
+    return this.openGaps.filter((x) => x.severity === 'blocking')
+  },
+  statusPercent(): number {
+    const s = this.projectStatus
+    return s.total ? Math.round((s.done / s.total) * 100) : 0
+  },
+  /** How many of what is left must be done (missing) or should be done (partly). */
+  statusLeft(status: 'missing' | 'partly'): number {
+    return this.projectStatus.left.filter((r) => r.status === status).length
+  },
+  statusRowAction(row: { open?: { kind?: string } }): string {
+    const kind = row.open?.kind
+    if (kind === 'focus') return this.inbox.length ? 'Answer them' : 'Show on the map'
+    return kind === 'screen' ? 'Open the screen' : 'Write it'
+  },
+  titlesOf(list: { title: string }[]): string {
+    return list.map((x) => x.title).join(', ')
+  },
+  /** Settle a name from the select it was picked in, which goes back to empty. */
+  settleFrom(name: string, select: HTMLSelectElement) {
+    const to = select.value
+    select.value = ''
+    return this.settle(name, to)
+  },
+  readablePersonas() {
+    return this.personaList.filter((p) => !p.error)
+  },
+  /** Words that are there, joined by a middle dot. */
+  joinDot(parts: unknown[]): string {
+    return parts.filter(Boolean).join(' · ')
+  },
+  /** Every segment as a card: the sorted ones, then the ones that cannot be read. */
+  segmentCards() {
+    return [...this.sortedSegments, ...this.segments.filter((s) => s.error)]
+  },
+  /** The kinds of segment to pick from, with the one a file has even when it is not among them. */
+  segmentTypesWith(type: string | undefined): string[] {
+    const all = [...this.segmentTypes] as string[]
+    return !type || all.includes(type) ? all : [...all, type]
+  },
+  /** Personas that are in a segment at all. */
+  personasIn(segment: string) {
+    return this.personaList.filter((p) => p.segments[segment] && p.segments[segment].how !== 'none')
+  },
+  /** Employers to pick from, with the open persona's own. */
+  employerChoices(): string[] {
+    return [...new Set([...this.employers, ...(this.persona?.employer ?? [])])]
+  },
+  personaHow(segment: string): string {
+    return this.persona?.segments[segment]?.how || ''
+  },
+  personaTitlesIn(segment: string): string {
+    return (this.persona?.segments[segment]?.titles ?? []).join(', ')
+  },
+  /** Fit a text box to its text once it is drawn. */
+  fitFieldSoon(el: HTMLTextAreaElement) {
+    void Alpine.nextTick(() => this.fitField(el))
+  },
+  /** Open a screen in the sitemap. */
+  openScreen(id: string) {
+    this.selectScreen(id)
+    this.setView('sitemap')
+  },
+  /** The open screen's audience that are personas. */
+  screenPersonas(): string[] {
+    return this.screen?.audience.filter((a) => this.personaFor(a)) ?? []
+  },
+  /** Names in the open screen's audience that are no persona yet. */
+  looseAudience(): string[] {
+    return this.screen?.audience.filter((a) => !this.personaFor(a)) ?? []
+  },
+  /** Rows for a text box: as many as it holds, at least so many. */
+  rowsFor(lines: number, least: number): number {
+    return Math.max(least, lines)
+  },
+  /** A screen's title, or its id when it is gone. */
+  screenTitleOr(id: string): string {
+    return this.screenById(id)?.title ?? `${id} (missing)`
+  },
+  /** A new feature from its form, which is emptied. */
+  addFeatureFrom(screenId: string, form: HTMLFormElement) {
+    const field = form.elements.namedItem('f') as HTMLInputElement | null
+    void this.addFeature(screenId, field?.value ?? '')
+    form.reset()
+  },
+  /** Waiting for… opens on a question, or closes. */
+  toggleWaitingMenu(key: string) {
+    this.waitingMenu = this.waitingMenu === key ? '' : key
+    this.waitingName = ''
+  },
+  /**
+   * Pictures pasted, dropped or picked with the file button: saved with their
+   * owner (a thought, screen or persona), their Markdown added at the end of
+   * into[field]. A paste without pictures is left to the box as text.
+   */
+  async picturesInto(into: Record<string, unknown>, field: string, owner: string, e: Event) {
+    const files = picturesOf(e)
+    if (!files.length) return
+    const md = await this.uploadPictures(owner, files)
+    into[field] = this.withPictures(String(into[field] ?? ''), md)
+  },
+  /** Pictures for a test note: the whole test, or one step's. */
+  async testNotePictures(i: number, step: number | null, e: Event) {
+    const files = picturesOf(e)
+    if (!files.length || !this.selectedId) return
+    const md = await this.uploadPictures(this.selectedId, files)
+    const note = this.testNote(i)
+    if (step === null) this.setTestNote(i, { general: this.withPictures(note.general ?? '', md) })
+    else this.setTestNote(i, { step: [step, this.withPictures(note.steps?.[step] ?? '', md)] })
+  },
+  /** Enter without Shift (and not while composing): true, and the newline is not typed. */
+  onEnter(e: KeyboardEvent): boolean {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return false
+    e.preventDefault()
+    return true
+  },
+  /** Whether this entry is being changed now. */
+  editingEntry(run: string): boolean {
+    return this.entryEdit?.run === run
+  },
+  toggleEditPick(option: string) {
+    const edit = this.entryEdit
+    if (edit) edit.picked = edit.picked.includes(option) ? edit.picked.filter((x) => x !== option) : [...edit.picked, option]
+  },
+  /** Who a question waits for, or undefined. */
+  waitingFor(item: InboxItem): string | undefined {
+    return this.waitingOf(item)?.for
+  },
+  /** Whether a thread has a question still open. */
+  threadHasOpen(thread: { open?: boolean }[]): boolean {
+    return thread.some((e) => e.open)
+  },
+  /** The sitemap's zoom as a percentage, for its field. */
+  zoomPercent(): number {
+    return Math.round(this.sitemapZoom * 100)
+  },
+  /** Zoom to what the field says, then show the zoom it became. */
+  zoomFromField(field: HTMLInputElement) {
+    this.zoomSitemap(Number.parseFloat(field.value))
+    this.resetZoomField(field, true)
+  },
+  resetZoomField(field: HTMLInputElement, leave = false) {
+    field.value = String(this.zoomPercent())
+    if (leave) field.blur()
+  },
+  /** A picture's tooltip: the texts it shows, or its name. */
+  shotTitle(shot: { key: string; texts?: string[] }): string {
+    return shot.texts?.length ? `It shows: ${shot.texts.slice(0, 8).join(' · ')}` : shot.key
+  },
+  /** A screen's box in the drawn sitemap: compact or not, dropped on, open, led to, planned, hidden. */
+  sitemapBoxClass(b: { id: string; screen: { status?: string } }): (string | false)[] {
+    const open = this.screen
+    const edge = this.dropOn === b.id ? 'border-accent ring-2 ring-accent' : open?.id === b.id ? 'border-accent ring-1 ring-accent' : open?.leads_to.includes(b.id) ? 'border-accent/50' : 'border-line hover:border-tint/25'
+    return [this.sitemapCompact ? 'flex-col gap-1 px-1.5 py-1' : 'gap-2 px-3 py-2', edge, b.screen.status === 'planned' && 'border-dashed', this.hiddenIds.has(b.id) && 'opacity-50']
+  },
+  sitemapRowClass(id: string): (string | false)[] {
+    const edge = this.dropOn === id ? 'bg-accent/20 ring-1 ring-accent' : this.screen?.id === id ? 'bg-tint/10' : 'hover:bg-tint/5'
+    return [edge, this.hiddenIds.has(id) && 'opacity-50']
+  },
+  /** The width of a box's picture beside its text: narrower for a phone's. */
+  sitemapShotStyle(screen: Screen): string {
+    if (this.sitemapCompact) return ''
+    const phone = this.shotsOf(screen)[0]?.platform === 'ios'
+    return `width: ${Math.round((phone ? 38 : 64) * Math.min(1, this.sitemapZoom))}px`
+  },
+  /** Whether the open screen has a web route to open. */
+  screenHasRoute(): boolean {
+    return Boolean(this.screen?.code.some((c) => c.startsWith('/')))
+  },
+  /** A row of the list: the open card, the one picked with the keys while searching, a new one, or the rest. */
+  listRowClass(id: string): string {
+    if (this.selectedId === id) return 'bg-accent/25 text-fog'
+    if (this.listRows[this.listIndex]?.id === id && this.query) return 'bg-tint/10 text-fog'
+    if (this.freshIds.includes(id)) return 'bg-tint/10 text-fog'
+    return 'text-fog/70 hover:bg-tint/5'
+  },
+  /** The views on the rail: [key, title, icon]; Documents only on the Mac. */
+  railViews(): [string, string, string][] {
+    const all: [string, string, string][] = [
+      ['focus', "Inbox: your agent's questions", 'i-inbox'],
+      ['map', 'Map', 'i-map'],
+      ['sitemap', 'Sitemap: every screen and what it is for', 'i-screens'],
+      ['personas', 'Personas: who the product is for', 'i-users'],
+      ['readiness', 'Status: what is done and what is left', 'i-check'],
+      ['docs', 'Documents: what steers your agent in the product, and what a check found in each', 'i-book'],
+      ['deliverables', 'Deliverables', 'i-doc'],
+    ]
+    return all.filter((v) => this.onMac || v[0] !== 'docs')
+  },
+  relayPhones() {
+    return this.relay.phones ?? []
+  },
+  relayInvites() {
+    return this.relay.invites ?? []
+  },
+  /** A date as this browser writes dates. */
+  dateOf(when: string | number): string {
+    return new Date(when).toLocaleDateString()
+  },
+  /** Invite whoever the form names, then empty the field. */
+  async inviteFrom(form: { name: string }) {
+    if (!form.name.trim()) return
+    await this.invite(form.name)
+    form.name = ''
+  },
+  openScopeInSitemap() {
+    this.scopeOpen = false
+    if (this.scope) this.selectScreen(this.scope)
+    this.setView('sitemap')
+  },
+  viewPanelTitle(): string {
+    if (this.viewPanel === 'main') return 'View settings'
+    return this.viewRows.find((r) => r.key === this.viewPanel)?.name ?? ''
+  },
+  /** The panel's title: the report, a gap, a story or the open card. */
+  panelTitle(): string {
+    if (this.reportOpen) return 'Readiness report'
+    if (this.selectedGap) return `Missing: ${this.selectedGap.title}`
+    if (this.selectedStory) return `Story: ${this.selectedStory.title}`
+    return this.selected?.title ?? ''
+  },
+  principleTitles(): string {
+    return this.principles.map((p) => p.title).join(' · ')
+  },
+  changePrinciple(id: string) {
+    this.principleMenu = ''
+    this.select(id)
+  },
+  relayWaiting() {
+    return this.relay.waiting ?? []
+  },
   renamingFeature: '',
   /** Add a feature to a screen: an empty section to drop cards in. */
   async addFeature(screenId: string, name: string) {
@@ -4075,11 +4430,11 @@ export const state = Alpine.reactive({
 })
 
 /**
- * Markdown as HTML for x-html. Sanitized: files can hold text from anyone who
+ * Markdown as HTML for x-markup. Sanitized: files can hold text from anyone who
  * sent a comment, quoted by Claude into a report or a brief. Stricter than
  * DOMPurify's defaults: no styles, forms or embedded content (they can restyle
- * or cover the map, say hide a pairing request), no Alpine attributes (x-html
- * starts Alpine on what it inserts), and pictures only from grndwrk itself,
+ * or cover the map, say hide a pairing request), no Alpine attributes (kept out
+ * even though x-markup starts nothing on what it inserts), and pictures only from grndwrk itself,
  * so rendering a file never tells another server that it was opened.
  */
 export function md(text: string): string {

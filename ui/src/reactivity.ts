@@ -1,4 +1,4 @@
-import Alpine from 'alpinejs'
+import Alpine from '@alpinejs/csp'
 import { computed, effect, reactive, stop, toRaw, type ComputedRef } from '@vue/reactivity'
 
 // Alpine inlines its own copy of @vue/reactivity, which keeps `computed` out
