@@ -90,7 +90,7 @@ export function storeFunction({ backend, verify }) {
       const store = storeOver(backend, map)
       const method = request.method
 
-      if (route === 'hello' && method === 'GET') return withSite(json(200, { ...(await store.hello()), writable: may === 'write', role: may }), may === 'comment' ? await siteOf(map, request) : '')
+      if (route === 'hello' && method === 'GET') return withSite(json(200, { ...(await store.hello()), writable: may === 'write', role: may, ...(may === 'comment' ? { commenter } : {}) }), may === 'comment' ? await siteOf(map, request) : '')
 
       let path = ''
       if (route.startsWith('files/')) {

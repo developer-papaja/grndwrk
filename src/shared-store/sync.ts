@@ -22,7 +22,7 @@ import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from '../st
 import { keepOutOfGit } from '../store/gitignore.js'
 import { BadInput } from '../store/nodes.js'
 import { adapterState, openStore, readStoreConfig, storeStateDir } from './config.js'
-import { bytesProblem, type Change, checkChanges, CursorGone, INBOX, isMapPath, STATUS, StoreBroke, type StoreClient, SYNCED_FILES, SYNCED_FOLDERS, typeOf } from './protocol.js'
+import { bytesProblem, type Change, checkChanges, COMMENTER, CursorGone, INBOX, isMapPath, STATUS, StoreBroke, type StoreClient, SYNCED_FILES, SYNCED_FOLDERS, typeOf } from './protocol.js'
 
 export const SYNC_STATE = 'store-sync.json'
 
@@ -51,11 +51,12 @@ export interface SyncCounts {
   conflicts: number
   /** Comments from the inbox that became cards. */
   comments: number
+  /** Test results and deletes from the inbox, each about a commenter's own comments. */
+  results: number
 }
 
-const zero = (): SyncCounts => ({ pulled: 0, pushed: 0, deletedHere: 0, deletedThere: 0, conflicts: 0, comments: 0 })
+const zero = (): SyncCounts => ({ pulled: 0, pushed: 0, deletedHere: 0, deletedThere: 0, conflicts: 0, comments: 0, results: 0 })
 const hashOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
-const COMMENTER = /^[A-Za-z0-9_-]{8,64}$/
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export interface SyncOptions {
@@ -456,11 +457,16 @@ export class StoreSync {
       if (problem) throw new BadInput(problem)
       const body = JSON.parse(Buffer.from(r.bytes).toString('utf8')) as unknown
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new BadInput('it is not a JSON object')
-      // Written on the Mac is for a phone that points at its own grndwrk: here nobody's browser is asked to open.
-      const { from, on_mac: _onMac, ...rest } = body as Record<string, unknown>
-      const name = typeof from === 'string' && from.trim() ? from : commenter
-      await commentRequest('/api/feedback', rest, { ...this.ctx, via: 'store', from: { name, commenter }, cardId: cardIdFor(path) })
-      this.counts.comments++
+      if (isEnvelope(body)) {
+        await this.takeEnvelope(commenter, body)
+        this.counts.results++
+      } else {
+        // Written on the Mac is for a phone that points at its own grndwrk: here nobody's browser is asked to open.
+        const { from, on_mac: _onMac, ...rest } = body as Record<string, unknown>
+        const name = typeof from === 'string' && from.trim() ? from : commenter
+        await commentRequest('/api/feedback', rest, { ...this.ctx, via: 'store', from: { name, commenter }, cardId: cardIdFor(path) })
+        this.counts.comments++
+      }
     } catch (err) {
       const said = err instanceof Error ? err.message : String(err)
       // Not a comment: left in the inbox for whoever runs the store to look at, never deleted unseen. Said once per version.
@@ -475,6 +481,34 @@ export class StoreSync {
     this.inboxTries.delete(path)
     // Filed: removed with If-Match. A comment changed meanwhile stays, and comes again.
     await this.store.remove(path, r.version)
+  }
+
+  /**
+   * A device tested a fix, or deleted a comment: `{ path, body, at? }`, as
+   * the relay's envelopes. It acts only on comments filed from its own
+   * folder (`store_commenter`), and only by their keys, whatever ids it
+   * names. A test result must name the round it tested: one for another
+   * round, or made before the fix was built, settles nothing.
+   */
+  private async takeEnvelope(commenter: string, { path, body, at }: Envelope) {
+    const list = (body as { comments?: unknown })?.comments
+    if (!Array.isArray(list)) throw new BadInput('Send { comments: [{ id, key }] }')
+    const nodes = await this.ctx.store.list()
+    const mine = new Set(nodes.filter((n) => n.extra?.store_commenter === commenter).map((n) => n.id))
+    let own = list.filter((c) => mine.has((c as { id?: unknown })?.id as string))
+    if (path === '/api/feedback/tested') {
+      own = own.filter((c) => typeof (c as { round?: unknown })?.round === 'string')
+      if (typeof at === 'number') {
+        // A day of slack: built dates are written by the map (UTC) and by agents (their own day).
+        const made = new Date(at + 86_400_000).toISOString().slice(0, 10)
+        const built = new Map(nodes.map((n) => [n.id, typeof n.extra?.built === 'string' ? n.extra.built : '']))
+        own = own.filter((c) => (built.get((c as { id: string }).id) ?? '') <= made)
+      }
+    }
+    if (!own.length) return
+    // Show on my Mac is not offered through a store: nobody's map is asked to open anything.
+    const { on_mac: _onMac, ...rest } = body as Record<string, unknown>
+    await commentRequest(path, { ...rest, comments: own }, { ...this.ctx, via: 'store', from: { name: commenter, commenter } })
   }
 
   /** Each commenter's own comments, as `feedbackStatus` tells a device, written only when it changed. */
@@ -507,7 +541,7 @@ export class StoreSync {
 
   private async afterBatch() {
     // New cards from the inbox (and their pictures) go to the store at once.
-    if (this.counts.comments) await this.scan()
+    if (this.counts.comments || this.counts.results) await this.scan()
     await this.save()
     await this.sendStatus()
   }
@@ -540,7 +574,7 @@ export class StoreSync {
           return
         }
         const c = await this.pull(25)
-        if (c.pulled || c.deletedHere || c.comments) this.log(`From the store: ${describe(c)}.`)
+        if (c.pulled || c.deletedHere || c.comments || c.results) this.log(`From the store: ${describe(c)}.`)
         if (this.error) this.log('The store answers again.')
         this.error = undefined
         pause = 0
@@ -575,6 +609,7 @@ export function describe(c: SyncCounts): string {
     c.deletedThere && `${n(c.deletedThere, 'file')} deleted in the store`,
     c.conflicts && `${n(c.conflicts, 'conflict')} kept`,
     c.comments && `${n(c.comments, 'comment')} filed`,
+    c.results && `${n(c.results, 'test result or delete', 'test results and deletes')} from devices`,
   ]
     .filter(Boolean)
     .join(', ')
@@ -635,4 +670,25 @@ export function cardIdFor(path: string): string {
   const digest = createHash('sha256').update(`grndwrk-inbox:${path}`).digest()
   const abc = 'abcdefghijklmnopqrstuvwxyz0123456789'
   return `n_${[...digest.subarray(0, 6)].map((b) => abc[b % abc.length]).join('')}`
+}
+
+/** What a device sends besides a comment, as through the relay. Show on my Mac is not among them. */
+export const ENVELOPE_PATHS = ['/api/feedback/tested', '/api/feedback/remove']
+interface Envelope {
+  path: string
+  body: unknown
+  at?: unknown
+}
+
+/**
+ * An inbox file is a comment (the `/api/feedback` JSON) or an envelope
+ * `{ path, body }`. One that names a path but no other is no comment either:
+ * refused, never filed as one.
+ */
+function isEnvelope(v: object): v is Envelope {
+  if (!('path' in v)) return false
+  const { path, body } = v as Envelope
+  if (typeof path !== 'string' || !ENVELOPE_PATHS.includes(path)) throw new BadInput('it names something a device does not send through the store')
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new BadInput('its body is not a JSON object')
+  return true
 }

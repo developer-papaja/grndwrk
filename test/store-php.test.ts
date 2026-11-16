@@ -108,7 +108,7 @@ describe.skipIf(!php)('the PHP store', () => {
 
   it('lets a commenter leave comments under its own id only, and read only its own status', async () => {
     const phone = mint('clinic', 'comment', '--commenter', 'dev_phone01', '--name', 'Front desk')
-    expect(await new HttpStore(url, phone).hello()).toMatchObject({ writable: false, role: 'comment' })
+    expect(await new HttpStore(url, phone).hello()).toMatchObject({ writable: false, role: 'comment', commenter: 'dev_phone01' })
     expect((await put('inbox/dev_phone01/c_00000001.json', phone, '{"text":"The button is too small","from":"Someone else"}')).status).toBe(201)
     // The name the store knows wins over the one the device sent.
     const left = await new HttpStore(url, writer).read('inbox/dev_phone01/c_00000001.json')

@@ -30,6 +30,7 @@ export const TYPES: Record<string, string> = { md: 'text/markdown', json: 'appli
  */
 export const INBOX = /^inbox\/([A-Za-z0-9_-]{8,64})\/[A-Za-z0-9_-]{8,64}\.json$/
 export const STATUS = /^status\/[A-Za-z0-9_-]{8,64}\.json$/
+export const COMMENTER = /^[A-Za-z0-9_-]{8,64}$/
 
 /** Whether a path is mirrored into `.grndwrk/` (the map), not one of the comment folders. */
 export const isMapPath = (path: string) => !pathProblem(path) && !INBOX.test(path) && !STATUS.test(path)
@@ -91,6 +92,8 @@ export interface Hello {
   project: string
   writable: boolean
   role?: Role
+  /** For a comment token: the commenter its comments go under (`inbox/<commenter>/`) and whose status it reads. */
+  commenter?: string
 }
 
 export interface Read {

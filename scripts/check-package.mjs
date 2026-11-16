@@ -33,7 +33,7 @@ try {
   if (!existsSync(shim)) fail(`the grndwrk command was not installed (${shim})`)
 
   // 3. What the tool needs at runtime is in the package.
-  const needed = ['dist/cli.js', 'dist/ui/index.html', 'dist/vendor/modern-screenshot.js', 'overlay/feedback.js', 'templates/CLAUDE.md', 'templates/checklist.md', 'commands/personas.md', 'commands/readiness.md', 'clients/ios/GrndwrkFeedback/Package.swift']
+  const needed = ['dist/cli.js', 'dist/ui/index.html', 'dist/vendor/modern-screenshot.js', 'overlay/feedback.js', 'overlay/store.js', 'templates/CLAUDE.md', 'templates/checklist.md', 'commands/personas.md', 'commands/readiness.md', 'clients/ios/GrndwrkFeedback/Package.swift']
   for (const file of needed) if (!existsSync(join(root, file))) fail(`${file} is not in the package (see "files" in package.json)`)
   const deps = readdirSync(join(root, 'node_modules')).filter((d) => !d.startsWith('.'))
   console.log(`Installed with ${deps.length} packages beside it: ${deps.join(', ')}`)

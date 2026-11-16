@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { bytesProblem, checkChanges, checkVersion, CursorGone, type Hello, INBOX, MAX_INBOX, pathProblem, PROTOCOL, type Read, type Role, StoreBroke, type StoreClient, typeOf, type Written } from './protocol.js'
+import { bytesProblem, checkChanges, COMMENTER, checkVersion, CursorGone, type Hello, INBOX, MAX_INBOX, pathProblem, PROTOCOL, type Read, type Role, StoreBroke, type StoreClient, typeOf, type Written } from './protocol.js'
 
 /** A store over HTTP: its address for this project, and this person's token. */
 export class HttpStore implements StoreClient {
@@ -46,7 +46,8 @@ export class HttpStore implements StoreClient {
     const b = await this.json(res)
     if (b.protocol !== PROTOCOL) throw new StoreBroke(`hello: protocol ${String(b.protocol)}, grndwrk speaks ${PROTOCOL}`)
     const role = b.role === 'read' || b.role === 'write' || b.role === 'comment' ? b.role : b.writable === true ? 'write' : 'read'
-    return { protocol: PROTOCOL, project: typeof b.project === 'string' ? b.project.slice(0, 200) : '', writable: b.writable === true, role }
+    const commenter = role === 'comment' && typeof b.commenter === 'string' && COMMENTER.test(b.commenter) ? { commenter: b.commenter } : {}
+    return { protocol: PROTOCOL, project: typeof b.project === 'string' ? b.project.slice(0, 200) : '', writable: b.writable === true, role, ...commenter }
   }
 
   async changes({ since, wait = 0 }: { since?: string; wait?: number } = {}) {
@@ -98,30 +99,47 @@ export class HttpStore implements StoreClient {
 /**
  * The HTTP side of the protocol over any store client: what a store server
  * answers. grndwrk's tests run the check against it, and it is the model the
- * example stores in `stores/` follow. `token` decides who may read and write.
+ * example stores in `stores/` follow. `token` decides who may read and write;
+ * `origins` are the staging sites whose pages may make the comment calls
+ * (CORS), as the protocol says: only those calls, only for a comment token.
  */
-export function storeHandler(client: StoreClient, token: (bearer: string) => Role | { role: 'comment'; commenter: string } | null) {
+export function storeHandler(client: StoreClient, token: (bearer: string) => Role | { role: 'comment'; commenter: string } | null, { origins = [] }: { origins?: string[] } = {}) {
   return async (req: IncomingMessage, res: ServerResponse, prefix = '/') => {
+    let cors: Record<string, string> = {}
     const send = (status: number, body: unknown, headers: Record<string, string> = {}) => {
-      res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers }).end(JSON.stringify(body))
+      res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors, ...headers }).end(JSON.stringify(body))
     }
     const url = new URL(req.url ?? '/', 'http://store')
     if (!url.pathname.startsWith(`${prefix}v1/`)) return send(404, { error: 'Not found' })
     const route = url.pathname.slice(prefix.length + 3)
+    const origin = String(req.headers.origin ?? '')
+    const commentCall = (method: string) => (route === 'hello' && method === 'GET') || (route.startsWith('files/inbox/') && method === 'PUT') || (route.startsWith('files/status/') && method === 'GET')
+    const site = origin && origins.includes(origin) ? origin : ''
+    const siteHeaders = { 'Access-Control-Allow-Origin': site, 'Access-Control-Expose-Headers': 'ETag', Vary: 'Origin' }
+    if (req.method === 'OPTIONS') {
+      if (!site || !commentCall(String(req.headers['access-control-request-method'] ?? ''))) return send(403, { error: 'Not allowed from this page' })
+      res.writeHead(204, { ...siteHeaders, 'Access-Control-Allow-Methods': 'GET, PUT', 'Access-Control-Allow-Headers': 'Authorization, Content-Type, If-None-Match', 'Access-Control-Max-Age': '600' }).end()
+      return
+    }
     const bearer = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1] ?? ''
     const who = token(bearer)
+    // A page may read a 401 on a comment call, to ask the person to log in again.
+    if (site && commentCall(req.method ?? '')) cors = siteHeaders
     if (!who) return send(401, { error: 'A valid token is required' })
     const may: Role = typeof who === 'string' ? who : who.role
     const commenter = typeof who === 'string' ? '' : who.commenter
+    // Never CORS for what a read or write token does.
+    if (may !== 'comment') cors = {}
     try {
-      if (route === 'hello' && req.method === 'GET') return send(200, { ...(await client.hello()), writable: may === 'write', role: may })
+      // A comment token learns its commenter here: the folder its comments go in, and its status file.
+      if (route === 'hello' && req.method === 'GET') return send(200, { ...(await client.hello()), writable: may === 'write', role: may, ...(may === 'comment' ? { commenter } : {}) })
       // A commenter sees nothing of the map: only its own status, and new files in the inbox.
       if (may === 'comment') {
         const path = route.startsWith('files/') ? decodeURIComponent(route.slice(6)) : ''
         if (req.method === 'GET' && path === `status/${commenter}.json`) {
           const f = await client.read(path)
           if (!f) return send(404, { error: 'No status yet' })
-          res.writeHead(200, { 'Content-Type': f.type, ETag: `"${f.version}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }).end(Buffer.from(f.bytes))
+          res.writeHead(200, { 'Content-Type': f.type, ETag: `"${f.version}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...cors }).end(Buffer.from(f.bytes))
           return
         }
         // Only under its own name: grndwrk knows who left a comment by its path, never by what the device wrote in it.
