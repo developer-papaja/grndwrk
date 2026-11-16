@@ -35,6 +35,11 @@ final class Api
         $path = explode('?', $_SERVER['REQUEST_URI'] ?? '/', 2)[0];
         $base = $this->config['base'] ?? (PHP_SAPI === 'cli-server' ? '' : rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/'));
         if ($base !== '' && str_starts_with($path, "$base/")) $path = substr($path, strlen($base));
+        // The projects this token may read, at the store's own root: for All projects on the page.
+        if ($path === '/v1/projects') {
+            $this->projects($method, $base);
+            return;
+        }
         // The page: the map in a browser, for colleagues without the repository (see page()).
         if (($method === 'GET' || $method === 'HEAD') && preg_match('#^/([a-z0-9][a-z0-9-]{0,63})(/(?!v1/).*)?$#sD', $path, $p) && $this->page($p[1], $p[2] ?? '', $base)) {
             return;
@@ -127,6 +132,23 @@ final class Api
             return;
         }
         $this->send(405, ['error' => 'Not allowed']);
+    }
+
+    /** GET /v1/projects: read only, `{ projects: [{ name, url }] }`, each reached with the same token. */
+    private function projects(string $method, string $base): void
+    {
+        if ($method !== 'GET') {
+            $this->send(405, ['error' => 'Not allowed']);
+            return;
+        }
+        $list = Auth::projects($this->db, ($_SERVER['HTTP_AUTHORIZATION'] ?? '') ?: ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+        if ($list === null) {
+            $this->send(401, ['error' => 'A valid token is required']);
+            return;
+        }
+        $https = ($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off';
+        $root = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $base;
+        $this->send(200, ['projects' => array_map(fn (array $p) => ['name' => $p['name'], 'url' => "$root/{$p['slug']}/"], $list)]);
     }
 
     private function changes(string $project): void

@@ -3,7 +3,7 @@ import { checkStore } from '../src/shared-store/check.js'
 import { HttpStore } from '../src/shared-store/http.js'
 import { access } from '../stores/cloudflare/src/access.js'
 import { CHUNK, type Storage } from '../stores/cloudflare/src/store.js'
-import worker, { type Env, StoreObject } from '../stores/cloudflare/src/worker.js'
+import worker, { type Env, listProjects, StoreObject } from '../stores/cloudflare/src/worker.js'
 import { expectServesPage, PAGE_FILES } from './page-fixture.js'
 
 /** A Durable Object's storage, in memory: keys listed in order, values copied as structured clone does. */
@@ -79,6 +79,21 @@ describe('the Cloudflare store', () => {
     const { token } = await mint('clinic', { role: 'write' })
     expect((await new HttpStore(`${BASE}/clinic/`, token, fetcher).hello()).project).toBe('clinic')
     await expect(new HttpStore(`${BASE}/clinic-two/`, token, fetcher).hello()).rejects.toThrow(/401/)
+  })
+
+  it('lists the one project a token belongs to at its root, read only', async () => {
+    const { fetcher, mint } = deploy()
+    const list = (token?: string, method = 'GET') => fetcher(`${BASE}/v1/projects`, { method, headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    const writer = await mint('clinic', { role: 'write' })
+    expect(writer.token).toMatch(/^gws_clinic\./)
+    expect(await (await list(writer.token)).json()).toEqual({ projects: [{ name: 'clinic', url: `${BASE}/clinic/` }] })
+    expect(await (await list((await mint('clinic', { role: 'read' })).token)).json()).toEqual({ projects: [{ name: 'clinic', url: `${BASE}/clinic/` }] })
+    // A comment token reads no map; a token that names a project it is not in, or none, is no token; older tokens say no project.
+    expect(await (await list((await mint('clinic', { role: 'comment' })).token)).json()).toEqual({ projects: [] })
+    expect((await list(writer.token.replace('gws_clinic.', 'gws_kennel.'))).status).toBe(401)
+    expect((await list()).status).toBe(401)
+    expect((await list('gws_somethingolder')).status).toBe(404)
+    expect((await list(writer.token, 'PUT')).status).toBe(405)
   })
 
   it('refuses a project name that is not one, and http to another machine', async () => {
@@ -256,6 +271,18 @@ describe('Cloudflare Access, as an option', () => {
     const forged = await other.sign({ aud: [AUD], iss: `https://${TEAM}`, exp: Date.now() / 1000 + 60, email: 'vet@clinic.example' })
     expect(await identify(req(forged), 'clinic')).toBeNull()
     expect(() => access({ team: 'evil.example.com', aud: AUD, roles }, certs)).toThrow(/cloudflareaccess/)
+  })
+
+  it('lists every project the allow list lets the person read, and none to someone it does not', async () => {
+    const { certs, sign } = await signer()
+    const many = JSON.stringify({ clinic: { 'vet@clinic.example': 'write' }, 'clinic-admin': { '*@clinic.example': 'read' }, kennel: { 'vet@clinic.example': 'comment' }, shop: {} })
+    const identify = access({ team: TEAM, aud: AUD, roles: many }, certs)
+    const claims = { aud: [AUD], iss: `https://${TEAM}`, exp: Date.now() / 1000 + 60 }
+    // Through Access no project's object is asked: the allow list says it all.
+    const STORE = { idFromName: (n: string) => n, get: () => ({ fetch: async () => new Response(null, { status: 500 }) }) }
+    const ask = async (email: string) => listProjects(new Request(`${BASE}/v1/projects`, { headers: { 'Cf-Access-Jwt-Assertion': await sign({ ...claims, email }) } }), STORE, identify, many)
+    expect(await (await ask('vet@clinic.example')).json()).toEqual({ projects: [{ name: 'clinic', url: `${BASE}/clinic/` }, { name: 'clinic-admin', url: `${BASE}/clinic-admin/` }] })
+    expect((await ask('someone@else.example')).status).toBe(401)
   })
 })
 

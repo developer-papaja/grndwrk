@@ -6,10 +6,11 @@
  *   https://<worker>/<project>/v1/...         the protocol
  *   https://<worker>/<project>/admin/tokens   tokens, for whoever deployed it
  *   https://<worker>/<project>/               the page, and store.js for the staging site (page.ts)
+ *   https://<worker>/v1/projects              the projects the token (or the Access login) may read
  */
 import { access } from './access.js'
 import { type Assets, page } from './page.js'
-import { parseOrigins, type Storage, Store } from './store.js'
+import { type Identify, parseOrigins, type Storage, Store } from './store.js'
 
 export interface Env {
   OWNER_AUTH?: string
@@ -27,10 +28,45 @@ export interface Env {
 /** A project's name in the address: lowercase letters, digits and dashes. */
 export const PROJECT = /^\/([a-z0-9][a-z0-9-]{0,62})\//
 
+/** Cloudflare Access, when all three settings are there (access.ts). */
+const accessOf = (env: Env): Identify | undefined =>
+  env.ACCESS_TEAM && env.ACCESS_AUD && env.ACCESS_ROLES ? access({ team: env.ACCESS_TEAM, aud: env.ACCESS_AUD, roles: env.ACCESS_ROLES }) : undefined
+
+/**
+ * `GET /v1/projects`, at the store's root: the projects this person may read,
+ * for All projects on the page. Read only. A token belongs to one project and
+ * says which (`gws_<project>.<secret>`; older tokens do not, and get 404, as a
+ * store without the call), so that project's own object checks it and the list
+ * holds that one. Through Access, every project the allow list gives the
+ * person read or write, each reached with the same login.
+ */
+export async function listProjects(req: Request, store: Env['STORE'], identify?: Identify, roles = ''): Promise<Response> {
+  const json = (status: number, body: unknown) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
+  if (req.method !== 'GET') return json(405, { error: 'Not allowed' })
+  const origin = new URL(req.url).origin
+  const bearer = /^Bearer (\S+)$/.exec(req.headers.get('authorization') ?? '')?.[1]
+  if (bearer) {
+    const project = /^gws_([a-z0-9][a-z0-9-]{0,62})\./.exec(bearer)?.[1]
+    if (!project) return json(404, { error: 'This token does not say its project. A new one does.' })
+    const hello = await store.get(store.idFromName(project)).fetch(new Request(`${origin}/${project}/v1/hello`, { headers: { Authorization: `Bearer ${bearer}` } }))
+    if (!hello.ok) return json(hello.status === 401 ? 401 : 404, { error: hello.status === 401 ? 'A valid token is required' : 'Not found' })
+    const role = ((await hello.json()) as { role?: string }).role
+    return json(200, { projects: role === 'read' || role === 'write' ? [{ name: project, url: `${origin}/${project}/` }] : [] })
+  }
+  if (!identify) return json(401, { error: 'A valid token is required' })
+  const out: { name: string; url: string }[] = []
+  for (const project of Object.keys(JSON.parse(roles || '{}') as Record<string, unknown>)) {
+    if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(project)) continue
+    const who = await identify(req, project)
+    if (who?.role === 'read' || who?.role === 'write') out.push({ name: project, url: `${origin}/${project}/` })
+  }
+  return out.length ? json(200, { projects: out }) : json(401, { error: 'A valid login is required' })
+}
+
 export class StoreObject {
   private store: Store
   constructor(state: { storage: Storage }, env: Env) {
-    const identify = env.ACCESS_TEAM && env.ACCESS_AUD && env.ACCESS_ROLES ? access({ team: env.ACCESS_TEAM, aud: env.ACCESS_AUD, roles: env.ACCESS_ROLES }) : undefined
+    const identify = accessOf(env)
     this.store = new Store(state.storage, { ownerAuth: env.OWNER_AUTH, identify, origins: parseOrigins(env.COMMENT_ORIGINS) })
   }
   fetch(req: Request): Promise<Response> {
@@ -44,6 +80,7 @@ export default {
     const url = new URL(req.url)
     // https only, so a token never travels in the clear; http just on this machine, for `wrangler dev`.
     if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return Response.json({ error: 'https only' }, { status: 400 })
+    if (url.pathname === '/v1/projects') return listProjects(req, env.STORE, accessOf(env), env.ACCESS_ROLES)
     // The page and the button: anything under the project's address but the protocol and admin.
     const under = /^\/([a-z0-9][a-z0-9-]{0,62})(?:$|\/(?!v1\/|admin\/))/.exec(url.pathname)?.[1]
     const shown = under ? await page(req, env.ASSETS, under, parseOrigins(env.COMMENT_ORIGINS)) : null

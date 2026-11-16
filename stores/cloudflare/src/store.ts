@@ -129,7 +129,7 @@ export class Store {
     try {
       const url = new URL(req.url)
       const route = url.pathname.slice(project.length + 2)
-      if (route === 'admin/tokens' || route.startsWith('admin/tokens/')) return await this.admin(req, route.slice(12))
+      if (route === 'admin/tokens' || route.startsWith('admin/tokens/')) return await this.admin(req, route.slice(12), project)
       if (!route.startsWith('v1/')) return error(404, 'Not found')
       const origin = req.headers.get('origin') ?? ''
       const site = this.options.origins?.includes(origin) ? origin : ''
@@ -322,7 +322,7 @@ export class Store {
     for (const wake of [...this.waiters]) wake()
   }
 
-  private async admin(req: Request, rest: string): Promise<Response> {
+  private async admin(req: Request, rest: string, project: string): Promise<Response> {
     const owner = this.options.ownerAuth
     const bearer = /^Bearer (\S+)$/.exec(req.headers.get('authorization') ?? '')?.[1] ?? ''
     if (!owner) return error(403, 'OWNER_AUTH is not set on this Worker')
@@ -349,7 +349,8 @@ export class Store {
         t.commenter = commenter
         if (clean(b.name)) t.name = clean(b.name)
       }
-      const token = `gws_${random(32)}`
+      // The project in front, so the store's root knows whose object to ask (GET /v1/projects); the secret is the rest.
+      const token = `gws_${project}.${random(32)}`
       const hash = await sha256(token)
       await this.storage.put(`token:${hash}`, t)
       await this.storage.put(`tokenid:${t.id}`, hash)

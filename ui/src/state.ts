@@ -17,7 +17,9 @@ import { markSeen as postSeen } from './api'
 import { isPrinciple, PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
 import { fetchProject, fetchWaiting, saveWaiting, savePersonalInfo, type WaitingState } from './api'
-import { PAGE, session, signIn, signOut } from './api'
+import { PAGE, session, signIn, signOut, fetchViews, createView, updateView, deleteView, teamProjects, readTeamProject, signInToProject, openProjectPage, SignInThere, type TeamProject, type TeamProjectRead } from './api'
+import { searchThoughts } from '../../src/shared/overview'
+import { sameSettings, type SavedView, type ViewSettings } from '../../src/shared/views'
 import { splitQuestions } from '../../src/shared/thread'
 import { waitingKey } from '../../src/shared/waiting'
 import { marked } from 'marked'
@@ -29,7 +31,7 @@ import { buildBoard, buildOutline, CARD_GROUPS, featureOf, firstLine, MAP_LAYOUT
 import { counterpart, inVariant, narrowView, projectVariants, unknownVariants } from '../../src/shared/variants'
 import { inBand, isGuess, looseNames, personaNamed, readEvidence, readSections, screensForPersona, SECTIONS, sizeLabel, themeCounts, type Evidence } from '../../src/shared/personas'
 
-export type View = 'focus' | 'map' | 'sitemap' | 'personas' | 'readiness' | 'docs' | 'deliverables'
+export type View = 'focus' | 'map' | 'sitemap' | 'personas' | 'readiness' | 'docs' | 'deliverables' | 'projects'
 
 /** A question from Claude waiting on the person, in the Inbox. */
 export interface InboxItem {
@@ -170,7 +172,7 @@ export const state = Alpine.reactive({
   sending: false,
   readiness: null as Readiness | null,
   /** Which view the rail shows: focus, the map, readiness, or deliverables. */
-  view: ((v: View) => (v === 'docs' && PAGE ? 'map' : v))(readStored<View>('grndwrk.view', 'map')),
+  view: ((v: View) => ((v === 'docs' && PAGE) || (v === 'projects' && !PAGE) ? 'map' : v))(readStored<View>('grndwrk.view', 'map')),
   /** How the map draws its cards: as a board, or as an outline. */
   mapLayout: readStored<MapLayout>('grndwrk.mapLayout', 'board') === 'outline' ? ('outline' as MapLayout) : ('board' as MapLayout),
   mapLayouts: MAP_LAYOUTS,
@@ -798,6 +800,183 @@ export const state = Alpine.reactive({
     if (page === 'layout') this.setMapLayout(option as never)
     else if (page === 'columns') this.setGroupBy(option as 'page' | 'topic')
     else this.setCardGroup(option as CardGroup)
+  },
+  // Views saved for everyone: the layout, columns, grouping and filters under a name, one file each in views/.
+  savedViews: [] as SavedView[],
+  /** The view picked last in this browser, '' for none. Which view is in use is this browser's, the views are everyone's. */
+  viewId: readStored<string>('grndwrk.viewId', ''),
+  viewsOpen: false,
+  /** What the Views menu asks below its list: a name for a new view, a new name, or whether to delete. */
+  viewsStep: '' as '' | 'save' | 'rename' | 'delete',
+  viewName: '',
+  async loadViews() {
+    this.savedViews = await fetchViews()
+    if (this.viewId && !this.savedViews.some((v) => v.id === this.viewId)) this.setViewId('')
+  },
+  setViewId(id: string) {
+    this.viewId = id
+    store('grndwrk.viewId', id)
+  },
+  get currentView(): SavedView | null {
+    return this.savedViews.find((v) => v.id === this.viewId) ?? null
+  },
+  /** What the map shows now, as a view would hold it. */
+  get viewSettings(): ViewSettings {
+    return {
+      layout: this.mapLayout,
+      groupBy: this.groupBy,
+      cardGroup: this.cardGroup,
+      filters: { status: this.progressFilter, type: this.typeFilter, topic: this.topicFilter, level: this.levelFilter, who: this.whoFilter, waiting: this.waitingFilter, new: this.newOnly },
+      ...(this.scope ? { part: this.scope } : {}),
+      ...(this.onAll ? {} : { page: this.currentPage }),
+    }
+  },
+  /** The settings changed since the view was picked: the menu shows a dot and offers to update it. */
+  get viewChanged(): boolean {
+    return !!this.currentView && !sameSettings(this.currentView, this.viewSettings)
+  },
+  openViews() {
+    this.viewsOpen = !this.viewsOpen
+    this.viewsStep = ''
+  },
+  /** Set everything the view holds, through the same calls View settings and the Filter row make. */
+  applyView(id: string) {
+    const v = this.savedViews.find((x) => x.id === id)
+    if (!v) return
+    this.setMapLayout(v.layout)
+    this.setGroupBy(v.groupBy)
+    this.setCardGroup(v.cardGroup)
+    // A page goes back to the whole product, so the part comes after it.
+    this.showPage(v.page && this.pageNames.some((p) => samePage(p, v.page!)) ? v.page : ALL)
+    if (v.part && this.screens.some((s) => s.id === v.part)) {
+      this.scope = v.part
+      store('grndwrk.scope', v.part)
+    }
+    const f = v.filters
+    this.setProgressFilter(f.status as ProgressFilter)
+    this.typeFilter = f.type
+    this.topicFilter = f.topic
+    this.levelFilter = f.level
+    this.whoFilter = f.who
+    this.setWaitingFilter(f.waiting)
+    if (f.new) this.newShown = this.newComments.map((n) => n.id)
+    this.newOnly = f.new
+    this.filterOpen = ''
+    if (this.selected && !this.visibleNodes.includes(this.selected)) this.select(null)
+    this.setViewId(v.id)
+    this.viewsOpen = false
+    this.viewsStep = ''
+  },
+  startViewStep(step: 'save' | 'rename' | 'delete') {
+    this.viewsStep = step
+    this.viewName = step === 'rename' ? (this.currentView?.name ?? '') : ''
+    if (step !== 'delete') focusWhenVisible('view-name')
+  },
+  /** Save what is in view now as a new view, for everyone. */
+  async saveViewAs() {
+    const name = this.viewName.trim()
+    if (!name) return
+    try {
+      const v = await createView({ name, ...this.viewSettings })
+      this.putView(v)
+      this.setViewId(v.id)
+      this.viewsOpen = false
+      this.viewsStep = ''
+      this.flash(`Saved ${v.name}. Everyone on the project sees it under Views.`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  /** The view in use takes what is in view now. */
+  async updateCurrentView() {
+    const v = this.currentView
+    if (!v) return
+    try {
+      this.putView(await updateView(v.id, { settings: this.viewSettings }))
+      this.viewsOpen = false
+      this.flash(`Updated ${v.name}`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async renameCurrentView() {
+    const v = this.currentView
+    const name = this.viewName.trim()
+    if (!v || !name || name === v.name) return void (this.viewsStep = '')
+    try {
+      this.putView(await updateView(v.id, { name }))
+      this.viewsStep = ''
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  async deleteCurrentView() {
+    const v = this.currentView
+    if (!v) return
+    try {
+      await deleteView(v.id)
+      this.savedViews = this.savedViews.filter((x) => x.id !== v.id)
+      this.setViewId('')
+      this.viewsStep = ''
+      this.flash(`Deleted ${v.name}. The map keeps showing what it showed.`)
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
+  putView(v: SavedView) {
+    this.savedViews = [...this.savedViews.filter((x) => x.id !== v.id), v].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+  },
+  // All projects: a team's projects on one store, side by side. On the page only, from the project badge's menu.
+  projectMenu: false,
+  teamProjects: [] as TeamProject[],
+  /** Each project's card by its address: being read, read, or why it cannot be. */
+  projectCards: {} as Record<string, { loading: boolean; read?: TeamProjectRead; signIn?: string; error?: string }>,
+  /** Tokens being typed to sign in to another project, by its address. */
+  projectTokens: {} as Record<string, string>,
+  projectSearch: '',
+  async toggleProjectMenu() {
+    this.projectMenu = !this.projectMenu
+    if (this.projectMenu) this.teamProjects = await teamProjects()
+  },
+  async showAllProjects() {
+    this.projectMenu = false
+    this.setView('projects')
+    this.teamProjects = await teamProjects()
+    await Promise.all(this.teamProjects.map((p) => this.loadProjectCard(p.url)))
+  },
+  async loadProjectCard(url: string) {
+    this.projectCards = { ...this.projectCards, [url]: { ...this.projectCards[url], loading: true } }
+    let card: { loading: boolean; read?: TeamProjectRead; signIn?: string; error?: string }
+    try {
+      card = { loading: false, read: await readTeamProject(url) }
+    } catch (err) {
+      card = err instanceof SignInThere ? { loading: false, signIn: err.message } : { loading: false, error: errorText(err) }
+    }
+    this.projectCards = { ...this.projectCards, [url]: card }
+  },
+  async signInProject(url: string) {
+    const why = await signInToProject(url, this.projectTokens[url] ?? '')
+    if (why) return this.flash(why)
+    this.projectTokens = { ...this.projectTokens, [url]: '' }
+    this.teamProjects = await teamProjects()
+    await this.loadProjectCard(url)
+  },
+  /** Go to a project's page, at a thought when one is named. This project's opens here. */
+  openProject(url: string, nodeId = '') {
+    this.projectMenu = false
+    if (this.teamProjects.find((x) => x.url === url)?.current) return nodeId ? this.goToNode(nodeId) : this.setView('map')
+    openProjectPage(url, nodeId)
+  },
+  /** Thoughts across every project read, titles and notes, each naming its project. */
+  get projectHits(): { url: string; project: string; id: string; title: string; snippet: string }[] {
+    const q = this.projectSearch.trim()
+    if (!q) return []
+    return this.teamProjects
+      .flatMap((p) => {
+        const read = this.projectCards[p.url]?.read
+        return read ? searchThoughts(read.thoughts, q, 30).map((h) => ({ ...h, url: p.url, project: read.name || p.name })) : []
+      })
+      .slice(0, 60)
   },
   noteArrived(ids: string[]) {
     const fresh = ids.filter((id) => this.nodes[id] && isRelayComment(this.nodes[id]) && !this.arrivedHere.includes(id))
@@ -2976,7 +3155,7 @@ export const state = Alpine.reactive({
     // Leaving focus for another page closes the card focus had open. The map keeps it, to see it in place.
     if (this.view === 'focus' && view !== 'focus' && view !== 'map') this.closePanel()
     // Documents are the product's own files, on the Mac: the page on a store has none.
-    this.view = view === 'docs' && !this.onMac ? 'map' : view
+    this.view = (view === 'docs' && !this.onMac) || (view === 'projects' && this.onMac) ? 'map' : view
     store('grndwrk.view', this.view)
     if (view === 'map') revealSelection()
     if (view === 'docs') void this.loadDocs()

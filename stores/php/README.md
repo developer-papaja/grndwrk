@@ -105,6 +105,8 @@ grndwrk store assets page
 
 `Api.php` serves it from there (or from the folder `'assets'` names in `config.php`): `index.html` and `assets/...` to anyone, with a strict Content-Security-Policy and `nosniff`; `store.js` (the Comment button, put together with its config) and `screenshot.js` only to a page on a site listed in `'origins'`, by its `Referer`. Nothing else in the folder is served. Run the command again after updating grndwrk. The page asks for a read or write token; hand one to a person however you hand out tokens, or after your own login send them to `https://maps.example.com/clinic/#token=<token>`. See [The page](../../docs/store-protocol.md#the-page).
 
+`GET /v1/projects` at the store's root (not a project's) answers the projects a token may read, for All projects on the page. A token here belongs to one project, so it lists that one (`{ "projects": [{ "name": "Clinic", "url": "https://maps.example.com/clinic/" }] }`); a comment token lists none, no valid token is `401`. Read only: anything but `GET` is `405`. With your own login (below), change `Auth::projects` to list every project the person may read, each reached with the same token. Name no project `v1`; `admin.php` refuses it.
+
 ## Check it
 
 From a project with grndwrk, with a write token:

@@ -24,4 +24,19 @@ final class Auth
         if ($row['role'] === 'comment' && !preg_match(Protocol::COMMENTER, (string) $row['commenter'])) return null;
         return ['role' => $row['role'], 'commenter' => $row['commenter'], 'name' => $row['name']];
     }
+
+    /**
+     * The projects a token may read, for GET /v1/projects at the store's root. A token
+     * here belongs to one project, so that one; a comment token reads no map, so none.
+     * With your own login, list every project the person may read.
+     *
+     * @return list<array{slug: string, name: string}>|null null when the token is not one
+     */
+    public static function projects(Database $db, string $authorization): ?array
+    {
+        if (!preg_match('/^Bearer ([A-Za-z0-9_\-.~+\/]{16,200}=*)$/D', $authorization, $m)) return null;
+        $row = $db->tokenProject($m[1]);
+        if (!$row) return null;
+        return $row['role'] === 'read' || $row['role'] === 'write' ? [['slug' => $row['project'], 'name' => $row['name']]] : [];
+    }
 }

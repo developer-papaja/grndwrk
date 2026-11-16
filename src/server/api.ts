@@ -9,6 +9,7 @@ import { createStory, listStories, readDraft, readOutput, updateStory } from '..
 import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/screens.js'
 import { createPersona, deletePersona, listPersonas, settleAudienceName, updatePersona } from '../store/personas.js'
 import { createSegment, deleteSegment, listSegments, updateSegment } from '../store/segments.js'
+import { createView, deleteView, listViews, updateView, ViewProblem } from '../store/views.js'
 import { listShots, readShot } from '../store/shots.js'
 import { changeOwnEntry, EntryRefused, removeOwnEntry } from '../store/threads.js'
 import { rememberedApp } from '../store/local.js'
@@ -303,6 +304,34 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     if (personaMatch && method === 'DELETE') {
       if (!(await deletePersona(ctx.gwDir, personaMatch[1]))) throw new NotFound(personaMatch[1])
+      res.writeHead(204).end()
+      return true
+    }
+    // Views of the map saved for everyone, one file each in views/.
+    if (url.pathname === '/api/views' && method === 'GET') return send(res, 200, await listViews(ctx.gwDir))
+    if (url.pathname === '/api/views' && method === 'POST') {
+      const me = await gitUser(ctx.gwDir)
+      try {
+        return send(res, 201, await createView(ctx.gwDir, (await readBody(req)) as unknown as Record<string, unknown>, me ? { by: me } : {}))
+      } catch (err) {
+        if (err instanceof ViewProblem) throw new BadInput(err.message)
+        throw err
+      }
+    }
+    const viewMatch = url.pathname.match(/^\/api\/views\/(v_[a-z0-9]{6})$/)
+    if (viewMatch && method === 'PATCH') {
+      let view: Awaited<ReturnType<typeof updateView>>
+      try {
+        view = await updateView(ctx.gwDir, viewMatch[1], (await readBody(req)) as unknown as Record<string, unknown>)
+      } catch (err) {
+        if (err instanceof ViewProblem) throw new BadInput(err.message)
+        throw err
+      }
+      if (!view) throw new NotFound(viewMatch[1])
+      return send(res, 200, view)
+    }
+    if (viewMatch && method === 'DELETE') {
+      if (!(await deleteView(ctx.gwDir, viewMatch[1]))) throw new NotFound(viewMatch[1])
       res.writeHead(204).end()
       return true
     }

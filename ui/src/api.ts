@@ -1,3 +1,5 @@
+import type { SavedView, ViewSettings } from '../../src/shared/views'
+import type { ProjectOverview } from '../../src/shared/overview'
 import type { GNode, NodeInput, PairRequest, Persona, PersonaInSegment, PersonaList, PersonaSection, Readiness, Screen, Segment, ServerEvent, Story } from '../../src/shared/types'
 
 export const OFFLINE_MESSAGE = "Can't reach grndwrk. Is `grndwrk` still running in your terminal?"
@@ -121,6 +123,11 @@ export const removeFromRelay = (kind: 'phones' | 'invites', id: string) => reque
 /** A comment through the relay was opened here: the server writes `seen:` on it the first time. */
 export const markSeen = (id: string) => request<{ seen: boolean }>('POST', `/api/nodes/${encodeURIComponent(id)}/seen`, {})
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
+/** Views of the map saved for everyone (src/store/views.ts). */
+export const fetchViews = () => request<SavedView[]>('GET', '/api/views').catch(() => [] as SavedView[])
+export const createView = (input: ViewSettings & { name: string }) => request<SavedView>('POST', '/api/views', input)
+export const updateView = (id: string, input: { name?: string; settings?: ViewSettings }) => request<SavedView>('PATCH', `/api/views/${encodeURIComponent(id)}`, input)
+export const deleteView = (id: string) => request<void>('DELETE', `/api/views/${encodeURIComponent(id)}`)
 
 /** Subscribe to server events. EventSource reconnects on its own after a drop. */
 export function subscribe(handlers: {
@@ -153,3 +160,13 @@ export const signIn = async (_token: string) => ''
 export const signOut = () => {}
 /** Pictures load by their path from grndwrk itself. */
 export const watchPictures = (_root: Element) => {}
+/** A team's other projects (All projects) are on the page only: grndwrk on a Mac knows this project alone. */
+export interface TeamProject { name: string; url: string; current: boolean; signedIn: boolean }
+export interface TeamProjectRead { name: string; overview: ProjectOverview; thoughts: GNode[] }
+export class SignInThere extends Error {}
+export const teamProjects = async (): Promise<TeamProject[]> => []
+export const readTeamProject = async (_url: string): Promise<TeamProjectRead> => {
+  throw new Error('All projects is on the page on a team\'s store')
+}
+export const signInToProject = async (_url: string, _token: string) => 'All projects is on the page on a team\'s store'
+export const openProjectPage = (_url: string, _nodeId = '') => {}

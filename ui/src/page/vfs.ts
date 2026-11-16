@@ -233,3 +233,19 @@ function same(a: Uint8Array | null, b: Uint8Array | null): boolean {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
   return true
 }
+
+// Another project's map, read for a moment to count what waits there (All projects).
+// Under a root of its own, never ROOT, so nothing of it is ever sent to this project's store.
+
+/** Put a file of another project's map under `root`. */
+export function putElsewhere(root: string, path: string, bytes: Uint8Array) {
+  if (root === ROOT || !root.startsWith('/peek/')) throw new Error('Another project goes under /peek/')
+  files.set(`${root}/${path}`, { bytes, version: '', mtime: new Date() })
+}
+
+/** Forget everything under `root` again. */
+export function dropElsewhere(root: string) {
+  if (root === ROOT) return
+  for (const k of [...files.keys()]) if (k.startsWith(`${root}/`)) files.delete(k)
+  for (const d of [...dirs]) if (d === root || d.startsWith(`${root}/`)) dirs.delete(d)
+}

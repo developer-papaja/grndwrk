@@ -120,6 +120,12 @@ final class Database
         return $this->one('SELECT role, commenter, name FROM tokens WHERE project = ? AND hash = ?', [$project, hash('sha256', $bearer)]);
     }
 
+    /** The project a token belongs to, its name and the token's role there, wherever it is asked: for GET /v1/projects. */
+    public function tokenProject(string $bearer): ?array
+    {
+        return $this->one('SELECT t.project, t.role, p.name FROM tokens t JOIN projects p ON p.slug = t.project WHERE t.hash = ?', [hash('sha256', $bearer)]);
+    }
+
     // Files
 
     /** @return array{bytes: string, version: string, type: string}|null */

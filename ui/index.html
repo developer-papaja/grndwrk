@@ -45,6 +45,7 @@
       <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></symbol>
       <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></symbol>
       <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path d="M6 6h.008v.008H6V6Z" /></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></symbol>
       <symbol id="i-screens" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" /></symbol>
     </svg>
 
@@ -354,6 +355,73 @@
           </div>
         </div>
       </div>
+      <!-- Views saved for everyone: layout, columns, grouping and filters under a name -->
+      <div id="views" class="pointer-events-auto relative" @keydown.escape.stop="$store.gw.viewsOpen = false" @click.outside="$store.gw.viewsOpen = false">
+        <button
+          id="views-button"
+          class="menu-btn max-w-[240px]"
+          :class="$store.gw.currentView && 'menu-btn-on'"
+          :title="$store.gw.currentView ? $store.gw.currentView.name + ($store.gw.viewChanged ? ': changed since you picked it' : '') + ' · Views saved for everyone' : 'Views saved for everyone: pick one, or save what is in view now'"
+          :aria-expanded="$store.gw.viewsOpen"
+          @click="$store.gw.openViews()"
+        >
+          <svg class="size-4 shrink-0" :class="$store.gw.currentView ? 'text-accent' : 'text-fog/50'"><use href="#i-bookmark" /></svg>
+          <span class="truncate" x-text="$store.gw.currentView ? $store.gw.currentView.name : 'Views'"></span>
+          <span x-show="$store.gw.viewChanged" id="views-changed" class="size-1.5 shrink-0 rounded-full bg-accent" aria-label="Changed"></span>
+          <svg class="size-3.5 shrink-0 rotate-90 text-fog/50"><use href="#i-chevron" /></svg>
+        </button>
+        <div x-show="$store.gw.viewsOpen" x-transition.opacity.duration.100ms class="menu-pop w-72 whitespace-normal p-1.5">
+          <div class="px-2 pb-1 pt-0.5 text-body font-semibold text-fog">Views</div>
+          <template x-for="v in $store.gw.savedViews" :key="v.id">
+            <button class="menu-item" :data-view="v.id" :title="v.by ? 'Saved by ' + v.by : ''" @click="$store.gw.applyView(v.id)">
+              <span class="min-w-0 flex-1 truncate" x-text="v.name"></span>
+              <svg x-show="v.id === $store.gw.viewId" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+            </button>
+          </template>
+          <p x-show="!$store.gw.savedViews.length" class="px-2 py-1 text-body text-fog/50">No views yet. Save the map as it is now, and everyone on the project can pick it.</p>
+          <div x-show="$store.gw.session.writable" class="mt-1 border-t border-line pt-1">
+            <template x-if="$store.gw.viewsStep === 'save' || $store.gw.viewsStep === 'rename'">
+              <form class="flex flex-col gap-1.5 p-1.5" @submit.prevent="$store.gw.viewsStep === 'save' ? $store.gw.saveViewAs() : $store.gw.renameCurrentView()">
+                <label class="label" for="view-name" x-text="$store.gw.viewsStep === 'save' ? 'Name this view' : 'A new name'"></label>
+                <input id="view-name" x-model="$store.gw.viewName" maxlength="80" autocomplete="off" class="field w-full" placeholder="Open questions by screen" />
+                <div class="flex justify-end gap-1.5">
+                  <button type="button" class="rounded-md px-2.5 py-1 text-body text-fog/60 hover:bg-tint/5 hover:text-fog" @click="$store.gw.viewsStep = ''">Cancel</button>
+                  <button type="submit" class="rounded-md bg-accent px-3 py-1 text-body font-medium text-white hover:bg-accent/90 disabled:opacity-50" :disabled="!$store.gw.viewName.trim()">Save</button>
+                </div>
+              </form>
+            </template>
+            <template x-if="$store.gw.viewsStep === 'delete' && $store.gw.currentView">
+              <div class="p-1.5 text-body">
+                <p class="text-fog/80">Delete <span class="font-medium text-fog" x-text="$store.gw.currentView.name"></span> for everyone on the project?</p>
+                <div class="mt-1.5 flex justify-end gap-1.5">
+                  <button type="button" class="rounded-md px-2.5 py-1 text-fog/60 hover:bg-tint/5 hover:text-fog" @click="$store.gw.viewsStep = ''">Cancel</button>
+                  <button type="button" id="view-delete-confirm" class="rounded-md bg-rose-600 px-3 py-1 font-medium text-white hover:bg-rose-600/90" @click="$store.gw.deleteCurrentView()">Delete</button>
+                </div>
+              </div>
+            </template>
+            <template x-if="!$store.gw.viewsStep">
+              <div class="flex flex-col">
+                <button x-show="$store.gw.viewChanged" id="view-update" class="menu-item" @click="$store.gw.updateCurrentView()">
+                  <span class="size-1.5 shrink-0 rounded-full bg-accent"></span>
+                  <span class="flex-1">Update the view</span>
+                </button>
+                <button id="view-save" class="menu-item" @click="$store.gw.startViewStep('save')">
+                  <svg class="size-4 shrink-0 text-fog/55"><use href="#i-plus" /></svg>
+                  <span class="flex-1">Save this view…</span>
+                </button>
+                <button x-show="$store.gw.currentView" id="view-rename" class="menu-item" @click="$store.gw.startViewStep('rename')">
+                  <svg class="size-4 shrink-0 text-fog/55"><use href="#i-pencil" /></svg>
+                  <span class="flex-1">Rename</span>
+                </button>
+                <button x-show="$store.gw.currentView" id="view-delete" class="menu-item" @click="$store.gw.startViewStep('delete')">
+                  <svg class="size-4 shrink-0 text-fog/55"><use href="#i-trash" /></svg>
+                  <span class="flex-1">Delete</span>
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
       <!-- Each setting is a menu: its current value shows, the choices only when opened -->
       <template x-for="m in $store.gw.mapMenus" :key="m.key">
         <div class="relative" :class="m.right && 'ml-auto'" :id="m.key" @click.outside="$store.gw.openMenu === m.key && ($store.gw.openMenu = '')" @keydown.escape.stop="$store.gw.openMenu = ''">
@@ -656,23 +724,49 @@
 
     <!-- Views rail -->
     <nav id="rail" class="fixed inset-y-0 left-0 z-10 flex w-16 flex-col items-center gap-2 border-r border-line bg-ink pt-3">
-      <!-- Which project this map is, on every view: several maps can be open at once. A click edits its name, letters and color. -->
+      <!-- Which project this map is, on every view: several maps can be open at once. A click edits its name, letters and color;
+           on the page on a store, it opens the team's other projects and All projects first. -->
       <div
         x-show="$store.gw.projectLabel"
         class="relative mb-1 w-full border-b border-line px-1 pb-2.5"
-        x-data="{ open: false, name: '', initials: '', color: '' }"
-        @keydown.escape.stop="open = false"
-        @click.outside="open = false"
+        x-data="{ open: false, name: '', initials: '', color: '', edit() { this.open = true; this.name = String($store.gw.project.name ?? ''); this.initials = String($store.gw.project.initials ?? ''); this.color = String($store.gw.project.color ?? ''); $nextTick(() => $refs.badgeName.focus()) } }"
+        @keydown.escape.stop="open = false; $store.gw.projectMenu = false"
+        @click.outside="open = false; $store.gw.projectMenu = false"
       >
         <button
           id="rail-project"
           class="flex w-full flex-col items-center gap-1 rounded-lg py-0.5 hover:bg-tint/5"
-          :title="'Project: ' + $store.gw.projectLabel + '. Click to change its name, letters or color'"
-          @click="open = !open; if (open) { name = String($store.gw.project.name ?? ''); initials = String($store.gw.project.initials ?? ''); color = String($store.gw.project.color ?? ''); $nextTick(() => $refs.badgeName.focus()) }"
+          :class="$store.gw.view === 'projects' && 'bg-tint/10'"
+          :title="'Project: ' + $store.gw.projectLabel + ($store.gw.onMac ? '. Click to change its name, letters or color' : '. Click for your other projects and All projects')"
+          :aria-expanded="$store.gw.onMac ? open : $store.gw.projectMenu"
+          @click="if ($store.gw.onMac) { open ? (open = false) : edit() } else { open = false; $store.gw.toggleProjectMenu() }"
         >
           <span class="grid size-9 place-items-center rounded-lg text-body font-semibold text-white" :style="{ background: $store.gw.projectColor }" x-text="$store.gw.projectInitials"></span>
           <span class="line-clamp-2 w-full break-words text-center text-tag font-medium leading-tight text-fog/80" x-text="$store.gw.projectLabel"></span>
         </button>
+        <!-- On the page: the other projects this person can reach, and All projects -->
+        <div x-show="$store.gw.projectMenu" x-cloak x-transition.opacity.duration.100ms id="project-menu" class="menu-pop left-full top-0 ml-2 w-64 p-1.5">
+          <div class="px-2 pb-1 pt-0.5 text-body font-semibold text-fog">Projects</div>
+          <template x-for="p in $store.gw.teamProjects" :key="p.url">
+            <button class="menu-item" :data-project="p.url" @click="$store.gw.openProject(p.url)">
+              <span class="min-w-0 flex-1">
+                <span class="block truncate" x-text="p.name"></span>
+                <span x-show="!p.signedIn" class="block text-body text-fog/45">Sign in there</span>
+              </span>
+              <svg x-show="p.current" class="size-3.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+            </button>
+          </template>
+          <div class="mt-1 border-t border-line pt-1">
+            <button id="all-projects" class="menu-item" @click="$store.gw.showAllProjects()">
+              <svg class="size-4 shrink-0 text-fog/55"><use href="#i-columns" /></svg>
+              <span class="flex-1">All projects</span>
+            </button>
+            <button x-show="$store.gw.session.writable" class="menu-item" @click="$store.gw.projectMenu = false; edit()">
+              <svg class="size-4 shrink-0 text-fog/55"><use href="#i-pencil" /></svg>
+              <span class="flex-1">Name, letters and color</span>
+            </button>
+          </div>
+        </div>
         <form
           x-show="open"
           x-transition.opacity
@@ -2883,6 +2977,75 @@
             </div>
           </div>
         </template>
+      </div>
+    </main>
+
+    <!-- All projects: a team's projects on one store, each from its own files. On the page only. -->
+    <main x-cloak x-show="$store.gw.view === 'projects'" id="projects-view" class="fixed inset-y-0 left-16 right-0 overflow-y-auto bg-ink text-body">
+      <div class="mx-auto max-w-5xl px-8 pb-24 pt-10">
+        <div class="flex flex-wrap items-baseline justify-between gap-4">
+          <h1 class="text-heading font-semibold text-fog">All projects</h1>
+          <span class="text-body text-fog/45" x-text="$store.gw.teamProjects.length + ($store.gw.teamProjects.length === 1 ? ' project' : ' projects')"></span>
+        </div>
+        <p class="mt-1 text-fog/55">What waits in each of your team's projects, read from that project's own files with your sign-in there.</p>
+
+        <label class="mt-6 flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2" for="project-search">
+          <svg class="size-4 shrink-0 text-fog/45"><use href="#i-search" /></svg>
+          <input id="project-search" x-model="$store.gw.projectSearch" autocomplete="off" spellcheck="false" class="min-w-0 flex-1 bg-transparent text-body text-fog outline-none placeholder:text-fog/40" placeholder="Search thoughts in every project" />
+        </label>
+        <template x-if="$store.gw.projectSearch.trim()">
+          <div id="project-hits" class="mt-2 rounded-lg border border-line">
+            <template x-for="h in $store.gw.projectHits" :key="h.url + h.id">
+              <button class="flex w-full flex-col items-start gap-0.5 border-b border-line px-3 py-2 text-left last:border-b-0 hover:bg-tint/5" @click="$store.gw.openProject(h.url, h.id)">
+                <span class="flex w-full items-baseline gap-2">
+                  <span class="min-w-0 flex-1 truncate font-medium text-fog" x-text="h.title"></span>
+                  <span class="shrink-0 rounded bg-tint/10 px-1.5 py-0.5 text-tag text-fog/70" x-text="h.project"></span>
+                </span>
+                <span x-show="h.snippet" class="line-clamp-2 text-fog/55" x-text="h.snippet"></span>
+              </button>
+            </template>
+            <p x-show="!$store.gw.projectHits.length" class="px-3 py-2 text-fog/50">No thought matches in the projects you are signed in to.</p>
+          </div>
+        </template>
+
+        <div id="project-cards" class="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <template x-for="p in $store.gw.teamProjects" :key="p.url">
+            <section class="flex flex-col rounded-xl border border-line bg-panel p-4" :class="p.current && 'ring-1 ring-accent/40'" :data-project-card="p.url" x-data="{ get c() { return $store.gw.projectCards[p.url] ?? { loading: true } } }">
+              <div class="flex items-baseline gap-2">
+                <h2 class="min-w-0 flex-1 truncate text-title font-semibold text-fog" x-text="c.read?.name || p.name"></h2>
+                <span x-show="p.current" class="shrink-0 text-tag text-fog/45">This project</span>
+              </div>
+              <p x-show="c.loading" class="mt-3 text-fog/45">Reading…</p>
+              <p x-show="c.error" class="mt-3 text-rose-400" x-text="c.error"></p>
+              <template x-if="c.signIn">
+                <form class="mt-3 flex flex-col gap-1.5" @submit.prevent="$store.gw.signInProject(p.url)">
+                  <span class="text-fog/60" x-text="c.signIn"></span>
+                  <div class="flex gap-1.5">
+                    <input type="password" autocomplete="off" spellcheck="false" class="field min-w-0 flex-1" placeholder="Token for this project" :aria-label="'Token for ' + p.name" x-model="$store.gw.projectTokens[p.url]" />
+                    <button type="submit" class="rounded-md bg-accent px-3 py-1 font-medium text-white hover:bg-accent/90">Sign in</button>
+                  </div>
+                </form>
+              </template>
+              <template x-if="c.read">
+                <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                  <div><dt class="text-fog/50">Questions for you</dt><dd class="text-title font-semibold text-fog" data-count="questions" x-text="c.read.overview.questions"></dd></div>
+                  <div><dt class="text-fog/50">Blocking gaps</dt><dd class="text-title font-semibold" :class="c.read.overview.blocking ? 'text-rose-400' : 'text-fog'" data-count="blocking" x-text="c.read.overview.blocking"></dd></div>
+                  <div><dt class="text-fog/50">Stories</dt><dd class="text-fog" data-count="stories" x-text="c.read.overview.stories.all ? c.read.overview.stories.done + ' done, ' + c.read.overview.stories.partly + ' partly, of ' + c.read.overview.stories.all : 'None yet'"></dd></div>
+                  <div><dt class="text-fog/50">Ready to test</dt><dd class="text-fog" data-count="test" x-text="c.read.overview.toTest"></dd></div>
+                  <div class="col-span-2 border-t border-line pt-2">
+                    <dt class="text-fog/50">Focus on this next</dt>
+                    <dd class="text-fog" x-text="c.read.overview.focus ? c.read.overview.focus.title : 'Nothing from /readiness yet'"></dd>
+                    <dd x-show="c.read.overview.focus" class="line-clamp-2 text-fog/55" x-text="c.read.overview.focus?.why"></dd>
+                  </div>
+                </dl>
+              </template>
+              <div class="mt-auto flex justify-end pt-3">
+                <button class="rounded-md px-2.5 py-1 text-accent hover:bg-tint/5" @click="$store.gw.openProject(p.url)" x-text="p.current ? 'Back to the map' : 'Open'"></button>
+              </div>
+            </section>
+          </template>
+        </div>
+        <p class="mt-6 text-fog/45">Projects come from your store's list when it has one, and from every project you signed in to in this tab.</p>
       </div>
     </main>
 

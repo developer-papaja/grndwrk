@@ -96,9 +96,11 @@ let loadedOnce = false
  * #write=<id> (its title, to write it) or #reply=<id> (its reply box, to say
  * what is still wrong after a reject) when grndwrk opened this tab.
  */
-const opening = /^#(write|reply)=([A-Za-z0-9_-]+)$/.exec(location.hash)
+const opening = /^#(write|reply|open)=([A-Za-z0-9_-]+)$/.exec(location.hash)
 let writeWhenLoaded = opening?.[2] ?? ''
 let replyWhenLoaded = opening?.[1] === 'reply'
+/** #open=<id>: a thought found in All projects, opened on its own project's page. */
+let onlyOpen = opening?.[1] === 'open'
 if (writeWhenLoaded) history.replaceState(null, '', location.pathname + location.search)
 
 async function reload() {
@@ -109,9 +111,11 @@ async function reload() {
     if (before) state.noteArrived(nodes.map((n) => n.id).filter((id) => !before.has(id)))
     loadedOnce = true
     if (writeWhenLoaded && state.nodes[writeWhenLoaded]) {
-      state.writeComment(writeWhenLoaded, replyWhenLoaded)
+      if (onlyOpen) state.goToNode(writeWhenLoaded)
+      else state.writeComment(writeWhenLoaded, replyWhenLoaded)
       writeWhenLoaded = ''
       replyWhenLoaded = false
+      onlyOpen = false
     }
   } catch (err) {
     state.flash(err instanceof Error ? err.message : String(err))
@@ -133,6 +137,7 @@ const handlers = {
     void state.loadSiteRequests()
     void state.loadRelay()
     void state.loadAuthors()
+    void state.loadViews()
     void state.loadWaiting()
     void state.loadShots()
     void state.loadRuntime()
@@ -159,6 +164,7 @@ const handlers = {
       else {
         writeWhenLoaded = event.id
         replyWhenLoaded = event.reply === true
+        onlyOpen = false
       }
     }
     else if (event.type === 'pair:request') state.addPairRequest(event.request)
@@ -171,6 +177,7 @@ const handlers = {
     }
     else if (event.type === 'file:change' && event.path.startsWith('shots/')) void state.loadShots()
     else if (event.type === 'file:change' && event.path.startsWith('waiting/')) void state.loadWaiting()
+    else if (event.type === 'file:change' && event.path.startsWith('views/')) void state.loadViews()
     else if (event.type === 'file:change' && event.path === 'project.md') {
       void fetchProject().then((p) => (state.project = p))
       void state.loadRuntime()

@@ -57,6 +57,7 @@ $command = implode(' ', array_slice($args, 0, 2));
 if ($command === 'project add') {
     $slug = $args[2] ?? '';
     if (!preg_match('/^[a-z0-9][a-z0-9-]{0,63}$/D', $slug)) fail('A project is lowercase letters, digits and -, at most 64');
+    if ($slug === 'v1') fail('v1 is the store\'s own address (v1/projects); pick another name');
     if ($db->project($slug)) fail("$slug is there already");
     $db->addProject($slug, trim(implode(' ', array_slice($args, 3))) ?: $slug);
     echo "Project $slug: /$slug/v1/\n";
