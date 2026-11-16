@@ -8,6 +8,7 @@ altitude: 3
 links: []
 status: open
 created: 2026-11-16
+built: 2026-11-16
 ---
 In the last couple of days, chatting with Claude has not done anything in grndwrk unless asked specifically about it. Should it not do that, or ask about it?
 
