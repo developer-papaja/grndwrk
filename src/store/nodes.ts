@@ -189,7 +189,9 @@ export class NodeStore {
       // Only a thread entry added: the card's own file stays exactly as it is, so
       // nothing in it can clash with someone else's change in git.
       const onlyBody = Object.entries(input).every(([k, v]) => k === 'body' || v === undefined)
-      if (!(onlyBody && body === bodies.get(id))) await this.write(next, own, body)
+      // The panel may send the notes without their last newline: that is no change either.
+      const same = body.trimEnd() === (bodies.get(id) ?? '').trimEnd()
+      if (!(onlyBody && same)) await this.write(next, own, body)
       return this.changed(touched)
     })
   }

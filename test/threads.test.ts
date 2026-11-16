@@ -31,6 +31,17 @@ describe('thread entries in files of their own', () => {
     expect(questions(answered.body)[0].open).toBe(false)
   })
 
+  it('leaves the card file as it was when the notes come back without their last newline', async () => {
+    await mkdir(join(gw, 'nodes'), { recursive: true })
+    const card = '---\nid: n_abcdef\ntype: idea\ntitle: An answer\naltitude: 3\nlinks: []\nstatus: open\ncreated: 2026-11-16\n---\nAnswer to the gap.\n'
+    await writeFile(join(gw, 'nodes', 'n_abcdef.md'), card)
+    const asked = (await store.update('n_abcdef', { body: appendEntry('Answer to the gap.', 'claude-asks', 'Which?', '2026-11-16') })).upserted[0]
+    expect(await readFile(join(gw, 'nodes', 'n_abcdef.md'), 'utf8')).toBe(card)
+    await store.update('n_abcdef', { body: appendEntry(asked.body.replace(/\n+$/, ''), 'you', '> Which?\n\nThis one', '2026-11-16') })
+    expect(await readFile(join(gw, 'nodes', 'n_abcdef.md'), 'utf8')).toBe(card)
+    expect(await entryFiles('n_abcdef')).toHaveLength(2)
+  })
+
   it('keeps entry files when the notes change, and writes the notes into the card', async () => {
     const n = (await store.create({ title: 'A' })).upserted[0]
     const asked = (await store.update(n.id, { body: appendEntry('', 'claude-asks', 'Why?', '2026-10-14') })).upserted[0]
