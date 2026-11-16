@@ -8,6 +8,7 @@ altitude: 2
 links: [n_r9wswb]
 status: open
 created: 2026-11-09
+built: 2026-11-16
 ---
 Found while testing the tab icon (n_r9wswb):
 

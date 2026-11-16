@@ -115,6 +115,11 @@ enum Relay {
   /// Joined, allowed in, and the relay answers: comments go through it.
   static var usable: Bool { joined != nil && joined?.refused == nil && reachable }
 
+  /// The person chose to keep using the relay when grndwrk turned up on the Wi-Fi unpaired: not asked to pair again.
+  /// Kept per project; Pair with the Mac in the long-press menu still pairs.
+  static func keepsRelay(_ project: String) -> Bool { UserDefaults.standard.bool(forKey: "grndwrk.keepRelay.\(project)") }
+  static func setKeepsRelay(_ project: String, _ keep: Bool) { UserDefaults.standard.set(keep, forKey: "grndwrk.keepRelay.\(project)") }
+
   /// Asks the relay whether it lets this phone in, without taking anything: so "waiting to be allowed"
   /// ends as soon as someone allows it in the map, not only at the next comment.
   static func check() async {

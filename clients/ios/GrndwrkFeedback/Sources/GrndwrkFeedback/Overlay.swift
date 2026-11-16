@@ -356,9 +356,14 @@ final class OverlayController: UIViewController {
       if case .connected = before {
         flash(Relay.usable ? "Away from grndwrk's Wi-Fi. Comments go through your team's relay." : "Lost grndwrk. Comments wait on the phone.")
       }
-    case .needsCode:
+    case .needsCode(let project, _):
       // Ask once when it starts wanting the code, not every time it checks.
       if case .needsCode = before { return }
+      // Joined the team's relay: comments already go there. Ask which way, rather than asking to be allowed twice.
+      if Relay.joined != nil {
+        if !Relay.keepsRelay(project) { askWifiOrRelay(project: project) }
+        return
+      }
       pair()
     case .unknown:
       break
@@ -366,6 +371,26 @@ final class OverlayController: UIViewController {
   }
 
   private var pairing = false
+
+  /// grndwrk turned up on this Wi-Fi, not paired, while the phone sends through the team's relay: which way from now on?
+  private func askWifiOrRelay(project: String) {
+    var host: UIViewController = self
+    while let next = host.presentedViewController { host = next }
+    if host is UIAlertController { return }
+    let alert = UIAlertController(
+      title: "grndwrk is on this Wi-Fi",
+      message: "Comments go through your team's relay now. Pair with grndwrk\(project.isEmpty ? "" : " \u{201C}\(project)\u{201D}") on this Wi-Fi instead? It is quicker, and works without the relay. Either way, nothing waits.",
+      preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "Keep using the relay", style: .cancel) { [weak self] _ in
+      Relay.setKeepsRelay(project, true)
+      self?.flash("Comments go through your team's relay. Long press, Pair with the Mac, to change it.")
+    })
+    alert.addAction(UIAlertAction(title: "Pair on the Wi-Fi", style: .default) { [weak self] _ in
+      Relay.setKeepsRelay(project, false)
+      self?.pair()
+    })
+    host.present(alert, animated: true)
+  }
 
   /// Ask the person at the Mac to allow this phone. Without the map open on
   /// the Mac, or without an answer, ask for the code from the terminal instead.
@@ -489,7 +514,10 @@ final class OverlayController: UIViewController {
   func status() -> String {
     switch Connection.state {
     case .connected(let project, let host): return "Connected to \(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)."
-    case .needsCode(let project, let host): return "\(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host) needs the pairing code. Comments wait on the phone."
+    case .needsCode(let project, let host):
+      let name = project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}"
+      if Relay.joined != nil { return "\(name) at \(host) is on this Wi-Fi but not paired. Comments go through your team's relay meanwhile." }
+      return "\(name) at \(host) needs the pairing code. Comments wait on the phone."
     case .offline(let why):
       if Connection.viaRelay, let host = Relay.joined.flatMap({ URL(string: $0.url)?.host }) {
         return "Through your team's relay at \(host). No grndwrk on this Wi-Fi, so comments go to the relay and reach grndwrk when someone on the team runs it."

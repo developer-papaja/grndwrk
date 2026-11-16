@@ -24,9 +24,20 @@ enum Connection {
   private static var checking = false
 
   /// No grndwrk on this Wi-Fi, but the team's relay takes comments: not offline, as far as the person is concerned.
+  /// Also while a grndwrk on the Wi-Fi waits to be paired: comments are never held back for that.
   static var viaRelay: Bool {
-    if case .offline = state { return Relay.usable }
-    return false
+    switch state {
+    case .offline, .needsCode: return Relay.usable
+    default: return false
+    }
+  }
+
+  /// Where a comment goes when grndwrk on the Wi-Fi cannot take it: the relay, when this phone joined one.
+  static var sendsToRelay: Bool {
+    switch state {
+    case .offline, .needsCode: return Relay.joined != nil
+    default: return false
+    }
   }
 
   static var project: String? {
@@ -88,6 +99,8 @@ enum Connection {
     }
     Pairing.current = nil
     set(.needsCode(project: project, host: host))
+    // Not paired on the Wi-Fi, but in the team's relay: what waits goes there meanwhile.
+    await throughRelay()
   }
 
   /// Away from grndwrk's Wi-Fi, with the team's relay joined: what waits goes there, and the status of what went comes back.

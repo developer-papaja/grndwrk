@@ -79,7 +79,8 @@ enum Outbox {
 
   static func post(_ data: Data, to path: String = "api/feedback") async -> Result {
     // No grndwrk on this Wi-Fi, and the phone joined the team's relay: it goes there.
-    if case .offline = Connection.state, Relay.joined != nil { return await viaRelay(data, path) }
+    // Or grndwrk is here but this phone is not paired with it: never held back for that.
+    if Connection.sendsToRelay { return await viaRelay(data, path) }
     guard let server = await Locator.url() else {
       Connection.reached(false, why: Locator.problem)
       return Relay.joined != nil ? await viaRelay(data, path) : .unreachable
