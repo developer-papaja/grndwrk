@@ -12,7 +12,8 @@ export const NODE_TYPES = [
 ] as const
 export type NodeType = (typeof NODE_TYPES)[number]
 
-export const STATUSES = ['open', 'settled', 'parked'] as const
+/** A principle is a thought that never closes but steers everything: off the board, in the strip above it. */
+export const STATUSES = ['open', 'settled', 'parked', 'principle'] as const
 export type Status = (typeof STATUSES)[number]
 
 export interface GNode {

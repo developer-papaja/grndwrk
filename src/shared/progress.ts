@@ -11,6 +11,9 @@ import type { GNode, Story } from './types.js'
  *   Done          a comment fixed, a story done, a thought settled
  *   Not now       a thought parked, a story set aside
  *
+ * A guiding principle is none of these: it never closes, and the map shows it
+ * in the strip above the board instead (`isPrinciple`).
+ *
  * The files keep their own words (incoming, partial, settled...); this is
  * only how the map reads them.
  */
@@ -24,8 +27,15 @@ export const PROGRESS_WORDS: Record<Progress, string> = {
   later: 'Not now',
 }
 
+/** A thought that never closes but steers everything: shown above the board, never on it, and counted nowhere. */
+export function isPrinciple(n: GNode): boolean {
+  return n.status === 'principle'
+}
+
 export function progressOfNode(n: GNode): Progress {
   if (n.status === 'parked') return 'later'
+  // Never on the board, so no filter shows it; as settled as a thought gets.
+  if (isPrinciple(n)) return 'done'
   if (isFeedback(n)) {
     const st = feedbackState(n)
     return st === 'fixed' ? 'done' : st === 'ready' ? 'ready' : st === 'proposed' ? 'in-progress' : 'open'

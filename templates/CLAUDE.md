@@ -37,6 +37,13 @@ Not only comments: when you build what any thought asks for, the person tests it
 - **Work asked for in the chat, with no thought behind it,** gets a thought of its own (on the page and topic it belongs to), so it can be tested like the rest.
 - **Sent back:** `built:` is gone and the thread ends in "Tested on the Mac: does not work yet.", with what is still wrong quoted and maybe pictures below it (look at them). Read it, fix it, and mark it built again with new steps.
 
+## Guiding principles
+
+Thoughts with `status: principle` in `nodes/` never close: they say what everything in the product should be (it should feel easy, it should help people ideate). The map shows them in a strip above the board.
+
+- **Read them before you build,** whatever you were asked. When a change you are asked for, or one you are about to make, goes against one, say so and name it before you go on.
+- Never set or remove `status: principle` unless the person asks. A principle the person changed has `changed:` with the date: read it again.
+
 ## Stories
 
 Stories in `stories/` say what someone can do in the product, with acceptance criteria under `## Acceptance`, one per line: `- [ ] not met yet`, `- [x] met`.

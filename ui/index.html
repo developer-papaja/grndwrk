@@ -539,6 +539,56 @@
         </div>
         <button x-show="$store.gw.filterCount" class="menu-btn text-fog/55 hover:text-fog" id="reset-filters" title="Take every filter away: back to everything open" @click="$store.gw.resetFilters()">Reset</button>
       </div>
+      <!-- Guiding principles: thoughts that never close but steer everything. Read here, changed only through their menu. -->
+      <section
+        x-show="$store.gw.principles.length"
+        id="principles"
+        aria-label="Guiding principles"
+        x-init="new ResizeObserver(() => ($store.gw.principlesHeight = $el.offsetHeight)).observe($el)"
+        class="pointer-events-auto relative -mt-2 w-full border-b border-line bg-panel/95 px-3 text-[12.5px] backdrop-blur"
+        @keydown.escape.stop="$store.gw.principleMenu = ''"
+      >
+        <button
+          id="principles-toggle"
+          class="flex h-8 w-full items-center gap-2 text-left text-fog/60 hover:text-fog"
+          :aria-expanded="$store.gw.principlesOpen"
+          :title="$store.gw.principlesOpen ? 'Fold the guiding principles' : 'Read the guiding principles'"
+          @click="$store.gw.setPrinciplesOpen(!$store.gw.principlesOpen)"
+        >
+          <svg class="size-3.5 shrink-0 transition-transform" :class="$store.gw.principlesOpen && 'rotate-90'"><use href="#i-chevron" /></svg>
+          <span class="shrink-0 font-medium text-fog/80">Guiding principles</span>
+          <span class="shrink-0 text-fog/45" x-text="$store.gw.principles.length"></span>
+          <span x-show="!$store.gw.principlesOpen" class="min-w-0 truncate" x-text="$store.gw.principles.map((p) => p.title).join(' · ')"></span>
+        </button>
+        <ol x-show="$store.gw.principlesOpen" class="max-h-[40vh] overflow-y-auto pb-2 pl-5.5">
+          <template x-for="p in $store.gw.principles" :key="p.id">
+            <li class="group relative flex items-start gap-2 rounded-md py-1 pr-1">
+              <div class="min-w-0 flex-1">
+                <p class="text-fog/90" x-text="p.title"></p>
+                <p x-show="$store.gw.firstLine(p.body)" class="truncate text-fog/50" x-text="$store.gw.firstLine(p.body)"></p>
+              </div>
+              <button
+                class="icon-btn size-6 shrink-0 opacity-60 group-hover:opacity-100"
+                :class="$store.gw.principleMenu === p.id && 'opacity-100'"
+                title="Change or move back"
+                aria-label="Change or move back"
+                :aria-expanded="$store.gw.principleMenu === p.id"
+                @click="$store.gw.principleMenu = $store.gw.principleMenu === p.id ? '' : p.id"
+              >
+                <svg class="size-4" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="18" cy="12" r="1.5" /></svg>
+              </button>
+              <div x-show="$store.gw.principleMenu === p.id" @click.outside="$store.gw.principleMenu = ''" class="menu-pop left-auto right-0 top-7">
+                <button class="menu-item" @click="$store.gw.principleMenu = ''; $store.gw.select(p.id)">
+                  <svg class="size-4 text-fog/55"><use href="#i-pencil" /></svg> Change it
+                </button>
+                <button class="menu-item" @click="$store.gw.setPrinciple(p.id, false)">
+                  <svg class="size-4 text-fog/55"><use href="#i-map" /></svg> Move back to the map
+                </button>
+              </div>
+            </li>
+          </template>
+        </ol>
+      </section>
     </div>
 
     <!-- A phone on the network asks to send comments: allow it here, and it gets the pairing code -->
@@ -3369,11 +3419,15 @@
                 <span class="label">Status</span>
                 <select id="field-status" x-model="$store.gw.draft.status" @change="$store.gw.edit('status', true)" class="field w-full">
                   <template x-for="s in $store.gw.statuses" :key="s">
-                    <option :value="s" x-text="({ open: 'Open', settled: 'Done (decided)', parked: 'Not now' })[s] || s" :selected="s === $store.gw.draft.status"></option>
+                    <option :value="s" x-text="({ open: 'Open', settled: 'Done (decided)', parked: 'Not now', principle: 'Guiding principle' })[s] || s" :selected="s === $store.gw.draft.status"></option>
                   </template>
                 </select>
               </label>
             </div>
+            <p x-show="$store.gw.selected.status === 'principle'" id="principle-note" class="-mt-1 text-xs text-fog/55">
+              A guiding principle: read above the board, not on it, and by your agent before it builds.
+              <span x-show="$store.gw.selected.extra?.changed" x-text="'Changed ' + $store.gw.selected.extra?.changed + '.'"></span>
+            </p>
 
             <!-- Stories this thought leads to, and a new one from it -->
             <div id="thought-stories">

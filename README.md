@@ -6,7 +6,7 @@ grndwrk lives inside your project. It keeps everything as plain markdown files i
 
 ## What you can do with it
 
-- **Think before you build.** Capture thoughts as cards, grouped by screen or topic, from vision down to detail. Your agent asks where things are thin, and tells you whether you are ready to build, ready to prototype, or not ready yet.
+- **Think before you build.** Capture thoughts as cards, grouped by screen or topic, from vision down to detail. Your agent asks where things are thin, and tells you whether you are ready to build, ready to prototype, or not ready yet. Thoughts that never close but steer everything ("going forward should feel easy") become guiding principles: off the board, in a strip above it, and read by your agent before it builds.
 - **Start from a project that already exists.** `/survey` reads the code, docs and history and draws the map from what is there. `/sitemap` draws every screen, what it is for and who it is for.
 - **Write the brief and the stories.** `/brief` writes a brief, user stories linked to the thoughts behind them, and a starter `CLAUDE.md` for building the product.
 - **Comment on the running product.** A Comment button on your website or in your iOS app turns what you point at into a card in the map. Your agent proposes and builds fixes, and you test them in the app, then approve or reject them. Anything else your agent builds from the map comes back the same way, with steps to test.

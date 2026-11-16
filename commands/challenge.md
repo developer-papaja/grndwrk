@@ -57,6 +57,8 @@ Without an argument, work on the whole map as below.
 2. `.grndwrk/readiness/report.md` and `gaps.json` if they exist. They name the thin areas. If there is no report, judge the thin areas yourself against `.grndwrk/readiness/checklist.md`.
 3. Every file in `.grndwrk/nodes/`, including threads, so you do not ask something already asked or answered.
 
+**Guiding principles.** Thoughts with `status: principle` never close: they say what everything should be. When an open thought, a decision or a screen seems to go against one, that is worth one of your questions, on that thought's thread: name the principle and its id, say where they pull apart, and offer options (change the thought, keep it as an exception, or change the principle). Never ask whether a principle is done.
+
 ## Ask
 
 Three to five questions, aimed at the thinnest areas, the ones a real build would stumble on first. A good question:

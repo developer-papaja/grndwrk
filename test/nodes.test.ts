@@ -138,3 +138,21 @@ describe('a thought about one screen', () => {
     expect(bad.extra.screen).toBeUndefined()
   })
 })
+
+describe('Guiding principles', () => {
+  it('keeps the status, and dates a change to the words', async () => {
+    const n = (await store.create({ title: 'Going forward should feel easy' })).upserted[0]
+    await store.update(n.id, { status: 'principle' })
+    expect(await file(n.id)).toContain('status: principle')
+    // Becoming a principle is not a change to its words.
+    expect(await file(n.id)).not.toContain('changed:')
+    await store.update(n.id, { title: 'Going forward with ideas should feel easy' })
+    expect(await file(n.id)).toMatch(/changed: \d{4}-\d{2}-\d{2}/)
+  })
+
+  it('leaves an open thought undated when its words change', async () => {
+    const n = (await store.create({ title: 'A thought' })).upserted[0]
+    await store.update(n.id, { title: 'A better thought' })
+    expect(await file(n.id)).not.toContain('changed:')
+  })
+})

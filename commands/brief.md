@@ -44,7 +44,7 @@ Gaps are one file each, `readiness/gaps/<gap id>.json`, holding that one gap's o
 ## Read
 
 1. `.grndwrk/project.md`: name, purpose, project type, `pages:`.
-2. Every file in `.grndwrk/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and notes, including threads. Settled thoughts and decisions carry the most weight. A thread answer from the person counts as decided.
+2. Every file in `.grndwrk/nodes/`: frontmatter (`id`, `type`, `title`, `topic`, `page`, `altitude`, `links`, `status`) and notes, including threads. Settled thoughts and decisions carry the most weight. A thread answer from the person counts as decided. Thoughts with `status: principle` are the guiding principles: they never close, and everything in the brief, the stories and the starter must agree with them.
 3. `.grndwrk/readiness/report.md` and `gaps.json`, if they exist.
 4. Existing `.grndwrk/stories/*.md`, `.grndwrk/screens/*.md`, `.grndwrk/personas/*.md` and `.grndwrk/outputs/*.md`, if they exist. Write stories from the personas' point of view, by their names, when there are personas. Update stories and outputs; never duplicate them.
 
@@ -68,6 +68,9 @@ Two sentences: what the product is and the problem it solves.
 
 ## Who it is for
 ## What success looks like
+
+## Guiding principles
+Each thought with `status: principle`, its title as written and its id, with one line from its notes when they say more. Leave the section out when there are none.
 
 ## Core flows
 Each flow as numbered steps from start to end.
@@ -126,6 +129,7 @@ so that booking never feels like a chore.
 The starting CLAUDE.md for the product's own repository. It is read by the coding agent at the start of every session (by Claude Code as CLAUDE.md; Codex, Cursor and others read the same text as AGENTS.md), so it must be short, concrete and true to the map:
 
 - what the product is, who it is for, and what success is
+- the guiding principles (`status: principle`), each as written with its id, under a heading of their own, and a rule to read them before building and to say when a change goes against one
 - the core flows and the site map, in brief
 - the design foundation and technical decisions, as rules
 - what is not in the first version, as rules ("Do not build ...")

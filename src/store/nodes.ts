@@ -5,6 +5,7 @@ import { NODE_TYPES, STATUSES, type GNode, type NodeInput } from '../shared/type
 import { DEFAULTS, isValidId, oneOf, parseNode, serializeNode, toAltitude, today } from './frontmatter.js'
 import { readEntryFiles, removeEntries, saveBody, withEntries } from './threads.js'
 import { needsSeen } from '../shared/unseen.js'
+import { splitBody } from '../shared/thread.js'
 
 export class NotFound extends Error {}
 export class ReadOnly extends Error {}
@@ -160,6 +161,11 @@ export class NodeStore {
       if (input.proposed !== undefined) {
         const { proposed: _, ...rest } = next.extra
         next.extra = typeof input.proposed === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.proposed) ? { ...rest, proposed: input.proposed } : rest
+      }
+      // A principle steers everything, so a change to its words is dated: the agent can see it moved.
+      if (next.status === 'principle' && current.status === 'principle') {
+        const notes = input.body !== undefined ? splitBody(String(input.body)).notes.trim() !== splitBody(current.body).notes.trim() : false
+        if (next.title !== current.title || notes) next.extra = { ...next.extra, changed: today() }
       }
       const touched = [id]
       if (input.links) {

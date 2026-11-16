@@ -14,7 +14,7 @@ import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testEntryIndex, te
 import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
 import { isNewComment, isRelayComment, needsSeen } from '../../src/shared/unseen'
 import { markSeen as postSeen } from './api'
-import { PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
+import { isPrinciple, PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
 import { fetchProject, fetchWaiting, saveWaiting, savePersonalInfo, type WaitingState } from './api'
 import { splitQuestions } from '../../src/shared/thread'
@@ -235,7 +235,8 @@ export const state = Alpine.reactive({
   /** The nodes on the page in view, before the feedback filter. Everything on All. */
   get pageNodes(): GNode[] {
     return cached('pageNodes', () => {
-      const all = Object.values(this.nodes)
+      // Guiding principles never sit on the board: they are in the strip above it.
+      const all = Object.values(this.nodes).filter((n) => !isPrinciple(n))
       // Working on one part shows its thoughts from every page.
       if (this.scopeScreen) return all.filter((n) => this.inScope(n))
       if (this.onAll) return all
@@ -700,7 +701,36 @@ export const state = Alpine.reactive({
   },
   /** Where the map's content starts: under the toolbar, and the filter row when it shows. */
   get mapTop(): number {
-    return 48 + (this.filterRowShown ? this.filterRowHeight : 0)
+    return 48 + (this.filterRowShown ? this.filterRowHeight : 0) + (this.principles.length ? this.principlesHeight : 0)
+  },
+  /** Guiding principles: thoughts that never close but steer everything, oldest first, in the strip above the board. */
+  get principles(): GNode[] {
+    return cached('principles', () =>
+      Object.values(this.nodes as Record<string, GNode>)
+        .filter(isPrinciple)
+        .sort((a, b) => a.created.localeCompare(b.created) || a.title.localeCompare(b.title)),
+    )
+  },
+  /** The strip folds to one line; kept in this browser. */
+  principlesOpen: readStored('grndwrk.principlesOpen', false),
+  principlesHeight: 0,
+  /** The principle whose menu is open in the strip. */
+  principleMenu: '',
+  setPrinciplesOpen(open: boolean) {
+    this.principlesOpen = open
+    this.principleMenu = ''
+    store('grndwrk.principlesOpen', open)
+  },
+  /** Make a thought a guiding principle, or move one back to the map as open. */
+  async setPrinciple(id: string, on: boolean) {
+    this.principleMenu = ''
+    try {
+      this.upsert(await updateNode(id, { status: on ? 'principle' : 'open' }))
+      if (this.selectedId === id) this.draft.status = on ? 'principle' : 'open'
+      this.flash(on ? 'A guiding principle now, above the board' : 'Back on the map, open')
+    } catch (err) {
+      this.flash(errorText(err))
+    }
   },
   toggleFilterRow() {
     if (this.filterRowShown && !this.filterCount) {
@@ -1374,7 +1404,7 @@ export const state = Alpine.reactive({
   /** What a page shows with the filters in view, as its topics below count them. */
   pageCount(page: string): number {
     const names = this.pageNames
-    return this.nodesMatching('', Object.values(this.nodes).filter((n) => this.inScope(n) && samePage(pageOf(n, names), page))).length
+    return this.nodesMatching('', Object.values(this.nodes).filter((n) => !isPrinciple(n) && this.inScope(n) && samePage(pageOf(n, names), page))).length
   },
   get selected(): GNode | null {
     return this.selectedId ? (this.nodes[this.selectedId] ?? null) : null
