@@ -26,7 +26,7 @@ Each file has a **version**: an opaque string of at most 100 characters that the
 
 Your store has an address for each project, like `https://maps.example.com/clinic/`. grndwrk adds `v1/...` to it.
 
-Every request carries `Authorization: Bearer <token>`. How a person gets a token is up to you (a page after your login, an invite, a key you hand out); grndwrk keeps it on that person's machine, never in the project. Without a valid token, answer `401`. A token that may read but not write gets `403` on writes.
+Every request carries `Authorization: Bearer <token>`. How a person gets a token is up to you (a page after your login, an invite, a key you hand out); grndwrk keeps it on that person's machine, never in the project. Without a valid token, answer `401`. How long a token lasts, and where a store keeps which staging site may send comments, is the store's own choice; grndwrk keeps one token per store and asks for a new one when it gets `401`. A token that may read but not write gets `403` on writes.
 
 Errors are JSON, `{ "error": "Plain words" }`.
 
@@ -129,6 +129,8 @@ export default async function store({ project, root }) {
   }
 }
 ```
+
+An adapter is **one file**: allowing covers exactly that file, so it may import installed packages (`firebase-admin`, `node:crypto`) but no other file of the repository, and no address it works out while running. grndwrk refuses to allow or load one that does. A cursor the store no longer knows is an error named `CursorGone` (or with `code: 'CURSOR_GONE'`), the adapter's way of answering `410`.
 
 Credentials for your database are the adapter's own business: read them from the environment or your usual config, never from `.grndwrk/`.
 

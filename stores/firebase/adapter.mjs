@@ -278,11 +278,14 @@ export const mapId = (name) =>
  * @param {{ project: string, root: string }} options
  */
 export default async function store({ project }) {
-  // By a name in a variable: firebase-admin is installed only where the store runs, not in grndwrk's repository, whose checks read this file too.
-  const load = (/** @type {string} */ name) => import(name)
-  const { applicationDefault, getApps, initializeApp } = await load('firebase-admin/app')
-  const { getFirestore } = await load('firebase-admin/firestore')
-  const { getStorage } = await load('firebase-admin/storage')
+  // Named in full, never in a variable, so grndwrk can see this file imports packages only (an allowed adapter is one file).
+  // firebase-admin is installed only where the store runs, not in grndwrk's repository, whose checks read this file too.
+  // @ts-expect-error: not installed in grndwrk's own repository
+  const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app')
+  // @ts-expect-error: not installed in grndwrk's own repository
+  const { getFirestore } = await import('firebase-admin/firestore')
+  // @ts-expect-error: not installed in grndwrk's own repository
+  const { getStorage } = await import('firebase-admin/storage')
   // An app of its own name, so a project that uses firebase-admin elsewhere keeps its default app.
   const app =
     getApps().find((/** @type {any} */ a) => a.name === 'grndwrk') ??

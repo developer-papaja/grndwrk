@@ -18,7 +18,7 @@ import { pathToFileURL } from 'node:url'
 import { readFile } from '../store/fs.js'
 import { stateDir } from '../root.js'
 import { HttpStore } from './http.js'
-import { type StoreClient, StoreBroke } from './protocol.js'
+import { checkChanges, CursorGone, type StoreClient, StoreBroke } from './protocol.js'
 
 export type StoreConfig = { url: string } | { adapter: string }
 
@@ -107,10 +107,31 @@ export async function adapterPath(projectRoot: string, adapter: string): Promise
 
 const hashOf = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
 
+/**
+ * Why the adapter's source cannot be allowed, or ''. Allowing covers this one
+ * file, so it may import installed packages (`firebase-admin`, `node:fs`) but
+ * no file of the repository and no address it computes: a pull request could
+ * change such a file and run it without anyone allowing it again.
+ */
+export function adapterImportProblem(source: string): string {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+  const local = /^(\.|\/|file:|data:|https?:)/
+  for (const m of code.matchAll(/\b(?:from|import)\s*['"`]([^'"`]*)['"`]|\b(?:import|require)\s*\(\s*([^)]*)\)/g)) {
+    const spec = m[1] ?? m[2].trim()
+    if (m[2] !== undefined && !/^['"][^'"`]*['"]$/.test(spec)) return `it imports an address it works out while running (${spec.slice(0, 40)})`
+    const name = m[1] ?? spec.slice(1, -1)
+    if (local.test(name)) return `it imports ${name}: an adapter is one file, and may import installed packages only`
+  }
+  return ''
+}
+
 /** Allow the adapter as it is now on this machine. Returns its hash. */
 export async function allowAdapter(projectRoot: string, adapter: string): Promise<string> {
   const full = await adapterPath(projectRoot, adapter)
-  const hash = hashOf(await readPlain(full))
+  const bytes = await readPlain(full)
+  const problem = adapterImportProblem(bytes.toString('utf8'))
+  if (problem) throw new StoreBroke(`${adapter} cannot be allowed: ${problem}`)
+  const hash = hashOf(bytes)
   const file = join(dir(), 'store-allowed.json')
   const all = await readJson<Record<string, string>>(file, {})
   all[full] = hash
@@ -140,6 +161,8 @@ export async function loadAdapter(projectRoot: string, adapter: string, project:
   if (!allowed) throw new AdapterNotAllowed(`The store adapter ${adapter} is not allowed on this machine yet. Read it, then run: grndwrk store allow`)
   const hash = hashOf(bytes)
   if (hash !== allowed) throw new AdapterNotAllowed(`The store adapter ${adapter} changed since it was allowed. Read what changed (git diff), then run: grndwrk store allow`)
+  const problem = adapterImportProblem(bytes.toString('utf8'))
+  if (problem) throw new AdapterNotAllowed(`${adapter} is not loaded: ${problem}`)
   // The hash in the address: a changed file is a new module, never a cached old one.
   const mod = (await import(`${pathToFileURL(full).href}?sha=${hash}`)) as { default?: unknown }
   if (typeof mod.default !== 'function') throw new StoreBroke(`${adapter}: the default export is a function that returns the store`)
@@ -147,7 +170,23 @@ export async function loadAdapter(projectRoot: string, adapter: string, project:
   for (const call of ['hello', 'changes', 'read', 'write', 'remove'] as const) {
     if (typeof store?.[call] !== 'function') throw new StoreBroke(`${adapter}: the store has no ${call}()`)
   }
-  return store
+  // An adapter cannot reach grndwrk's own CursorGone: an error named so (or with code CURSOR_GONE) means the same.
+  const changes = store.changes.bind(store)
+  return Object.assign(Object.create(store) as StoreClient, {
+    hello: store.hello.bind(store),
+    read: store.read.bind(store),
+    write: store.write.bind(store),
+    remove: store.remove.bind(store),
+    changes: async (o: { since?: string; wait?: number }) => {
+      try {
+        return checkChanges(await changes(o))
+      } catch (err) {
+        const e = err as { name?: unknown; code?: unknown }
+        if (e?.name === 'CursorGone' || e?.code === 'CURSOR_GONE') throw new CursorGone(o.since ?? '')
+        throw err
+      }
+    },
+  })
 }
 
 /** The project's store, ready to call, or null when the map is only the folder. */

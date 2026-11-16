@@ -8,7 +8,7 @@ import { checkStore } from '../src/shared-store/check.js'
 import { adapterState, AdapterNotAllowed, allowAdapter, loadAdapter } from '../src/shared-store/config.js'
 import { HttpStore, storeHandler } from '../src/shared-store/http.js'
 import { MemoryStore } from '../src/shared-store/memory.js'
-import { pathProblem } from '../src/shared-store/protocol.js'
+import { CursorGone, pathProblem } from '../src/shared-store/protocol.js'
 
 describe('which paths a store keeps', () => {
   it('keeps the map, never what belongs to one machine', () => {
@@ -76,8 +76,9 @@ describe('adapters', () => {
     process.env.GRNDWRK_STORE_DIR = join(root, 'state')
     await mkdir(join(root, 'tools'))
     // An adapter that keeps the map in memory, as one in a team's repo would keep it in their database.
-    const memory = new URL('../src/shared-store/memory.ts', import.meta.url).href
-    await writeFile(join(root, 'tools', 'store.mjs'), `import { MemoryStore } from '${memory}'\nexport default async ({ project }) => new MemoryStore(project)\n`)
+    // One file, no imports: the test hands it the store through a global.
+    ;(globalThis as Record<string, unknown>).__testStore = (project: string) => new MemoryStore(project)
+    await writeFile(join(root, 'tools', 'store.mjs'), 'export default async ({ project }) => globalThis.__testStore(project)\n')
   })
   afterAll(async () => {
     if (stateDirBefore === undefined) delete process.env.GRNDWRK_STORE_DIR
@@ -99,6 +100,29 @@ describe('adapters', () => {
     await writeFile(join(root, 'tools', 'store.mjs'), `${'// changed by a pull request\n'}export default async () => { throw new Error('ran') }\n`)
     expect(await adapterState(root, 'tools/store.mjs')).toBe('changed')
     await expect(loadAdapter(root, 'tools/store.mjs', 'Clinic')).rejects.toThrow(/changed since it was allowed/)
+  })
+
+  it('refuses an adapter that imports a file of the repository, or an address it works out', async () => {
+    for (const [name, src] of [
+      ['rel.mjs', "import { x } from './helper.mjs'\nexport default async () => x\n"],
+      ['abs.mjs', "import x from '/tmp/x.mjs'\nexport default async () => x\n"],
+      ['dyn.mjs', "export default async () => (await import('../x.mjs')).default\n"],
+      ['computed.mjs', "const p = './x.mjs'\nexport default async () => (await import(p)).default\n"],
+      ['req.mjs', "const x = require('./x.cjs')\nexport default async () => x\n"],
+    ]) {
+      await writeFile(join(root, 'tools', name), src)
+      await expect(allowAdapter(root, `tools/${name}`)).rejects.toThrow(/cannot be allowed/)
+    }
+    // Installed packages are fine, and a URL in a comment is not an import.
+    await writeFile(join(root, 'tools', 'pkg.mjs'), "import { createHash } from 'node:crypto'\n// see https://example.com/docs\nexport default async () => createHash\n")
+    await expect(allowAdapter(root, 'tools/pkg.mjs')).resolves.toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('turns an adapter error named CursorGone into a 410', async () => {
+    await writeFile(join(root, 'tools', 'gone.mjs'), "export default async ({ project }) => { const s = globalThis.__testStore(project); return Object.assign(Object.create(s), { changes: async (o) => { if (o.since) { const e = new Error('gone'); e.name = 'CursorGone'; throw e } return s.changes(o) }, hello: () => s.hello(), read: (p) => s.read(p), write: (...a) => s.write(...a), remove: (...a) => s.remove(...a) }) }\n")
+    await allowAdapter(root, 'tools/gone.mjs')
+    const store = await loadAdapter(root, 'tools/gone.mjs', 'Clinic')
+    await expect(store.changes({ since: 'c_99' })).rejects.toBeInstanceOf(CursorGone)
   })
 
   it('refuses an adapter outside the project, a link, or anything but .mjs', async () => {
