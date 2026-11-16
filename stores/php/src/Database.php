@@ -51,12 +51,16 @@ final class Database
             $this->pdo->exec("CREATE TABLE IF NOT EXISTS projects (slug VARCHAR(64) $ascii PRIMARY KEY, name VARCHAR(200) NOT NULL, seq BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             $this->pdo->exec("CREATE TABLE IF NOT EXISTS tokens (id INT AUTO_INCREMENT PRIMARY KEY, project VARCHAR(64) $ascii NOT NULL, hash CHAR(64) $ascii NOT NULL UNIQUE, role VARCHAR(10) NOT NULL, commenter VARCHAR(64) $ascii NULL, name VARCHAR(200) NULL, label VARCHAR(200) NULL, created VARCHAR(30) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             $this->pdo->exec("CREATE TABLE IF NOT EXISTS files (project VARCHAR(64) $ascii NOT NULL, path VARCHAR(300) $ascii NOT NULL, version VARCHAR(100) $ascii NULL, type VARCHAR(40) NULL, bytes LONGBLOB NULL, seq BIGINT NOT NULL, deleted TINYINT NOT NULL DEFAULT 0, PRIMARY KEY (project, path), KEY files_seq (project, seq)) ENGINE=InnoDB");
+            $this->pdo->exec("CREATE TABLE IF NOT EXISTS inbox_log (project VARCHAR(64) $ascii NOT NULL, commenter VARCHAR(64) $ascii NOT NULL, at BIGINT NOT NULL, size BIGINT NOT NULL, KEY inbox_log_at (project, commenter, at)) ENGINE=InnoDB");
             return;
         }
         $this->pdo->exec('CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, seq INTEGER NOT NULL DEFAULT 0)');
         $this->pdo->exec('CREATE TABLE IF NOT EXISTS tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, hash TEXT NOT NULL UNIQUE, role TEXT NOT NULL, commenter TEXT, name TEXT, label TEXT, created TEXT NOT NULL)');
         $this->pdo->exec('CREATE TABLE IF NOT EXISTS files (project TEXT NOT NULL, path TEXT NOT NULL, version TEXT, type TEXT, bytes BLOB, seq INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (project, path))');
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS files_seq ON files (project, seq)');
+        // What each commenter left in the last hour, for the inbox limits (config 'inbox').
+        $this->pdo->exec('CREATE TABLE IF NOT EXISTS inbox_log (project TEXT NOT NULL, commenter TEXT NOT NULL, at INTEGER NOT NULL, size INTEGER NOT NULL)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS inbox_log_at ON inbox_log (project, commenter, at)');
     }
 
     private function one(string $sql, array $args = []): ?array
@@ -139,14 +143,24 @@ final class Database
 
     /**
      * Create ($create) or replace $ifVersion, never anything else.
-     * @return array{ok: bool, version: ?string} the new version, or the one there (null: none)
+     * $limits, for a comment token's write: ['commenter', 'files_per_hour', 'mb_per_hour', 'waiting', 'total'],
+     * checked inside the lock, so two comments at once cannot both slip under one.
+     * @return array{ok: bool, version: ?string, limited?: string} the new version, or the one there (null: none);
+     *   `limited` says in plain words which limit refused it
      */
-    public function write(string $project, string $path, string $bytes, string $type, bool $create, ?string $ifVersion): array
+    public function write(string $project, string $path, string $bytes, string $type, bool $create, ?string $ifVersion, ?array $limits = null): array
     {
-        return $this->locked($project, function (int $seq) use ($project, $path, $bytes, $type, $create, $ifVersion) {
+        return $this->locked($project, function (int $seq) use ($project, $path, $bytes, $type, $create, $ifVersion, $limits) {
             $there = $this->one('SELECT version, deleted FROM files WHERE project = ? AND path = ?', [$project, $path]);
             $current = $there && !(int) $there['deleted'] ? $there['version'] : null;
             if ($create ? $current !== null : $current === null || $current !== $ifVersion) return [['ok' => false, 'version' => $current], false];
+            if ($limits !== null) {
+                $why = $this->overLimit($project, $limits, strlen($bytes));
+                if ($why !== '') return [['ok' => false, 'version' => null, 'limited' => $why], false];
+                $now = time();
+                $this->pdo->prepare('DELETE FROM inbox_log WHERE project = ? AND commenter = ? AND at <= ?')->execute([$project, $limits['commenter'], $now - 3600]);
+                $this->pdo->prepare('INSERT INTO inbox_log (project, commenter, at, size) VALUES (?, ?, ?, ?)')->execute([$project, $limits['commenter'], $now, strlen($bytes)]);
+            }
             $version = "v$seq";
             $sql = $there
                 ? 'UPDATE files SET version = :v, type = :t, bytes = :b, seq = :s, deleted = 0 WHERE project = :p AND path = :path'
@@ -157,6 +171,22 @@ final class Database
             $q->execute();
             return [['ok' => true, 'version' => $version], true];
         });
+    }
+
+    /** Why this commenter may not leave $size more bytes now, in plain words, or ''. */
+    private function overLimit(string $project, array $limits, int $size): string
+    {
+        $c = (string) $limits['commenter'];
+        $files = (int) $limits['files_per_hour'];
+        $mb = (int) $limits['mb_per_hour'];
+        $recent = $this->one('SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS size FROM inbox_log WHERE project = ? AND commenter = ? AND at > ?', [$project, $c, time() - 3600]) ?? ['n' => 0, 'size' => 0];
+        if ((int) $recent['n'] + 1 > $files) return "At most $files comments an hour: try again later";
+        if ((int) $recent['size'] + $size > $mb * 1_000_000) return "At most $mb MB of comments an hour: try again later";
+        // Inbox files not filed yet, by a range on the path (not LIKE, where the _ of a commenter id is a wildcard). '0' follows '/'.
+        $waiting = fn (string $from): int => (int) ($this->one('SELECT COUNT(*) AS n FROM files WHERE project = ? AND deleted = 0 AND path >= ? AND path < ?', [$project, $from, substr($from, 0, -1) . '0'])['n'] ?? 0);
+        if ($waiting("inbox/$c/") >= (int) $limits['waiting']) return "{$limits['waiting']} of your comments are still waiting to be read: try again later";
+        if ($waiting('inbox/') >= (int) $limits['total']) return 'Too many comments are waiting to be read: try again later';
+        return '';
     }
 
     /** @return array{ok: bool, version: ?string, gone?: bool} */

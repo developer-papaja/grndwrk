@@ -37,11 +37,11 @@ final class Api
         if ($base !== '' && str_starts_with($path, "$base/")) $path = substr($path, strlen($base));
         // The projects this token may read, at the store's own root: for All projects on the page.
         if ($path === '/v1/projects') {
-            $this->projects($method, $base);
+            $this->projects($method);
             return;
         }
         // The page: the map in a browser, for colleagues without the repository (see page()).
-        if (($method === 'GET' || $method === 'HEAD') && preg_match('#^/([a-z0-9][a-z0-9-]{0,63})(/(?!v1/).*)?$#sD', $path, $p) && $this->page($p[1], $p[2] ?? '', $base)) {
+        if (($method === 'GET' || $method === 'HEAD') && preg_match('#^/([a-z0-9][a-z0-9-]{0,63})(/(?!v1/).*)?$#sD', $path, $p) && $this->page($p[1], $p[2] ?? '')) {
             return;
         }
         if (!preg_match('#^/([a-z0-9][a-z0-9-]{0,63})/v1/(.*)$#sD', $path, $m)) {
@@ -74,9 +74,11 @@ final class Api
         if ($site && $role === 'comment') $this->origin = $origin;
 
         if ($route === 'hello' && $method === 'GET') {
+            // A comment token learns its commenter here: the folder its comments go in, and its status file.
+            // Teammates learn that this store vouches for `from` on every comment, and the staging site comments come from.
+            $first = array_values(array_filter((array) ($this->config['origins'] ?? []), fn ($o) => is_string($o) && preg_match('#^https://[a-z0-9.-]+(:\d{1,5})?$#D', $o)))[0] ?? null;
             $this->send(200, ['protocol' => Protocol::VERSION, 'project' => $this->db->project($project)['name'] ?? $project, 'writable' => $role === 'write', 'role' => $role]
-                // A comment token learns its commenter here: the folder its comments go in, and its status file.
-                + ($role === 'comment' ? ['commenter' => $who['commenter']] : []));
+                + ($role === 'comment' ? ['commenter' => $who['commenter']] : ['names' => true] + ($first !== null ? ['site' => $first] : [])));
             return;
         }
 
@@ -117,7 +119,7 @@ final class Api
         $match = preg_match('/^"(.*)"$/sD', $_SERVER['HTTP_IF_MATCH'] ?? '', $mm) ? $mm[1] : null;
         $create = ($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === '*';
         if ($method === 'PUT') {
-            $this->put($project, $file, $create, $match, $role === 'comment' ? $who['name'] : null, $role === 'comment');
+            $this->put($project, $file, $create, $match, $role === 'comment' ? $who['name'] : null, $role === 'comment' ? (string) $who['commenter'] : null);
             return;
         }
         if ($method === 'DELETE') {
@@ -135,7 +137,7 @@ final class Api
     }
 
     /** GET /v1/projects: read only, `{ projects: [{ name, url }] }`, each reached with the same token. */
-    private function projects(string $method, string $base): void
+    private function projects(string $method): void
     {
         if ($method !== 'GET') {
             $this->send(405, ['error' => 'Not allowed']);
@@ -146,9 +148,13 @@ final class Api
             $this->send(401, ['error' => 'A valid token is required']);
             return;
         }
-        $https = ($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off';
-        $root = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $base;
-        $this->send(200, ['projects' => array_map(fn (array $p) => ['name' => $p['name'], 'url' => "$root/{$p['slug']}/"], $list)]);
+        // The addresses from the config, never from the request's Host, which whoever sends it chooses.
+        $root = $this->baseUrl();
+        if ($root === null) {
+            $this->send(404, ['error' => 'Not found']);
+            return;
+        }
+        $this->send(200, ['projects' => array_map(fn (array $p) => ['name' => $p['name'], 'url' => "$root{$p['slug']}/"], $list)]);
     }
 
     private function changes(string $project): void
@@ -179,8 +185,21 @@ final class Api
         echo $f['bytes'];
     }
 
-    private function put(string $project, string $path, bool $create, ?string $match, ?string $name, bool $comment): void
+    /**
+     * The store's own address from config 'base_url', ending in /, or null when it is not set or not
+     * one: https, or http on this machine only. Projects are at <base_url><project>/.
+     */
+    private function baseUrl(): ?string
     {
+        $url = $this->config['base_url'] ?? null;
+        if (!is_string($url) || !preg_match('#^(https://[A-Za-z0-9.-]+|http://(localhost|127\.0\.0\.1))(:\d{1,5})?(/[A-Za-z0-9._~/-]*)?$#D', $url)) return null;
+        return str_ends_with($url, '/') ? $url : "$url/";
+    }
+
+    /** $commenter: a comment token's write, held to the inbox limits (config 'inbox'). */
+    private function put(string $project, string $path, bool $create, ?string $match, ?string $name, ?string $commenter): void
+    {
+        $comment = $commenter !== null;
         if (!$create && $match === null) {
             $this->send(428, ['error' => 'Send If-Match or If-None-Match: *']);
             return;
@@ -203,9 +222,10 @@ final class Api
                 $this->send(400, ['error' => 'A comment is a JSON object']);
                 return;
             }
-            // From a comment token, the name the store knows wins over the device's.
-            if ($comment && $name !== null && $name !== '') {
-                $data->from = $name;
+            // From a comment token, `from` is always the store's word: the name it knows, or none at all, never the device's own.
+            if ($comment) {
+                unset($data->from);
+                if ($name !== null && $name !== '') $data->from = $name;
                 $bytes = (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
             }
         }
@@ -214,7 +234,12 @@ final class Api
             $this->send(str_contains($problem, 'at most') ? 413 : 415, ['error' => $problem]);
             return;
         }
-        $w = $this->db->write($project, $path, $bytes, $type, $create, $match);
+        $limits = $comment ? ['commenter' => $commenter] + (array) ($this->config['inbox'] ?? []) + self::INBOX_LIMITS : null;
+        $w = $this->db->write($project, $path, $bytes, $type, $create, $match, $limits);
+        if (isset($w['limited'])) {
+            $this->send(429, ['error' => $w['limited']]);
+            return;
+        }
         $this->send($w['ok'] ? ($create ? 201 : 200) : 412, ['version' => $w['version']]);
     }
 
@@ -226,7 +251,7 @@ final class Api
      * src/shared-store/page.ts. False when there is no such file or project, so
      * the request is answered as any other.
      */
-    private function page(string $project, string $rest, string $base): bool
+    private function page(string $project, string $rest): bool
     {
         $dir = $this->config['assets'] ?? dirname(__DIR__) . '/page';
         if (!is_string($dir) || !is_file("$dir/index.html") || !$this->db->project($project)) return false;
@@ -266,9 +291,15 @@ final class Api
         if (!$page) header('Vary: Referer');
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') return true;
         if ($name === 'store.js') {
-            // One script: its config (the project's address, the site), the store mode, then the button.
-            $https = ($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off';
-            $url = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $base . "/$project/";
+            // One script: its config (the project's address, from config 'base_url', never the request's Host), the store mode, then the button.
+            $root = $this->baseUrl();
+            if ($root === null) {
+                http_response_code(503);
+                header('Content-Type: text/plain; charset=utf-8');
+                echo 'Set base_url in config.php first';
+                return true;
+            }
+            $url = "$root$project/";
             echo 'window.__grndwrkStoreConfig = ' . json_encode(['url' => $url, 'site' => $site], JSON_UNESCAPED_SLASHES) . ";\n";
             readfile($file);
             echo "\n";
@@ -279,6 +310,12 @@ final class Api
         readfile($file);
         return true;
     }
+
+    /**
+     * What one comment token may leave in the inbox, unless config 'inbox' says otherwise. Such a token
+     * may sit in a staging page, where any script on it can read it, so it must never fill the store.
+     */
+    private const INBOX_LIMITS = ['files_per_hour' => 60, 'mb_per_hour' => 100, 'waiting' => 500, 'total' => 5000];
 
     // The page's rules, as in src/shared-store/page.ts. Keep them the same.
     private const PAGE_FILE = '#^(?:index\.html|assets/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:js|css|woff2|svg|png))$#D';

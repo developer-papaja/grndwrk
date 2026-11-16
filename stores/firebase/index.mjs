@@ -21,7 +21,27 @@ const handle = storeFunction({
   verify: async (token) => ({ uid: (await getAuth().verifyIdToken(token, true)).uid }),
   // The page and the Comment button: the folder `grndwrk store assets page` wrote here, deployed with the function.
   page: (name) => readFile(new URL(`./page/${name}`, import.meta.url)).catch(() => null),
+  // The store's own address, as the staging site and the page reach it: the function's address
+  // (or your Hosting address), ending in /. Set in .env next to this file. Never taken from a request.
+  baseUrl: process.env.GRNDWRK_STORE_URL,
+  // Optional: what one comment token may leave (adapter.mjs, INBOX_LIMITS).
+  limits: limitsFromEnv(process.env),
 })
+
+/**
+ * The inbox limits the environment changes: INBOX_FILES_PER_HOUR, INBOX_MB_PER_HOUR, INBOX_WAITING, INBOX_TOTAL.
+ * @param {Record<string, string | undefined>} env
+ */
+function limitsFromEnv(env) {
+  const n = (/** @type {string | undefined} */ v) => (v && /^\d{1,12}$/.test(v.trim()) && Number(v) > 0 ? Number(v) : undefined)
+  /** @type {Partial<import('./adapter.mjs').InboxLimits>} */
+  const out = {}
+  if (n(env.INBOX_FILES_PER_HOUR)) out.filesPerHour = n(env.INBOX_FILES_PER_HOUR)
+  if (n(env.INBOX_MB_PER_HOUR)) out.bytesPerHour = Number(n(env.INBOX_MB_PER_HOUR)) * 1_000_000
+  if (n(env.INBOX_WAITING)) out.waiting = n(env.INBOX_WAITING)
+  if (n(env.INBOX_TOTAL)) out.total = n(env.INBOX_TOTAL)
+  return out
+}
 
 // https://<region>-<firebase project>.cloudfunctions.net/store/<map>/ is the address grndwrk is given.
 // Pick the region your Firestore is in.

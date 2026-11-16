@@ -10,7 +10,7 @@
  */
 import { access } from './access.js'
 import { type Assets, page } from './page.js'
-import { type Identify, parseOrigins, type Storage, Store } from './store.js'
+import { type Identify, type InboxLimits, parseOrigins, type Storage, Store } from './store.js'
 
 export interface Env {
   OWNER_AUTH?: string
@@ -20,6 +20,11 @@ export interface Env {
   ACCESS_TEAM?: string
   ACCESS_AUD?: string
   ACCESS_ROLES?: string
+  /** Optional, what one comment token may leave (store.ts, INBOX_LIMITS): whole numbers. */
+  INBOX_FILES_PER_HOUR?: string
+  INBOX_MB_PER_HOUR?: string
+  INBOX_WAITING?: string
+  INBOX_TOTAL?: string
   /** The folder `grndwrk store assets page` wrote, as the Worker's static assets (wrangler.toml). */
   ASSETS?: Assets
   STORE: { idFromName(name: string): unknown; get(id: unknown): { fetch(req: Request): Promise<Response> } }
@@ -27,6 +32,21 @@ export interface Env {
 
 /** A project's name in the address: lowercase letters, digits and dashes. */
 export const PROJECT = /^\/([a-z0-9][a-z0-9-]{0,62})\//
+
+/** The inbox limits the settings change; the rest stay as INBOX_LIMITS says. */
+export function limitsOf(env: Env): Partial<InboxLimits> {
+  const n = (v?: string) => (v && /^\d{1,12}$/.test(v.trim()) && Number(v) > 0 ? Number(v) : undefined)
+  const out: Partial<InboxLimits> = {}
+  const files = n(env.INBOX_FILES_PER_HOUR)
+  const mb = n(env.INBOX_MB_PER_HOUR)
+  const waiting = n(env.INBOX_WAITING)
+  const total = n(env.INBOX_TOTAL)
+  if (files) out.filesPerHour = files
+  if (mb) out.bytesPerHour = mb * 1_000_000
+  if (waiting) out.waiting = waiting
+  if (total) out.total = total
+  return out
+}
 
 /** Cloudflare Access, when all three settings are there (access.ts). */
 const accessOf = (env: Env): Identify | undefined =>
@@ -67,7 +87,7 @@ export class StoreObject {
   private store: Store
   constructor(state: { storage: Storage }, env: Env) {
     const identify = accessOf(env)
-    this.store = new Store(state.storage, { ownerAuth: env.OWNER_AUTH, identify, origins: parseOrigins(env.COMMENT_ORIGINS) })
+    this.store = new Store(state.storage, { ownerAuth: env.OWNER_AUTH, identify, origins: parseOrigins(env.COMMENT_ORIGINS), limits: limitsOf(env) })
   }
   fetch(req: Request): Promise<Response> {
     const project = PROJECT.exec(new URL(req.url).pathname)?.[1] ?? ''

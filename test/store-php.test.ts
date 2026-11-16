@@ -37,23 +37,29 @@ describe.skipIf(!php)('the PHP store', () => {
   let writer = ''
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'gw-store-php-'))
-    // A small page, so following the changes has to use `more`.
-    await writeFile(join(dir, 'config.php'), `<?php return ['dsn' => 'sqlite:' . ${JSON.stringify(join(dir, 'store.sqlite'))}, 'page' => 2, 'origins' => ['${site}'], 'assets' => ${JSON.stringify(join(dir, 'page'))}];\n`)
+    // A free port among 18500 to 18599.
+    let port = 0
+    for (let p = 18500; p < 18600 && !port; p++) {
+      port = await new Promise<number>((done) => {
+        const s = createServer()
+        s.once('error', () => done(0))
+        s.listen(p, '127.0.0.1', () => s.close(() => done(p)))
+      })
+    }
+    if (!port) throw new Error('No free port between 18500 and 18599')
+    base = `http://127.0.0.1:${port}/`
+    url = `${base}clinic/`
+    // A small page, so following the changes has to use `more`; small inbox limits, tried on kennel.
+    const inbox = `['files_per_hour' => 5, 'mb_per_hour' => 1, 'waiting' => 4, 'total' => 8]`
+    await writeFile(join(dir, 'config.php'), `<?php return ['dsn' => 'sqlite:' . ${JSON.stringify(join(dir, 'store.sqlite'))}, 'page' => 2, 'origins' => ['${site}', 'https://second.clinic.example'], 'assets' => ${JSON.stringify(join(dir, 'page'))}, 'base_url' => '${base}', 'inbox' => ${inbox}];\n`)
     await writeFakePage(join(dir, 'page'))
     admin('project', 'add', 'clinic', 'Clinic')
     admin('project', 'add', 'other')
+    admin('project', 'add', 'kennel')
     writer = mint('clinic', 'write')
-    const port = await new Promise<number>((done) => {
-      const s = createServer().listen(0, '127.0.0.1', () => {
-        const p = (s.address() as { port: number }).port
-        s.close(() => done(p))
-      })
-    })
     // Several workers, so writes really race; in a process group of its own, so stopping it stops them too.
     const workers = process.platform === 'win32' ? {} : { PHP_CLI_SERVER_WORKERS: '4' }
     server = spawn('php', ['-S', `127.0.0.1:${port}`, join(app, 'public', 'index.php')], { env: { ...env(), ...workers }, stdio: 'ignore', detached: process.platform !== 'win32' })
-    base = `http://127.0.0.1:${port}/`
-    url = `${base}clinic/`
     for (let i = 0; i < 100; i++) {
       if (await fetch(`${url}v1/hello`).then((r) => r.status === 401, () => false)) return
       await new Promise((done) => setTimeout(done, 50))
@@ -78,7 +84,7 @@ describe.skipIf(!php)('the PHP store', () => {
   })
 
   it('says who it is, and never sends a file as something to render', async () => {
-    expect(await new HttpStore(url, writer).hello()).toEqual({ protocol: 1, project: 'Clinic', writable: true, role: 'write' })
+    expect(await (await call('v1/hello', writer)).json()).toEqual({ protocol: 1, project: 'Clinic', writable: true, role: 'write', names: true, site })
     expect((await put('nodes/n_phpnos.md', writer, '<script>alert(1)</script>', { 'If-None-Match': '*', 'Content-Type': 'text/markdown' })).status).toBe(201)
     const res = await call('v1/files/nodes/n_phpnos.md', writer)
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
@@ -204,6 +210,59 @@ describe.skipIf(!php)('the PHP store', () => {
     expect((await fetch(`${base}v1/projects`)).status).toBe(401)
     expect((await list('gwt_000000000000000000000000000000000000000000000000')).status).toBe(401)
     expect((await list(writer, { method: 'PUT', body: '{}' })).status).toBe(405)
+  })
+
+  it('sets from to the name it knows, or takes away the one the device sent, and tells teammates so', async () => {
+    const nameless = mint('clinic', 'comment', '--commenter', 'dev_noname1')
+    expect((await put('inbox/dev_noname1/c_00000001.json', nameless, '{"text":"Hi","from":"The vet in charge"}')).status).toBe(201)
+    const left = await new HttpStore(url, writer).read('inbox/dev_noname1/c_00000001.json')
+    expect(JSON.parse(new TextDecoder().decode(left!.bytes))).toEqual({ text: 'Hi' })
+    expect(await (await call('v1/hello', mint('clinic', 'read'))).json()).toMatchObject({ names: true, site })
+    const phone = (await (await call('v1/hello', nameless)).json()) as Record<string, unknown>
+    expect([phone.names, phone.site]).toEqual([undefined, undefined])
+  })
+
+  it('names addresses from base_url, never from the Host header', async () => {
+    const forged = { Host: 'evil.example' }
+    const button = await fetch(`${base}clinic/store.js`, { headers: { Referer: `${site}/visits/42`, ...forged } })
+    expect(await button.text()).toContain(JSON.stringify({ url, site }))
+    const list = await fetch(`${base}v1/projects`, { headers: { Authorization: `Bearer ${writer}`, ...forged } })
+    expect(JSON.stringify(await list.json())).not.toContain('evil')
+  })
+
+  it('holds a comment token to its limits, per commenter and for the whole project, then 429', async () => {
+    const kennel = (path: string, token: string, body = '{"text":"The kennel list is hard to read"}') =>
+      fetch(new URL(`v1/files/${path}`, `${base}kennel/`), { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*' }, body })
+    const owner = new HttpStore(`${base}kennel/`, mint('kennel', 'write'))
+    // Waiting: four of one commenter.
+    const a = mint('kennel', 'comment', '--commenter', 'dev_kennel_a')
+    for (let i = 1; i <= 4; i++) expect((await kennel(`inbox/dev_kennel_a/c_0000000${i}.json`, a)).status).toBe(201)
+    const waiting = await kennel('inbox/dev_kennel_a/c_00000005.json', a)
+    expect(waiting.status).toBe(429)
+    expect(((await waiting.json()) as { error: string }).error).toMatch(/waiting/)
+    // An hour: five, though grndwrk filed the first three.
+    const b = mint('kennel', 'comment', '--commenter', 'dev_kennel_b')
+    for (let i = 1; i <= 3; i++) {
+      const p = `inbox/dev_kennel_b/c_0000000${i}.json`
+      expect((await kennel(p, b)).status).toBe(201)
+      expect((await owner.remove(p, (await owner.read(p))!.version)).ok).toBe(true)
+    }
+    for (let i = 4; i <= 5; i++) expect((await kennel(`inbox/dev_kennel_b/c_0000000${i}.json`, b)).status).toBe(201)
+    const hourly = await kennel('inbox/dev_kennel_b/c_00000006.json', b)
+    expect(hourly.status).toBe(429)
+    expect(((await hourly.json()) as { error: string }).error).toMatch(/an hour/)
+    // Megabytes an hour.
+    const c = mint('kennel', 'comment', '--commenter', 'dev_kennel_c')
+    const big = JSON.stringify({ text: 'x'.repeat(600_000) })
+    expect((await kennel('inbox/dev_kennel_c/c_00000001.json', c, big)).status).toBe(201)
+    expect((await kennel('inbox/dev_kennel_c/c_00000002.json', c, big)).status).toBe(429)
+    // Seven wait now; one more fills the project's inbox for every commenter, never for teammates.
+    const d = mint('kennel', 'comment', '--commenter', 'dev_kennel_d')
+    expect((await kennel('inbox/dev_kennel_d/c_00000001.json', d)).status).toBe(201)
+    const full = await kennel('inbox/dev_kennel_d/c_00000002.json', d)
+    expect(full.status).toBe(429)
+    expect(((await full.json()) as { error: string }).error).toMatch(/Too many/)
+    expect((await owner.write('inbox/dev_kennel_d/c_00000009.json', words.encode('{}'), { type: 'application/json', create: true })).ok).toBe(true)
   })
 
   it('stops taking a token once it is revoked', async () => {

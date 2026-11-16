@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { checkStore } from '../src/shared-store/check.js'
 import { HttpStore } from '../src/shared-store/http.js'
 import { access } from '../stores/cloudflare/src/access.js'
-import { CHUNK, type Storage } from '../stores/cloudflare/src/store.js'
-import worker, { type Env, listProjects, StoreObject } from '../stores/cloudflare/src/worker.js'
+import { CHUNK, type Storage, Store } from '../stores/cloudflare/src/store.js'
+import worker, { type Env, limitsOf, listProjects, StoreObject } from '../stores/cloudflare/src/worker.js'
 import { expectServesPage, PAGE_FILES } from './page-fixture.js'
 
 /** A Durable Object's storage, in memory: keys listed in order, values copied as structured clone does. */
@@ -389,5 +389,144 @@ describe('from the protocol', () => {
       const res = await fetcher(`${BASE}/clinic/v1/files/inbox/dev_phone01/c_0000000${++n}.json`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*' }, body })
       expect(res.status).toBe(400)
     }
+  })
+})
+
+describe('what a comment token may send', () => {
+  /** A store with small limits and a clock the test moves. */
+  async function small(limits = {}) {
+    const storage = new MemoryStorage()
+    let now = Date.UTC(2026, 10, 16, 9)
+    const store = new Store(storage, { ownerAuth: OWNER, limits: { filesPerHour: 3, bytesPerHour: 1000, waiting: 4, total: 6, ...limits }, now: () => now })
+    const call = (path: string, init: RequestInit = {}) => store.handle(new Request(`${BASE}/clinic/${path}`, init), 'clinic')
+    const mint = async (body: Record<string, unknown>) => ((await (await call('admin/tokens', { method: 'POST', headers: { Authorization: `Bearer ${OWNER}` }, body: JSON.stringify(body) })).json()) as { token: string }).token
+    const put = (token: string, path: string, body = '{"text":"The weight field is too small"}') =>
+      call(`v1/files/${path}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*' }, body })
+    return { storage, call, mint, put, later: (ms: number) => (now += ms) }
+  }
+
+  it('takes at most so many comments and bytes an hour from one commenter, then 429', async () => {
+    const { mint, put, later } = await small()
+    const phone = await mint({ role: 'comment', commenter: 'dev_phone01' })
+    const other = await mint({ role: 'comment', commenter: 'dev_phone02' })
+    for (let i = 1; i <= 3; i++) expect((await put(phone, `inbox/dev_phone01/c_0000000${i}.json`)).status).toBe(201)
+    const refused = await put(phone, 'inbox/dev_phone01/c_00000004.json')
+    expect(refused.status).toBe(429)
+    expect(((await refused.json()) as { error: string }).error).toMatch(/an hour/)
+    // Another commenter has its own hour.
+    expect((await put(other, 'inbox/dev_phone02/c_00000001.json', JSON.stringify({ text: 'x'.repeat(900) }))).status).toBe(201)
+    expect((await put(other, 'inbox/dev_phone02/c_00000002.json', JSON.stringify({ text: 'x'.repeat(200) }))).status).toBe(429)
+    later(3_600_001)
+    expect((await put(phone, 'inbox/dev_phone01/c_00000004.json')).status).toBe(201)
+  })
+
+  it('keeps at most so many waiting per commenter and in the whole inbox, and never holds teammates to it', async () => {
+    const { mint, put, later } = await small({ filesPerHour: 100, bytesPerHour: 1e9 })
+    const writer = await mint({ role: 'write' })
+    const a = await mint({ role: 'comment', commenter: 'dev_phone01' })
+    const b = await mint({ role: 'comment', commenter: 'dev_phone02' })
+    for (let i = 1; i <= 4; i++) expect((await put(a, `inbox/dev_phone01/c_0000000${i}.json`)).status).toBe(201)
+    expect((await put(a, 'inbox/dev_phone01/c_00000005.json')).status).toBe(429)
+    later(3_600_001)
+    expect((await put(a, 'inbox/dev_phone01/c_00000005.json')).status).toBe(429)
+    expect((await put(b, 'inbox/dev_phone02/c_00000001.json')).status).toBe(201)
+    expect((await put(b, 'inbox/dev_phone02/c_00000002.json')).status).toBe(201)
+    // Six in all: the whole inbox is full for every commenter.
+    expect((await put(b, 'inbox/dev_phone02/c_00000003.json')).status).toBe(429)
+    // A teammate files and writes as before.
+    expect((await put(writer, 'inbox/dev_phone02/c_00000009.json')).status).toBe(201)
+  })
+
+  it('reads the limits from the settings', () => {
+    expect(limitsOf({ INBOX_FILES_PER_HOUR: '10', INBOX_MB_PER_HOUR: '5', INBOX_WAITING: 'lots', INBOX_TOTAL: '0' } as Env)).toEqual({ filesPerHour: 10, bytesPerHour: 5_000_000 })
+  })
+
+  it('stops reading a body at the limit, with or without Content-Length', async () => {
+    const { fetcher, mint } = deploy()
+    const { token } = await mint('clinic', { role: 'write' })
+    let pulled = 0
+    const endless = new ReadableStream<Uint8Array>({ pull: (c) => void (pulled++, c.enqueue(new Uint8Array(256 * 1024).fill(65))) })
+    const res = await fetcher(`${BASE}/clinic/v1/files/nodes/n_huge01.md`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*' }, body: endless, duplex: 'half' } as RequestInit)
+    expect(res.status).toBe(413)
+    expect(pulled).toBeLessThan(10)
+    const said = await fetcher(`${BASE}/clinic/v1/files/nodes/n_huge02.md`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*', 'Content-Length': '2000000' }, body: 'x' })
+    expect(said.status).toBe(413)
+  })
+
+  it('never answers a failure with its own words', async () => {
+    const broken = new MemoryStorage()
+    broken.get = async () => {
+      throw new Error('storage at 10.0.0.7 refused the key')
+    }
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await new Store(broken, {}).handle(new Request(`${BASE}/clinic/v1/hello`, { headers: { Authorization: 'Bearer gws_clinic.x' } }), 'clinic')
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'Something went wrong' })
+    expect(log).toHaveBeenCalled()
+    log.mockRestore()
+  })
+})
+
+describe('the name on a comment, and what teammates learn from hello', () => {
+  it('sets from to the name the store knows, or takes away the one the device sent', async () => {
+    const site = 'https://staging.clinic.example'
+    const { fetcher, mint } = deploy({ COMMENT_ORIGINS: `${site}, https://second.clinic.example` })
+    const writer = (await mint('clinic', { role: 'write' })).token
+    const nameless = (await mint('clinic', { role: 'comment', commenter: 'dev_noname1' })).token
+    const put = (token: string, path: string) =>
+      fetcher(`${BASE}/clinic/v1/files/${path}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'If-None-Match': '*' }, body: '{"text":"Hi","from":"The vet in charge"}' })
+    expect((await put(nameless, 'inbox/dev_noname1/c_00000001.json')).status).toBe(201)
+    const store = new HttpStore(`${BASE}/clinic/`, writer, fetcher)
+    expect(JSON.parse(new TextDecoder().decode((await store.read('inbox/dev_noname1/c_00000001.json'))!.bytes))).toEqual({ text: 'Hi' })
+    // A teammate filing by hand writes what it writes.
+    expect((await put(writer, 'inbox/dev_noname1/c_00000002.json')).status).toBe(201)
+    expect(JSON.parse(new TextDecoder().decode((await store.read('inbox/dev_noname1/c_00000002.json'))!.bytes)).from).toBe('The vet in charge')
+    const hello = async (token: string) => (await fetcher(`${BASE}/clinic/v1/hello`, { headers: { Authorization: `Bearer ${token}` } })).json()
+    expect(await hello(writer)).toMatchObject({ names: true, site })
+    expect(await hello((await mint('clinic', { role: 'read' })).token)).toMatchObject({ names: true, site })
+    const phone = (await hello(nameless)) as Record<string, unknown>
+    expect(phone.names).toBeUndefined()
+    expect(phone.site).toBeUndefined()
+    // Without a staging site, no site.
+    const plain = deploy()
+    const t = (await plain.mint('clinic', { role: 'write' })).token
+    expect(await (await plain.fetcher(`${BASE}/clinic/v1/hello`, { headers: { Authorization: `Bearer ${t}` } })).json()).toEqual({ protocol: 1, project: 'clinic', writable: true, role: 'write', names: true })
+  })
+})
+
+describe('Cloudflare Access keys and times', () => {
+  const TEAM = 'clinic.cloudflareaccess.com'
+  const AUD = 'aud-for-tests'
+  const b64url = (b: Uint8Array | string) => Buffer.from(b).toString('base64url')
+  const roles = JSON.stringify({ clinic: { 'vet@clinic.example': 'write' } })
+  const key = async () => (await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify'])) as CryptoKeyPair
+  const sign = async (kid: string, pair: CryptoKeyPair, claims: Record<string, unknown>) => {
+    const body = `${b64url(JSON.stringify({ alg: 'RS256', kid }))}.${b64url(JSON.stringify(claims))}`
+    return `${body}.${b64url(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', pair.privateKey, new TextEncoder().encode(body))))}`
+  }
+  const req = (jwt: string) => new Request(`${BASE}/clinic/v1/hello`, { headers: { 'Cf-Access-Jwt-Assertion': jwt } })
+
+  it('refuses a token before its nbf, and fetches the keys again for a new kid, at most once a minute', async () => {
+    const [one, two] = [await key(), await key()]
+    let published = [{ ...(await crypto.subtle.exportKey('jwk', one.publicKey)), kid: 'k1' }]
+    let fetches = 0
+    const certs = (async () => (fetches++, Response.json({ keys: published }))) as unknown as typeof fetch
+    let now = Date.now()
+    const identify = access({ team: TEAM, aud: AUD, roles }, certs, () => now)
+    const claims = { aud: [AUD], iss: `https://${TEAM}`, exp: now / 1000 + 600, email: 'vet@clinic.example' }
+    expect(await identify(req(await sign('k1', one, claims)), 'clinic')).toEqual({ role: 'write' })
+    expect(await identify(req(await sign('k1', one, { ...claims, nbf: now / 1000 + 60 })), 'clinic')).toBeNull()
+    expect(await identify(req(await sign('k1', one, { ...claims, nbf: now / 1000 - 1 })), 'clinic')).toEqual({ role: 'write' })
+    expect(fetches).toBe(1)
+    // Rotated: unknown at first, then fetched again, once, after a minute.
+    const rotated = await sign('k2', two, claims)
+    expect(await identify(req(rotated), 'clinic')).toBeNull()
+    expect(fetches).toBe(1)
+    published = [...published, { ...(await crypto.subtle.exportKey('jwk', two.publicKey)), kid: 'k2' }]
+    now += 61_000
+    expect(await identify(req(rotated), 'clinic')).toEqual({ role: 'write' })
+    expect(fetches).toBe(2)
+    expect(await identify(req(await sign('k9', two, claims)), 'clinic')).toBeNull()
+    expect(fetches).toBe(2)
   })
 })
