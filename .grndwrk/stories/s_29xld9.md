@@ -14,5 +14,4 @@ so that their feedback reaches the map without them being on my network.
 - [x] An invite by name gives a link and a QR code; the phone joins and waits until allowed in the map with four digits
 - [x] Comments arrive with the colleague's name, and what became of them goes back to their phone
 - [x] A colleague can be removed in the map, and the relay then refuses their phone
-- [ ] A teammate who runs grndwrk and leaves the team can be taken out (a new team key for the rest)
 - [ ] Two teammates fetching at the same moment never both take the same comment

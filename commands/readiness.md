@@ -216,8 +216,9 @@ One entry per concrete thing that is missing or thin. Not one per area: a thin a
 - `near`: ids of the closest related thoughts, when there are any.
 - `suggestions`: two or three concrete answers the person could pick, each `{ "title": ..., "why": ... }`. The title is the answer itself, written so it could be the thought as it stands ("Keep the sizes already in use: 12, 13, 15 and 20 px"), not advice ("Decide a type scale"). Ground them in this project: what the code, docs or map already hold, or the plainest common choice for this kind of project. The `why` is one short line on what picking it means. Make them differ in a way that matters. The person may still write their own.
 - Drop a gap whose `answered_by` node closes it, and every gap with `enough: true`. Keep it, without `answered_by`, if the answer was not enough, and say why in the report.
+- **When an answer closes its gap, settle the answer:** set `status: settled` on the node named in `answered_by` (it is decided now, so it leaves the board), unless it is already settled or parked, or is a guiding principle. Change only that line. This is the one change this command makes to a node.
 
-Write only those five files inside `.grndwrk/readiness/`, and drafts inside `.grndwrk/outputs/drafts/`. Never edit nodes: questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
+Write only those five files inside `.grndwrk/readiness/`, and drafts inside `.grndwrk/outputs/drafts/`. Never edit nodes, except settling an answer that closed its gap (above): questions for the person belong to `/challenge`. Write plainly and directly. Do not use the dash characters "–" or "—".
 
 ## Report back
 
