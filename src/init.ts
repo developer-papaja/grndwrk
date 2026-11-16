@@ -10,6 +10,7 @@ import { scalar } from './store/frontmatter.js'
 import { readProject, writeFields } from './store/project.js'
 import { setPersonalInfo } from './store/waiting.js'
 import { personalInfo } from './shared/waiting.js'
+import { SYNCED_FILES, SYNCED_FOLDERS } from './shared-store/protocol.js'
 
 export type Start = 'new' | 'existing'
 
@@ -28,7 +29,10 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
     await mkdir(join(gw, dir), { recursive: true })
   }
   // What belongs to this machine stays out of git from the start, before anything writes it.
-  for (const entry of ['local.json', 'lan-code', 'lan-devices.json', 'shots/']) await keepOutOfGit(gw, entry)
+  for (const entry of ['local.json', 'lan-code', 'lan-devices.json', 'shots/', 'store-sync.json']) await keepOutOfGit(gw, entry)
+  // Where the map is kept: asked once, for a map not started yet, so one from the store comes in before anything is written.
+  const fresh = !(await exists(join(gw, 'project.md'))) && !(await exists(join(gw, 'store.json')))
+  if (fresh) await decideStore(projectRoot, gw, options.ask)
 
   // New or existing decides the steps grndwrk guides through. Ask once; keep the answer.
   const known = (await readProject(gw)).data.start
@@ -160,6 +164,32 @@ async function decidePersonalInfo(gw: string, ask?: (question: string) => Promis
   const answer = (await prompt('May the map hold people\'s names, such as who a question waits for? Say no if the repository is public. [y/N] ')).trim().toLowerCase()
   console.log('')
   await setPersonalInfo(gw, answer.startsWith('y') ? 'yes' : 'no')
+}
+
+const exists = (path: string) => readFile(path).then(() => true, () => false)
+
+/**
+ * In this repository, as always, or in the team's store (docs/store-protocol.md).
+ * Only asked of a person at a terminal. With a store, the map may also be left
+ * out of git: that is the project's choice, so it goes in .grndwrk/.gitignore.
+ */
+async function decideStore(projectRoot: string, gw: string, ask?: (question: string) => Promise<string>): Promise<void> {
+  const prompt = ask ?? (process.stdin.isTTY ? askInTerminal : undefined)
+  if (!prompt) return
+  const where = (await prompt("Where is the map kept? In this repository (1), or in your team's store (2)? [1] ")).trim().toLowerCase()
+  console.log('')
+  if (!(where === '2' || where.startsWith('s') || where.startsWith('t'))) return
+  const target = (await prompt("The store's address (https://...), or its adapter file in this repository (.mjs): ")).trim()
+  if (!target) return void console.log('  No store given, so the map is kept in this repository. Later: grndwrk store use <url | adapter.mjs>\n')
+  const { useStore, syncOnce } = await import('./shared-store/cli.js')
+  if (!(await useStore(projectRoot, target))) return
+  if ((await prompt('Leave the map out of git, so the store is where it is kept? store.json and the agent rules stay in the repository. [y/N] ')).trim().toLowerCase().startsWith('y')) {
+    for (const entry of [...SYNCED_FILES, ...SYNCED_FOLDERS.map((f) => `${f}/`)]) await keepOutOfGit(gw, `/${entry}`)
+    console.log('  The map is in .grndwrk/.gitignore now. Files git already tracks stay tracked until: git rm -r --cached <them>')
+  }
+  // The team's map comes in first, so what init writes next does not stand in its way.
+  await syncOnce(projectRoot, gw)
+  console.log('')
 }
 
 async function askInTerminal(question: string): Promise<string> {

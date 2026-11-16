@@ -18,6 +18,8 @@ import { handleComments, type CommentsCtx } from './comments.js'
 import { watchgrndwrk } from './watcher.js'
 import { projectRelay } from '../relay/config.js'
 import type { RelaySync } from '../relay/sync.js'
+import { readStoreConfig } from '../shared-store/config.js'
+import type { StoreSync } from '../shared-store/sync.js'
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
@@ -47,6 +49,11 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
   const project = String((await readProject(gwDir)).data.name ?? 'project')
   // Comments from the iOS package: in the Simulator on this port, from a phone on the LAN port.
   const comments: CommentsCtx = { gwDir, store, nodes, project, uiUrl: `http://localhost:${port}` }
+
+  // A team's store (.grndwrk/store.json): synced once before the map is served, then while it runs.
+  // Loaded only then: a project without a store runs none of it.
+  const storeSync: StoreSync | undefined = (await readStoreConfig(gwDir).catch(() => ({}))) ? await (await import('../shared-store/sync.js')).connectStore(gwDir, comments, project) : undefined
+  if (storeSync) await nodes.sync()
 
   // With --lan: the pairing code to type once, the phones paired so far, and phones asking the person here to allow them.
   const lanCode = lan ? await pairingCode(gwDir) : undefined
@@ -112,7 +119,8 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
 
   const actualPort = await listen(server, port)
   comments.uiUrl = `http://localhost:${actualPort}`
-  watchgrndwrk(gwDir, nodes)
+  watchgrndwrk(gwDir, nodes, storeSync ? (rel) => storeSync.changed(rel) : undefined)
+  storeSync?.start()
   let appUrl: string | undefined
   if (app) {
     // Remembered, so the map can open screens and `grndwrk screenshots` knows where the product runs.

@@ -1,10 +1,16 @@
 import { createInterface } from 'node:readline/promises'
 import { basename, join } from 'node:path'
 import { type CheckResult, checkStore } from './check.js'
-import { adapterState, allowAdapter, loadAdapter, readStoreConfig, saveToken, tokenFor } from './config.js'
+import { adapterState, allowAdapter, loadAdapter, openStore, readStoreConfig, saveToken, type StoreConfig, tokenFor, writeStoreConfig } from './config.js'
 import { HttpStore } from './http.js'
 
 export const STORE_HELP = `Usage:
+  grndwrk store use <url | adapter.mjs> [--token <t>]
+                         keep this project's map in your team's store from now
+                         on (writes .grndwrk/store.json); grndwrk start syncs
+                         .grndwrk/ with it while it runs
+  grndwrk store sync     sync .grndwrk/ with the store once, and stop
+  grndwrk store leave    stop using the store; .grndwrk/ stays as it is
   grndwrk store check <url | adapter.mjs> [--token <t>]
                          run the store protocol's rules against a store, yours
                          or one you are building (docs/store-protocol.md); it
@@ -55,27 +61,119 @@ export async function storeCommand(args: string[], root: string | null, token?: 
   if (!root || !gwDir) return void console.error('Run this inside a project with a .grndwrk folder.')
   const config = await readStoreConfig(gwDir)
 
+  if (sub === 'use') {
+    if (!target) return void console.error('Usage: grndwrk store use <url | adapter.mjs> [--token <t>]')
+    return void (await useStore(root, target, token))
+  }
+
   if (sub === 'login') {
     if (!config || !('url' in config)) return void console.error('.grndwrk/store.json names no store address ("url").')
-    const t = token ?? (await ask(`Token for ${config.url}: `))
-    if (!t) return void console.error('No token given.')
-    const store = new HttpStore(config.url, t)
-    const hello = await store.hello()
-    await saveToken(config.url, t)
-    return void console.log(`Kept on this machine. ${hello.project || 'The store'} answers${hello.writable ? '' : ', for reading only'}.`)
+    return void (await login(config.url, token))
   }
 
   if (sub === 'allow') {
     if (!config || !('adapter' in config)) return void console.error('.grndwrk/store.json names no adapter.')
-    const state = await adapterState(root, config.adapter)
-    if (state === 'allowed') return void console.log(`${config.adapter} is allowed as it is.`)
-    console.log(`${config.adapter} runs on this machine with your rights each time grndwrk syncs. ${state === 'changed' ? 'It changed since you allowed it: read the change (git diff) first.' : 'Read it first.'}`)
-    // Only a person at a terminal allows code to run: never an agent or a script.
-    if (!process.stdin.isTTY) return void console.error('Run grndwrk store allow yourself, in a terminal.')
-    if ((await ask('Allow it? [y/N] ')).toLowerCase() !== 'y') return void console.log('Not allowed.')
-    await allowAdapter(root, config.adapter)
-    return void console.log(`Allowed on this machine, as it is now. If it changes, grndwrk asks again.`)
+    return void (await allow(root, config.adapter))
+  }
+
+  if (sub === 'sync') {
+    if (!config) return void console.error('This project keeps its map in .grndwrk only: there is no store.json. Run grndwrk store use <url | adapter.mjs> first.')
+    return void (await syncOnce(root, gwDir))
+  }
+
+  if (sub === 'leave') {
+    if (!config) return void console.log('This project uses no store. Nothing to leave.')
+    await writeStoreConfig(gwDir, null)
+    const { rm } = await import('../store/fs.js')
+    await rm(join(gwDir, 'store-sync.json'), { force: true })
+    return void console.log(`This project no longer uses the store at ${'url' in config ? config.url : config.adapter}. The map stays in .grndwrk as it is.`)
   }
 
   console.log(STORE_HELP)
+}
+
+/** Keep the token for a store on this machine, after it answered with it. True when kept. */
+async function login(url: string, token?: string): Promise<boolean> {
+  const t = token ?? (await ask(`Token for ${url}: `))
+  if (!t) {
+    console.error('No token given. Run grndwrk store login when you have one.')
+    return false
+  }
+  const store = new HttpStore(url, t)
+  const hello = await store.hello()
+  await saveToken(url, t)
+  console.log(`Kept on this machine. ${hello.project || 'The store'} answers${hello.writable ? '' : ', for reading only'}.`)
+  return true
+}
+
+/** Allow the adapter as it is now, asked of a person at a terminal. True when allowed. */
+async function allow(root: string, adapter: string): Promise<boolean> {
+  const state = await adapterState(root, adapter)
+  if (state === 'allowed') {
+    console.log(`${adapter} is allowed as it is.`)
+    return true
+  }
+  console.log(`${adapter} runs on this machine with your rights each time grndwrk syncs. ${state === 'changed' ? 'It changed since you allowed it: read the change (git diff) first.' : 'Read it first.'}`)
+  // Only a person at a terminal allows code to run: never an agent or a script.
+  if (!process.stdin.isTTY) {
+    console.error('Run grndwrk store allow yourself, in a terminal.')
+    return false
+  }
+  if ((await ask('Allow it? [y/N] ')).toLowerCase() !== 'y') {
+    console.log('Not allowed.')
+    return false
+  }
+  await allowAdapter(root, adapter)
+  console.log('Allowed on this machine, as it is now. If it changes, grndwrk asks again.')
+  return true
+}
+
+/**
+ * `grndwrk store use`: the project's map is kept in this store from now on.
+ * store.json is written once the address or file is valid; the token (or
+ * allowing the adapter) follows, and can be done later.
+ */
+export async function useStore(root: string, target: string, token?: string): Promise<StoreConfig | null> {
+  const gwDir = join(root, '.grndwrk')
+  const config: StoreConfig = /\.mjs$/.test(target) ? { adapter: target } : { url: target }
+  await writeStoreConfig(gwDir, config)
+  try {
+    // Read back as start will read it: an address over http, or an adapter outside the project, is refused here.
+    await readStoreConfig(gwDir)
+    if ('adapter' in config) await adapterState(root, config.adapter)
+  } catch (err) {
+    await writeStoreConfig(gwDir, null)
+    console.error(err instanceof Error ? err.message : String(err))
+    return null
+  }
+  console.log(`This project's map is kept in ${target} from now on (.grndwrk/store.json).`)
+  const ready = 'url' in config ? ((await tokenFor(config.url)) ? true : await login(config.url, token).catch((err) => (console.error(err instanceof Error ? err.message : String(err)), false))) : await allow(root, config.adapter)
+  console.log(ready ? 'grndwrk start syncs .grndwrk with it while it runs; grndwrk store sync does it once now.' : 'Once that is done, grndwrk start syncs .grndwrk with it.')
+  return config
+}
+
+/** One full pass, said in a line; for `grndwrk store sync` and init. */
+export async function syncOnce(root: string, gwDir: string) {
+  const project = basename(root)
+  let client: Awaited<ReturnType<typeof openStore>>
+  try {
+    client = await openStore(root, gwDir, project)
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err))
+    return void (process.exitCode = 1)
+  }
+  if (!client) return
+  const { StoreSync, describe } = await import('./sync.js')
+  const { NodeStore } = await import('../store/nodes.js')
+  const { NodeSync } = await import('../server/events.js')
+  const store = new NodeStore(gwDir)
+  const ctx = { gwDir, store, nodes: new NodeSync(() => store.list()), project, uiUrl: '' }
+  const sync = new StoreSync(gwDir, client, ctx)
+  try {
+    const c = await sync.fullPass()
+    console.log(`Synced: ${describe(c) || 'nothing new'}.${c.conflicts ? ` Your side of each conflict is kept in ${sync.conflictsDir()}` : ''}`)
+  } catch (err) {
+    console.error(`Could not sync: ${err instanceof Error ? err.message : String(err)}`)
+    process.exitCode = 1
+  }
 }

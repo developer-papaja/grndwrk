@@ -159,9 +159,21 @@ The iOS package sends a picture of each screen as you use the app.
 
 Each project runs its own grndwrk and its own map. Two people working on the same map in git: every new thing is a file of its own (cards, thread entries, gaps, each run of a command), so GitHub merges your changes without conflicts unless you both changed the same words. Comments always go to the project they were made in. Each project keeps three ports (the map, `--app` and `--lan`), and grndwrk remembers which project has which on your Mac, so a new project never takes ports another one keeps, even one that is not running. Each project keeps its port from then on, so a line in a layout keeps working. `grndwrk --port 7850` moves a project for good, and grndwrk tells you when two projects' ports overlap.
 
+## A team's store
+
+A team can keep the map in a store of its own instead of git: a small server, a database, a cloud project, hosted your way (docs/store-protocol.md says what it must answer; `stores/` has examples). `.grndwrk/` stays the folder your agent reads and writes, and grndwrk keeps it in step with the store while it runs.
+
+```
+grndwrk store use https://maps.example.com/clinic/   # or tools/grndwrk-store.mjs; asks for your token
+grndwrk store sync    # once, now
+grndwrk store leave   # stop; .grndwrk/ stays as it is
+```
+
+When the same file changed on your machine and in the store, the store's version is kept in `.grndwrk/` and yours is saved in your user folder (`store-conflicts/`), and grndwrk says where. A file deleted on one side but changed on the other is kept. Comments a phone or a staging site leaves straight in the store become cards as if they came through the relay. `grndwrk init` asks where a new map is kept, and with a store can leave the map out of git.
+
 ## What goes into git
 
-Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed like code: thoughts, screens, stories, the brief. Pictures attached to comments are committed with them, so the whole team sees what a comment is about. They show what is on the screen around the spot (the web button draws form fields empty); add `files/` to `.grndwrk/.gitignore` to keep them on your Mac instead. These stay out of git, through `.grndwrk/.gitignore`: the pairing code and the keys of paired phones, pictures of screens, and this machine's port. A login for `grndwrk screenshots` is kept outside the project, in your user folder.
+Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed like code: thoughts, screens, stories, the brief. Pictures attached to comments are committed with them, so the whole team sees what a comment is about. They show what is on the screen around the spot (the web button draws form fields empty); add `files/` to `.grndwrk/.gitignore` to keep them on your Mac instead. These stay out of git, through `.grndwrk/.gitignore`: the pairing code and the keys of paired phones, pictures of screens, this machine's port, and what was last synced with a team's store. A login for `grndwrk screenshots` is kept outside the project, in your user folder.
 
 ## How it is kept safe
 

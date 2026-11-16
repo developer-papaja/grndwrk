@@ -2,8 +2,11 @@ import { watch } from 'chokidar'
 import { basename, relative, sep } from 'node:path'
 import { broadcast, type NodeSync } from './events.js'
 
-/** Watch `.grndwrk/` and push changes made by Claude Code or by hand. */
-export function watchgrndwrk(gwDir: string, nodes: NodeSync) {
+/**
+ * Watch `.grndwrk/` and push changes made by Claude Code or by hand. `onFile`
+ * hears every file that changed (the store's sync sends it on).
+ */
+export function watchgrndwrk(gwDir: string, nodes: NodeSync, onFile?: (rel: string) => void) {
   let timer: NodeJS.Timeout | undefined
   let running = Promise.resolve()
   const scheduleSync = () => {
@@ -25,6 +28,9 @@ export function watchgrndwrk(gwDir: string, nodes: NodeSync) {
   watcher.on('all', (event, path) => {
     if (event === 'addDir' || event === 'unlinkDir') return
     const rel = relative(gwDir, path).split(sep).join('/')
+    // The store's sync state changes on every round; nothing in the map shows it.
+    if (rel === 'store-sync.json') return
+    onFile?.(rel)
     if (rel.startsWith('nodes/') && rel.endsWith('.md')) scheduleSync()
     // A thread entry in a file of its own: its card, or its screen, changed.
     else if (rel.startsWith('threads/n_')) scheduleSync()
