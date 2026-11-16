@@ -55,7 +55,7 @@ final class Api
         // The staging sites named in the config may call the comment calls from a page (CORS):
         // hello, PUT inbox/... and GET status/..., and only with a comment token. Nothing else, no other site.
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-        $site = $origin !== '' && in_array($origin, (array) ($this->config['origins'] ?? []), true)
+        $site = $origin !== '' && in_array($origin, $this->origins(), true)
             && ($route === 'hello' || ($file !== null && (preg_match(Protocol::INBOX, $file) || preg_match(Protocol::STATUS, $file))));
         if ($method === 'OPTIONS') {
             if ($site) $this->origin = $origin;
@@ -76,7 +76,7 @@ final class Api
         if ($route === 'hello' && $method === 'GET') {
             // A comment token learns its commenter here: the folder its comments go in, and its status file.
             // Teammates learn that this store vouches for `from` on every comment, and the staging site comments come from.
-            $first = array_values(array_filter((array) ($this->config['origins'] ?? []), fn ($o) => is_string($o) && preg_match('#^https://[a-z0-9.-]+(:\d{1,5})?$#D', $o)))[0] ?? null;
+            $first = $this->origins()[0] ?? null;
             $this->send(200, ['protocol' => Protocol::VERSION, 'project' => $this->db->project($project)['name'] ?? $project, 'writable' => $role === 'write', 'role' => $role]
                 + ($role === 'comment' ? ['commenter' => $who['commenter']] : ['names' => true] + ($first !== null ? ['site' => $first] : [])));
             return;
@@ -269,7 +269,7 @@ final class Api
             // The Comment button, only for a page on a staging site named in the config (by Referer).
             $parts = parse_url((string) ($_SERVER['HTTP_REFERER'] ?? ''));
             $origin = isset($parts['scheme'], $parts['host']) ? "{$parts['scheme']}://{$parts['host']}" . (isset($parts['port']) ? ":{$parts['port']}" : '') : '';
-            $site = in_array($origin, (array) ($this->config['origins'] ?? []), true) ? $origin : '';
+            $site = in_array($origin, $this->origins(), true) ? $origin : '';
             if ($site === '') {
                 http_response_code(403);
                 header('Content-Type: text/plain; charset=utf-8');
@@ -343,5 +343,11 @@ final class Api
     {
         $this->headers($status, 'application/json');
         if ($body !== null) echo json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /** The staging sites from the config, https origins only: a comment token never goes to a page over plain http. */
+    private function origins(): array
+    {
+        return array_values(array_filter((array) ($this->config['origins'] ?? []), fn ($o) => is_string($o) && preg_match('#^https://[a-z0-9.-]+(:\d{1,5})?$#D', $o)));
     }
 }

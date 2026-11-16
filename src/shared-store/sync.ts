@@ -14,7 +14,7 @@
  * like any other, and never removes a file someone changed meanwhile.
  */
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdir as mkdirPlain, writeFile as writePlain } from 'node:fs/promises'
+import { mkdir as mkdirPlain, readdir as readdirPlain, rm as rmPlain, writeFile as writePlain } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { commentRequest, type CommentsCtx } from '../server/comments.js'
 import { feedbackStatus } from '../server/feedback.js'
@@ -457,6 +457,23 @@ export class StoreSync {
     return file
   }
 
+  /**
+   * What the inbox held that was no comment, so whoever runs the store can
+   * see what was sent: its first 64 KB, and only the newest hundred. A comment
+   * token can send such files again and again, and every teammate's Mac keeps
+   * them, so this never grows with what it sends.
+   */
+  private async keepRefused(path: string, bytes: Uint8Array): Promise<string> {
+    const folder = join(this.conflictsDir(), 'not-comments')
+    await mkdirPlain(folder, { recursive: true, mode: 0o700 })
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const file = join(folder, `${stamp}-${path.split('/').slice(1).join('-')}`)
+    await writePlain(file, bytes.subarray(0, REFUSED_BYTES), { mode: 0o600 })
+    const all = (await readdirPlain(folder)).sort()
+    for (const old of all.slice(0, Math.max(0, all.length - REFUSED_KEPT))) await rmPlain(join(folder, old), { force: true })
+    return file
+  }
+
   /** Every map file in the folder: no dot files (temp files), no links, nothing the store would refuse by its path. */
   private async listLocal(): Promise<string[]> {
     const out: string[] = []
@@ -518,8 +535,8 @@ export class StoreSync {
       // Not a comment: kept on this machine, then taken out of the inbox, so it never counts against the
       // commenter's limits for good. Never deleted unseen: the copy and the reason are said.
       if (err instanceof BadInput || err instanceof SyntaxError) {
-        const kept = await this.keep(path, r.bytes)
-        this.log(`${path} in the store is not a comment grndwrk can file (${said}). Taken out of the inbox; kept at ${kept}`)
+        const kept = await this.keepRefused(path, r.bytes)
+        this.log(`${path} in the store is not a comment grndwrk can file (${said}). Taken out of the inbox; its start is kept at ${kept}`)
         await this.store.remove(path, r.version)
         return
       }
@@ -747,6 +764,9 @@ function isEnvelope(v: object): v is Envelope {
 }
 
 /** Comments filed from one commenter in one round of the sync. */
+/** What is kept of an inbox file that is no comment: its start, and the newest so many. */
+const REFUSED_BYTES = 64 * 1024
+const REFUSED_KEPT = 100
 const PER_COMMENTER_ROUND = 50
 
 function sameOrigin(url: string, site: string): boolean {

@@ -51,7 +51,11 @@ describe.skipIf(!php)('the PHP store', () => {
     url = `${base}clinic/`
     // A small page, so following the changes has to use `more`; small inbox limits, tried on kennel.
     const inbox = `['files_per_hour' => 5, 'mb_per_hour' => 1, 'waiting' => 4, 'total' => 8]`
-    await writeFile(join(dir, 'config.php'), `<?php return ['dsn' => 'sqlite:' . ${JSON.stringify(join(dir, 'store.sqlite'))}, 'page' => 2, 'origins' => ['${site}', 'https://second.clinic.example'], 'assets' => ${JSON.stringify(join(dir, 'page'))}, 'base_url' => '${base}', 'inbox' => ${inbox}];\n`)
+    // SQLite in a temporary folder; or MySQL/MariaDB, an empty database named by GRNDWRK_TEST_PHP_DSN (and _USER), to check that path too.
+    const db = process.env.GRNDWRK_TEST_PHP_DSN
+      ? `'dsn' => ${JSON.stringify(process.env.GRNDWRK_TEST_PHP_DSN)}, 'user' => ${JSON.stringify(process.env.GRNDWRK_TEST_PHP_USER ?? 'root')}, 'password' => ''`
+      : `'dsn' => 'sqlite:' . ${JSON.stringify(join(dir, 'store.sqlite'))}`
+    await writeFile(join(dir, 'config.php'), `<?php return [${db}, 'page' => 2, 'origins' => ['${site}', 'https://second.clinic.example'], 'assets' => ${JSON.stringify(join(dir, 'page'))}, 'base_url' => '${base}', 'inbox' => ${inbox}];\n`)
     await writeFakePage(join(dir, 'page'))
     admin('project', 'add', 'clinic', 'Clinic')
     admin('project', 'add', 'other')

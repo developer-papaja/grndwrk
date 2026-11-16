@@ -3,6 +3,8 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { checkStore } from '../src/shared-store/check.js'
 import { adapterState, AdapterNotAllowed, allowAdapter, loadAdapter } from '../src/shared-store/config.js'
@@ -298,6 +300,60 @@ describe('what an allowed adapter may import', () => {
     await allowAdapter(root, 'tools/self.mjs')
     await expect(loadAdapter(root, 'tools/self.mjs', 'Clinic')).rejects.toThrow(/vetapp/)
     expect((globalThis as Record<string, unknown>).__laterRan).toBeUndefined()
+  })
+
+  // The second audit (run-3): an import() made later, inside the adapter's function or a store call,
+  // once looked up from a copy that was already gone, so the project's files came back into play.
+  it('resolves an import made later, inside the adapter or a store call, to the installed package only', async () => {
+    const root = await project()
+    for (const name of ['clinicdb', 'clinicdb2']) await pkg(join(root, 'node_modules', name), { name, exports: './index.mjs' }, { 'index.mjs': "export default 'installed'\n" })
+    await writeFile(join(root, 'tools', 'lazy.mjs'), [
+      'export default async () => {',
+      "  const first = (await import('clinicdb')).default",
+      "  const store = { hello: async () => ({ protocol: 1, project: first, writable: true }), changes: async () => ({ cursor: 'c', changes: [] }), write: async () => ({ ok: true, version: 'v' }), remove: async () => ({ ok: true }), read: async () => ({ bytes: new TextEncoder().encode((await import('clinicdb2')).default), version: 'v', type: 'text/markdown' }) }",
+      '  return store',
+      '}',
+      '',
+    ].join('\n'))
+    await allowAdapter(root, 'tools/lazy.mjs')
+    // Then a pull request that leaves the adapter as it is: the map's own package.json, the project's renamed.
+    await pkg(join(root, '.grndwrk'), { name: 'clinicdb', exports: './hijack.mjs' }, { 'hijack.mjs': "export default 'hijacked'\n" })
+    await pkg(root, { name: 'clinicdb2', exports: './hijack2.mjs' }, { 'hijack2.mjs': "export default 'hijacked'\n" })
+    // In a Node process of its own, as grndwrk start runs it: the test runner resolves imports its own way.
+    const script = join(root, 'run.mts')
+    const config = new URL('../src/shared-store/config.ts', import.meta.url).href
+    await writeFile(script, [
+      `import { loadAdapter } from ${JSON.stringify(config)}`,
+      "import { mkdir, writeFile } from 'node:fs/promises'",
+      `const root = ${JSON.stringify(root)}`,
+      "const store = await loadAdapter(root, 'tools/lazy.mjs', 'Clinic')",
+      'const first = (await store.hello()).project',
+      // A node_modules in the map that comes with a pull while grndwrk runs.
+      "await mkdir(root + '/.grndwrk/node_modules/clinicdb2', { recursive: true })",
+      "await writeFile(root + '/.grndwrk/node_modules/clinicdb2/package.json', JSON.stringify({ name: 'clinicdb2', exports: './index.mjs' }))",
+      "await writeFile(root + '/.grndwrk/node_modules/clinicdb2/index.mjs', \"export default 'hijacked'\\n\")",
+      "const later = new TextDecoder().decode((await store.read('nodes/n_aaaaaa.md')).bytes)",
+      'console.log(JSON.stringify({ first, later }))',
+      '',
+    ].join('\n'))
+    const tsx = fileURLToPath(new URL('../node_modules/tsx/dist/loader.mjs', import.meta.url))
+    const out = execFileSync(process.execPath, ['--import', pathToFileURL(tsx).href, script], { cwd: root, env: { ...process.env, GRNDWRK_STORE_DIR: join(root, 'state') }, encoding: 'utf8' })
+    expect(JSON.parse(out.trim().split('\n').pop()!)).toEqual({ first: 'installed', later: 'installed' })
+  }, 30_000)
+
+  it('reads a comment between import and what it imports as the space it stands for, and refuses other ways to run code', async () => {
+    const root = await project()
+    for (const [name, src] of [
+      ['c1.mjs', "import/**/'../../tools/later.mjs'\nexport default async () => 1\n"],
+      ['c2.mjs', "import { v } from/* x */'../later.mjs'\nexport default async () => v\n"],
+      ['c3.mjs', 'export default async () => import/**/(process.env.X)\n'],
+      ['c4.mjs', "export default async () => process.getBuiltinModule('child_process')\n"],
+      ['c5.mjs', "export default async () => (function () {}).constructor('return 1')()\n"],
+      ['c6.mjs', "export default async () => \\u0065val('1')\n"],
+    ]) {
+      await writeFile(join(root, 'tools', name), src)
+      await expect(allowAdapter(root, `tools/${name}`), name).rejects.toThrow(/cannot be allowed/)
+    }
   })
 
   it('refuses to allow or load while .grndwrk/ holds node_modules', async () => {

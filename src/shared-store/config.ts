@@ -12,10 +12,11 @@
  *   A changed file is not loaded until it is allowed again.
  */
 import { createHash, randomBytes } from 'node:crypto'
-import { lstat, mkdir, readFile as readPlain, realpath, rename, rm as rmPlain, writeFile as writePlain } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
+import { lstat, mkdir, readdir as readdirPlain, readFile as readPlain, realpath, rename, rm as rmPlain, symlink, writeFile as writePlain } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { mkdir as mkdirGuarded, readFile, writeFile as writeGuarded } from '../store/fs.js'
+import { readFile } from '../store/fs.js'
 import { stateDir } from '../root.js'
 import { HttpStore } from './http.js'
 import { checkChanges, CursorGone, type StoreClient, StoreBroke } from './protocol.js'
@@ -153,14 +154,16 @@ export function adapterImportProblem(source: string): string {
     if (!/^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$/i.test(name) || name.split('/').some((s) => s === '.' || s === '..')) return `it imports ${name}: ${one}`
     return ''
   }
-  // Every specifier written after import or from, whatever surrounds it.
-  for (const m of source.matchAll(/\b(?:from|import)\s*(['"`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)) {
+  // Every specifier written after import or from, whatever surrounds it. A comment between the word
+  // and the specifier is still JavaScript, so it counts as the space it stands for.
+  const gap = String.raw`(?:\s|/\*[\s\S]*?\*/|//[^\n]*\n)*`
+  for (const m of source.matchAll(new RegExp(String.raw`\b(?:from|import)${gap}(['"\`])((?:(?!\1)[^\\\n]|\\.)*)\1`, 'g'))) {
     if (m[1] === '`' && m[2].includes('${')) return `it imports an address it works out while running (${m[2].slice(0, 40)})`
     const problem = named(m[2])
     if (problem) return problem
   }
   // import(...): one plain string naming an installed package, nothing else.
-  for (const m of source.matchAll(/\bimport\s*\(\s*([^)]*)\)/g)) {
+  for (const m of source.matchAll(new RegExp(String.raw`\bimport${gap}\(${gap}([^)]*)\)`, 'g'))) {
     const plain = /^(['"])([^'"`\\$]*)\1\s*$/.exec(m[1])
     if (!plain) return `it imports an address it works out while running (${m[1].slice(0, 40)})`
     const problem = named(plain[2])
@@ -169,7 +172,9 @@ export function adapterImportProblem(source: string): string {
   const words: [RegExp, string][] = [
     [/\brequire\s*\(|\bcreateRequire\b|\bmainModule\b/, 'require'],
     [/\beval\s*\(|\bFunction\s*\(|\bnew\s+Function\b/, 'eval or Function'],
-    [/import\.meta\.resolve|\bregisterHooks\b|\bmodule\.register\b|process\.binding|process\.dlopen/, 'module hooks or native code'],
+    [/import\.meta\.resolve|\bregisterHooks\b|\bmodule\.register\b|process\.binding|process\.dlopen|\bgetBuiltinModule\b/, 'module hooks, built-in modules by name or native code'],
+    // Function reached as any function's constructor, and names written with escapes (\u0065val is eval).
+    [/\bconstructor\b|\\u[0-9a-fA-F{]/, 'a constructor or escaped names'],
   ]
   for (const [re, what] of words) if (re.test(source)) return `it uses ${what}, which can run code from another file: ${one}`
   return ''
@@ -205,6 +210,33 @@ export class AdapterNotAllowed extends Error {}
  * map alone could then change what an allowed adapter runs. Refused while
  * one is there.
  */
+/**
+ * A new folder for one loaded adapter, in this machine's per-user folder,
+ * removed when grndwrk stops. Folders left by a grndwrk that is no longer
+ * running are removed on the way.
+ */
+async function adapterFolder(): Promise<string> {
+  const root = join(dir(), 'adapters')
+  await mkdir(root, { recursive: true, mode: 0o700 })
+  for (const name of await readdirPlain(root).catch(() => [] as string[])) {
+    const pid = Number(/^(\d+)-/.exec(name)?.[1])
+    if (pid && pid !== process.pid && !alive(pid)) await rmPlain(join(root, name), { recursive: true, force: true })
+  }
+  const folder = join(root, `${process.pid}-${randomBytes(6).toString('hex')}`)
+  await mkdir(folder, { mode: 0o700 })
+  process.once('exit', () => rmSync(folder, { recursive: true, force: true }))
+  return folder
+}
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return (err as { code?: string }).code === 'EPERM'
+  }
+}
+
 async function packagesInMap(projectRoot: string): Promise<string> {
   const there = await lstat(join(projectRoot, '.grndwrk', 'node_modules')).then(() => true, () => false)
   return there ? '.grndwrk/node_modules would change which packages the adapter imports: remove it' : ''
@@ -224,22 +256,19 @@ export async function loadAdapter(projectRoot: string, adapter: string, project:
   if (hash !== allowed) throw new AdapterNotAllowed(`The store adapter ${adapter} changed since it was allowed. Read what changed (git diff), then run: grndwrk store allow`)
   const problem = adapterImportProblem(bytes.toString('utf8')) || (await packagesInMap(projectRoot))
   if (problem) throw new AdapterNotAllowed(`${adapter} is not loaded: ${problem}`)
-  // Run exactly the bytes that were hashed, never the file read again a moment later. The copy sits
-  // in .grndwrk/, so installed packages resolve from the project as from the adapter; it goes at once.
-  const copyDir = join(projectRoot, '.grndwrk', `.adapter-${randomBytes(6).toString('hex')}`)
-  // Through grndwrk's own file calls: a .grndwrk that is a link is refused, as everywhere.
-  await mkdirGuarded(copyDir, { recursive: true, mode: 0o700 })
+  // Run exactly the bytes that were hashed, never the file read again a moment later, from a folder
+  // of this machine's own (never inside the project): a package of its own without a name, whose
+  // node_modules is a link to the project's. So every import, now or later from inside the store
+  // (an import() in a call), means a package installed in the project's node_modules: never the
+  // project's own package.json or one in .grndwrk/ (Node's self-reference), never .grndwrk/node_modules.
+  // The folder stays while the store is used, so imports made later resolve the same way.
+  const copyDir = await adapterFolder()
   const copy = join(copyDir, `adapter-${hash.slice(0, 16)}.mjs`)
-  let mod: { default?: unknown }
-  try {
-    // A package of its own without a name: an import can never mean .grndwrk/package.json or the
-    // project's own package.json (Node's self-reference), only a package installed in node_modules.
-    await writeGuarded(join(copyDir, 'package.json'), Buffer.from('{"type":"module"}\n'), { mode: 0o600, flag: 'wx' })
-    await writeGuarded(copy, bytes, { mode: 0o600, flag: 'wx' })
-    mod = (await import(pathToFileURL(copy).href)) as { default?: unknown }
-  } finally {
-    await rmPlain(copyDir, { recursive: true, force: true })
-  }
+  await writePlain(join(copyDir, 'package.json'), '{"type":"module"}\n', { mode: 0o600, flag: 'wx' })
+  const installed = join(projectRoot, 'node_modules')
+  if (await lstat(installed).then(() => true, () => false)) await symlink(installed, join(copyDir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
+  await writePlain(copy, bytes, { mode: 0o600, flag: 'wx' })
+  const mod = (await import(pathToFileURL(copy).href)) as { default?: unknown }
   if (typeof mod.default !== 'function') throw new StoreBroke(`${adapter}: the default export is a function that returns the store`)
   const store = (await (mod.default as (o: { project: string; root: string }) => Promise<StoreClient>)({ project, root: projectRoot })) as StoreClient
   for (const call of ['hello', 'changes', 'read', 'write', 'remove'] as const) {
