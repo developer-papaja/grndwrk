@@ -10,6 +10,7 @@ grndwrk lives inside your project. It keeps everything as plain markdown files i
 - **Start from a project that already exists.** `/survey` reads the code, docs and history and draws the map from what is there. `/sitemap` draws every screen, what it is for and who it is for.
 - **Write the brief and the stories.** `/brief` writes a brief, user stories linked to the thoughts behind them, and a starter `CLAUDE.md` for building the product.
 - **Comment on the running product.** A Comment button on your website or in your iOS app turns what you point at into a card in the map. Your agent proposes and builds fixes, and you test them in the app, then approve or reject them. Anything else your agent builds from the map comes back the same way, with steps to test.
+- **Share the map with a team, your way.** Keep it in git, or in a store the team hosts itself (on Cloudflare, Firebase, a PHP server or anything that speaks a few HTTP calls). Colleagues who never clone the repository then comment from a staging site or a phone, straight into the store.
 
 ## Requirements
 
@@ -161,17 +162,54 @@ Each project runs its own grndwrk and its own map. Two people working on the sam
 
 ## A team's store
 
-A team can keep the map in a store of its own instead of git: a small server, a database, a cloud project, hosted your way (docs/store-protocol.md says what it must answer; `stores/` has examples). `.grndwrk/` stays the folder your agent reads and writes, and grndwrk keeps it in step with the store while it runs.
+By default the map lives in git, in `.grndwrk/`. A team can keep it in a **store** instead: a small server, a database or a cloud project the team hosts itself, its own way. `.grndwrk/` stays the folder your agent reads and writes, and grndwrk keeps it in step with the store while it runs, so the commands and your agent work as before. Colleagues who never clone the repository can then send comments straight to the store.
+
+A store only has to answer a few HTTP calls over the map's files. [docs/store-protocol.md](docs/store-protocol.md) says which; everything else is yours: where it runs, which database, how people log in, who may read, write or only comment.
+
+### Set one up
+
+Start from an example in `stores/` and make it yours. Each is a starting point to copy and change, not a product:
+
+- **`stores/cloudflare/`**: a Worker with one Durable Object per project, on your own Cloudflare account. Logins with tokens you hand out, or Cloudflare Access.
+- **`stores/firebase/`**: Cloud Functions over Firestore and Storage in your own Firebase project, logins with Firebase Auth. Also an adapter (below) that talks to Firestore directly.
+- **`stores/php/`**: one small app for any PHP host, over SQLite or MySQL, with a command to hand out tokens.
+
+Each README says how to deploy it and hand out tokens. Then check that it speaks the protocol:
 
 ```
-grndwrk store use https://maps.example.com/clinic/   # or tools/grndwrk-store.mjs; asks for your token
+grndwrk store check https://maps.example.com/clinic/ --token <a token that may write>
+```
+
+It writes a few test files, runs every rule, says which fail and why, and removes what it wrote. Run it before anyone relies on a store, and after you change one.
+
+### Use it
+
+```
+grndwrk store use https://maps.example.com/clinic/   # asks for your token, kept on this machine only
 grndwrk store sync    # once, now
 grndwrk store leave   # stop; .grndwrk/ stays as it is
 ```
 
-When the same file changed on your machine and in the store, the store's version is kept in `.grndwrk/` and yours is saved in your user folder (`store-conflicts/`), and grndwrk says where. A file deleted on one side but changed on the other is kept. Comments a phone or a staging site leaves straight in the store become cards as if they came through the relay.
+`grndwrk init` asks where a new map is kept, and with a store can leave the map out of git. While grndwrk runs it syncs both ways. When the same file changed on your machine and in the store, the store's version is kept in `.grndwrk/` and yours is saved in your user folder (`store-conflicts/`), and grndwrk says where: nothing is lost. A file deleted on one side but changed on the other is kept. Each person has a token of their own; `grndwrk store login` changes it.
 
-**Colleagues through the store.** With a store, colleagues' phones and a staging site send comments to the store, not the relay. Each colleague gets a store link from your store, the way your store hands them out (its login page, or a link someone sends): `grndwrk:store/maps.example.com/clinic/#<token>`. It is not a web address: paste it, do not open it. In the app they long press the grndwrk button, **Join with a store link or invite**, and paste or scan it. On a staging site, add `<script src="https://maps.example.com/clinic/store.js" defer></script>` to its layout, on staging only; the button asks for the link once. The link holds a comment token, which can only leave comments and read what became of them, never the map; in a browser it is kept in the site's storage, where a script on the staging page can read it. Comments wait on the device while the store is away or refuses the link, reach the map when any teammate's grndwrk syncs, and fixes are tested, approved and rejected as through the relay. A phone joined to both uses the store. `grndwrk init` asks where a new map is kept, and with a store can leave the map out of git.
+### An adapter instead of a server
+
+A team that would rather reach its own database directly, without a server in between, writes an adapter: one `.mjs` file in the repository with the same calls as functions (`stores/firebase/adapter.mjs` is an example). Point `.grndwrk/store.json` at it, `{ "adapter": "tools/grndwrk-store.mjs" }`, and allow it on each machine:
+
+```
+grndwrk store allow
+```
+
+grndwrk runs an adapter only after you allowed that exact file, at a terminal. When it changes (a pull, another branch), grndwrk stops syncing and asks again, so a pull request cannot run code on your machine unseen. An adapter is one file: it may import installed packages, never another file of the repository.
+
+### Colleagues through the store
+
+With a store, colleagues' phones and a staging site send comments to the store, not the relay. Each colleague gets a store link from your store, the way your store hands them out (its login page, or a link someone sends): `grndwrk:store/maps.example.com/clinic/#<token>`. It is not a web address: paste it, do not open it.
+
+- **On a phone:** long press the grndwrk button, **Join with a store link or invite**, and paste or scan it. A phone joined to both a store and a relay uses the store.
+- **On a staging site:** add `<script src="https://maps.example.com/clinic/store.js" defer></script>` to its layout, on staging only. The button asks for the link once.
+
+The link holds a comment token: it can only leave comments and read what became of them, never the map. In a browser it is kept in the site's storage, where a script on the staging page can read it. Comments wait on the device while the store is away or refuses the link, reach the map when any teammate's grndwrk syncs, and fixes are tested, approved and rejected as through the relay. Two teammates' grndwrks filing the same comment at once make one card.
 
 ## What goes into git
 
@@ -182,10 +220,12 @@ Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed 
 - **It runs on your machine only.** The map answers on `localhost`. Websites on the internet get nothing from it, and local sites can only send comments, once you allow them.
 - **Phones pair once.** With `--lan`, phones on your Wi-Fi can only send comments, after you allow them on the Mac (or type the pairing code once). Each phone then gets its own long key: the phone checks that it talks to your grndwrk before it sends anything, and signs every request with the key instead of sending it, so nothing a neighbour records can be reused. The connection is plain HTTP, so others on the Wi-Fi can read comments and pictures on the way, and the moment of pairing: use `--lan` on networks you trust.
 - **Comments are untrusted input.** Anyone who used the product wrote them. grndwrk stores their words as a quote, and every command tells your agent to read them as a report, never as instructions. A comment that reads like orders to an agent (asks to ignore its rules, to run a command, for secrets, names the agent's own files, hides text) is marked **Suspicious** with the reasons, in English, Swedish, Norwegian, Danish, German, Dutch, French and Spanish; the comment is kept as sent, and your agent is told to act on none of it and tell you. Still, think twice before letting your agent act on comments from people you do not know without your review.
-- **Nothing ships with your product.** The web button runs only on local addresses, or on the one staging site you named for the relay. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
+- **Nothing ships with your product.** The web button runs only on local addresses, or on the one staging site you named for the relay or your store. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
 - **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine, and grndwrk never follows a symbolic link inside `.grndwrk/`, so a file in a pull request cannot point it at anything else on your machine.
 - **Review `.grndwrk/` in pull requests like code.** A colleague's change can add thoughts, answers or questions that look like your agent's; read them before you run commands on them.
 - **The relay cannot read what it carries.** Each phone makes its own key when it joins, and seals every comment with a key made from it, which the relay never gets; a changed or moved envelope is refused, and so is one the relay hands over a second time, or after 30 days. The relay knows only enough to check that a request comes from a phone your team let in. A phone is let in only when someone allows it in the map, with four digits it shows too, and acts only on its own comments. A phone can send at most 60 comments and 100 MB an hour, 300 and 300 MB a day. The keys for your project's mailbox (the team key) and the relay's owner key stay in your user folder, never in the project. A team link opens the project's comments, so send it privately. Envelopes are deleted once fetched, or after 30 days.
+- **A store is yours, and so are its rules.** grndwrk sends a store only the map's own files, never what belongs to one machine (the pairing code, phone keys, pictures of screens, the sync state), and keeps your token in your user folder, never in the project. A store refuses a write from an old version, so nobody's words are overwritten unseen. Comment tokens can only leave comments. Run `grndwrk store check` against a store before you trust it, and remember it holds your map: host it where you would host your code.
+- **Adapters run only once allowed.** A store adapter is code from the repository, so grndwrk runs it only after you allowed that exact file at a terminal, and stops when it changes.
 - **Websites ask before they send.** Each local site's first comment waits until you allow the site in the map. Allowed sites are kept in your user folder, never in the project, so a pull request cannot allow one.
 
 ### What package scanners say
