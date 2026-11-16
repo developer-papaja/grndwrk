@@ -234,6 +234,8 @@
   const $ = (s) => root.querySelector(s)
   const pill = $('.pill'), box = $('.box'), tip = $('.tip'), hint = $('.hint'), card = $('.card'), field = $('textarea'), toast = $('.toast')
   const sendBtn = $('.send'), saveBtn = $('.save'), pillLabel = $('.pill span')
+  // Through the relay or the store the comment goes to the team, not to one Mac's grndwrk.
+  if (relay) sendBtn.textContent = store ? 'Send to your team\'s store' : 'Send to your team'
   const bar = $('.bar'), tab = $('.tab'), dockTarget = $('.dock-target'), barGo = $('.bar .go'), barLabel = $('.bar-label'), barSave = $('.bar-save')
 
   // Where the button sits: floating where it was dragged, as a bar along the
