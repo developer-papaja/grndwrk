@@ -1,0 +1,25 @@
+{
+  "id": "gap_team_key",
+  "area": "constraints",
+  "title": "Rotating the relay's team key",
+  "why": "A teammate who leaves keeps the key and can still read the project's comments at the relay.",
+  "near": [
+    "n_raqz00",
+    "n_0fe7zi"
+  ],
+  "severity": "important",
+  "page": "Feedback",
+  "topic": "comments",
+  "altitude": 2,
+  "suggestions": [
+    {
+      "title": "grndwrk relay rotate makes a new team key and prints the new link",
+      "why": "Whoever runs it hands the link to the teammates who stay"
+    },
+    {
+      "title": "A new mailbox when someone leaves, and every phone joins again",
+      "why": "Nothing new to build, but every colleague has to join again"
+    }
+  ],
+  "answered_by": "n_hihlky"
+}

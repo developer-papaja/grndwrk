@@ -1,0 +1,35 @@
+{
+  "checked": "2026-11-16",
+  "items": [
+    {
+      "id": "waiting_to_test",
+      "title": "Fixes are waiting for you, and two answers were not taken up",
+      "why": "Three built fixes wait to be tested (n_83trpl, n_2a5pmy, n_gzuvjc). Your answers on the badge (a red dot instead of a number, n_r9wswb) and on --lan with a relay invite (n_1k04nr) have no reply from Claude yet. Untested fixes pile up and are harder to judge later.",
+      "prompt": "In .grndwrk, take up n_r9wswb (replace the badge's number with a red dot) and n_1k04nr (comments wait until --lan is off when a phone also joined through the relay): fix both, and mark each built with steps to test. Do not settle anything."
+    },
+    {
+      "id": "storage_decision",
+      "title": "Decide whether a shared store becomes part of grndwrk",
+      "why": "n_284d3k asks for the map in a shared store with a hosted page and a login, against the first principle. Answering through a link (n_kk4fxs) is a relay feature without it and a page of the hosted map with it, so deciding first saves building it twice. The screen's purpose in the button's menu (n_q7w2rd) does not depend on it.",
+      "prompt": "Read .grndwrk/nodes/n_284d3k.md and its thread, and notes/decisions.md. Write a short plan as a Claude entry in n_284d3k's thread: what a shared store means for the data model, the commands, init and the principles in CLAUDE.md, what the smallest first step is, and what it costs to keep files as the default. Ask in the thread what is unclear. Build nothing."
+    },
+    {
+      "id": "relay_team_key",
+      "title": "A teammate who leaves keeps access to the relay",
+      "why": "grndwrk is public and the relay is released, and the team key cannot be changed: whoever leaves can still read the project's comments at the relay (n_raqz00).",
+      "prompt": "Add grndwrk relay rotate: make a new team key for the project's mailbox, reseal what the relay keeps for the team with it, print the new team link for the teammates who stay, and make the relay refuse the old key. Test it in test/relay.test.ts. Mark n_raqz00 built with steps to test."
+    },
+    {
+      "id": "claude_tools",
+      "title": "This repo's map and commands lag behind the product",
+      "why": "The commands installed here are older than the ones grndwrk ships (no /feedback, /sitemap, /personas or /questions), project.md still calls the map 3D, and all ten stories say Not started although they are built. Status then shows grndwrk as further from done than it is.",
+      "prompt": "Run node bin/grndwrk.js init in this repo to update the commands. Rewrite the purpose line in .grndwrk/project.md to match the product as it is now. Then check each story in .grndwrk/stories/ against the code: tick the criteria that are met, fill in applies_to, and list in the reply what is not built. Build nothing."
+    },
+    {
+      "id": "design_tokens",
+      "title": "Text sizes are picked per element",
+      "why": "ui/index.html uses eight text sizes from 10 to 15 px, half pixels included. Each new panel adds its own, and the interface drifts a little with every change.",
+      "prompt": "Define the type sizes once in the @theme block of ui/src/style.css (for example 11, 13 and 15 px as text-small, text-body and text-title), replace the raw text-[..px] classes in ui/index.html with them, and add a rule to CLAUDE.md: no raw text sizes."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[
+  { "item": "design docs", "status": "partly", "note": "The direction is in CLAUDE.md (a design tool's interface, Heroicons, neutral greys, one blue accent) and n_bz8p; no design document of its own.", "seen_in": ["CLAUDE.md#interaction", "n_bz8p"] },
+  { "item": "colors as tokens", "status": "found", "note": "Every color is a token written as light-dark(), with tint and shade for surfaces.", "seen_in": ["ui/src/style.css"] },
+  { "item": "typography", "status": "partly", "note": "One font (Inter), but sizes are raw pixels per element: 10, 10.5, 11, 11.5, 12, 12.5, 13 and 15 px.", "seen_in": ["ui/src/style.css", "ui/index.html"] },
+  { "item": "spacing scale", "status": "partly", "note": "Tailwind's default spacing is used throughout; nothing decided beyond it.", "seen_in": ["ui/index.html"] },
+  { "item": "radius and shadows", "status": "partly", "note": "Tailwind's rounded and shadow classes with shade tints, chosen per element.", "seen_in": ["ui/src/style.css", "ui/index.html"] },
+  { "item": "shared components", "status": "partly", "note": "Menus and cards share classes in style.css; the rest is markup repeated in one large index.html.", "seen_in": ["ui/src/style.css", "ui/index.html"] },
+  { "item": "icons", "status": "found", "note": "Heroicons, inlined, for tools and panel actions; words for content.", "seen_in": ["ui/index.html", "CLAUDE.md#interaction"] },
+  { "item": "references", "status": "partly", "note": "A design tool's interface (Figma UI3) is named as the reference; no reference set kept in the project.", "seen_in": ["CLAUDE.md#interaction"] },
+  { "item": "accessibility", "status": "partly", "note": "About 20 aria labels and tooltips; no stated baseline since n_mcjp put it aside while the tool was internal.", "seen_in": ["ui/index.html", "n_mcjp"] }
+]

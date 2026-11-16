@@ -7,6 +7,6 @@ topic_by: claude
 page: Product
 altitude: 4
 links: [n_adhc]
-status: open
+status: principle
 created: 2026-10-02
 ---

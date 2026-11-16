@@ -1,0 +1,28 @@
+{
+  "id": "gap_accessibility",
+  "area": "design foundation",
+  "title": "An accessibility baseline now that it is public",
+  "why": "n_mcjp set it aside while grndwrk was internal; others install it now, and nothing says what it promises them.",
+  "near": [
+    "n_mcjp"
+  ],
+  "severity": "important",
+  "page": "Feedback",
+  "topic": "look and feel",
+  "altitude": 3,
+  "suggestions": [
+    {
+      "title": "Keyboard for everything, labels on every icon button, AA contrast in both themes",
+      "why": "The baseline most developer tools hold, and mostly in place already"
+    },
+    {
+      "title": "WCAG 2.1 AA in full",
+      "why": "A clear promise, with work on the map board and the sitemap"
+    },
+    {
+      "title": "Enough for now: it stays a tool for developers",
+      "why": "Nothing to add until someone asks"
+    }
+  ],
+  "answered_by": "n_5r3e4a"
+}

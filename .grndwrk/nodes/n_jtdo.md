@@ -7,6 +7,6 @@ topic_by: claude
 page: Product
 altitude: 5
 links: [n_wncw, n_rlee]
-status: open
+status: principle
 created: 2026-10-02
 ---

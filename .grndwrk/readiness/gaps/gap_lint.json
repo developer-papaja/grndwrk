@@ -1,0 +1,26 @@
+{
+  "id": "gap_lint",
+  "area": "setup for building with claude",
+  "title": "Lint and format config",
+  "why": "Without one, style is held only by habit and each session formats a little differently.",
+  "near": [],
+  "severity": "nice",
+  "page": "Product",
+  "topic": "working with Claude",
+  "altitude": 1,
+  "suggestions": [
+    {
+      "title": "Biome, set to the current style, run in GitHub Actions",
+      "why": "One small tool for lint and format, no plugins"
+    },
+    {
+      "title": "ESLint and Prettier",
+      "why": "The common pair, more configuration and more packages"
+    },
+    {
+      "title": "Enough for now: the type check and the tests hold it",
+      "why": "Nothing to add; style stays a matter of habit"
+    }
+  ],
+  "answered_by": "n_4ubabj"
+}

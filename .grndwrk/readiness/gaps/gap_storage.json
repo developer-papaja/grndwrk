@@ -1,0 +1,29 @@
+{
+  "id": "gap_storage",
+  "area": "technical",
+  "title": "Whether the map can live in a shared store",
+  "why": "Answering through a link and the hosted page are built differently depending on it, and the first principle says no database.",
+  "near": [
+    "n_284d3k",
+    "n_kk4fxs"
+  ],
+  "severity": "important",
+  "page": "Feedback",
+  "topic": "the map",
+  "altitude": 4,
+  "suggestions": [
+    {
+      "title": "Files in git stay the only way; the overview across apps reads several repos",
+      "why": "Keeps every principle, but people without a repo stay out"
+    },
+    {
+      "title": "A shared store as an option at init, with .grndwrk/ as the agent's working copy",
+      "why": "Opens the map to people and systems without a repo; the commands stay as they are"
+    },
+    {
+      "title": "Not now: build answering through a link on the relay first",
+      "why": "Gives colleagues a way in soon, and the store can come later"
+    }
+  ],
+  "answered_by": "n_htewko"
+}

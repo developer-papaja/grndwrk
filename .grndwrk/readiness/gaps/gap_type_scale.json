@@ -1,0 +1,25 @@
+{
+  "id": "gap_type_scale",
+  "area": "design foundation",
+  "title": "Type scale and spacing",
+  "why": "Each new panel picks its own sizes, so the interface drifts a little with every change.",
+  "near": [
+    "n_bz8p",
+    "n_wv4e"
+  ],
+  "severity": "important",
+  "page": "Feedback",
+  "topic": "look and feel",
+  "altitude": 2,
+  "suggestions": [
+    {
+      "title": "Three sizes: 11 px for labels, 13 px for body, 15 px for titles",
+      "why": "The three most used today, so most of the interface stays as it is"
+    },
+    {
+      "title": "Keep 10, 11, 12, 13 and 15 px, and drop the half pixels",
+      "why": "Almost nothing moves, but five sizes is still a lot for one panel"
+    }
+  ],
+  "answered_by": "n_78thgf"
+}

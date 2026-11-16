@@ -1,0 +1,22 @@
+{
+  "id": "gap_stories_stale",
+  "area": "core flows",
+  "title": "Stories that say what is built",
+  "why": "All ten stories say Not started although they are built, and nothing built since October has a story, so Status shows the product as further from done than it is.",
+  "near": [],
+  "severity": "important",
+  "page": "Product",
+  "topic": "working with Claude",
+  "altitude": 3,
+  "suggestions": [
+    {
+      "title": "Tick the ten stories against the code, and leave newer work without stories",
+      "why": "Quick, and Status is right about what the stories cover"
+    },
+    {
+      "title": "Tick them, and run /survey to write stories for comments, the relay and testing",
+      "why": "Status then covers the whole product, at the cost of a longer run"
+    }
+  ],
+  "answered_by": "n_kw4wap"
+}
