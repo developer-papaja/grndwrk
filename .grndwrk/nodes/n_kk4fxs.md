@@ -8,6 +8,7 @@ altitude: 3
 links: [n_rsi4qt, n_0fe7zi, n_284d3k]
 status: open
 created: 2026-11-16
+built: 2026-11-16
 ---
 Maybe its own thing, apart from keeping the map in a database. Questions can already be marked as waiting for someone (n_rsi4qt), and then you sit down with that person. It would be better to send them a link with the questions that are for them, which they answer wherever they are, without grndwrk, the repo or the map.
 

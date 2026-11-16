@@ -190,7 +190,7 @@ grndwrk store sync    # once, now
 grndwrk store leave   # stop; .grndwrk/ stays as it is
 ```
 
-`grndwrk init` asks where a new map is kept, and with a store can leave the map out of git. While grndwrk runs it syncs both ways. When the same file changed on your machine and in the store, the store's version is kept in `.grndwrk/` and yours is saved in your user folder (`store-conflicts/`), and grndwrk says where: nothing is lost. A file deleted on one side but changed on the other is kept. Each person has a token of their own; `grndwrk store login` changes it.
+`grndwrk init` asks where a new map is kept, and with a store can leave the map out of git. In CI or a script, set `GRNDWRK_STORE_TOKEN` together with `GRNDWRK_STORE_URL`, the store it is for; it is never sent anywhere else. While grndwrk runs it syncs both ways. When the same file changed on your machine and in the store, the store's version is kept in `.grndwrk/` and yours is saved in your user folder (`store-conflicts/`), and grndwrk says where: nothing is lost. A file deleted on one side but changed on the other is kept. Each person has a token of their own; `grndwrk store login` changes it. Pointing the map at another store deletes nothing here, and a sync that would delete many files at once stops and asks (`grndwrk store sync --allow-deletes` when the store really lost them).
 
 ### An adapter instead of a server
 
@@ -227,7 +227,7 @@ With a store, colleagues' phones and a staging site send comments to the store, 
 - **On a phone:** long press the grndwrk button, **Join with a store link or invite**, and paste or scan it. A phone joined to both a store and a relay uses the store.
 - **On a staging site:** add `<script src="https://maps.example.com/clinic/store.js" defer></script>` to its layout, on staging only. The button asks for the link once.
 
-The link holds a comment token: it can only leave comments and read what became of them, never the map. In a browser it is kept in the site's storage, where a script on the staging page can read it. Comments wait on the device while the store is away or refuses the link, reach the map when any teammate's grndwrk syncs, and fixes are tested, approved and rejected as through the relay. Two teammates' grndwrks filing the same comment at once make one card.
+The link holds a comment token: it can only leave comments and read what became of them, never the map. In a browser it is kept in the site's storage, where a script on the staging page can read it. Comments wait on the device while the store is away or refuses the link, reach the map when any teammate's grndwrk syncs, and fixes are tested, approved and rejected as through the relay. Two teammates' grndwrks filing the same comment at once make one card. The example stores limit what a comment token may send (per hour, and waiting at once), so a token copied from a staging page cannot fill your store or your map.
 
 ## What goes into git
 
