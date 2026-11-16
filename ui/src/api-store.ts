@@ -30,6 +30,9 @@ import { createSegment as saveNewSegment, deleteSegment as dropSegment, listSegm
 import { changeOwnEntry, removeOwnEntry } from '../../src/store/threads'
 import { readWaiting, setPersonalInfo, setWaiting } from '../../src/store/waiting'
 import { today } from '../../src/store/frontmatter'
+import { createView as saveNewView, deleteView as dropView, listViews, updateView as saveView } from '../../src/store/views'
+import type { ViewSettings } from '../../src/shared/views'
+import { overviewOf, type MapFiles, type ProjectOverview } from '../../src/shared/overview'
 import * as vfs from './page/vfs'
 
 /** The page, not grndwrk on a Mac: the one flag the UI reads to leave out what only works there. */
@@ -373,6 +376,7 @@ function what(path: string): string {
       segments: 'this segment',
       'project.md': 'the project settings',
       waiting: 'this question',
+      views: 'this view',
       readiness: 'the check',
       files: 'this picture',
     }[top] ?? path
@@ -675,6 +679,18 @@ export const markSeen = async (id: string) => {
   const c = await change(() => nodes.markSeen(id))
   return { seen: c.upserted.length > 0 }
 }
+export const fetchViews = () => look(() => listViews(ROOT))
+export const createView = (input: ViewSettings & { name: string }) => change(() => saveNewView(ROOT, input as unknown as Record<string, unknown>, session.name ? { by: session.name } : {}))
+export const updateView = (id: string, input: { name?: string; settings?: ViewSettings }) =>
+  change(async () => {
+    const v = await saveView(ROOT, id, input)
+    if (!v) throw new Error('That view is gone: someone deleted it.')
+    return v
+  })
+export const deleteView = (id: string) =>
+  change(async () => {
+    if (!(await dropView(ROOT, id))) throw new Error('That view is gone: someone deleted it.')
+  })
 export const deleteNode = (id: string) =>
   change(async () => {
     await nodes.delete(id)
@@ -743,4 +759,185 @@ export function watchPictures(root: Element) {
       }
     }
   }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['src'] })
+}
+
+// A team's other projects on the same store, for All projects
+
+/** A project this person can reach on the store. */
+export interface TeamProject {
+  name: string
+  url: string
+  /** The project this page is. */
+  current: boolean
+  /** This tab has a token that reaches it. */
+  signedIn: boolean
+}
+
+/** What All projects shows of one project, read from its own files with its own token. */
+export interface TeamProjectRead {
+  name: string
+  overview: ProjectOverview
+  thoughts: GNode[]
+}
+
+/** fetch called as itself: a browser refuses window.fetch called as another object's method. */
+const browserFetch: typeof fetch = (input, init) => fetch(input, init)
+
+/** Tokens the store said reach another project (`v1/projects`: the same token), by its address. */
+const reaches = new Map<string, string>()
+const keyFor = (url: string) => `grndwrk.token:${new URL(url).pathname}`
+function tokenAt(url: string): string {
+  if (url === base) return token
+  try {
+    return storage?.getItem(keyFor(url)) || reaches.get(url) || ''
+  } catch {
+    return reaches.get(url) ?? ''
+  }
+}
+
+/** A project's address as the store gave it: on this store's own origin only, so a token never goes elsewhere. */
+function projectUrl(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 500) return ''
+  try {
+    const u = new URL(value, base)
+    if (u.origin !== new URL(base).origin || u.username || u.password) return ''
+    u.hash = ''
+    u.search = ''
+    return u.pathname.endsWith('/') ? u.toString() : ''
+  } catch {
+    return ''
+  }
+}
+
+const plainName = (v: unknown) => (typeof v === 'string' ? v.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, 120) : '')
+const nameOfUrl = (url: string) => decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() ?? url)
+
+/**
+ * The projects this person can reach: the store's list (`GET <store>/v1/projects`,
+ * when it has one; 404 otherwise), every project this tab is signed in to
+ * (tokens are kept per project), and this one.
+ */
+export async function teamProjects(): Promise<TeamProject[]> {
+  const found = new Map<string, string>([[base, session.project]])
+  try {
+    const res = await fetch(new URL('../v1/projects', base), { headers: { Authorization: `Bearer ${token}` }, redirect: 'error' })
+    const body = res.ok ? ((await res.json().catch(() => null)) as { projects?: unknown } | null) : null
+    for (const p of Array.isArray(body?.projects) ? body.projects.slice(0, 200) : []) {
+      const url = projectUrl((p as { url?: unknown })?.url)
+      if (!url) continue
+      if (!found.get(url)) found.set(url, plainName((p as { name?: unknown }).name))
+      if (url !== base) reaches.set(url, token)
+    }
+  } catch {
+    // No list from the store: the projects this tab knows are enough.
+  }
+  try {
+    for (let i = 0; storage && i < storage.length; i++) {
+      const key = storage.key(i) ?? ''
+      if (!key.startsWith('grndwrk.token:')) continue
+      const url = projectUrl(key.slice('grndwrk.token:'.length))
+      if (url && !found.has(url)) found.set(url, '')
+    }
+  } catch {
+    // Blocked storage: only what the store listed.
+  }
+  return [...found].map(([url, name]) => ({ url, name: name || nameOfUrl(url), current: url === base, signedIn: !!tokenAt(url) }))
+}
+
+/** Every text file of a project's map, into memory under `root`, to read it with grndwrk's own store code. */
+async function readMapInto(s: HttpStore, root: string) {
+  let page = await s.changes({})
+  const all = [...page.changes]
+  while (page.more) {
+    page = await s.changes({ since: page.cursor })
+    all.push(...page.changes)
+  }
+  const wanted = all.filter((c) => !c.deleted && isMapPath(c.path) && !isPicture(typeOf(c.path)))
+  for (let i = 0; i < wanted.length; i += 8) {
+    await Promise.all(
+      wanted.slice(i, i + 8).map(async ({ path }) => {
+        const f = await s.read(path)
+        if (f) vfs.putElsewhere(root, path, f.bytes)
+      }),
+    )
+  }
+}
+
+async function filesAt(root: string): Promise<MapFiles> {
+  const [nodes, screens, personas, stories, readiness] = await Promise.all([new NodeStore(root).list(), listScreens(root), listPersonas(root), listStories(root), readReadiness(root).catch(() => null)])
+  return { nodes, screens, personas, stories, readiness }
+}
+
+/** Signing in at that project's address is needed: no token here, or the one there ran out. */
+export class SignInThere extends Error {}
+
+let peeks = 0
+/** One project's card and its thoughts for the search, read with that project's own token. This project from what the page holds. */
+export async function readTeamProject(url: string): Promise<TeamProjectRead> {
+  if (url === base) {
+    const files = await look(() => filesAt(ROOT))
+    return { name: session.project, overview: overviewOf(files), thoughts: files.nodes }
+  }
+  const t = tokenAt(url)
+  if (!t) throw new SignInThere('Sign in to see this project.')
+  const s = new HttpStore(url, t, browserFetch)
+  const root = `/peek/${++peeks}`
+  try {
+    const hello = await s.hello()
+    if (hello.role === 'comment') throw new SignInThere('That sign-in may only leave comments there.')
+    await readMapInto(s, root)
+    const files = await filesAt(root)
+    return { name: hello.project || nameOfUrl(url), overview: overviewOf(files), thoughts: files.nodes }
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err)
+    if (/\(401\)/.test(why)) {
+      reaches.delete(url)
+      try {
+        storage?.removeItem(keyFor(url))
+      } catch {
+        // Blocked storage: nothing kept to forget.
+      }
+      throw new SignInThere('Your sign-in there ran out. Sign in again.')
+    }
+    // fetch throws a TypeError only when nothing answered at all.
+    if (err instanceof TypeError && /fetch|network/i.test(why)) throw new Error(OFFLINE_MESSAGE)
+    throw err
+  } finally {
+    vfs.dropElsewhere(root)
+  }
+}
+
+/** Sign in to another project, at its own address. Returns why not, or '' when signed in there. */
+export async function signInToProject(url: string, t: string): Promise<string> {
+  const there = projectUrl(url)
+  const next = t.trim()
+  if (!there) return 'That project is not on this store.'
+  if (!next) return 'Paste the token your store gave you for that project.'
+  try {
+    const hello = await new HttpStore(there, next, browserFetch).hello()
+    if (hello.role === 'comment') return 'That token may only leave comments. The page needs one that may read the map.'
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err)
+    return /\(401\)|: 403/.test(why) ? 'The store did not take that token for this project.' : OFFLINE_MESSAGE
+  }
+  try {
+    storage?.setItem(keyFor(there), next)
+  } catch {
+    // Blocked storage: signed in there for as long as this page is open.
+  }
+  reaches.set(there, next)
+  return ''
+}
+
+/** Go to another project's page, signed in there when this tab can be, at a thought when one is named. */
+export function openProjectPage(url: string, nodeId = '') {
+  const there = projectUrl(url)
+  if (!there) return
+  const t = tokenAt(there)
+  try {
+    if (t && there !== base && !storage?.getItem(keyFor(there))) storage?.setItem(keyFor(there), t)
+  } catch {
+    // Blocked storage: the page there asks for a token.
+  }
+  location.assign(there + (/^n_[A-Za-z0-9_-]{1,60}$/.test(nodeId) ? `#open=${nodeId}` : ''))
 }

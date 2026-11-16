@@ -77,6 +77,9 @@ export function storeFunction({ backend, verify, page }) {
     const shown = page && (request.method === 'GET' || request.method === 'HEAD') ? await pageAnswer(page, request, url, async (map) => backend.get(`projects/${map}`)) : null
     if (shown) return shown
     const m = ROUTE.exec(url.pathname)
+    // The store's own root, not a map's (a map may be named anything, so one that exists keeps its route).
+    const listing = PROJECTS.exec(url.pathname)
+    if (listing && !(m && (await backend.get(`projects/${m[1]}`)))) return projects(request, url, listing[1])
     if (!m) return json(404, { error: 'Not found' })
     const [, map, route] = m
     // The preflight carries no token: answer it for the comment calls only, and only for the map's site.
@@ -170,6 +173,49 @@ export function storeFunction({ backend, verify, page }) {
       return json(500, { error: 'The store failed; see the function log' })
     }
   }
+  /**
+   * GET /v1/projects: the maps this person may read, for All projects on the
+   * page. Read only. A Firebase ID token reaches every map its user is a
+   * member of, so all of those where the role is read or write; a store key
+   * belongs to one map, so that one.
+   * @param {Request} request
+   * @param {URL} url
+   * @param {string} prefix
+   */
+  const projects = async (request, url, prefix) => {
+    if (request.method !== 'GET') return json(405, { error: 'Not allowed' })
+    const bearer = /^Bearer (\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1] ?? ''
+    if (!bearer) return json(401, { error: 'A valid token is required' })
+    if (!backend.maps) return json(404, { error: 'Not found' })
+    try {
+      const maps = (await backend.maps()).filter((id) => /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/.test(id)).slice(0, 500)
+      /** @type {{ uid: string, only?: string } | null} */
+      let user = null
+      if (bearer.startsWith('gk_')) {
+        for (const map of maps) {
+          const k = await backend.get(`projects/${map}/keys/${keyHash(bearer)}`)
+          if (typeof k?.uid === 'string') {
+            user = { uid: k.uid, only: map }
+            break
+          }
+        }
+      } else user = await verify(bearer).catch(() => null)
+      if (!user) return json(401, { error: 'A valid token is required' })
+      const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? url.host
+      const out = []
+      for (const map of user.only ? [user.only] : maps) {
+        const member = await backend.get(`projects/${map}/members/${user.uid}`)
+        if (member?.role !== 'read' && member?.role !== 'write') continue
+        const doc = await backend.get(`projects/${map}`)
+        out.push({ name: typeof doc?.name === 'string' && doc.name ? doc.name : map, url: `https://${host}/${prefix}${map}/` })
+      }
+      return json(200, { projects: out })
+    } catch (err) {
+      console.error(err)
+      return json(500, { error: 'The store failed; see the function log' })
+    }
+  }
+
   return async (request) => {
     const res = await answer(request)
     if ((res.status !== 401 && res.status !== 403) || request.method === 'OPTIONS' || res.headers.has('access-control-allow-origin')) return res
@@ -232,6 +278,9 @@ async function pageAnswer(read, request, url, mapOf) {
   const config = { url: `https://${host}/${prefix}${map}/`, site }
   return new Response(`window.__grndwrkStoreConfig = ${JSON.stringify(config)};\n${store}\n${feedback}\n`, { headers: { ...headers, Vary: 'Referer' } })
 }
+
+/** The store's own root: .../store/v1/projects */
+const PROJECTS = /^\/((?:[^/]+\/)*?)v1\/projects$/
 
 /** The map's id is the part before the first /v1/: .../store/clinic/v1/hello */
 const ROUTE = /^\/(?:[^/]+\/)*?([A-Za-z0-9][A-Za-z0-9_-]{0,62})\/v1\/(.*)$/

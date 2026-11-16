@@ -112,6 +112,8 @@ firebase deploy --only functions
 
 The folder is deployed with the function, which serves it (`index.mjs` reads it, `functions.mjs` decides): `index.html` and `assets/...` under each map that exists, with a strict Content-Security-Policy and `nosniff`; `store.js` (put together with its config) and `screenshot.js` only to a page on the map's `site`, by its `Referer`; nothing else. Through the function rather than Hosting, so the page and its calls to `v1/...` share one address and need no CORS. The config in `store.js` names the map's address from the request's host (`X-Forwarded-Host` behind Hosting): open `store.js` once from the staging site and check it. See [The page](../../docs/store-protocol.md#the-page).
 
+`GET .../store/v1/projects`, at the function's root rather than a map's, answers the maps this person may read, for All projects on the page. Read only (`405` for anything but `GET`). A Firebase ID token reaches every map its user is a member of, so it lists each one where the member's role is `read` or `write`, with the map's `name`; a store key belongs to one map, so it lists that one. A request under an existing map's address always goes to that map, so a map may have any name.
+
 ## The adapter
 
 For people who have access to the Firebase project itself. grndwrk loads `adapter.mjs` and reaches Firestore and Storage with firebase-admin, as the function does.

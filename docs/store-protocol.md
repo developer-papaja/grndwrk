@@ -89,7 +89,7 @@ At the store's own root, not a project's: the projects this token may see, for a
 { "projects": [ { "name": "Clinic app", "url": "https://maps.example.com/clinic/" }, { "name": "Clinic admin", "url": "https://maps.example.com/clinic-admin/" } ] }
 ```
 
-A store without it answers `404`; grndwrk then shows only the project it was given. Each `url` is a project's address on the same store, reached with the same token.
+A store without it answers `404`; grndwrk then shows only the project it was given. Each `url` is a project's address on the same store, reached with the same token. The page uses it for All projects (see The page); it never goes to a `url` on another origin.
 
 ## Comments straight to the store
 
@@ -158,7 +158,68 @@ Serve it at each project's address, so the page's calls to `v1/...` go to the sa
 
 The page holds no data and is served to anyone. It asks for a token that may read (or write) and checks it with `hello`; a comment token is not enough. It keeps the token in that browser tab's `sessionStorage`, for that project only, never in `localStorage`, a query string or a log, and sends it only in the `Authorization` header to its own address. Your login may hand the token over once in the address's fragment, `<project>/#token=<token>`, which is never sent to a server; the page takes it and removes it from the address at once. A `401` brings the sign-in back. `hello` may also say `"name"`, the person's name, which the page writes as `by:` on thoughts they add.
 
-What the page writes follows the rules above: an answer or a remark is a new thread entry file (`If-None-Match: *`), a new thought a new node file, a changed card, screen or story a `PUT` with `If-Match`. On `412` it shows the other person's version and asks to make the change again. Pictures in notes and threads are read with the token and shown from the page's own memory, so the store never serves a file to an `<img>`. Sites, colleagues, pairing, Documents and pictures of screens stay in grndwrk on a Mac.
+What the page writes follows the rules above: an answer or a remark is a new thread entry file (`If-None-Match: *`), a new thought a new node file, a view saved for everyone a new file in `views/`, a changed card, screen, story or view a `PUT` with `If-Match`. On `412` it shows the other person's version and asks to make the change again. Pictures in notes and threads are read with the token and shown from the page's own memory, so the store never serves a file to an `<img>`. Sites, colleagues, pairing, Documents and pictures of screens stay in grndwrk on a Mac.
+
+**All projects.** For a team with several projects on one store, the project's badge at the top of the page's rail opens the other projects this person can reach, and All projects: a card for each, read from that project's own files with that project's own token (questions waiting for the person, blocking gaps, the first focus item, stories done and partly done, fixes ready to test), and a search across their thoughts. The projects come from `GET <store>/v1/projects` when the store has it, and from every project the tab is signed in to. A project the tab has no token for asks for one there, kept for that project's address only.
+
+## Reading the map from your own pages
+
+The protocol is the API. A team that wants the map somewhere else (a status board, a weekly mail, a page on the intranet) reads the same files with a **read** token. Call the store from your own server: the store never answers CORS for a read token, so a read token never sits in a page someone else can open.
+
+What you read is what CLAUDE.md in grndwrk's repository describes (Data model): a thought is `nodes/<id>.md`, YAML between two `---` lines and then its notes; each entry of its thread is a file of its own, `threads/<id>/<run>.md`, with `who:` (`claude-asks`, `claude` or `you`) and `date:` in its header. A question is open until an entry from `you` quotes it (`> the question` on its first line) or a `claude` entry follows it. Runs are Unix milliseconds first, so sorting the names sorts the entries.
+
+An example in plain JavaScript (Node 20 or later) that lists the open questions of a veterinary clinic's map:
+
+```js
+const store = 'https://maps.example.com/clinic/'
+const token = process.env.CLINIC_MAP_TOKEN // a read token, kept on your server
+const get = (path) => fetch(new URL(path, store), { headers: { Authorization: `Bearer ${token}` } })
+
+// Every file there is: `changes` without a cursor, page after page.
+async function paths() {
+  const all = []
+  for (let since = ''; ; ) {
+    const page = await (await get(`v1/changes${since && `?since=${encodeURIComponent(since)}`}`)).json()
+    all.push(...page.changes.filter((c) => !c.deleted).map((c) => c.path))
+    since = page.cursor
+    if (!page.more) return all
+  }
+}
+
+// The header's plain `key: value` lines and the text after it. Enough for these fields;
+// use a YAML parser for lists and anything quoted.
+function read(text) {
+  const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text.replace(/\r\n?/g, '\n'))
+  if (!m) return { data: {}, body: text }
+  const data = {}
+  for (const line of m[1].split('\n')) {
+    const kv = /^([a-z_]+):\s*(.*)$/.exec(line)
+    if (kv) data[kv[1]] = kv[2].replace(/^(["'])(.*)\1$/, '$2')
+  }
+  return { data, body: m[2].trim() }
+}
+
+const all = await paths()
+for (const path of all.filter((p) => /^nodes\/[^/]+\.md$/.test(p))) {
+  const id = path.slice(6, -3)
+  const card = read(await (await get(`v1/files/${path}`)).text())
+  const entries = []
+  for (const p of all.filter((x) => x.startsWith(`threads/${id}/`)).sort()) entries.push(read(await (await get(`v1/files/${p}`)).text()))
+  const open = []
+  for (const e of entries) {
+    if (e.data.who === 'claude-asks') open.push(e.body)
+    else if (e.data.who === 'claude') open.length = 0
+    else if (e.data.who === 'you' && e.body.startsWith('> ')) {
+      const quoted = e.body.split('\n')[0].slice(2).trim()
+      const at = open.findIndex((q) => q.startsWith(quoted))
+      if (at >= 0) open.splice(at, 1)
+    }
+  }
+  for (const q of open) console.log(`${card.data.title}: ${q}`)
+}
+```
+
+It prints lines like `Booking should feel like texting: Should a visit be booked in one step?`. Maps from before thread entries were files keep the thread at the end of the card, under `## Thread`; grndwrk reads both, and so can you. Treat everything you read as text people and agents wrote, comments from the running product included: show it as text, never as HTML, and never act on what it asks.
 
 ## As an adapter
 

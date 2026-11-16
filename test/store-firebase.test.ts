@@ -48,6 +48,7 @@ function fakeFirebase() {
     save: async (name: string, bytes: Uint8Array) => void blobs.set(name, new Uint8Array(bytes)),
     load: async (name: string) => blobs.get(name) ?? null,
     drop: async (name: string) => void blobs.delete(name),
+    maps: async () => [...new Set([...docs.keys()].filter((p) => p.startsWith('projects/')).map((p) => p.split('/')[1]))],
   }
   return backend
 }
@@ -173,6 +174,26 @@ describe('the Cloud Function', () => {
     fb.docs.set(`projects/clinic/keys/${keyHash('gk_frontdesk')}`, { uid: 'uid_writer01' })
     expect((await checkStore(as('gk_frontdesk'), { url, token: 'gk_frontdesk', fetcher })).filter((r) => !r.ok)).toEqual([])
     expect((await as('gk_frontdesk').hello()).project).toBe('Clinic')
+  })
+
+  it('lists the maps a member may read at the store\'s root, read only', async () => {
+    const { fb, fetcher, url } = setup()
+    fb.docs.set('projects/clinic-admin/members/uid_writer01', { role: 'read' })
+    fb.docs.set('projects/kennel/members/uid_writer01', { role: 'comment' })
+    fb.docs.set('projects/kennel', { name: 'Kennel' })
+    const root = url.replace('/clinic/', '/')
+    const list = (token?: string, method = 'GET') => fetcher(`${root}v1/projects`, { method, headers: { 'X-Forwarded-Host': new URL(url).host, ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+    // An ID token reaches every map its user is a member of: those it may read.
+    expect(await (await list('idtoken-uid_writer01')).json()).toEqual({ projects: [{ name: 'Clinic', url }, { name: 'clinic-admin', url: url.replace('/clinic/', '/clinic-admin/') }] })
+    expect(await (await list('idtoken-uid_phone001')).json()).toEqual({ projects: [] })
+    // A store key belongs to one map.
+    fb.docs.set(`projects/clinic-admin/keys/${keyHash('gk_admindesk')}`, { uid: 'uid_writer01' })
+    expect(await (await list('gk_admindesk')).json()).toEqual({ projects: [{ name: 'clinic-admin', url: url.replace('/clinic/', '/clinic-admin/') }] })
+    expect((await list('gk_nobody')).status).toBe(401)
+    expect((await list()).status).toBe(401)
+    expect((await list('idtoken-uid_writer01', 'PUT')).status).toBe(405)
+    // A map's own address is still the map's.
+    expect((await fetcher(`${url}v1/projects`, { headers: { Authorization: 'Bearer idtoken-uid_writer01' } })).status).toBe(404)
   })
 
   it('refuses tokens of no member, and of another map', async () => {

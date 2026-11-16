@@ -193,6 +193,19 @@ describe.skipIf(!php)('the PHP store', () => {
     expect((await new HttpStore(`${base}other/`, other).changes({})).changes).toEqual([])
   })
 
+  it('lists the one project a token belongs to at the store\'s root, read only', async () => {
+    const list = (token: string, init: RequestInit = {}) => fetch(`${base}v1/projects`, { ...init, headers: { Authorization: `Bearer ${token}` } })
+    const res = await list(writer)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ projects: [{ name: 'Clinic', url: `${base}clinic/` }] })
+    expect(await (await list(mint('clinic', 'read'))).json()).toEqual({ projects: [{ name: 'Clinic', url: `${base}clinic/` }] })
+    // A comment token reads no map, so it lists none; no token, or a wrong one, is 401.
+    expect(await (await list(mint('clinic', 'comment', '--commenter', 'dev_listing1'))).json()).toEqual({ projects: [] })
+    expect((await fetch(`${base}v1/projects`)).status).toBe(401)
+    expect((await list('gwt_000000000000000000000000000000000000000000000000')).status).toBe(401)
+    expect((await list(writer, { method: 'PUT', body: '{}' })).status).toBe(405)
+  })
+
   it('stops taking a token once it is revoked', async () => {
     const token = mint('clinic', 'write', '--label', 'old laptop')
     expect((await call('v1/hello', token)).status).toBe(200)

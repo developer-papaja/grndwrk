@@ -109,8 +109,10 @@ export class CursorGone extends Error {
  *   save(name: string, bytes: Uint8Array, type: string): Promise<void>,
  *   load(name: string): Promise<Uint8Array | null>,
  *   drop(name: string): Promise<void>,
+ *   maps?(): Promise<string[]>,
  * }} Backend
  *   `after`: the documents of a collection whose `at` is above the given one, lowest first.
+ *   `maps`: the ids of the maps under projects/, for GET /v1/projects (the Cloud Function only).
  */
 
 /** @param {string} path */
@@ -259,6 +261,8 @@ export function firebaseBackend(db, bucket) {
     drop: async (name) => {
       await bucket().file(name).delete({ ignoreNotFound: true })
     },
+    // Every map, also one whose document holds nothing but its members.
+    maps: async () => (await db.collection('projects').listDocuments()).map((/** @type {any} */ d) => d.id),
   }
 }
 
