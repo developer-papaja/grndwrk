@@ -1,0 +1,20 @@
+# A grndwrk store on your own Cloudflare account. Set the owner key with
+# `npx wrangler secret put OWNER_AUTH` before minting tokens.
+name = "grndwrk-store"
+main = "src/worker.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "StoreObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["StoreObject"]
+
+# Optional: Cloudflare Access instead of tokens (see README.md).
+# [vars]
+# ACCESS_TEAM = "your-team.cloudflareaccess.com"
+# ACCESS_AUD = "<the application's audience tag>"
+# ACCESS_ROLES = '{"clinic": {"vet@clinic.example": "write", "*@clinic.example": "read"}}'
