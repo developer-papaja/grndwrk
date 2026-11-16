@@ -56,6 +56,8 @@ final class Api
 
         $who = Auth::who($this->db, $project, ($_SERVER['HTTP_AUTHORIZATION'] ?? '') ?: ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
         if (!$who) {
+            // On a comment call from a listed site, the page may read why, so it can ask the person to log in again.
+            if ($site) $this->origin = $origin;
             $this->send(401, ['error' => 'A valid token is required']);
             return;
         }
