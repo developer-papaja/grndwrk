@@ -20,6 +20,8 @@ export interface CommentsCtx {
   via?: CommentVia
   /** From the relay: the colleague's name, from their invite, and their phone's id at the relay. From the store: the name and the commenter id in the path. */
   from?: CommentFrom
+  /** From the store: the card's id, derived from the inbox path, so teammates filing the same comment at once make one card. */
+  cardId?: string
   /** The largest body accepted, in bytes. */
   limit?: number
 }
@@ -94,7 +96,7 @@ export async function commentRequest(path: string, body: unknown, ctx: CommentsC
   }
   if (path !== '/api/feedback') return { status: 404, body: { error: 'Not found' } }
   const input = parseFeedback(body)
-  const node = await createFeedback(ctx.gwDir, ctx.store, input, ctx.via, ctx.from)
+  const node = await createFeedback(ctx.gwDir, ctx.store, input, ctx.via, ctx.from, ctx.cardId)
   await ctx.nodes.sync()
   let opened: 'browser' | 'new tab' | undefined
   if (input.onMac) opened = await openOnMac(node.id, ctx.uiUrl)

@@ -138,7 +138,12 @@ export interface CommentFrom { name: string; device?: string; commenter?: string
  * the relay carries back. `via: store` one left in the team's store, with
  * `store_commenter:` the commenter the store named in its path.
  */
-export async function createFeedback(gwDir: string, store: NodeStore, input: FeedbackInput, via?: CommentVia, from?: CommentFrom): Promise<GNode> {
+export async function createFeedback(gwDir: string, store: NodeStore, input: FeedbackInput, via?: CommentVia, from?: CommentFrom, cardId?: string): Promise<GNode> {
+  // Filed before, here or by a teammate whose card arrived through the store: the same comment, once.
+  if (cardId) {
+    const there = (await store.list()).find((n) => n.id === cardId)
+    if (there) return there
+  }
   const e = input.element ?? {}
   const where = input.screen ? ` on ${input.screen}` : ''
   // Written on the Mac: the title says what it is about until the person types over it.
@@ -187,6 +192,7 @@ export async function createFeedback(gwDir: string, store: NodeStore, input: Fee
       ...(suspicious.length ? { suspicious } : {}),
       ...(from ? { from: cleanText(from.name).trim().slice(0, 80) || 'A colleague', ...(from.device ? { relay_device: from.device } : {}), ...(from.commenter ? { store_commenter: from.commenter } : {}) } : {}),
     },
+    cardId,
   )
   let node = change.upserted[0]
 

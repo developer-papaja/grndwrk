@@ -459,7 +459,7 @@ export class StoreSync {
       // Written on the Mac is for a phone that points at its own grndwrk: here nobody's browser is asked to open.
       const { from, on_mac: _onMac, ...rest } = body as Record<string, unknown>
       const name = typeof from === 'string' && from.trim() ? from : commenter
-      await commentRequest('/api/feedback', rest, { ...this.ctx, via: 'store', from: { name, commenter } })
+      await commentRequest('/api/feedback', rest, { ...this.ctx, via: 'store', from: { name, commenter }, cardId: cardIdFor(path) })
       this.counts.comments++
     } catch (err) {
       const said = err instanceof Error ? err.message : String(err)
@@ -624,4 +624,15 @@ export async function connectStore(gwDir: string, ctx: CommentsCtx, project: str
     log(`Could not sync with the store at ${where}: ${err instanceof Error ? err.message : String(err)}\nThe map is served from .grndwrk as it is; grndwrk keeps trying.`)
   }
   return sync
+}
+
+/**
+ * The card an inbox comment becomes, the same on every machine: two teammates
+ * filing it at once write the same file, and the store keeps one (the other's
+ * create gets 412). Six letters and digits from a hash of the path.
+ */
+export function cardIdFor(path: string): string {
+  const digest = createHash('sha256').update(`grndwrk-inbox:${path}`).digest()
+  const abc = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  return `n_${[...digest.subarray(0, 6)].map((b) => abc[b % abc.length]).join('')}`
 }

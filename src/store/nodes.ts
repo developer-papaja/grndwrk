@@ -85,15 +85,21 @@ export class NodeStore {
   }
 
   /** Create a node. `extra` is for fields the server sets itself, never taken from a request. */
-  create(input: NodeInput, extra: Record<string, unknown> = {}): Promise<Change> {
+  create(input: NodeInput, extra: Record<string, unknown> = {}, fixedId?: string): Promise<Change> {
     return this.serial(async () => {
       const title = input.title?.trim()
       if (!title) throw new BadInput('A title is required')
       const { nodes: all, own } = await this.read()
       const byId = new Map(all.map((n) => [n.id, n]))
       let id: string
-      do id = newId('n_')
-      while (byId.has(id))
+      // An id the caller derived, so two machines making the same card make the same file (a store keeps one).
+      if (fixedId !== undefined) {
+        if (!/^n_[a-z0-9]{6}$/.test(fixedId) || byId.has(fixedId)) throw new BadInput(`Cannot make ${fixedId}`)
+        id = fixedId
+      } else {
+        do id = newId('n_')
+        while (byId.has(id))
+      }
 
       const node: GNode = {
         id,
