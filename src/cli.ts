@@ -23,6 +23,9 @@ const HELP = `Usage:
                          comments from colleagues' phones away from your Wi-Fi,
                          and from a staging site, through a relay on your own
                          Cloudflare account
+  grndwrk store [check <url | adapter.mjs> | login | allow]
+                         a shared store for the map, hosted your own way
+                         (docs/store-protocol.md); grndwrk store help says more
   grndwrk build-ios-loader [path]
                          build GrndwrkFeedback for injecting into an app in
                          the iOS Simulator, without changing the app; prints
@@ -55,6 +58,7 @@ async function main() {
       dev: { type: 'boolean', default: false },
       login: { type: 'boolean', default: false },
       name: { type: 'string' },
+      token: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
     },
   })
@@ -122,6 +126,11 @@ async function main() {
       console.log(`${file}: ${added} added to the Feedback page${skipped ? `, ${skipped} already there or unreadable` : ''}`)
     }
     return
+  }
+
+  if (command === 'store') {
+    const { storeCommand } = await import('./shared-store/cli.js')
+    return storeCommand(positionals.slice(1), findProjectRoot(process.cwd()), values.token)
   }
 
   if (command === 'relay') {
