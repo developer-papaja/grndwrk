@@ -177,7 +177,8 @@ describe('comments straight to the store', () => {
     expect(JSON.parse(new TextDecoder().decode(r!.bytes))).toEqual({ text: 'The weight field is too small', from: 'Front desk' })
     expect((await put('inbox/dev_other01/c_00000002.json', phone)).status).toBe(403)
     expect((await put('inbox/dev_phone01/c_00000003.json', phone, '[1]')).status).toBe(400)
-    expect((await new HttpStore(`${BASE}/clinic/`, phone, fetcher).hello()).role).toBe('comment')
+    expect(await new HttpStore(`${BASE}/clinic/`, phone, fetcher).hello()).toMatchObject({ role: 'comment', commenter: 'dev_phone01' })
+    expect((await new HttpStore(`${BASE}/clinic/`, writer, fetcher).hello()).commenter).toBeUndefined()
   })
 
   it('refuses everything else to a commenter', async () => {

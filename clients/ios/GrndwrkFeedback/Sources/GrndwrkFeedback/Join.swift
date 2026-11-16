@@ -2,8 +2,8 @@
 import AVFoundation
 import UIKit
 
-/// Joining the team's relay with an invite from the map: the link pasted,
-/// or its QR code scanned. Scanning needs the camera, which an app may only
+/// Joining the team's relay with an invite from the map, or the team's store
+/// with a store link from the store: the link pasted, or its QR code scanned. Scanning needs the camera, which an app may only
 /// use when its Info.plist says why (NSCameraUsageDescription); without
 /// that, only pasting is offered.
 extension OverlayController {
@@ -14,12 +14,12 @@ extension OverlayController {
   func joinRelay() {
     let copied = UIPasteboard.general.hasStrings ? UIPasteboard.general.string ?? "" : ""
     let alert = UIAlertController(
-      title: "Join with an invite",
-      message: "Paste the invite link from grndwrk\(Self.canScan ? ", or scan its QR code" : ""). Comments then go through your team's relay when grndwrk is not on this Wi-Fi.",
+      title: "Join your team",
+      message: "Paste the store link from your team's store, or the invite link from grndwrk\(Self.canScan ? ", or scan its QR code" : ""). Comments then go to your team when grndwrk is not on this Wi-Fi.",
       preferredStyle: .alert)
     alert.addTextField {
-      $0.placeholder = "grndwrk:invite/..."
-      $0.text = Relay.parse(copied) != nil ? copied : ""
+      $0.placeholder = "grndwrk:store/... or grndwrk:invite/..."
+      $0.text = Self.isTeamLink(copied) ? copied : ""
       $0.autocapitalizationType = .none
       $0.autocorrectionType = .no
     }
@@ -30,6 +30,19 @@ extension OverlayController {
       alert.addAction(UIAlertAction(title: "Scan the QR code", style: .default) { [weak self] _ in self?.scanInvite() })
     }
     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    present(alert, animated: true)
+  }
+
+  /// A store link or a relay invite: the only codes and texts joining takes.
+  static func isTeamLink(_ text: String) -> Bool { Store.parse(text) != nil || Relay.parse(text) != nil }
+
+  func leaveStore() {
+    let alert = UIAlertController(title: "Leave your team's store?", message: "Comments then go only to grndwrk on this Wi-Fi\(Relay.joined != nil ? " or through the relay" : ""). Joining again needs a store link.", preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    alert.addAction(UIAlertAction(title: "Leave", style: .destructive) { [weak self] _ in
+      Store.leave()
+      self?.flash("Left your team's store")
+    })
     present(alert, animated: true)
   }
 
@@ -44,6 +57,7 @@ extension OverlayController {
   }
 
   private func join(_ link: String) {
+    if Store.parse(link) != nil { return joinStore(link) }
     Task {
       do {
         try await Relay.join(link)
@@ -59,6 +73,24 @@ extension OverlayController {
         flash("The relay did not answer. Try again on a network with internet")
       } catch {
         flash("The relay did not take it. Ask for a new invite")
+      }
+    }
+  }
+
+  private func joinStore(_ link: String) {
+    Task {
+      do {
+        try await Store.join(link)
+        await Connection.check()
+        flash("Joined your team's store. Comments go there when grndwrk is not on this Wi-Fi")
+      } catch Store.Problem.refused {
+        flash("The store did not take that link. Log in to the store again for a new one")
+      } catch Store.Problem.mayDoMore {
+        flash("That link may do more than leave comments. Ask your store for a comment link")
+      } catch Store.Problem.noCommenter {
+        flash("That store does not say who you are. Ask whoever runs it to update it")
+      } catch {
+        flash("The store did not answer. Try again on a network with internet")
       }
     }
   }
@@ -135,8 +167,8 @@ final class InviteScanner: UIViewController, AVCaptureMetadataOutputObjectsDeleg
   nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
     let text = objects.compactMap { ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue }.first
     MainActor.assumeIsolated {
-      // Only an invite link: any other code is ignored, and scanning goes on.
-      guard !done, let text, Relay.parse(text) != nil else { return }
+      // Only an invite or a store link: any other code is ignored, and scanning goes on.
+      guard !done, let text, OverlayController.isTeamLink(text) else { return }
       done = true
       session.stopRunning()
       found(text)

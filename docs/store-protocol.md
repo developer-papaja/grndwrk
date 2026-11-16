@@ -36,7 +36,11 @@ Errors are JSON, `{ "error": "Plain words" }`.
 { "protocol": 1, "project": "Clinic", "writable": true }
 ```
 
-`protocol` is `1` for this document. `writable` says whether this token may write.
+`protocol` is `1` for this document. `writable` says whether this token may write. `role` is `"read"`, `"write"` or `"comment"`; for a comment token, `commenter` names it too (see Comments straight to the store):
+
+```json
+{ "protocol": 1, "project": "Clinic", "writable": false, "role": "comment", "commenter": "web_stage01" }
+```
 
 ### `GET v1/changes?since=<cursor>&wait=<seconds>`
 
@@ -93,18 +97,29 @@ With a store, the Comment button on a staging site and the iOS package can leave
 
 A comment token may do exactly two things:
 
-- **Leave a comment:** `PUT v1/files/inbox/<commenter>/<id>.json` with `If-None-Match: *`. `<commenter>` is the id your store gave this person or device when it handed out the token, and the store refuses any other; `<id>` is new for each comment. Both are 8 to 64 letters, digits, `_` or `-`. The body is the same JSON the button sends to grndwrk's `/api/feedback` (words, the page or screen, the element, a picture as base64), at most 14 MB. If your store knows the person's name, set `from` in the JSON to it, replacing whatever the device sent; grndwrk believes the commenter in the path, never one in the body.
+- **Leave something in its inbox:** `PUT v1/files/inbox/<commenter>/<id>.json` with `If-None-Match: *`. `<commenter>` is the id your store gave this person or device when it handed out the token, and the store refuses any other; `<id>` is new for each file. Both are 8 to 64 letters, digits, `_` or `-`. At most 14 MB. If your store knows the person's name, set `from` in the JSON to it, replacing whatever the device sent; grndwrk believes the commenter in the path, never one in the body.
 - **Read what became of its own comments:** `GET v1/files/status/<commenter>.json`, its own and no other.
 
-Everything else, `changes` included, is `403`. `hello` says `"role": "comment"`. An inbox file's body is a JSON object; anything else is `400`.
+Everything else, `changes` included, is `403`. `hello` says `"role": "comment"` and `"commenter": "<commenter>"`: that is how the button and the phone learn which folder is theirs. An inbox file's body is a JSON object; anything else is `400`.
+
+An inbox file is one of two things, the same a phone sends grndwrk over the Wi-Fi or the relay:
+
+- **A comment:** the JSON the button sends to grndwrk's `/api/feedback` (words, the page or screen, the element, a picture as base64, and a random `key` the device keeps).
+- **An envelope:** `{ "path": "/api/feedback/tested", "body": {...}, "at": <milliseconds> }` when the person tested a fix (Approve or Reject, with the round it tested, `{ comments: [{ id, key, round }], works, note }`), or `{ "path": "/api/feedback/remove", "body": { "comments": [{ id, key }] } }` when they deleted a comment. Nothing else: an envelope for any other path stays in the inbox, never filed. Show on my Mac is not offered through a store.
+
+grndwrk acts on an envelope only for comments filed from the same commenter's folder, and only by their keys, whatever ids it names. A test result must name the round of fixing it tested (the status file gives it): one for another round, or made more than a day before the fix was built, settles nothing.
+
+**The status file** is written by grndwrk, `{ "comments": [...] }`, one entry per comment of that commenter, by its `id` and `key`: its `title`, `state` (`incoming`, `proposed`, `ready` or `fixed`) and, once there is one, `fix` (what changed) and `steps`. A fix ready to test also has its `round`, and for a comment made in a browser, `web`: the words, the page's `path`, the element's `selector` and `label`, so the button's Test can go to the page and mark the element.
+
+**A store link** gives the button and the phone their comment token: `grndwrk:store/<host><path>#<token>`, the project's address without `https://`, then `#` and the token, for example `grndwrk:store/maps.example.com/clinic/#ct_9f2kq7...`. It is not a web address, so opening it never sends the token anywhere. How a person gets one is your store's business: a page after your login that shows it (and its QR code, for a phone), or a link someone on the team sends. The person pastes it once, or scans it on the phone.
 
 For teammates, `inbox/` and `status/` are files like the others: `changes` lists them, a read token reads them, a write token writes and deletes them (that is how grndwrk files a comment and writes the status).
 
 **From a staging site's page.** The Comment button on a staging site calls the store from the browser, so a store that takes comments from one answers CORS for that site's origin, and only on `hello`, `PUT inbox/...` and `GET status/...` with a comment token: `Access-Control-Allow-Origin: <the site>`, the methods `GET, PUT`, the headers `Authorization, Content-Type, If-None-Match`, and the preflight (`OPTIONS`). Never `*`, and never CORS on anything a read or write token does. A `401` or `403` on those three calls carries the same headers, so the page can tell the person to log in again.
 
-grndwrk, on any teammate's machine that syncs, reads new files in `inbox/`, files each one exactly as a comment that came over the Wi-Fi or the relay (marked when it reads like orders to an agent, its words quoted, `from:` the commenter), deletes it from the inbox, and keeps `status/<commenter>.json` up to date. Neither folder is copied into `.grndwrk/`.
+The staging page loads the button from the store, in its layout, on staging only: `<script src="https://maps.example.com/clinic/store.js" defer></script>`. The store answers `store.js` with one script: `window.__grndwrkStoreConfig = { "url": "<the project's address>", "site": "<the staging site's origin>" };`, then grndwrk's `overlay/store.js`, then `overlay/feedback.js`. And `screenshot.js` next to it, which draws a comment's picture (grndwrk's `dist/vendor/modern-screenshot.js`, wrapped as the relay wraps it). Serve both only to pages on the site (by `Referer`). The button runs only when the page's origin is `site`. It asks for the store link once, keeps it in the site's `localStorage`, sends each comment as `inbox/<commenter>/c_<its key>.json` (a retry is the same file), keeps comments in the browser while the store refuses the link or does not answer, and reads its status for Test, Approve and Reject. A script on the staging page can read the token while the page is open, as it could anything on the page: a comment token can only leave comments and read their status, never the map. Never put a read or write token in a page.
 
-A store also answers `hello` with `"role"`: `"read"`, `"write"` or `"comment"`.
+grndwrk, on any teammate's machine that syncs, reads new files in `inbox/`, files each comment exactly as one that came over the Wi-Fi or the relay (marked when it reads like orders to an agent, its words quoted, `from:` the commenter), acts on each envelope as above, deletes the file from the inbox, and keeps `status/<commenter>.json` up to date. Neither folder is copied into `.grndwrk/`.
 
 ### What a store must not do
 

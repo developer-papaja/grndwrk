@@ -354,13 +354,13 @@ final class OverlayController: UIViewController {
     case .offline:
       // Only say it when it was there a moment ago. The dot says the rest.
       if case .connected = before {
-        flash(Relay.usable ? "Away from grndwrk's Wi-Fi. Comments go through your team's relay." : "Lost grndwrk. Comments wait on the phone.")
+        flash(Store.usable ? "Away from grndwrk's Wi-Fi. Comments go to your team's store." : Relay.usable ? "Away from grndwrk's Wi-Fi. Comments go through your team's relay." : "Lost grndwrk. Comments wait on the phone.")
       }
     case .needsCode(let project, _):
       // Ask once when it starts wanting the code, not every time it checks.
       if case .needsCode = before { return }
-      // Joined the team's relay: comments already go there. Ask which way, rather than asking to be allowed twice.
-      if Relay.joined != nil {
+      // Joined the team's store or relay: comments already go there. Ask which way, rather than asking to be allowed twice.
+      if Relay.joined != nil || Store.joined != nil {
         if !Relay.keepsRelay(project) { askWifiOrRelay(project: project) }
         return
       }
@@ -379,11 +379,11 @@ final class OverlayController: UIViewController {
     if host is UIAlertController { return }
     let alert = UIAlertController(
       title: "grndwrk is on this Wi-Fi",
-      message: "Comments go through your team's relay now. Pair with grndwrk\(project.isEmpty ? "" : " \u{201C}\(project)\u{201D}") on this Wi-Fi instead? It is quicker, and works without the relay. Either way, nothing waits.",
+      message: "Comments go to \(Connection.teamWay) now. Pair with grndwrk\(project.isEmpty ? "" : " \u{201C}\(project)\u{201D}") on this Wi-Fi instead? It is quicker. Either way, nothing waits.",
       preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "Keep using the relay", style: .cancel) { [weak self] _ in
+    alert.addAction(UIAlertAction(title: Store.joined != nil ? "Keep using the store" : "Keep using the relay", style: .cancel) { [weak self] _ in
       Relay.setKeepsRelay(project, true)
-      self?.flash("Comments go through your team's relay. Long press, Pair with the Mac, to change it.")
+      self?.flash("Comments go to \(Connection.teamWay). Long press, Pair with the Mac, to change it.")
     })
     alert.addAction(UIAlertAction(title: "Pair on the Wi-Fi", style: .default) { [weak self] _ in
       Relay.setKeepsRelay(project, false)
@@ -469,7 +469,7 @@ final class OverlayController: UIViewController {
   @objc private func menu(_ press: UILongPressGestureRecognizer) {
     guard press.state == .began else { return }
     let count = Outbox.count
-    var lines = [status(), Connection.viaRelay ? "" : Relay.status.map { "\($0)." } ?? "", Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
+    var lines = [status(), Connection.viaStore ? "" : Store.status.map { "\($0)." } ?? "", Connection.viaRelay || Store.joined != nil ? "" : Relay.status.map { "\($0)." } ?? "", Snapshots.status(window: appWindow())].filter { !$0.isEmpty }
     if count > 0 { lines.append("\(count) \(count == 1 ? "comment waits" : "comments wait") to be sent.") }
     let sheet = UIAlertController(title: "grndwrk", message: lines.joined(separator: "\n"), preferredStyle: .actionSheet)
     if case .needsCode = Connection.state {
@@ -489,8 +489,12 @@ final class OverlayController: UIViewController {
     if count > 0 {
       sheet.addAction(UIAlertAction(title: "Share \(count) \(count == 1 ? "comment" : "comments") as a file", style: .default) { [weak self] _ in self?.share() })
     }
+    if let store = Store.joined {
+      if store.refused != nil { sheet.addAction(UIAlertAction(title: "Join again with a store link", style: .default) { [weak self] _ in self?.joinRelay() }) }
+      sheet.addAction(UIAlertAction(title: "Leave your team's store", style: .default) { [weak self] _ in self?.leaveStore() })
+    }
     if Relay.joined == nil {
-      sheet.addAction(UIAlertAction(title: "Join with an invite", style: .default) { [weak self] _ in self?.joinRelay() })
+      if Store.joined == nil { sheet.addAction(UIAlertAction(title: "Join with a store link or invite", style: .default) { [weak self] _ in self?.joinRelay() }) }
     } else if Relay.joined?.refused != nil {
       sheet.addAction(UIAlertAction(title: "Show the digits to be allowed", style: .default) { [weak self] _ in self?.showDigits() })
       sheet.addAction(UIAlertAction(title: "Leave the relay", style: .default) { [weak self] _ in self?.leaveRelay() })
@@ -516,9 +520,12 @@ final class OverlayController: UIViewController {
     case .connected(let project, let host): return "Connected to \(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)."
     case .needsCode(let project, let host):
       let name = project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}"
-      if Relay.joined != nil { return "\(name) at \(host) is on this Wi-Fi but not paired. Comments go through your team's relay meanwhile." }
+      if Relay.joined != nil || Store.joined != nil { return "\(name) at \(host) is on this Wi-Fi but not paired. Comments go to \(Connection.teamWay) meanwhile." }
       return "\(name) at \(host) needs the pairing code. Comments wait on the phone."
     case .offline(let why):
+      if Connection.viaStore {
+        return "Straight to your team's store at \(Store.host). No grndwrk on this Wi-Fi, so comments go to the store and reach the map when someone on the team runs grndwrk."
+      }
       if Connection.viaRelay, let host = Relay.joined.flatMap({ URL(string: $0.url)?.host }) {
         return "Through your team's relay at \(host). No grndwrk on this Wi-Fi, so comments go to the relay and reach grndwrk when someone on the team runs it."
       }
@@ -736,7 +743,8 @@ final class OverlayController: UIViewController {
         self?.flash(ok ? "Open on your Mac" : "grndwrk is not reachable. Try again when connected.")
       }
     }
-    let top = UIStackView(arrangedSubviews: [title, mac, fold, close])
+    // Through the store nobody's map is asked to open anything.
+    let top = UIStackView(arrangedSubviews: Connection.throughStore ? [title, fold, close] : [title, mac, fold, close])
     top.alignment = .center
     testStack.addArrangedSubview(top)
 
@@ -802,10 +810,12 @@ final class OverlayController: UIViewController {
     alert.addAction(UIAlertAction(title: "Reject", style: .destructive) { [weak self] _ in
       self?.sendTested(item, works: false, note: alert.textFields?.first?.text ?? "")
     })
-    // Rejects it now, and opens it in the map on the Mac to write what is still wrong there.
-    alert.addAction(UIAlertAction(title: "Reject and write on the Mac", style: .default) { [weak self] _ in
-      self?.sendTested(item, works: false, note: alert.textFields?.first?.text ?? "", onMac: true)
-    })
+    // Rejects it now, and opens it in the map on the Mac to write what is still wrong there. Not through a store.
+    if !Connection.throughStore {
+      alert.addAction(UIAlertAction(title: "Reject and write on the Mac", style: .default) { [weak self] _ in
+        self?.sendTested(item, works: false, note: alert.textFields?.first?.text ?? "", onMac: true)
+      })
+    }
     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     present(alert, animated: true)
   }
@@ -1079,7 +1089,7 @@ final class OverlayController: UIViewController {
         return nil
       case .relayed:
         Outbox.remember(data, id: "", project: nil, relayed: true)
-        self?.flash("Sent through the relay. Write it in the map when you are at your Mac.")
+        self?.flash("Sent to \(Connection.teamWay). Write it in the map when you are at your Mac.")
         return nil
       case .rejected(let status): return "grndwrk did not take it (\(status))."
       case .blockedByATS: return "Blocked by App Transport Security. See the GrndwrkFeedback README."
@@ -1137,7 +1147,7 @@ final class OverlayController: UIViewController {
     var config = button.configuration
     // Offline, the button says so in words, so nobody wonders where comments went.
     // Through the relay it is not offline: comments still go, only another way.
-    let relay = Connection.viaRelay
+    let relay = Connection.viaRelay || Connection.viaStore
     let offline: Bool
     if case .offline = Connection.state { offline = !relay } else { offline = false }
     let name = offline ? "Offline" : "grndwrk"

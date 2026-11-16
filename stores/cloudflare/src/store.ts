@@ -162,7 +162,8 @@ export class Store {
     const who = await this.who(req, project)
     if (!who) return error(401, 'A valid token is required')
     seen(who)
-    if (route === 'hello' && req.method === 'GET') return json(200, { protocol: 1, project, writable: who.role === 'write', role: who.role })
+    // A comment token learns its commenter here: the folder its comments go in, and its status file.
+    if (route === 'hello' && req.method === 'GET') return json(200, { protocol: 1, project, writable: who.role === 'write', role: who.role, ...(who.role === 'comment' ? { commenter: who.commenter } : {}) })
     let path = ''
     if (route.startsWith('files/')) {
       try {

@@ -211,7 +211,8 @@ describe('the Cloud Function', () => {
 
     it('leaves a comment only in its own inbox folder, with the name the store knows', async () => {
       const { fetcher, url, as } = setup()
-      expect((await as('idtoken-uid_phone001').hello()).role).toBe('comment')
+      expect(await as('idtoken-uid_phone001').hello()).toMatchObject({ role: 'comment', commenter: 'uid_phone001' })
+      expect((await as('idtoken-uid_writer01').hello()).commenter).toBeUndefined()
       expect((await put(fetcher, url, 'inbox/uid_phone001/c_00000001.json', 'idtoken-uid_phone001')).status).toBe(201)
       const comment = JSON.parse(new TextDecoder().decode((await as('idtoken-uid_writer01').read('inbox/uid_phone001/c_00000001.json'))?.bytes))
       expect(comment).toEqual({ text: 'The weight field is too small', from: 'Front desk iPad' })

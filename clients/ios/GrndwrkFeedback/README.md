@@ -182,10 +182,19 @@ Comments are kept on the device and sent once grndwrk answers, oldest first. The
 A colleague who tests at home, or anywhere without your grndwrk on the Wi-Fi, sends through your team's relay: a small server you put on your own Cloudflare account with `grndwrk relay deploy` (see grndwrk's README). It only passes on sealed envelopes, and cannot read them.
 
 1. In the map, the globe at the bottom of the rail: **Colleagues**, type their name, **Invite**. It shows a link and a QR code. Send the link (or show the code). It works once, for seven days.
-2. In the app, they long press the grndwrk button, **Join with an invite**, and paste the link (`grndwrk:invite/...`), or **Scan the QR code**. The phone shows four digits.
+2. In the app, they long press the grndwrk button, **Join with a store link or invite**, and paste the link (`grndwrk:invite/...`), or **Scan the QR code**. The phone shows four digits.
 3. A grndwrk on your team shows "A phone joined with Anna's invite" with four digits. Allow it when Anna's phone shows the same; until then her comments wait on her phone (long press, **Show the digits to be allowed**, shows them again). From then on, when no grndwrk answers on their Wi-Fi, comments go to the relay. They reach the map when a grndwrk on the team runs, marked with their name. What became of them (fix proposed, ready to test, fixed, with the steps) comes back the same way, so they test fixes as you do.
 
 Its key is kept in the Keychain, on this device only. The phone still tries the Wi-Fi first. When it finds a grndwrk there that it is not paired with, it asks once: **Pair on the Wi-Fi**, or **Keep using the relay**. Until paired, comments keep going through the relay, so nothing waits. **Leave the relay**, in the same menu, stops it; joining again needs a new invite. In the map, Colleagues lists who joined; Remove takes a phone out at once.
+
+### Through your team's store
+
+A team that keeps its map in a store (see grndwrk's README, A team's store) sends comments there instead of through the relay. Each colleague gets a store link from the store, the way the store hands them out: its login page, or a link someone on the team sends. It looks like `grndwrk:store/maps.example.com/clinic/#...`.
+
+1. In the app, long press the grndwrk button, **Join with a store link or invite**, and paste the link, or **Scan the QR code**.
+2. That is all: the store already knows who you are. When no grndwrk answers on the Wi-Fi, comments go to the store, and reach the map when someone on the team runs grndwrk. What became of them comes back from the store, so fixes are tested, approved and rejected as through the relay. Show on my Mac and Write on the Mac are not offered this way.
+
+The link holds a token that can only leave comments and read what became of them, never the map. It is kept in the Keychain, on this device only. When the store no longer takes it (logged out, or taken back), comments wait on the phone, and the menu offers **Join again with a store link**. **Leave your team's store** stops it. A phone joined to both a store and a relay uses the store.
 
 **Scanning needs the camera,** so the app's Info.plist must say why: `NSCameraUsageDescription`, for example "To scan an invite from grndwrk". Put it in the Info.plist of the builds that have the package. Without it, the app offers only pasting the link.
 
