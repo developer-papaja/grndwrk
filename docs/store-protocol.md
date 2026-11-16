@@ -36,7 +36,7 @@ Errors are JSON, `{ "error": "Plain words" }`.
 { "protocol": 1, "project": "Clinic", "writable": true }
 ```
 
-`protocol` is `1` for this document. `writable` says whether this token may write. `role` is `"read"`, `"write"` or `"comment"`; for a comment token, `commenter` names it too (see Comments straight to the store):
+`protocol` is `1` for this document. `writable` says whether this token may write. A store that knows who the person is may add `"name"`: the page writes it as `by:` on thoughts the person adds there, so the map shows who added them (leave it out when the map may not hold names). `role` is `"read"`, `"write"` or `"comment"`; for a comment token, `commenter` names it too (see Comments straight to the store):
 
 ```json
 { "protocol": 1, "project": "Clinic", "writable": false, "role": "comment", "commenter": "web_stage01" }
