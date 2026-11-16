@@ -113,6 +113,20 @@ describe('adapters', () => {
       await writeFile(join(root, 'tools', name), src)
       await expect(allowAdapter(root, `tools/${name}`)).rejects.toThrow(/cannot be allowed/)
     }
+    // What the security review got past the first check: a fake comment in a string, createRequire, a # import, eval, child processes.
+    for (const [name, src] of [
+      ['str1.mjs', 'const s="/*"; import x from \'./evil.mjs\'; const t="*/"\nexport default async () => x\n'],
+      ['str2.mjs', "const u='a//'; const m = await import('./evil.mjs')\nexport default async () => m\n"],
+      ['cr.mjs', "import { createRequire } from 'node:module'\nconst r = createRequire(import.meta.url); r('./evil.cjs')\nexport default async () => r\n"],
+      ['hash.mjs', "import x from '#evil'\nexport default async () => x\n"],
+      ['eval.mjs', "import { readFileSync } from 'node:fs'\nexport default async () => eval(readFileSync('tools/evil.mjs', 'utf8'))\n"],
+      ['spawn.mjs', "import { execFileSync } from 'node:child_process'\nexport default async () => execFileSync('node', ['tools/evil.mjs'])\n"],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the adapter's own source, a template it would run
+      ['tpl.mjs', "const p = 'evil'\nexport default async () => (await import(`./${p}.mjs`)).default\n"],
+    ]) {
+      await writeFile(join(root, 'tools', name), src)
+      await expect(allowAdapter(root, `tools/${name}`), name).rejects.toThrow(/cannot be allowed/)
+    }
     // Installed packages are fine, and a URL in a comment is not an import.
     await writeFile(join(root, 'tools', 'pkg.mjs'), "import { createHash } from 'node:crypto'\n// see https://example.com/docs\nexport default async () => createHash\n")
     await expect(allowAdapter(root, 'tools/pkg.mjs')).resolves.toMatch(/^[a-f0-9]{64}$/)
@@ -187,5 +201,24 @@ describe('comments straight to the store', () => {
     expect((await pre('v1/changes', 'GET')).status).toBe(403)
     expect((await pre('v1/files/inbox/dev_phone01/c_00000009.json', 'DELETE')).status).toBe(403)
     expect((await pre('v1/hello', 'GET', 'https://elsewhere.example')).status).toBe(403)
+  })
+})
+
+describe('a token from the environment', () => {
+  it('goes only to the store GRNDWRK_STORE_URL names', async () => {
+    const { tokenFor } = await import('../src/shared-store/config.js')
+    const before = { t: process.env.GRNDWRK_STORE_TOKEN, u: process.env.GRNDWRK_STORE_URL, d: process.env.GRNDWRK_STORE_DIR }
+    process.env.GRNDWRK_STORE_DIR = await mkdtemp(join(tmpdir(), 'gw-token-'))
+    process.env.GRNDWRK_STORE_TOKEN = 'ci-secret'
+    try {
+      delete process.env.GRNDWRK_STORE_URL
+      expect(await tokenFor('https://maps.example.com/clinic/')).toBeNull()
+      process.env.GRNDWRK_STORE_URL = 'https://maps.example.com/clinic'
+      expect(await tokenFor('https://maps.example.com/clinic/')).toBe('ci-secret')
+      // A pull request pointing store.json elsewhere gets nothing.
+      expect(await tokenFor('https://attacker.example/clinic/')).toBeNull()
+    } finally {
+      for (const [k, v] of [['GRNDWRK_STORE_TOKEN', before.t], ['GRNDWRK_STORE_URL', before.u], ['GRNDWRK_STORE_DIR', before.d]] as const) v === undefined ? delete process.env[k] : (process.env[k] = v)
+    }
   })
 })

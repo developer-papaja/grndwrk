@@ -59,6 +59,7 @@ async function main() {
       login: { type: 'boolean', default: false },
       name: { type: 'string' },
       token: { type: 'string' },
+      'allow-deletes': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   })
@@ -130,7 +131,7 @@ async function main() {
 
   if (command === 'store') {
     const { storeCommand } = await import('./shared-store/cli.js')
-    return storeCommand(positionals.slice(1), findProjectRoot(process.cwd()), values.token)
+    return storeCommand(positionals.slice(1), findProjectRoot(process.cwd()), values.token, { allowDeletes: values['allow-deletes'] })
   }
 
   if (command === 'relay') {

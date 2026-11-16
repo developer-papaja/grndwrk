@@ -11,11 +11,11 @@
  *   adapter's full path and the hash of the exact file that was allowed.
  *   A changed file is not loaded until it is allowed again.
  */
-import { createHash } from 'node:crypto'
-import { lstat, mkdir, readFile as readPlain, realpath, rename, writeFile as writePlain } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { lstat, mkdir, readFile as readPlain, realpath, rename, rm as rmPlain, writeFile as writePlain } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { readFile } from '../store/fs.js'
+import { mkdir as mkdirGuarded, readFile, writeFile as writeGuarded } from '../store/fs.js'
 import { stateDir } from '../root.js'
 import { HttpStore } from './http.js'
 import { checkChanges, CursorGone, type StoreClient, StoreBroke } from './protocol.js'
@@ -74,9 +74,36 @@ export async function writeStoreConfig(gwDir: string, config: StoreConfig | null
 // Tokens
 
 export async function tokenFor(url: string): Promise<string | null> {
-  if (process.env.GRNDWRK_STORE_TOKEN) return process.env.GRNDWRK_STORE_TOKEN
+  // From the environment (CI, a script) only for the store it names: a pull request
+  // that points store.json elsewhere must not receive it.
+  if (process.env.GRNDWRK_STORE_TOKEN) {
+    const named = process.env.GRNDWRK_STORE_URL
+    if (named && sameStore(named, url)) return process.env.GRNDWRK_STORE_TOKEN
+    if (!named) console.error('GRNDWRK_STORE_TOKEN is set without GRNDWRK_STORE_URL, so it is not used: name the store it is for.')
+  }
   const all = await readJson<Record<string, string>>(join(dir(), 'store-tokens.json'), {})
   return all[new URL(url).toString()] ?? null
+}
+
+const sameStore = (a: string, b: string) => {
+  try {
+    return new URL(a).toString().replace(/\/?$/, '/') === new URL(b).toString().replace(/\/?$/, '/')
+  } catch {
+    return false
+  }
+}
+
+/** Whether this machine kept a token for any store on that host before: a new one is worth a second look. */
+export async function knownHost(url: string): Promise<boolean> {
+  const all = await readJson<Record<string, string>>(join(dir(), 'store-tokens.json'), {})
+  const host = new URL(url).host
+  return Object.keys(all).some((k) => {
+    try {
+      return new URL(k).host === host
+    } catch {
+      return false
+    }
+  })
 }
 
 export async function saveToken(url: string, token: string | null): Promise<void> {
@@ -109,19 +136,40 @@ const hashOf = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex
 
 /**
  * Why the adapter's source cannot be allowed, or ''. Allowing covers this one
- * file, so it may import installed packages (`firebase-admin`, `node:fs`) but
- * no file of the repository and no address it computes: a pull request could
- * change such a file and run it without anyone allowing it again.
+ * file, so it may import installed packages (`firebase-admin`, `node:crypto`)
+ * but must not be able to run code from anywhere else: no file of the
+ * repository, no address it works out while running, and none of the ways
+ * Node has to run other code (require, eval, Function, vm, child processes,
+ * workers, module hooks). Read on the raw text, comments and strings
+ * included, so nothing can be hidden behind something that only looks like a
+ * comment; a false alarm costs a rewrite, a miss would run unseen code.
  */
 export function adapterImportProblem(source: string): string {
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
-  const local = /^(\.|\/|file:|data:|https?:)/
-  for (const m of code.matchAll(/\b(?:from|import)\s*['"`]([^'"`]*)['"`]|\b(?:import|require)\s*\(\s*([^)]*)\)/g)) {
-    const spec = m[1] ?? m[2].trim()
-    if (m[2] !== undefined && !/^['"][^'"`]*['"]$/.test(spec)) return `it imports an address it works out while running (${spec.slice(0, 40)})`
-    const name = m[1] ?? spec.slice(1, -1)
-    if (local.test(name)) return `it imports ${name}: an adapter is one file, and may import installed packages only`
+  const one = 'an adapter is one file, and may import installed packages only'
+  const named = (name: string) => {
+    if (/^(\.|\/|\\|#|[a-z][a-z0-9+.-]*:)/i.test(name) && !/^node:[a-z_/]+$/.test(name)) return `it imports ${name}: ${one}`
+    if (/^(node:)?(child_process|vm|module|worker_threads|cluster|inspector|wasi)(\/|$)/.test(name)) return `it imports ${name}, which can run other code`
+    return ''
   }
+  // Every specifier written after import or from, whatever surrounds it.
+  for (const m of source.matchAll(/\b(?:from|import)\s*(['"`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)) {
+    if (m[1] === '`' && m[2].includes('${')) return `it imports an address it works out while running (${m[2].slice(0, 40)})`
+    const problem = named(m[2])
+    if (problem) return problem
+  }
+  // import(...): one plain string naming an installed package, nothing else.
+  for (const m of source.matchAll(/\bimport\s*\(\s*([^)]*)\)/g)) {
+    const plain = /^(['"])([^'"`\\$]*)\1\s*$/.exec(m[1])
+    if (!plain) return `it imports an address it works out while running (${m[1].slice(0, 40)})`
+    const problem = named(plain[2])
+    if (problem) return problem
+  }
+  const words: [RegExp, string][] = [
+    [/\brequire\s*\(|\bcreateRequire\b|\bmainModule\b/, 'require'],
+    [/\beval\s*\(|\bFunction\s*\(|\bnew\s+Function\b/, 'eval or Function'],
+    [/import\.meta\.resolve|\bregisterHooks\b|\bmodule\.register\b|process\.binding|process\.dlopen/, 'module hooks or native code'],
+  ]
+  for (const [re, what] of words) if (re.test(source)) return `it uses ${what}, which can run code from another file: ${one}`
   return ''
 }
 
@@ -163,8 +211,19 @@ export async function loadAdapter(projectRoot: string, adapter: string, project:
   if (hash !== allowed) throw new AdapterNotAllowed(`The store adapter ${adapter} changed since it was allowed. Read what changed (git diff), then run: grndwrk store allow`)
   const problem = adapterImportProblem(bytes.toString('utf8'))
   if (problem) throw new AdapterNotAllowed(`${adapter} is not loaded: ${problem}`)
-  // The hash in the address: a changed file is a new module, never a cached old one.
-  const mod = (await import(`${pathToFileURL(full).href}?sha=${hash}`)) as { default?: unknown }
+  // Run exactly the bytes that were hashed, never the file read again a moment later. The copy sits
+  // in .grndwrk/, so installed packages resolve from the project as from the adapter; it goes at once.
+  const copyDir = join(projectRoot, '.grndwrk', `.adapter-${randomBytes(6).toString('hex')}`)
+  // Through grndwrk's own file calls: a .grndwrk that is a link is refused, as everywhere.
+  await mkdirGuarded(copyDir, { recursive: true, mode: 0o700 })
+  const copy = join(copyDir, `adapter-${hash.slice(0, 16)}.mjs`)
+  let mod: { default?: unknown }
+  try {
+    await writeGuarded(copy, bytes, { mode: 0o600, flag: 'wx' })
+    mod = (await import(pathToFileURL(copy).href)) as { default?: unknown }
+  } finally {
+    await rmPlain(copyDir, { recursive: true, force: true })
+  }
   if (typeof mod.default !== 'function') throw new StoreBroke(`${adapter}: the default export is a function that returns the store`)
   const store = (await (mod.default as (o: { project: string; root: string }) => Promise<StoreClient>)({ project, root: projectRoot })) as StoreClient
   for (const call of ['hello', 'changes', 'read', 'write', 'remove'] as const) {

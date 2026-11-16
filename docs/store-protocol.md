@@ -42,6 +42,8 @@ Errors are JSON, `{ "error": "Plain words" }`.
 { "protocol": 1, "project": "Clinic", "writable": false, "role": "comment", "commenter": "web_stage01" }
 ```
 
+For read and write tokens, `hello` may also say `"names": true`, meaning the store sets `from` on every comment itself (the name it knows, or none), and `"site": "https://staging.clinic.example"`, the staging site it takes comments from. grndwrk believes a comment's `from` only with `names: true` (otherwise the comment is filed under its commenter id, which the path proves), and keeps a comment's page address only when it is on that site, as through the relay. It files at most fifty comments from one commenter in a round; the rest wait in the inbox.
+
 ### `GET v1/changes?since=<cursor>&wait=<seconds>`
 
 What changed since the cursor, each path once, with its latest state:
@@ -249,7 +251,7 @@ export default async function store({ project, root }) {
 }
 ```
 
-An adapter is **one file**: allowing covers exactly that file, so it may import installed packages (`firebase-admin`, `node:crypto`) but no other file of the repository, and no address it works out while running. grndwrk refuses to allow or load one that does. A cursor the store no longer knows is an error named `CursorGone` (or with `code: 'CURSOR_GONE'`), the adapter's way of answering `410`.
+An adapter is **one file**: allowing covers exactly that file, so it may import installed packages (`firebase-admin`, `node:crypto`) but nothing that could run code from anywhere else: no other file of the repository, no address it works out while running, no `require`, `eval` or `Function`, and none of `child_process`, `vm`, `module` or `worker_threads`. grndwrk reads the file's raw text for these, comments and strings included, and refuses to allow or load one that has them; rewrite the line if it is a false alarm. It runs exactly the bytes you allowed, from a private copy, never the file read again a moment later. A cursor the store no longer knows is an error named `CursorGone` (or with `code: 'CURSOR_GONE'`), the adapter's way of answering `410`.
 
 Credentials for your database are the adapter's own business: read them from the environment or your usual config, never from `.grndwrk/`.
 

@@ -18,10 +18,12 @@ export class MemoryStore implements StoreClient {
     private writable = true,
     /** How many changes one answer holds at most, to test `more`. */
     private page = 500,
+    /** What else hello says, as a real store would: `names`, `site`. */
+    private extra: Record<string, unknown> = {},
   ) {}
 
   async hello(): Promise<Hello> {
-    return { protocol: PROTOCOL, project: this.project, writable: this.writable }
+    return { ...this.extra, protocol: PROTOCOL, project: this.project, writable: this.writable }
   }
 
   async changes({ since, wait = 0 }: { since?: string; wait?: number } = {}): Promise<Changes> {

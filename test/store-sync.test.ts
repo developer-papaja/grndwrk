@@ -21,7 +21,8 @@ const words = (b: Uint8Array) => new TextDecoder().decode(b)
 beforeEach(async () => {
   tmp = await mkdtemp(join(tmpdir(), 'gw-store-sync-'))
   process.env.GRNDWRK_STORE_DIR = join(tmp, 'user')
-  shared = new MemoryStore('Clinic')
+  // As the example stores answer: they set every comment's name, and name their staging site.
+  shared = new MemoryStore('Clinic', true, 500, { names: true, site: 'https://staging.clinic.example' })
   lines.length = 0
 })
 afterEach(async () => {
@@ -30,11 +31,11 @@ afterEach(async () => {
 })
 
 /** A teammate's machine: its own project folder, synced with the shared store. */
-async function machine(name: string, store: StoreClient = shared) {
+async function machine(name: string, store: StoreClient = shared, opts: { identity?: string; allowManyDeletes?: boolean } = {}) {
   const gw = join(tmp, name, '.grndwrk')
   await mkdir(join(gw, 'nodes'), { recursive: true })
   const nodes = new NodeStore(gw)
-  const sync = new StoreSync(gw, store, { gwDir: gw, store: nodes, nodes: new NodeSync(() => nodes.list()), project: 'Clinic', uiUrl: '' }, { log: (l) => lines.push(l) })
+  const sync = new StoreSync(gw, store, { gwDir: gw, store: nodes, nodes: new NodeSync(() => nodes.list()), project: 'Clinic', uiUrl: '' }, { log: (l) => lines.push(l), ...opts })
   const put = async (path: string, body: string | Buffer) => {
     await mkdir(dirname(join(gw, path)), { recursive: true })
     await writeFile(join(gw, path), body)
@@ -433,5 +434,59 @@ describe('the Comment button on a staging site, straight to the store (overlay/s
     delete tokens.ct_frontdesk_000001
     expect(await browser.post({ ...comment, text: 'Another one' })).toBe('asked')
     expect(await browser.joined()).toBe(false)
+  })
+})
+
+describe('what the security review found', () => {
+  it('pointing the map at another store deletes nothing here', async () => {
+    const a = await machine('a', shared, { identity: 'https://maps.example.com/clinic/' })
+    await a.put('nodes/n_aaaaaa.md', card('n_aaaaaa', 'Reminders'))
+    await a.put('nodes/n_bbbbbb.md', card('n_bbbbbb', 'Booking'))
+    await a.sync.fullPass()
+    // The same folder, now with store.json naming another store (a pull request can).
+    const other = new MemoryStore('Other')
+    const again = new StoreSync(a.gw, other, { gwDir: a.gw, store: a.nodes, nodes: new NodeSync(() => a.nodes.list()), project: 'Clinic', uiUrl: '' }, { log: (l) => lines.push(l), identity: 'https://elsewhere.example/x/' })
+    const c = await again.fullPass()
+    expect(c.deletedHere).toBe(0)
+    expect(await a.get('nodes/n_aaaaaa.md')).toContain('Reminders')
+    expect(lines.some((l) => /synced with another store before/.test(l))).toBe(true)
+    // What only this folder has went to the new store, not away.
+    expect((await other.changes({})).changes.map((x) => x.path).sort()).toEqual(['nodes/n_aaaaaa.md', 'nodes/n_bbbbbb.md'])
+  })
+
+  it('a store that suddenly lacks much of the map is stopped before it empties the folder', async () => {
+    const a = await machine('a')
+    for (let i = 0; i < 30; i++) await a.put(`nodes/n_x${String(i).padStart(5, '0')}.md`, card(`n_x${String(i).padStart(5, '0')}`, `Thought ${i}`))
+    await a.sync.fullPass()
+    // The store loses everything at once.
+    for (const c of (await shared.changes({})).changes) await shared.remove(c.path, c.version as string)
+    await expect(a.sync.pull()).rejects.toThrow(/allow-deletes/)
+    const left = (await readdir(join(a.gw, 'nodes'))).filter((f) => f.endsWith('.md'))
+    expect(left.length).toBeGreaterThanOrEqual(20)
+    // Said by the person: then it goes through.
+    const b = await machine('a', shared, { allowManyDeletes: true })
+    await b.sync.pull()
+    expect((await readdir(join(a.gw, 'nodes'))).filter((f) => f.endsWith('.md'))).toEqual([])
+  })
+
+  it('without the store vouching, a comment is filed under its commenter, and an address off the staging site is dropped', async () => {
+    const plain = new MemoryStore('Clinic')
+    const a = await machine('a', plain)
+    const body = { text: 'The booking button is hard to find', screen: '/visits/1', key: 'k-plain-000000001', from: 'The clinic owner', url: 'http://localhost:5173/visits/1' }
+    await plain.write('inbox/phone_0001/c_0000000009.json', text(JSON.stringify(body)), { type: 'application/json', create: true })
+    await a.sync.fullPass()
+    const [n] = (await a.nodes.list()).filter((x) => x.extra?.source === 'app')
+    expect(n.extra.from).toBe('phone_0001')
+    expect(n.body).not.toContain('localhost:5173')
+  })
+
+  it('files at most fifty comments from one commenter in a round; the rest wait', async () => {
+    const a = await machine('a')
+    for (let i = 0; i < 60; i++) {
+      const c = { text: `Comment ${i}`, screen: 'Booking', key: `k-flood-${String(i).padStart(9, '0')}` }
+      await shared.write(`inbox/phone_0001/c_${String(i).padStart(10, '0')}.json`, text(JSON.stringify(c)), { type: 'application/json', create: true })
+    }
+    expect((await a.sync.fullPass()).comments).toBe(50)
+    expect(lines.some((l) => /filing 50 a round/.test(l))).toBe(true)
   })
 })

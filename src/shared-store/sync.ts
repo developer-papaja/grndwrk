@@ -29,11 +29,16 @@ export const SYNC_STATE = 'store-sync.json'
 /** The store answers, but this token cannot sync the map: trying again will not help. */
 export class NotForSync extends StoreBroke {}
 
+/** A round would delete more local files than a store plausibly removed at once: stopped, nothing more deleted. */
+export class TooManyDeletes extends StoreBroke {}
+
 interface Entry {
   version: string
   hash: string
 }
 interface State {
+  /** Which store these versions came from: its address or adapter, and its project. */
+  store?: string
   cursor?: string
   files: Record<string, Entry>
 }
@@ -66,6 +71,10 @@ export interface SyncOptions {
   stillAllowed?: () => Promise<string | null>
   /** Milliseconds between scans of the folder, a safety net under the watcher. */
   scanEvery?: number
+  /** Which store this is (its address, or `adapter:` and its path): versions from another store are never used. */
+  identity?: string
+  /** Let a round delete many files here, once the person said that is right (`grndwrk store sync --allow-deletes`). */
+  allowManyDeletes?: boolean
 }
 
 export class StoreSync {
@@ -81,6 +90,13 @@ export class StoreSync {
   private statusSent = new Map<string, string>()
   private inboxTries = new Map<string, number>()
   private said = new Map<string, string>()
+  private deletedThisRound = 0
+  /** Comments filed per commenter this round: a flood waits for later rounds instead of filling the map at once. */
+  private filedThisRound = new Map<string, number>()
+  /** The store sets `from` on every comment itself (hello `names: true`); otherwise a name is the device's own claim. */
+  private names = false
+  /** The staging site the store takes comments from (hello `site`): a comment's address is kept only on it. */
+  private site = ''
   private log: (line: string) => void
   /** A token that may only read: the folder takes the store's changes, its own stay here. */
   readOnly = false
@@ -112,13 +128,29 @@ export class StoreSync {
         if (v && typeof v === 'object' && v.files && typeof v.files === 'object') {
           const files: Record<string, Entry> = {}
           for (const [p, e] of Object.entries(v.files)) if (isMapPath(p) && typeof e?.version === 'string' && typeof e?.hash === 'string') files[p] = { version: e.version, hash: e.hash }
-          this.state = { ...(typeof v.cursor === 'string' ? { cursor: v.cursor } : {}), files }
+          this.state = { ...(typeof v.store === 'string' ? { store: v.store } : {}), ...(typeof v.cursor === 'string' ? { cursor: v.cursor } : {}), files }
         }
       } catch {
         // None yet, or unreadable: the full pass compares everything.
       }
       const hello = await this.store.hello()
       if (hello.role === 'comment') throw new NotForSync('This token may only leave comments. Ask for one that may read the map, then run: grndwrk store login')
+      // Versions from another store say nothing about this one: what it lacks was never deleted there.
+      // Without this, pointing store.json at another store (a pull request can) would delete the folder.
+      const identity = `${this.options.identity ?? ''}|${hello.project}`
+      if (this.state.store !== undefined && this.state.store !== identity) {
+        this.log('This map was synced with another store before. Starting afresh with this one: nothing here is deleted, and what only this folder has goes to this store.')
+        this.state = { files: {} }
+      }
+      this.state.store = identity
+      this.names = (hello as { names?: unknown }).names === true
+      const site = (hello as { site?: unknown }).site
+      try {
+        const u = typeof site === 'string' ? new URL(site) : null
+        this.site = u && u.protocol === 'https:' && !u.username && !u.password && u.pathname === '/' ? u.origin : ''
+      } catch {
+        this.site = ''
+      }
       this.readOnly = !hello.writable
       if (this.readOnly) this.log('This token may only read the store: changes made here stay in the folder and are not sent.')
     })()
@@ -137,6 +169,8 @@ export class StoreSync {
   private run(fn: () => Promise<void>): Promise<SyncCounts> {
     const next = this.queue.then(async () => {
       this.counts = zero()
+      this.deletedThisRound = 0
+      this.filedThisRound.clear()
       await fn()
       return { ...this.counts }
     })
@@ -405,6 +439,11 @@ export class StoreSync {
     const now = await this.readLocal(path)
     if (!now) return false
     if (hashOf(now) !== expect) return false
+    // A store that suddenly lacks much of the map is more likely wrong (a mistake, another project, an attack) than emptied on purpose.
+    const most = Math.max(10, Math.ceil(Object.keys(this.state.files).length * 0.2))
+    if (!this.options.allowManyDeletes && ++this.deletedThisRound > most) {
+      throw new TooManyDeletes(`The store no longer has many files this machine synced with it (more than ${most} in one go). Nothing more was deleted here. If they really were removed, run: grndwrk store sync --allow-deletes`)
+    }
     await unlink(join(this.gwDir, path))
     this.hashes.delete(path)
     return true
@@ -450,6 +489,10 @@ export class StoreSync {
     if (this.readOnly) return
     const commenter = INBOX.exec(path)?.[1]
     if (!commenter) return
+    // At most this many from one commenter in a round; the rest stay in the inbox for the next.
+    const filed = this.filedThisRound.get(commenter) ?? 0
+    if (filed >= PER_COMMENTER_ROUND) return this.sayOnce(`flood:${commenter}`, `Many comments from ${commenter} in the store: filing ${PER_COMMENTER_ROUND} a round, the rest wait in the inbox.`)
+    this.filedThisRound.set(commenter, filed + 1)
     const r = await this.store.read(path)
     if (!r) return // Another teammate's grndwrk took it.
     try {
@@ -462,9 +505,12 @@ export class StoreSync {
         this.counts.results++
       } else {
         // Written on the Mac is for a phone that points at its own grndwrk: here nobody's browser is asked to open.
-        const { from, on_mac: _onMac, ...rest } = body as Record<string, unknown>
-        const name = typeof from === 'string' && from.trim() ? from : commenter
-        await commentRequest('/api/feedback', rest, { ...this.ctx, via: 'store', from: { name, commenter }, cardId: cardIdFor(path) })
+        const { from, on_mac: _onMac, url, ...rest } = body as Record<string, unknown>
+        // The name only when the store vouches for it; otherwise the commenter's id, which the path proves.
+        const name = this.names && typeof from === 'string' && from.trim() ? from : commenter
+        // The address only on the store's staging site, as through the relay: never a local site's, never elsewhere.
+        const onSite = typeof url === 'string' && this.site && sameOrigin(url, this.site) ? { url } : {}
+        await commentRequest('/api/feedback', { ...rest, ...onSite }, { ...this.ctx, via: 'store', from: { name, commenter }, cardId: cardIdFor(path) })
         this.counts.comments++
       }
     } catch (err) {
@@ -639,6 +685,7 @@ export async function connectStore(gwDir: string, ctx: CommentsCtx, project: str
   const adapter = 'adapter' in config ? config.adapter : ''
   const sync = new StoreSync(gwDir, client, ctx, {
     log,
+    identity: 'url' in config ? config.url : `adapter:${config.adapter}`,
     // A pull may change the adapter: it is not run again until allowed again.
     stillAllowed: adapter
       ? async () => {
@@ -691,4 +738,16 @@ function isEnvelope(v: object): v is Envelope {
   if (typeof path !== 'string' || !ENVELOPE_PATHS.includes(path)) throw new BadInput('it names something a device does not send through the store')
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new BadInput('its body is not a JSON object')
   return true
+}
+
+/** Comments filed from one commenter in one round of the sync. */
+const PER_COMMENTER_ROUND = 50
+
+function sameOrigin(url: string, site: string): boolean {
+  try {
+    const u = new URL(url)
+    return u.origin === site && !u.username && !u.password
+  } catch {
+    return false
+  }
 }

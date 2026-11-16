@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline/promises'
 import { basename, join } from 'node:path'
 import { type CheckResult, checkStore } from './check.js'
-import { adapterState, allowAdapter, loadAdapter, openStore, readStoreConfig, saveToken, type StoreConfig, tokenFor, writeStoreConfig } from './config.js'
+import { adapterState, allowAdapter, knownHost, loadAdapter, openStore, readStoreConfig, saveToken, type StoreConfig, tokenFor, writeStoreConfig } from './config.js'
 import { HttpStore } from './http.js'
 import { writePageAssets } from './page.js'
 
@@ -11,6 +11,8 @@ export const STORE_HELP = `Usage:
                          on (writes .grndwrk/store.json); grndwrk start syncs
                          .grndwrk/ with it while it runs
   grndwrk store sync     sync .grndwrk/ with the store once, and stop
+      --allow-deletes    let this pass delete many files here, when the store
+                         really lost them (otherwise grndwrk stops and asks)
   grndwrk store leave    stop using the store; .grndwrk/ stays as it is
   grndwrk store check <url | adapter.mjs> [--token <t>]
                          run the store protocol's rules against a store, yours
@@ -37,7 +39,7 @@ async function ask(question: string): Promise<string> {
   }
 }
 
-export async function storeCommand(args: string[], root: string | null, token?: string): Promise<void> {
+export async function storeCommand(args: string[], root: string | null, token?: string, options: { allowDeletes?: boolean } = {}): Promise<void> {
   const [sub, target] = args
   const gwDir = root ? join(root, '.grndwrk') : null
 
@@ -96,7 +98,7 @@ export async function storeCommand(args: string[], root: string | null, token?: 
 
   if (sub === 'sync') {
     if (!config) return void console.error('This project keeps its map in .grndwrk only: there is no store.json. Run grndwrk store use <url | adapter.mjs> first.')
-    return void (await syncOnce(root, gwDir))
+    return void (await syncOnce(root, gwDir, { allowDeletes: options.allowDeletes }))
   }
 
   if (sub === 'leave') {
@@ -112,6 +114,8 @@ export async function storeCommand(args: string[], root: string | null, token?: 
 
 /** Keep the token for a store on this machine, after it answered with it. True when kept. */
 async function login(url: string, token?: string): Promise<boolean> {
+  // store.json comes through git: a pull request could name someone else's server and wait for a token.
+  if (!(await knownHost(url))) console.log(`\n  This machine has not used a store at ${new URL(url).host} before. Give a token only if that is your team's store.\n`)
   const t = token ?? (await ask(`Token for ${url}: `))
   if (!t) {
     console.error('No token given. Run grndwrk store login when you have one.')
@@ -171,7 +175,7 @@ export async function useStore(root: string, target: string, token?: string): Pr
 }
 
 /** One full pass, said in a line; for `grndwrk store sync` and init. */
-export async function syncOnce(root: string, gwDir: string) {
+export async function syncOnce(root: string, gwDir: string, options: { allowDeletes?: boolean } = {}) {
   const project = basename(root)
   let client: Awaited<ReturnType<typeof openStore>>
   try {
@@ -186,7 +190,8 @@ export async function syncOnce(root: string, gwDir: string) {
   const { NodeSync } = await import('../server/events.js')
   const store = new NodeStore(gwDir)
   const ctx = { gwDir, store, nodes: new NodeSync(() => store.list()), project, uiUrl: '' }
-  const sync = new StoreSync(gwDir, client, ctx)
+  const config = await readStoreConfig(gwDir)
+  const sync = new StoreSync(gwDir, client, ctx, { identity: config && 'url' in config ? config.url : config ? `adapter:${config.adapter}` : '', allowManyDeletes: options.allowDeletes })
   try {
     const c = await sync.fullPass()
     console.log(`Synced: ${describe(c) || 'nothing new'}.${c.conflicts ? ` Your side of each conflict is kept in ${sync.conflictsDir()}` : ''}`)
