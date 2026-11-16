@@ -14,7 +14,8 @@ import type { GNode } from './types.js'
  * Opening it in the panel marks it seen in this browser and, the first time
  * anyone opens it, writes `seen: <date>` on the comment, one line, committed.
  */
-export const isRelayComment = (n: GNode): boolean => isFeedback(n) && n.extra?.via === 'relay' && !n.error
+// Comments left in the team's store arrive the same way: nobody sees them come in.
+export const isRelayComment = (n: GNode): boolean => isFeedback(n) && (n.extra?.via === 'relay' || n.extra?.via === 'store') && !n.error
 
 export interface SeenHere {
   /** Comments opened in this browser. */

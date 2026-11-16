@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { BadInput, type NodeStore } from '../store/nodes.js'
 import { broadcast, clientCount, holdForTab, tabAround, type NodeSync } from './events.js'
 import type { ServerEvent } from '../shared/types.js'
-import { createFeedback, feedbackStatus, ownComments, parseFeedback, removeFeedback, testedOnDevice } from './feedback.js'
+import { type CommentFrom, type CommentVia, createFeedback, feedbackStatus, ownComments, parseFeedback, removeFeedback, testedOnDevice } from './feedback.js'
 import { saveIosShot, type ShotAbout } from '../store/shots.js'
 import { openTarget } from '../opener.js'
 import { listScreens } from '../store/screens.js'
@@ -16,10 +16,10 @@ export interface CommentsCtx {
   project: string
   /** The map in the browser, for opening a comment to write on the Mac. */
   uiUrl: string
-  /** Set for the LAN listener and the relay: comments are marked `via: lan` or `via: relay`. */
-  via?: 'lan' | 'relay'
-  /** From the relay: the colleague's name, from their invite, and their phone's id at the relay. */
-  from?: { name: string; device: string }
+  /** Set for the LAN listener, the relay and the store: comments are marked `via: lan`, `via: relay` or `via: store`. */
+  via?: CommentVia
+  /** From the relay: the colleague's name, from their invite, and their phone's id at the relay. From the store: the name and the commenter id in the path. */
+  from?: CommentFrom
   /** The largest body accepted, in bytes. */
   limit?: number
 }

@@ -23,7 +23,7 @@ const HELP = `Usage:
                          comments from colleagues' phones away from your Wi-Fi,
                          and from a staging site, through a relay on your own
                          Cloudflare account
-  grndwrk store [check <url | adapter.mjs> | login | allow]
+  grndwrk store [use <url | adapter.mjs> | sync | leave | login | allow | check]
                          a shared store for the map, hosted your own way
                          (docs/store-protocol.md); grndwrk store help says more
   grndwrk build-ios-loader [path]

@@ -22,7 +22,9 @@ import { type StoreClient, StoreBroke } from './protocol.js'
 
 export type StoreConfig = { url: string } | { adapter: string }
 
-const dir = () => process.env.GRNDWRK_STORE_DIR || stateDir()
+/** grndwrk's per-user folder for the store: tokens, allowed adapters, conflicts kept. */
+export const storeStateDir = () => process.env.GRNDWRK_STORE_DIR || stateDir()
+const dir = storeStateDir
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
   try {

@@ -195,12 +195,13 @@ describe('new or existing', () => {
     await writeFile(join(root, 'package.json'), '{}')
     const asked: string[] = []
     await init(root, { ask: async (q) => (asked.push(q), 'n') })
-    expect(asked[0]).toMatch(/has code/)
+    expect(asked[0]).toMatch(/Where is the map kept/)
+    expect(asked[1]).toMatch(/has code/)
     expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^start: new$/m)
     await init(root, { ask: async (q) => (asked.push(q), 'y') })
-    // New or existing, and whether the map may hold names: each asked once.
-    expect(asked).toHaveLength(2)
-    expect(asked[1]).toMatch(/people's names/)
+    // Where the map is kept, new or existing, and whether the map may hold names: each asked once.
+    expect(asked).toHaveLength(3)
+    expect(asked[2]).toMatch(/people's names/)
     expect(await readFile(join(root, '.grndwrk', 'project.md'), 'utf8')).toMatch(/^personal_info: "?no"?$/m)
   })
 
