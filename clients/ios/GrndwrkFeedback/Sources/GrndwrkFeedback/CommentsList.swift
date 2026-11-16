@@ -116,10 +116,13 @@ final class CommentsController: UITableViewController {
         return "Tap to pair: allow this phone in grndwrk on the Mac, or enter the code it shows in the terminal. Comments are kept on the phone until then."
       }
       if section == 0, case .offline(let why) = Connection.state {
+        if Connection.viaStore { return "\(why)\n\nComments go straight to your team's store instead, and reach grndwrk when someone on the team runs it. What became of them comes back the same way." }
+        if let store = Store.status { return "\(why)\n\n\(store)." }
         if Connection.viaRelay { return "\(why)\n\nComments go through your team's relay instead, and reach grndwrk when someone on the team runs it. What became of them comes back the same way." }
         if let relay = Relay.status { return "\(why)\n\n\(relay)." }
-        return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again. Away from this Wi-Fi? Join your team's relay with an invite: long press the grndwrk button."
+        return "\(why)\n\nComments are kept on the phone until grndwrk answers. Pull down to check again. Away from this Wi-Fi? Join your team's store with a store link, or its relay with an invite: long press the grndwrk button."
       }
+      if section == 0, let store = Store.status { return "Also joined: \(store.prefix(1).lowercased() + store.dropFirst())." }
       if section == 0, let relay = Relay.status { return "Also joined: \(relay.prefix(1).lowercased() + relay.dropFirst())." }
       return section == 1 ? "Ready to test: comments of yours whose fix your agent has built. Tap Test on one: it shows what to do, over the app, with Approve and Reject." : nil
     case .toTest: return items.isEmpty ? "Nothing to test right now. A fix shows up here once it is built." : "Test opens the app where it can be tested, with the steps on top. Tap a row to read more first."
@@ -139,7 +142,7 @@ final class CommentsController: UITableViewController {
         switch Connection.state {
         case .connected: return (.systemGreen, "Connected")
         case .needsCode: return (.systemYellow, "Needs the pairing code")
-        case .offline: return Connection.viaRelay ? (.systemBlue, "Through the relay") : (.systemOrange, "Not connected")
+        case .offline: return Connection.viaStore ? (.systemBlue, "To your team's store") : Connection.viaRelay ? (.systemBlue, "Through the relay") : (.systemOrange, "Not connected")
         case .unknown: return (.systemGray, "Looking for grndwrk")
         }
       }()
@@ -149,7 +152,7 @@ final class CommentsController: UITableViewController {
       content.text = text
       switch Connection.state {
       case .connected(let project, let host), .needsCode(let project, let host): content.secondaryText = "\(project.isEmpty ? "grndwrk" : "\u{201C}\(project)\u{201D}") at \(host)"
-      case .offline: content.secondaryText = Connection.viaRelay ? Relay.joined.flatMap { URL(string: $0.url)?.host } : "Comments wait on the phone"
+      case .offline: content.secondaryText = Connection.viaStore ? Store.host : Connection.viaRelay ? Relay.joined.flatMap { URL(string: $0.url)?.host } : "Comments wait on the phone"
       case .unknown: content.secondaryText = nil
       }
       if case .needsCode = Connection.state {} else { cell.selectionStyle = .none }
@@ -310,13 +313,16 @@ final class CommentController: UIViewController {
       } else if item.state == "fixed" {
         stack.addArrangedSubview(button("Reopen: it is not fixed", "arrow.uturn.backward.circle", .systemRed) { [weak self] in self?.reject() })
       }
-      stack.addArrangedSubview(button("Show on my Mac", "desktopcomputer", .systemBlue) { [weak self] in
-        guard let self, let node = self.item.node else { return }
-        Task {
-          let ok = await Outbox.showOnMac(node: node)
-          self.say(ok ? "Open on your Mac, with what changed in its thread" : "grndwrk is not reachable. Try again when connected.")
-        }
-      })
+      // Through the store nobody's map is asked to open anything.
+      if !Connection.throughStore {
+        stack.addArrangedSubview(button("Show on my Mac", "desktopcomputer", .systemBlue) { [weak self] in
+          guard let self, let node = self.item.node else { return }
+          Task {
+            let ok = await Outbox.showOnMac(node: node)
+            self.say(ok ? "Open on your Mac, with what changed in its thread" : "grndwrk is not reachable. Try again when connected.")
+          }
+        })
+      }
     }
     stack.addArrangedSubview(button("Delete", "trash", .systemRed) { [weak self] in
       guard let self else { return }
@@ -374,10 +380,12 @@ final class CommentController: UIViewController {
     alert.addAction(UIAlertAction(title: "Send", style: .default) { [weak self] _ in
       self?.tested(works: false, note: alert.textFields?.first?.text ?? "")
     })
-    // Rejects it now, and opens it in the map on the Mac to write what is still wrong there.
-    alert.addAction(UIAlertAction(title: "Send and write on the Mac", style: .default) { [weak self] _ in
-      self?.tested(works: false, note: alert.textFields?.first?.text ?? "", onMac: true)
-    })
+    // Rejects it now, and opens it in the map on the Mac to write what is still wrong there. Not through a store.
+    if !Connection.throughStore {
+      alert.addAction(UIAlertAction(title: "Send and write on the Mac", style: .default) { [weak self] _ in
+        self?.tested(works: false, note: alert.textFields?.first?.text ?? "", onMac: true)
+      })
+    }
     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
     present(alert, animated: true)
   }

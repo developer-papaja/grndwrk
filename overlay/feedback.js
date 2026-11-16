@@ -4,12 +4,15 @@
 ;(() => {
   if (window.__grndwrkFeedback) return
   // On the team's staging site, loaded from the team's relay (overlay/relay.js
-  // in front of this file): comments go through the relay, and only on the
-  // one site the team named, so a tag left in production does nothing.
-  const relay = window.__grndwrkRelay
-  if (window.__grndwrkRelayConfig) {
+  // in front of this file) or the team's store (overlay/store.js): comments
+  // go there, and only on the one site the team named, so a tag left in
+  // production does nothing. `relay` is either; `store` says which.
+  const remote = window.__grndwrkRelayConfig || window.__grndwrkStoreConfig
+  const relay = window.__grndwrkRelayConfig ? window.__grndwrkRelay : window.__grndwrkStoreConfig ? window.__grndwrkStore : undefined
+  const store = !!relay?.store
+  if (remote) {
     if (!relay || location.origin !== relay.site) {
-      console.warn(`grndwrk comments through the relay only run on ${window.__grndwrkRelayConfig.site}. Remove this script from the page.`)
+      console.warn(`grndwrk comments through the team's ${window.__grndwrkRelayConfig ? 'relay' : 'store'} only run on ${remote.site}. Remove this script from the page.`)
       return
     }
   } else if (!/^(localhost|127\.0\.0\.1|\[::1\])$|\.(test|localhost)$/.test(location.hostname)) {
@@ -231,6 +234,8 @@
   const $ = (s) => root.querySelector(s)
   const pill = $('.pill'), box = $('.box'), tip = $('.tip'), hint = $('.hint'), card = $('.card'), field = $('textarea'), toast = $('.toast')
   const sendBtn = $('.send'), saveBtn = $('.save'), pillLabel = $('.pill span')
+  // Through the relay or the store the comment goes to the team, not to one Mac's grndwrk.
+  if (relay) sendBtn.textContent = store ? 'Send to your team\'s store' : 'Send to your team'
   const bar = $('.bar'), tab = $('.tab'), dockTarget = $('.dock-target'), barGo = $('.bar .go'), barLabel = $('.bar-label'), barSave = $('.bar-save')
 
   // Where the button sits: floating where it was dragged, as a bar along the
@@ -859,6 +864,8 @@
     const comment = {
       text,
       platform: 'Web',
+      // To the team: a key of its own from the start, so a retry is the same comment.
+      ...(relay ? { key: [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('') } : {}),
       screen: location.pathname,
       // Without the query and the hash, which can hold tokens or personal data.
       url: location.origin + location.pathname,
@@ -885,7 +892,9 @@
       const list = [...outbox.read(), keep]
       outbox.write(list)
       if (relay && result === 'asked') openJoin()
-      flash(relay && result === 'asked'
+      flash(store && result === 'asked'
+        ? 'Saved. It goes once this browser has a store link that works.'
+        : relay && result === 'asked'
         ? 'Saved. It goes once this browser is allowed in grndwrk\'s map.'
         : result === 'asked'
         ? `Allow ${location.host} in grndwrk's map once. The comment goes then.`
@@ -978,6 +987,14 @@
   async function openJoin() {
     if (!relay) return
     const digits = await relay.digits()
+    if (store) {
+      // A store link, from the team's store: its login, or a link someone sent.
+      const had = await relay.hasLink()
+      $('.j-ask p').textContent = had
+        ? 'The store no longer takes this browser\'s link. Log in to your team\'s store again, and paste the new link here.'
+        : 'Comments from this site go to your team\'s store. Paste the store link you got from it, once, in this browser.'
+      jLink.placeholder = 'grndwrk:store/…'
+    }
     $('.j-ask').style.display = digits ? 'none' : 'block'
     $('.j-wait').style.display = digits ? 'block' : 'none'
     $('.j-digits').textContent = digits
@@ -993,6 +1010,12 @@
     try {
       await relay.join(jLink.value)
       jLink.value = ''
+      if (store) {
+        jcard.style.display = 'none'
+        flush()
+        loadTests()
+        return flash('Joined. Your comments go to your team\'s store.')
+      }
       openJoin()
     } catch (err) {
       jErr.textContent = err?.message ? err.message : String(err)
@@ -1002,7 +1025,7 @@
   $('.j-leave').addEventListener('click', async () => {
     await relay.leave()
     jcard.style.display = 'none'
-    flash('This browser left. An invite brings it back.')
+    flash(store ? 'This browser left. A store link brings it back.' : 'This browser left. An invite brings it back.')
   })
   $('.cancel').addEventListener('click', closeCard)
   saveBtn.addEventListener('click', saveFile)
@@ -1201,7 +1224,7 @@
     }
     if (relay) {
       const said = await relay.tested(current, works, note.value)
-      if (said !== 'sent') return flash(said === 'asked' ? 'This browser is not allowed yet.' : 'The relay did not take it. Try again.')
+      if (said !== 'sent') return flash(store ? (said === 'asked' || said === 'join' ? 'The store did not take this browser\'s link. Paste a new one.' : 'The store did not take it. Try again.') : said === 'asked' ? 'This browser is not allowed yet.' : 'The relay did not take it. Try again.')
       flash(works ? 'Approved. It is marked fixed once your team\'s grndwrk reads it.' : 'Rejected. It goes back to your agent with your note.')
       tests = tests.filter((t) => t.id !== current.id)
       closeTest()
@@ -1236,6 +1259,8 @@
   $('.t-back').addEventListener('click', () => rejecting(false))
   $('.t-ok').addEventListener('click', () => answer(true))
   $('.t-no').addEventListener('click', () => answer(false))
+  // Show on my Mac is not offered through a store: nobody's map is asked to open anything.
+  if (store) $('.t-show').style.display = 'none'
   $('.t-show').addEventListener('click', async () => {
     if (!current) return
     if (relay) return flash((await relay.show(current)) === 'sent' ? 'It opens in grndwrk on your team\'s Macs' : 'The relay did not take it')
@@ -1280,7 +1305,13 @@
     const waiting = outbox.read().length
     const lines = []
     let state = 'off', head = ''
-    if (relay) {
+    if (store) {
+      const had = await relay.hasLink()
+      const allowed = had && (await relay.allowed())
+      state = allowed ? 'on' : had ? 'wait' : 'off'
+      head = allowed ? 'Comments go to your team\'s store' : had ? 'The store did not take the link' : 'Not joined yet'
+      lines.push(allowed ? 'Straight to your team\'s store, where grndwrk files them.' : had ? 'Log in to the store again, or it is not answering. Comments wait here until then.' : 'Paste the store link you got from your team\'s store.')
+    } else if (relay) {
       const joined = await relay.joined()
       const allowed = joined && (await relay.allowed())
       state = allowed ? 'on' : joined ? 'wait' : 'off'
@@ -1319,7 +1350,18 @@
     if (tests.length) item(tests.length === 1 ? 'Test 1 fix' : `Test ${tests.length} fixes`, openTests)
     item('Comment on this page', () => setPicking(true))
     if (waiting) item(`Save ${waiting} waiting ${waiting === 1 ? 'comment' : 'comments'} as a file`, saveFile)
-    if (relay) {
+    if (store) {
+      const had = await relay.hasLink()
+      if (!had) item('Join with a store link', openJoin)
+      else if (state !== 'on') item('Paste a new store link', openJoin)
+      if (had) {
+        item('Leave the team\'s store', async () => {
+          await relay.leave()
+          loadTests()
+          flash('This browser left. A store link brings it back.')
+        })
+      }
+    } else if (relay) {
       const joined = await relay.joined()
       if (!joined) item('Join with an invite', openJoin)
       else if (state !== 'on') item('Show the digits to be allowed', openJoin)

@@ -25,20 +25,35 @@ enum Connection {
 
   /// No grndwrk on this Wi-Fi, but the team's relay takes comments: not offline, as far as the person is concerned.
   /// Also while a grndwrk on the Wi-Fi waits to be paired: comments are never held back for that.
+  /// A phone joined to the team's store too sends there instead.
   static var viaRelay: Bool {
     switch state {
-    case .offline, .needsCode: return Relay.usable
+    case .offline, .needsCode: return Relay.usable && Store.joined == nil
     default: return false
     }
   }
 
-  /// Where a comment goes when grndwrk on the Wi-Fi cannot take it: the relay, when this phone joined one.
-  static var sendsToRelay: Bool {
+  /// No grndwrk on this Wi-Fi, or one not paired, and the team's store takes comments.
+  static var viaStore: Bool {
     switch state {
-    case .offline, .needsCode: return Relay.joined != nil
+    case .offline, .needsCode: return Store.usable
     default: return false
     }
   }
+
+  /// Where a comment goes when grndwrk on the Wi-Fi cannot take it: the team's store or relay, when this phone joined one.
+  static var sendsToTeam: Bool {
+    switch state {
+    case .offline, .needsCode: return Store.joined != nil || Relay.joined != nil
+    default: return false
+    }
+  }
+
+  /// Comments go to the team's store now: nothing opens on anyone's Mac from here.
+  static var throughStore: Bool { sendsToTeam && Store.joined != nil }
+
+  /// The way comments go without grndwrk on the Wi-Fi, in words: "your team's store" or "your team's relay".
+  static var teamWay: String { Store.joined != nil ? "your team's store" : "your team's relay" }
 
   static var project: String? {
     if case .connected(let project, _) = state { return project }
@@ -103,10 +118,11 @@ enum Connection {
     await throughRelay()
   }
 
-  /// Away from grndwrk's Wi-Fi, with the team's relay joined: what waits goes there, and the status of what went comes back.
+  /// Away from grndwrk's Wi-Fi, with the team's store or relay joined: what waits goes there, and the status of what went comes back.
   private static func throughRelay() async {
-    guard Relay.joined != nil else { return }
-    await Relay.check()
+    guard Relay.joined != nil || Store.joined != nil else { return }
+    if Store.joined != nil { await Store.check() }
+    if Relay.joined != nil { await Relay.check() }
     await Outbox.flush()
     await Outbox.sync()
   }

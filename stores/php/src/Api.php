@@ -69,7 +69,9 @@ final class Api
         if ($site && $role === 'comment') $this->origin = $origin;
 
         if ($route === 'hello' && $method === 'GET') {
-            $this->send(200, ['protocol' => Protocol::VERSION, 'project' => $this->db->project($project)['name'] ?? $project, 'writable' => $role === 'write', 'role' => $role]);
+            $this->send(200, ['protocol' => Protocol::VERSION, 'project' => $this->db->project($project)['name'] ?? $project, 'writable' => $role === 'write', 'role' => $role]
+                // A comment token learns its commenter here: the folder its comments go in, and its status file.
+                + ($role === 'comment' ? ['commenter' => $who['commenter']] : []));
             return;
         }
 

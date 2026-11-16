@@ -10,7 +10,7 @@ import UIKit
 /// that holds the key can ask about the comment or delete it.
 @MainActor
 enum Outbox {
-  /// relayed: left at the team's relay, for a grndwrk on the team to fetch; its id in grndwrk comes later, with its status.
+  /// relayed: left at the team's store or relay, for a grndwrk on the team to fetch; its id in grndwrk comes later, with its status.
   enum Result { case sent(id: String, project: String?), relayed, rejected(Int), blockedByATS, unreachable, needsCode }
 
   /// Taken: by grndwrk, or by the relay for it.
@@ -80,10 +80,10 @@ enum Outbox {
   static func post(_ data: Data, to path: String = "api/feedback") async -> Result {
     // No grndwrk on this Wi-Fi, and the phone joined the team's relay: it goes there.
     // Or grndwrk is here but this phone is not paired with it: never held back for that.
-    if Connection.sendsToRelay { return await viaRelay(data, path) }
+    if Connection.sendsToTeam { return await viaTeam(data, path) }
     guard let server = await Locator.url() else {
       Connection.reached(false, why: Locator.problem)
-      return Relay.joined != nil ? await viaRelay(data, path) : .unreachable
+      return Relay.joined != nil || Store.joined != nil ? await viaTeam(data, path) : .unreachable
     }
     var request = URLRequest(url: server.appendingPathComponent(path))
     request.httpMethod = "POST"
@@ -125,8 +125,10 @@ enum Outbox {
     }
   }
 
-  private static func viaRelay(_ data: Data, _ path: String) async -> Result {
-    switch await Relay.send(path: path, body: data) {
+  /// To the team's store when this phone joined one, else through the relay.
+  private static func viaTeam(_ data: Data, _ path: String) async -> Result {
+    let sent = Store.joined != nil ? await Store.send(path: path, body: data) : await Relay.send(path: path, body: data)
+    switch sent {
     case .left: return .relayed
     case .notLetIn, .unreachable: return .unreachable
     case .refused: return .rejected(400)
@@ -287,9 +289,13 @@ enum Outbox {
     }
   }
 
-  /// The status of comments sent through the relay, by their key: their id in grndwrk once a grndwrk on the team took them, and what became of them.
+  /// The status of comments sent through the team's store or relay, by their key: their id in grndwrk once a grndwrk on the team took them, and what became of them.
   private static func syncRelay() async {
-    guard Relay.joined != nil, read(sentFile).contains(where: { $0["relay"] as? Bool == true }), let list = await Relay.statuses() else { return }
+    guard Relay.joined != nil || Store.joined != nil, read(sentFile).contains(where: { $0["relay"] as? Bool == true }) else { return }
+    let fromStore = Store.joined != nil ? await Store.statuses() : nil
+    let fromRelay = Relay.joined != nil ? await Relay.statuses() : nil
+    guard fromStore != nil || fromRelay != nil else { return }
+    let list = (fromStore ?? []) + (fromRelay ?? [])
     let now = Dictionary(list.compactMap { a in (a["key"] as? String).map { ($0, a) } }, uniquingKeysWith: { a, _ in a })
     let before = Set(read(sentFile).filter { $0["state"] as? String == "ready" }.compactMap { $0["node"] as? String })
     var next: [[String: Any]] = []
@@ -365,7 +371,7 @@ enum Outbox {
     // To the grndwrk on the Wi-Fi, its own; without one, the ones sent through the relay go there.
     let mine = deletes.filter { d in
       if let project { return (d["project"] as? String ?? "").isEmpty || d["project"] as? String == project }
-      return d["relay"] as? Bool == true && Relay.joined != nil
+      return d["relay"] as? Bool == true && (Relay.joined != nil || Store.joined != nil)
     }
     let ask = mine.map { ["id": $0["id"] as? String ?? "", "key": $0["key"] as? String ?? ""] }
     guard !mine.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["comments": ask]) else { return false }

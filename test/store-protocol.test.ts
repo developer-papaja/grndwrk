@@ -134,12 +134,14 @@ describe('adapters', () => {
   })
 })
 
+const SITE = 'https://staging.clinic.example'
+
 describe('comments straight to the store', () => {
   let server: Server
   let url = ''
   const memory = new MemoryStore('Clinic')
   beforeAll(async () => {
-    const handle = storeHandler(memory, (t) => (t === 'writer' ? 'write' : t === 'phone' ? { role: 'comment', commenter: 'dev_phone01' } : null))
+    const handle = storeHandler(memory, (t) => (t === 'writer' ? 'write' : t === 'phone' ? { role: 'comment', commenter: 'dev_phone01' } : null), { origins: [SITE] })
     server = createServer((req, res) => void handle(req, res, '/'))
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`
@@ -152,7 +154,8 @@ describe('comments straight to the store', () => {
     expect((await put('inbox/dev_phone01/c_00000001.json', 'phone')).status).toBe(201)
     // Never under another commenter's name.
     expect((await put('inbox/dev_other01/c_00000002.json', 'phone')).status).toBe(403)
-    expect((await new HttpStore(url, 'phone').hello()).role).toBe('comment')
+    expect(await new HttpStore(url, 'phone').hello()).toMatchObject({ role: 'comment', commenter: 'dev_phone01' })
+    expect((await new HttpStore(url, 'writer').hello()).commenter).toBeUndefined()
     // Never the map: not a card, not the changes, not someone else's status.
     expect((await put('nodes/n_phone1.md', 'phone', 'x')).status).toBe(403)
     expect((await fetch(new URL('v1/changes', url), { headers: { Authorization: 'Bearer phone' } })).status).toBe(403)
@@ -165,5 +168,24 @@ describe('comments straight to the store', () => {
     const res = await fetch(new URL('v1/files/status/dev_phone01.json', url), { headers: { Authorization: 'Bearer phone' } })
     expect(res.status).toBe(200)
     expect(await res.text()).toBe('{"comments":[]}')
+  })
+
+  it('answers CORS for a listed staging site, only on the comment calls and only for a comment token', async () => {
+    const from = (path: string, token: string, origin = SITE, init: RequestInit = {}) => fetch(new URL(path, url), { ...init, headers: { Origin: origin, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init.headers as Record<string, string>) } })
+    const allowed = (r: Response) => r.headers.get('access-control-allow-origin')
+    expect(allowed(await from('v1/hello', 'phone'))).toBe(SITE)
+    expect(allowed(await from('v1/files/status/dev_phone01.json', 'phone'))).toBe(SITE)
+    // A 401 the page can read, to ask for a new link.
+    const gone = await from('v1/hello', 'expired')
+    expect([gone.status, allowed(gone)]).toEqual([401, SITE])
+    expect(allowed(await from('v1/hello', 'phone', 'https://elsewhere.example'))).toBeNull()
+    expect(allowed(await from('v1/hello', 'writer'))).toBeNull()
+    expect(allowed(await from('v1/changes', 'phone'))).toBeNull()
+    const pre = (path: string, method: string, origin = SITE) => fetch(new URL(path, url), { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': method } })
+    const ok = await pre('v1/files/inbox/dev_phone01/c_00000009.json', 'PUT')
+    expect([ok.status, allowed(ok), ok.headers.get('access-control-allow-headers')]).toEqual([204, SITE, 'Authorization, Content-Type, If-None-Match'])
+    expect((await pre('v1/changes', 'GET')).status).toBe(403)
+    expect((await pre('v1/files/inbox/dev_phone01/c_00000009.json', 'DELETE')).status).toBe(403)
+    expect((await pre('v1/hello', 'GET', 'https://elsewhere.example')).status).toBe(403)
   })
 })
