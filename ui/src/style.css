@@ -197,8 +197,13 @@ select.field option {
 [x-cloak] {
   display: none !important;
 }
+/* Node ids in a thread or a test step: click to open the thought. */
+.node-link {
+  @apply rounded font-mono text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent;
+}
 /* Node ids in a document: click to open the thought. */
 .report .node-link {
+  @apply no-underline;
   @apply rounded bg-tint/8 px-1 font-mono text-body text-accent hover:bg-accent/15;
 }
 

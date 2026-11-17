@@ -48,6 +48,12 @@ describe("the map's page under a Content-Security-Policy without eval", () => {
     expect(html).not.toMatch(/\sx-html=/)
   })
 
+  it('puts into x-markup only sanitized Markdown, escaped text with id links, or the sitemap', () => {
+    const sources = [...html.matchAll(/\sx-markup="([^"]*)"/g)].map((m) => decode(m[1]))
+    const ok = /^(\$store\.gw\.idLinks\(|\$store\.gw\.\w+Html\b|\$store\.gw\.(sectionHtml|storyHtml|docHtml)\(|d\.notesHtml$|\$store\.gw\.(brief|starter) \? \$store\.gw\.\w+Html : '<p>No [a-z]+ yet\.<\/p>'$|'<g transform=)/
+    expect(sources.filter((v) => !ok.test(v))).toEqual([])
+  })
+
   it('allows no eval in any Content-Security-Policy the page is served with', () => {
     for (const file of ['../ui/index.html', '../src/shared-store/page.ts', '../stores/cloudflare/src/page.ts', '../stores/firebase/functions.mjs', '../stores/php/src/Api.php']) {
       expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toContain('unsafe-eval')

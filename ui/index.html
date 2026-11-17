@@ -1673,7 +1673,7 @@
                           <div class="space-y-3">
                             <template x-for="q in $store.gw.entryQuestions($store.gw.screen.body, i)" :key="q.index">
                               <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
-                                <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
+                                <p class="whitespace-pre-wrap text-fog/85" x-markup="$store.gw.idLinks($store.gw.entryWords(q.question))" @click="$store.gw.openIdLink($event)"></p>
                                 <div x-show="$store.gw.entryPictures(q.question).length" class="mt-2 flex gap-2">
                                   <template x-for="shot in $store.gw.entryPictures(q.question)" :key="shot.url">
                                     <button class="cursor-zoom-in" :title="'Look closer: ' + shot.key" @click="$store.gw.viewShot(shot, $store.gw.entryPictures(q.question))">
@@ -1747,7 +1747,7 @@
                                     </template>
                                   </div>
                                 </div>
-                                <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer || '')"></p>
+                                <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-markup="$store.gw.idLinks('Answered: ' + $store.gw.entryWords(q.answer || ''))" @click="$store.gw.openIdLink($event)"></p>
                                 <div x-show="$store.gw.entryPictures(q.answer || '').length" class="mt-2 flex flex-wrap gap-2">
                                   <template x-for="pic in $store.gw.entryPictures(q.answer || '')" :key="pic.url">
                                     <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer || ''))">
@@ -1762,7 +1762,7 @@
                         <template x-if="e.who !== 'claude-asks'">
                           <div>
                             <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-body text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
-                            <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-text="$store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
+                            <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-markup="$store.gw.idLinks($store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text))" @click="$store.gw.openIdLink($event)"></p>
                             <!-- Your own entry: change it later; a newer answer crosses this one out -->
                             <template x-if="e.who === 'you' && e.run">
                               <div class="mt-1" x-data="entryOwner('screen')">
@@ -2253,7 +2253,7 @@
                       <div class="space-y-3">
                         <template x-for="q in $store.gw.entryQuestions($store.gw.persona.body, i)" :key="q.index">
                           <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
-                            <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
+                            <p class="whitespace-pre-wrap text-fog/85" x-markup="$store.gw.idLinks($store.gw.entryWords(q.question))" @click="$store.gw.openIdLink($event)"></p>
                             <div x-show="$store.gw.entryPictures(q.question).length" class="mt-2 flex flex-wrap gap-2">
                               <template x-for="pic in $store.gw.entryPictures(q.question)" :key="pic.url">
                                 <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.question))">
@@ -2327,7 +2327,7 @@
                                 </template>
                               </div>
                             </div>
-                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer || '')"></p>
+                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-markup="$store.gw.idLinks('Answered: ' + $store.gw.entryWords(q.answer || ''))" @click="$store.gw.openIdLink($event)"></p>
                             <div x-show="$store.gw.entryPictures(q.answer || '').length" class="mt-2 flex flex-wrap gap-2">
                               <template x-for="pic in $store.gw.entryPictures(q.answer || '')" :key="pic.url">
                                 <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer || ''))">
@@ -2342,7 +2342,7 @@
                     <template x-if="e.who !== 'claude-asks'">
                       <div>
                         <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-body text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
-                        <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-text="$store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
+                        <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-markup="$store.gw.idLinks($store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text))" @click="$store.gw.openIdLink($event)"></p>
                         <!-- Your own entry: change it later; a newer answer crosses this one out -->
                         <template x-if="e.who === 'you' && e.run">
                           <div class="mt-1" x-data="entryOwner('persona')">
@@ -3206,7 +3206,7 @@
                     <template x-for="(e, j) in d.earlier" :key="j">
                       <div class="mb-1.5">
                         <span class="text-body" :class="e.who === 'you' ? 'text-fog/70' : 'text-accent'" x-text="(e.who === 'you' ? 'You' : 'Agent') + ' · ' + e.date"></span>
-                        <p class="whitespace-pre-wrap text-fog/75" x-text="$store.gw.entryWords(e.text)"></p>
+                        <p class="whitespace-pre-wrap text-fog/75" x-markup="$store.gw.idLinks($store.gw.entryWords(e.text))" @click="$store.gw.openIdLink($event)"></p>
                         <div x-show="$store.gw.entryPictures(e.text).length" class="mt-2 flex flex-wrap gap-2">
                           <template x-for="pic in $store.gw.entryPictures(e.text)" :key="pic.url">
                             <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(e.text))">
@@ -3716,7 +3716,7 @@
                       <div class="space-y-3">
                         <template x-for="q in $store.gw.entryQuestions($store.gw.draft.body, i)" :key="q.index">
                           <div :class="q.index > 0 && 'border-t border-tint/10 pt-2.5'">
-                            <p class="whitespace-pre-wrap text-fog/85" x-text="$store.gw.entryWords(q.question)"></p>
+                            <p class="whitespace-pre-wrap text-fog/85" x-markup="$store.gw.idLinks($store.gw.entryWords(q.question))" @click="$store.gw.openIdLink($event)"></p>
                             <div x-show="$store.gw.entryPictures(q.question).length" class="mt-2 flex flex-wrap gap-2">
                               <template x-for="pic in $store.gw.entryPictures(q.question)" :key="pic.url">
                                 <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.question))">
@@ -3790,7 +3790,7 @@
                                 </template>
                               </div>
                             </div>
-                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-text="'Answered: ' + $store.gw.entryWords(q.answer || '')"></p>
+                            <p x-show="!q.open && q.answer" class="mt-1 whitespace-pre-wrap text-body text-fog/50" x-markup="$store.gw.idLinks('Answered: ' + $store.gw.entryWords(q.answer || ''))" @click="$store.gw.openIdLink($event)"></p>
                             <div x-show="$store.gw.entryPictures(q.answer || '').length" class="mt-2 flex flex-wrap gap-2">
                               <template x-for="pic in $store.gw.entryPictures(q.answer || '')" :key="pic.url">
                                 <button class="cursor-zoom-in" title="Look closer" @click="$store.gw.viewShot(pic, $store.gw.entryPictures(q.answer || ''))">
@@ -3805,7 +3805,7 @@
                     <template x-if="e.who !== 'claude-asks'">
                       <div x-data="entrySteps">
                         <p x-show="$store.gw.youParts(e.text).quote" class="mb-1 border-l-2 border-tint/15 pl-2 text-body text-fog/50" x-text="$store.gw.youParts(e.text).quote"></p>
-                        <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-text="steps.steps.length ? steps.fix : $store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text)"></p>
+                        <p class="whitespace-pre-wrap text-fog/85" :class="e.superseded && 'line-through opacity-50'" x-markup="$store.gw.idLinks(steps.steps.length ? steps.fix : $store.gw.entryWords($store.gw.youParts(e.text).quote ? $store.gw.youParts(e.text).rest : e.text))" @click="$store.gw.openIdLink($event)"></p>
                         <!-- Your own entry: change it later; a newer answer crosses this one out -->
                         <template x-if="e.who === 'you' && e.run">
                           <div class="mt-1" x-data="entryOwner('thought')">
@@ -3850,7 +3850,7 @@
                                   :class="stepClass(i, n)"
                                   :title="stepTitle(i, n)"
                                   x-text="stepLabel(i, n)"></span>
-                                <span class="min-w-0 flex-1 text-body leading-snug" :class="$store.gw.stepShown(i, n, steps.steps.length) === 'ok' ? 'text-fog/55' : 'text-fog/85'" x-text="step"></span>
+                                <span class="min-w-0 flex-1 text-body leading-snug" :class="$store.gw.stepShown(i, n, steps.steps.length) === 'ok' ? 'text-fog/55' : 'text-fog/85'" x-markup="$store.gw.idLinks(step)" @click="$store.gw.openIdLink($event)"></span>
                                 <span x-show="$store.gw.testableEntry === i" class="flex shrink-0 gap-0.5">
                                   <button type="button" class="rounded px-1.5 py-0.5 text-body" :class="$store.gw.stepMark(i, n) === 'ok' ? 'bg-emerald-400/20 text-emerald-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'ok'" title="This step works" @click="$store.gw.markStep(i, n, 'ok')">Works</button>
                                   <button type="button" class="rounded px-1.5 py-0.5 text-body" :class="$store.gw.stepMark(i, n) === 'bad' ? 'bg-rose-400/20 text-rose-200' : 'text-fog/50 hover:bg-tint/8 hover:text-fog'" :aria-pressed="$store.gw.stepMark(i, n) === 'bad'" title="This step does not work" @click="fails(i, n)">No</button>

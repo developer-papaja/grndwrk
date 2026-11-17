@@ -40,8 +40,9 @@ Alpine.magic('focusSoon', (el) => (select = false) =>
 Alpine.magic('focusId', () => (id: string) => Alpine.nextTick(() => document.getElementById(id)?.focus()))
 Alpine.magic('fitCapture', (el) => () => Alpine.nextTick(() => fitCapture(el as HTMLTextAreaElement)))
 // x-markup puts markup into the element, as x-html did; the CSP build refuses x-html. Its values
-// are only what md() made (Markdown sanitized with DOMPurify, no Alpine attributes) or the
-// sitemap's lines drawn from numbers, so nothing in it is set up as Alpine.
+// are only what md() made (Markdown sanitized with DOMPurify, no Alpine attributes), plain text
+// escaped with its thought ids made links (idLinks), or the sitemap's lines drawn from numbers,
+// so nothing in it is set up as Alpine.
 Alpine.directive('markup', (el, { expression }, { effect, evaluateLater }) => {
   const read = evaluateLater(expression)
   effect(() => read((value) => {

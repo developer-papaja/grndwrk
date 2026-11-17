@@ -3405,6 +3405,16 @@ export const state = Alpine.reactive({
   // Called by the page's expressions, which Alpine's CSP build reads without eval: no arrow
   // functions, statements, ?. or ?? there, so what needs them is a method here.
   // ++ page helpers ++
+  /**
+   * Plain text for x-markup, with each thought id in it (n_284d3k) a link
+   * that opens that thought (openIdLink). The text is escaped first, so
+   * nothing in it is ever read as markup, whoever wrote it.
+   */
+  idLinks(text: string): string {
+    const t = document.createElement('template')
+    t.content.append(String(text ?? ''))
+    return linkIds(t.innerHTML)
+  },
   /** Focus the element with this id once it is drawn. */
   focusIdSoon(id: string) {
     void Alpine.nextTick(() => document.getElementById(id)?.focus())
