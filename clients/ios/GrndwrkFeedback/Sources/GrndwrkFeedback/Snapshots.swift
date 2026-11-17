@@ -34,7 +34,7 @@ enum Snapshots {
   /// Take a picture of the screen now, as it is: for when the automatic one
   /// showed something else, or none was taken. Replaces the one before.
   static func takeNow(window: UIWindow?) {
-    guard enabled, case .connected = Connection.state, let window, let server = Locator.current else { return }
+    guard enabled, case .connected = Connection.state, let window, let server = Locator.current, Connection.mayPost(server) else { return }
     let screen = Inspector.screen(of: window)
     let contents = Inspector.contents(of: window)
     send(window: window, screen: screen, contents: contents, look: look(contents), server: server)
@@ -43,7 +43,7 @@ enum Snapshots {
   /// Called every second with the app's window. `busy` while the
   /// person is picking an element or writing a comment.
   static func tick(window: UIWindow?, busy: Bool) {
-    guard enabled, !unsupported, !sending, !busy, case .connected = Connection.state, let window, let server = Locator.current else {
+    guard enabled, !unsupported, !sending, !busy, case .connected = Connection.state, let window, let server = Locator.current, Connection.mayPost(server) else {
       last = nil
       return
     }

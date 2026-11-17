@@ -63,6 +63,8 @@ internal object Pairing {
 
   /** A signed POST of JSON to grndwrk. */
   suspend fun post(server: String, path: String, body: ByteArray, timeoutMs: Int = 10_000): Http.Answer {
+    // Never to a grndwrk that has not proved it holds this phone's key (Connection.mayPost).
+    if (!Connection.mayPost(server)) throw Why("this grndwrk has not proved it is the one this phone paired with")
     val url = join(server, path)
     return Http.call(url, "POST", body, mapOf("Content-Type" to "application/json") + sign("POST", url, body), timeoutMs)
   }

@@ -86,12 +86,19 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
     // Only answer requests addressed to this machine. This blocks DNS rebinding,
     // where another site points its own hostname at 127.0.0.1.
     if (!isLocalHost(req.headers.host)) return res.writeHead(403).end('Forbidden')
-    if (await handleComments(req, res, comments)) return
-    // The Comment button for a product page that loads it itself, on the product's own address.
-    if (await handleOverlay(req, res, overlay)) return
-    if (await handleApi(req, res, { gwDir, store, nodes, pairings, runtime, sites, relay })) return
-    if (await handleFiles(req, res, gwDir)) return
-    ui(req, res, () => res.writeHead(404).end())
+    // No single request may end the map: an error that slips through answers 500 and the server keeps running.
+    try {
+      if (await handleComments(req, res, comments)) return
+      // The Comment button for a product page that loads it itself, on the product's own address.
+      if (await handleOverlay(req, res, overlay)) return
+      if (await handleApi(req, res, { gwDir, store, nodes, pairings, runtime, sites, relay })) return
+      if (await handleFiles(req, res, gwDir)) return
+      ui(req, res, () => res.writeHead(404).end())
+    } catch (err) {
+      console.error(err)
+      if (!res.headersSent) res.writeHead(500).end()
+      else res.destroy()
+    }
   })
 
   if (dev) {

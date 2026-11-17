@@ -24,6 +24,15 @@ class SettingsActivity : Activity() {
     root.addView(EditText(this).apply { setText("Riverside Vet Clinic"); contentDescription = null; id = android.R.id.edit })
     root.addView(Switch(this).apply { text = "Send reminders by text"; isChecked = true })
     root.addView(Switch(this).apply { text = "Allow online booking" })
+    // Hidden from TalkBack but still drawn, as content behind an open drawer is: its field must
+    // still be drawn empty in every picture (security audit run-4).
+    val hidden = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+    }
+    hidden.addView(TextView(this).apply { text = "Front desk notes"; textSize = 14f })
+    hidden.addView(EditText(this).apply { setText("blank-me-123") })
+    root.addView(hidden)
     root.addView(Button(this).apply { text = "Save"; contentDescription = "Save settings" })
     setContentView(root, LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
   }

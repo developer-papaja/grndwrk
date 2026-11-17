@@ -4,4 +4,4 @@
 jdk:
   - openjdk21
 install:
-  - cd clients/android && ./gradlew :feedback:publishReleasePublicationToMavenLocal -Pversion=$VERSION --no-daemon
+  - cd clients/android && ./gradlew :feedback:publishReleasePublicationToMavenLocal -Pversion="$VERSION" --no-daemon

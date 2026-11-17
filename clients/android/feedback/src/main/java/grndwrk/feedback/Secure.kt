@@ -42,9 +42,10 @@ internal object Secure {
       c.updateAAD(name.toByteArray())
       String(c.doFinal(all, 12, all.size - 12))
     } catch (e: Exception) {
-      // Restored from another device, or the key was cleared: as if never kept.
+      // Restored from another device, or the key was cleared: as if never kept. Any other error
+      // may pass (the Keystore busy), so the secret stays for the next try.
       gwLog.error("A kept secret ($name) could not be read: ${e.message}")
-      prefs.edit().remove(name).apply()
+      if (e is javax.crypto.AEADBadTagException || e is android.security.keystore.KeyPermanentlyInvalidatedException || e is IllegalArgumentException) prefs.edit().remove(name).apply()
       null
     }
   }

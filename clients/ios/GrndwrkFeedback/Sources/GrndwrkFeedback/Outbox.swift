@@ -85,6 +85,11 @@ enum Outbox {
       Connection.reached(false, why: Locator.problem)
       return Relay.joined != nil || Store.joined != nil ? await viaTeam(data, path) : .unreachable
     }
+    // Only to the grndwrk that proved it holds this phone's key: anything on the Wi-Fi can answer
+    // as grndwrk. Not paired yet: through the team when this phone joined it, else it waits.
+    guard Connection.mayPost(server) else {
+      return Relay.joined != nil || Store.joined != nil ? await viaTeam(data, path) : .needsCode
+    }
     var request = URLRequest(url: server.appendingPathComponent(path))
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -224,7 +229,7 @@ enum Outbox {
   /// for (each persona's summary and jobs), in lines for the long-press menu.
   /// Only from grndwrk on this Mac or the Wi-Fi, never through the relay.
   static func screenAbout(_ screen: Inspector.Screen) async -> String? {
-    guard case .connected = Connection.state, let server = await Locator.url() else { return nil }
+    guard case .connected = Connection.state, let server = await Locator.url(), Connection.mayPost(server) else { return nil }
     var ask: [String: String] = ["screen": screen.name]
     if let component = screen.component { ask["component"] = component }
     guard let data = try? JSONSerialization.data(withJSONObject: ask) else { return nil }
@@ -259,7 +264,7 @@ enum Outbox {
       return ["id": id, "key": key]
     }
     guard !ask.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["comments": ask]),
-      let server = await Locator.url() else { return }
+      let server = await Locator.url(), Connection.mayPost(server) else { return }
     var request = URLRequest(url: server.appendingPathComponent("api/feedback/status"))
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")

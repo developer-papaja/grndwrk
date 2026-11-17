@@ -25,6 +25,17 @@ internal object Connection {
 
   var state: State = State.Unknown
     private set
+
+  /**
+   * The address of the grndwrk that proved it holds this phone's key in the last check
+   * (or the Mac itself, from the emulator). Comments, pictures and every other request go
+   * only there: another grndwrk on the Wi-Fi may answer, but it gets nothing.
+   */
+  var proven: String? = null
+    private set
+
+  /** Whether requests may go to this address: it proved the key, or it is the Mac from the emulator. */
+  fun mayPost(server: String): Boolean = server == proven || isThisMac(server)
   private var timer: Job? = null
   private var checking = false
 
@@ -89,13 +100,17 @@ internal object Connection {
       }
       val project = first.str("project") ?: ""
       // This Mac, from the emulator: nothing travels over the network, no key needed.
-      if (isThisMac(server) && !first.has("paired")) return set(State.Connected(project, host))
+      if (isThisMac(server) && !first.has("paired")) {
+        proven = server
+        return set(State.Connected(project, host))
+      }
       // Anything on the Wi-Fi can call itself grndwrk. Comments and pictures go
       // only to a grndwrk that proves it holds this phone's key; the key itself
       // is never sent, every request is signed with it instead.
       val key = proves(server, project)
       if (key != null) {
         Pairing.current = key
+        proven = server
         return set(State.Connected(project, host))
       }
       Pairing.current = null
@@ -168,11 +183,16 @@ internal object Connection {
     Env.scope.launch { check() }
   }
 
-  /** Sending a comment also tells whether grndwrk is there. */
+  /**
+   * Sending a comment also tells whether grndwrk is there. An answer never makes an address
+   * connected by itself: only check() does, once the key is proven. It keeps a connection that
+   * was proven, and otherwise asks check() to look again.
+   */
   fun reached(yes: Boolean, project: String? = null, why: String? = null) {
     val server = Locator.current
     if (yes && server != null) {
-      set(State.Connected(project ?: this.project ?: "", java.net.URL(server).host))
+      if (state is State.Connected && mayPost(server)) set(State.Connected(project ?: this.project ?: "", java.net.URL(server).host))
+      else Env.scope.launch { check() }
     } else if (!yes && state is State.NeedsCode) {
       // Still there, still waiting to be paired.
     } else if (!yes) {
@@ -183,6 +203,8 @@ internal object Connection {
   private fun set(next: State) {
     val before = state
     state = next
+    // Not connected: no address is proven any more.
+    if (next !is State.Connected) proven = null
     if (next == before) return
     gwLog.info("State: $next")
     if (next is State.Connected) Locator.remember(next.project)

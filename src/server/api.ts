@@ -555,19 +555,31 @@ async function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks)
 }
 
+/** A path segment decoded, or null when its escapes are not valid UTF-8 (`%E0`): an unknown name, never a crash. */
+const decodeSegment = (s: string): string | null => {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return null
+  }
+}
+
 /** Serve /files/<node id>/<name> and /shots/<platform>/<name>, and nothing else from disk. */
 export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwDir: string): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const shot = url.pathname.match(/^\/shots\/(web|ios|android)\/([^/]+)$/)
   if (shot && req.method === 'GET') {
-    const found = await readShot(gwDir, shot[1], decodeURIComponent(shot[2]))
+    const name = decodeSegment(shot[2])
+    const found = name === null ? null : await readShot(gwDir, shot[1], name)
     if (!found) res.writeHead(404).end()
     else res.writeHead(200, { 'Content-Type': found.type, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' }).end(found.data)
     return true
   }
   const m = url.pathname.match(/^\/files\/([^/]+)\/([^/]+)$/)
   if (!m || req.method !== 'GET') return false
-  const image = await readImage(gwDir, decodeURIComponent(m[1]), decodeURIComponent(m[2]))
+  const id = decodeSegment(m[1])
+  const name = decodeSegment(m[2])
+  const image = id === null || name === null ? null : await readImage(gwDir, id, name)
   if (!image) {
     res.writeHead(404).end()
     return true

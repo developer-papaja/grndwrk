@@ -243,3 +243,7 @@ When several Grndwrks are on the network, the phone tries each until one answers
 - **On an iPhone, nothing arrives.** Check that grndwrk runs with `--lan`, that both are on the same Wi-Fi, that the two Info.plist keys are there, and that local network access is on in Settings > Privacy & Security > Local Network.
 - **"Needs the pairing code".** Long press the grndwrk button, then **Pair with the Mac** and click Allow in the browser, or **Enter pairing code** and type the one from the terminal. After ten wrong codes the phone is shut out for ten minutes (and after thirty from the whole network, typing codes stops for an hour; Allow in the browser still works).
 - **A fixed address.** `GrndwrkFeedback.start(server: URL(string: "http://192.168.1.20:7779")!)` skips discovery.
+
+## Working on the package
+
+The iOS and Android packages are kept the same: a change to one goes into the other. [clients/TESTING.md](../../TESTING.md) has the steps to test both, against a test map of their own.

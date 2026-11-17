@@ -16,7 +16,8 @@ GrndwrkFeedback is for your own debug builds. It shows a button that sends what 
 - **In a build installed from Google Play it never runs,** even if `start()` is called: it logs an error and does nothing.
 - **In any other build that is not debuggable** (a release build for testers) it does nothing unless you call `start(context, allowOutsideDebug = true)`. Never upload such a build to Google Play.
 - **Its permissions and plain http stay in the debug build.** The package's manifest adds `INTERNET`, Wi-Fi multicast (for finding grndwrk), `RECORD_AUDIO` (asked only when Speak is tapped) and `usesCleartextTraffic`, since grndwrk on the Mac speaks plain http. With `debugImplementation` they are merged into the debug build only.
-- **Check a release build:** `unzip -l app-release.apk | grep -i grndwrk` and `apkanalyzer dex packages app-release.apk | grep grndwrk` should print nothing.
+- **Check a release build:** `apkanalyzer dex packages app-release.apk | grep grndwrk` and `apkanalyzer manifest print app-release.apk | grep -i -e grndwrk -e usesCleartextTraffic` should print nothing. The second matters even when the code is stripped: with `implementation` instead of `debugImplementation`, the button never starts, but the release app would still allow plain http and ask for the microphone.
+- **Backups:** the package keeps waiting comments and their pictures in the app's own files, under `GrndwrkFeedback/`. If your debug build backs up to the cloud, exclude that folder in your debug backup rules. Its keys are sealed in the Android Keystore and never restore elsewhere.
 
 ## Add it
 
@@ -27,12 +28,15 @@ GrndwrkFeedback is for your own debug builds. It shows a button that sends what 
      repositories {
        google()
        mavenCentral()
-       maven("https://jitpack.io") { content { includeGroup("com.github.developer-papaja") } }
+       exclusiveContent {
+         forRepository { maven("https://jitpack.io") }
+         filter { includeGroup("com.github.developer-papaja") }
+       }
      }
    }
    ```
 
-   `includeGroup` keeps JitPack to this one package, so nothing else your app uses can come from there.
+   `exclusiveContent` ties the two together both ways: JitPack serves only this package, and this package comes only from JitPack, never from another repository that might hold something under the same name. Use a release tag (`v0.4.1`), never a branch or a commit: a tag is what grndwrk's tests and review went through.
 
 2. Add the package to debug builds, with the tag of the grndwrk you run (`grndwrk -v`), so the phone and the map stay in step:
 
@@ -142,3 +146,7 @@ Logcat, tag `GrndwrkFeedback`, shows every step of finding and reaching grndwrk.
 
 - **"blocked by Android: plain http is not allowed"**: the app has its own `networkSecurityConfig`, which overrides `usesCleartextTraffic`. Add a debug-only config that allows cleartext to `10.0.2.2` and your Mac's address, or to everything in debug.
 - **Nothing found on the Wi-Fi**: is `grndwrk --lan` running, on the same network? Some guest networks block devices from seeing each other.
+
+## Working on the package
+
+The iOS and Android packages are kept the same: a change to one goes into the other. [clients/TESTING.md](../TESTING.md) has the steps to test both, against a test map of their own.

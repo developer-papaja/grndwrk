@@ -20,6 +20,14 @@ enum Connection {
 
   static let changed = Notification.Name("GrndwrkFeedback.connection")
   private(set) static var state: State = .unknown
+
+  /// The address of the grndwrk that proved it holds this phone's key in the last check
+  /// (or the Mac itself, from the Simulator). Comments, pictures and every other request go
+  /// only there: another grndwrk on the Wi-Fi may answer, but it gets nothing.
+  private(set) static var proven: URL?
+
+  /// Whether requests may go to this address: it proved the key, or it is the Mac from the Simulator.
+  static func mayPost(_ server: URL) -> Bool { server == proven || isThisMac(server) }
   private static var timer: Timer?
   private static var checking = false
 
@@ -104,12 +112,16 @@ enum Connection {
     }
     let project = first["project"] as? String ?? ""
     // This Mac, from the Simulator: nothing travels over the network, no key needed.
-    if isThisMac(server), first["paired"] == nil { return set(.connected(project: project, host: host)) }
+    if isThisMac(server), first["paired"] == nil {
+      proven = server
+      return set(.connected(project: project, host: host))
+    }
     // Anything on the Wi-Fi can call itself grndwrk. Comments and pictures go
     // only to a grndwrk that proves it holds this phone's key; the key itself
     // is never sent, every request is signed with it instead.
     if let key = await proves(server, project: project) {
       Pairing.current = key
+      proven = server
       return set(.connected(project: project, host: host))
     }
     Pairing.current = nil
@@ -205,10 +217,16 @@ enum Connection {
     Task { await check() }
   }
 
-  /// Sending a comment also tells whether grndwrk is there.
+  /// Sending a comment also tells whether grndwrk is there. An answer never makes an address
+  /// connected by itself: only check() does, once the key is proven. It keeps a connection that
+  /// was proven, and otherwise asks check() to look again.
   static func reached(_ yes: Bool, project: String? = nil, why: String? = nil) {
     if yes, let server = Locator.current {
-      set(.connected(project: project ?? self.project ?? "", host: server.host ?? ""))
+      if case .connected = state, mayPost(server) {
+        set(.connected(project: project ?? self.project ?? "", host: server.host ?? ""))
+      } else {
+        Task { await check() }
+      }
     } else if !yes, case .needsCode = state {
       // Still there, still waiting for the code.
     } else if !yes {
@@ -219,6 +237,8 @@ enum Connection {
   private static func set(_ next: State) {
     let before = state
     state = next
+    // Not connected: no address is proven any more.
+    if case .connected = next {} else { proven = nil }
     guard next != before else { return }
     gwLog.info("State: \(String(describing: next), privacy: .public)")
     if case .connected(let project, _) = next { Locator.remember(project: project) }

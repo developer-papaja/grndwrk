@@ -144,7 +144,7 @@ internal object Inspector {
   }
 
   /** Whether this is something a person types into: its text is what they typed. */
-  private fun isTextEntry(v: View): Boolean = v is EditText || (v is TextView && v.onCheckIsTextEditor() && v.isEnabled)
+  private fun isTextEntry(v: View): Boolean = v is EditText || (v is TextView && v.onCheckIsTextEditor())
 
   private fun area(r: Rect) = r.width().toLong() * r.height()
 
@@ -290,14 +290,52 @@ internal object Inspector {
     return Found(Rect(frame), label.ifEmpty { null }?.take(120), inside.firstNotNullOfOrNull { it.identifier }, "area")
   }
 
-  /** Where the window's text fields are, to draw over what they hold. */
-  fun textFields(activity: Activity): List<Rect> = read(activity).nodes.filter { it.textEntry }.map { it.frame }
+  /**
+   * Where the window's text fields are, to draw over what they hold: every field that is drawn,
+   * whatever accessibility says about it. A drawer that is open, or a bottom sheet, hides the
+   * content behind it from TalkBack while it is still drawn, so this is a walk of its own, as
+   * iOS's textFields is, never the TalkBack walk. Null when the window cannot be read in full
+   * (too deep, too many views, Compose that will not read): then no picture is taken at all.
+   */
+  fun textFields(activity: Activity): List<Rect>? {
+    val root = activity.window?.decorView ?: return null
+    val out = mutableListOf<Rect>()
+    var visited = 0
+    var complete = true
+    fun visit(v: View, depth: Int) {
+      if (!complete) return
+      if (++visited > 20_000 || depth > 200) {
+        complete = false
+        return
+      }
+      if (v.visibility != View.VISIBLE) return
+      if (hasCompose && ComposeSemantics.isComposeView(v)) {
+        try {
+          val nodes = mutableListOf<Node>()
+          ComposeSemantics.collect(v, nodes, mutableListOf())
+          nodes.filter { it.textEntry }.forEach { out += it.frame }
+        } catch (e: Throwable) {
+          gwLog.error("Could not find the text fields of a Compose screen, so no picture is taken: ${e.message}")
+          complete = false
+          return
+        }
+      } else if (isTextEntry(v)) {
+        val frame = Rect()
+        if (v.getGlobalVisibleRect(frame) && !frame.isEmpty) out += frame
+      }
+      if (v is ViewGroup) for (i in 0 until v.childCount) visit(v.getChildAt(i), depth + 1)
+    }
+    visit(root, 0)
+    return if (complete) out else null
+  }
 
   /** The window as it is now, through PixelCopy, at most 2x the density. Null when it cannot be copied. */
   suspend fun capture(activity: Activity, area: Rect): Bitmap? {
     val window = activity.window ?: return null
     if (area.width() < 2 || area.height() < 2) return null
     val scale = min(1f, 2f / activity.resources.displayMetrics.density)
+    // Where the fields are, read on the same frame as the copy: what they hold never reaches a picture.
+    val fields = textFields(activity) ?: return null
     val full = Bitmap.createBitmap(area.width(), area.height(), Bitmap.Config.ARGB_8888)
     val ok = suspendCancellableCoroutine { done ->
       try {
@@ -308,7 +346,7 @@ internal object Inspector {
       }
     }
     if (!ok) return null
-    blank(full, textFields(activity), area, activity.resources.displayMetrics.density)
+    blank(full, fields, area, activity.resources.displayMetrics.density)
     if (scale >= 1f) return full
     return Bitmap.createScaledBitmap(full, max(1, (full.width * scale).toInt()), max(1, (full.height * scale).toInt()), true).also { full.recycle() }
   }

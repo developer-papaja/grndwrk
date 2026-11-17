@@ -728,7 +728,8 @@ internal object Overlay {
    */
   private fun shareable(a: Activity, file: File): Uri? {
     val authority = "${a.packageName}.grndwrk.share"
-    if (a.packageManager.resolveContentProvider(authority, 0) != null) return Uri.parse("content://$authority/${file.name}")
+    // Only this app's own provider: another app claiming the name would hand out its own content.
+    if (a.packageManager.resolveContentProvider(authority, 0)?.packageName == a.packageName) return Uri.parse("content://$authority/${file.name}")
     if (Build.VERSION.SDK_INT < 29) return null
     return try {
       val values = ContentValues().apply {

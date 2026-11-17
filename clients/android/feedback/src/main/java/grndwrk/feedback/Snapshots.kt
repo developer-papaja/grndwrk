@@ -57,7 +57,8 @@ internal object Snapshots {
   /** Called every second with the activity in front. `busy` while the person is picking an element or writing a comment. */
   fun tick(activity: Activity?, busy: Boolean) {
     val server = Locator.current
-    if (!enabled || unsupported || sending || busy || Connection.state !is Connection.State.Connected || activity == null || server == null) {
+    val secure = activity != null && (activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE) != 0
+    if (!enabled || unsupported || sending || busy || secure || Connection.state !is Connection.State.Connected || activity == null || server == null) {
       last = null
       return
     }

@@ -99,6 +99,11 @@ internal object Outbox {
       return if (Relay.joined != null || Store.joined != null) viaTeam(data, path) else Result.Unreachable
     }
     val host = java.net.URL(server).host
+    // Only to the grndwrk that proved it holds this phone's key: anything on the Wi-Fi can answer
+    // as grndwrk. Not paired yet: through the team when this phone joined it, else it waits.
+    if (!Connection.mayPost(server)) {
+      return if (Relay.joined != null || Store.joined != null) viaTeam(data, path) else Result.NeedsCode
+    }
     return try {
       val a = Pairing.post(server, path, data)
       val answer = a.json
@@ -400,8 +405,11 @@ internal object Outbox {
     val list = files
     val comments = list.mapNotNull { try { JSONObject(it.readText()) } catch (_: Exception) { null } }
     if (comments.isEmpty()) return null
-    val stamp = iso().take(16).replace(":", "")
-    val out = File(File(Env.app.cacheDir, "grndwrk").also { it.mkdirs() }, "grndwrk-feedback-$stamp.json")
+    val stamp = iso().replace(":", "").replace("Z", "") + "-" + UUID.randomUUID().toString().take(6)
+    val folder = File(Env.app.cacheDir, "grndwrk").also { it.mkdirs() }
+    // One export at a time: an app given an earlier one never reads a later one under its name.
+    folder.listFiles()?.filter { it.name.startsWith("grndwrk-feedback-") }?.forEach { it.delete() }
+    val out = File(folder, "grndwrk-feedback-$stamp.json")
     out.writeText(JSONObject().put("grndwrk", "feedback").put("comments", jsonList(comments)).toString())
     return out to list
   }
