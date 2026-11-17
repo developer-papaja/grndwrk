@@ -9,7 +9,7 @@ grndwrk lives inside your project. It keeps everything as plain markdown files i
 - **Think before you build.** Capture thoughts as cards, grouped by screen or topic, from vision down to detail. Your agent asks where things are thin, and tells you whether you are ready to build, ready to prototype, or not ready yet. Thoughts that never close but steer everything ("going forward should feel easy") become guiding principles: off the board, in a strip above it, and read by your agent before it builds.
 - **Start from a project that already exists.** `/survey` reads the code, docs and history and draws the map from what is there. `/sitemap` draws every screen, what it is for and who it is for.
 - **Write the brief and the stories.** `/brief` writes a brief, user stories linked to the thoughts behind them, and a starter `CLAUDE.md` for building the product.
-- **Comment on the running product.** A Comment button on your website or in your iOS app turns what you point at into a card in the map. Your agent proposes and builds fixes, and you test them in the app, then approve or reject them. Anything else your agent builds from the map comes back the same way, with steps to test.
+- **Comment on the running product.** A Comment button on your website or in your iOS or Android app turns what you point at into a card in the map. Your agent proposes and builds fixes, and you test them in the app, then approve or reject them. Anything else your agent builds from the map comes back the same way, with steps to test.
 - **Share the map with a team, your way.** Keep it in git, or in a store the team hosts itself (on Cloudflare, Firebase, a PHP server or anything that speaks a few HTTP calls). Colleagues who never clone the repository then answer questions and add thoughts on a page the store serves, and comment from a staging site or a phone, straight into the store.
 
 ## Requirements
@@ -39,7 +39,7 @@ grndwrk init    # asks whether the project is new or already exists, creates .gr
 grndwrk         # starts the map and opens it in the browser
 ```
 
-Run `grndwrk init` again after updating grndwrk: it updates the commands you have not changed yourself. `grndwrk check` reads every file in `.grndwrk/` as the map does and says what does not read and where; your agent runs it after writing to the map.
+`grndwrk -v` says which version you run. Run `grndwrk init` again after updating grndwrk: it updates the commands you have not changed yourself. `grndwrk check` reads every file in `.grndwrk/` as the map does and says what does not read and where; your agent runs it after writing to the map.
 
 The map shows what to do next. For a new idea: write the purpose, add thoughts, run `/readiness`, answer what is missing, run `/brief`. For an existing project: run `/survey` and `/sitemap` first.
 
@@ -101,6 +101,10 @@ The button only runs on addresses on your own machine (`localhost`, `*.test`, `*
 ### In an iOS app
 
 Add the Swift package in `clients/ios/GrndwrkFeedback` to the app's debug build, and start it with one line. It comes with grndwrk: after `npm install -g grndwrk` it is in `$(npm root -g)/grndwrk/clients/ios/GrndwrkFeedback`; add that folder in Xcode as a local package. Its [README](clients/ios/GrndwrkFeedback/README.md) has the steps, how to use it on a real iPhone over Wi-Fi (`grndwrk --lan`), and how to try it in the Simulator without changing the app at all (`grndwrk build-ios-loader`).
+
+### In an Android app
+
+Add `com.github.developer-papaja:grndwrk` from JitPack to the app's debug build only (`debugImplementation`), and start it with one line from the Application. It works with Jetpack Compose and Views. Its [README](clients/android/README.md) has the steps, how to try it in the emulator (which reaches your Mac at `10.0.2.2`), and how to use it on a real phone over Wi-Fi (`grndwrk --lan`).
 
 ### Testing fixes
 
@@ -238,7 +242,7 @@ Everything in `.grndwrk/` is plain markdown, meant to be committed and reviewed 
 - **It runs on your machine only.** The map answers on `localhost`. Websites on the internet get nothing from it, and local sites can only send comments, once you allow them.
 - **Phones pair once.** With `--lan`, phones on your Wi-Fi can only send comments, after you allow them on the Mac (or type the pairing code once). Each phone then gets its own long key: the phone checks that it talks to your grndwrk before it sends anything, and signs every request with the key instead of sending it, so nothing a neighbour records can be reused. The connection is plain HTTP, so others on the Wi-Fi can read comments and pictures on the way, and the moment of pairing: use `--lan` on networks you trust.
 - **Comments are untrusted input.** Anyone who used the product wrote them. grndwrk stores their words as a quote, and every command tells your agent to read them as a report, never as instructions. A comment that reads like orders to an agent (asks to ignore its rules, to run a command, for secrets, names the agent's own files, hides text) is marked **Suspicious** with the reasons, in English, Swedish, Norwegian, Danish, German, Dutch, French and Spanish; the comment is kept as sent, and your agent is told to act on none of it and tell you. Still, think twice before letting your agent act on comments from people you do not know without your review.
-- **Nothing ships with your product.** The web button runs only on local addresses, or on the one staging site you named for the relay or your store. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it.
+- **Nothing ships with your product.** The web button runs only on local addresses, or on the one staging site you named for the relay or your store. The iOS package refuses to run in an App Store build and does nothing outside Debug unless you allow it; the Android package is added to debug builds only, never runs when installed from Google Play, and does nothing in a build that is not debuggable unless you allow it.
 - **Files are read as data.** The map only reads YAML, so a file in a pull request cannot run code on your machine, and grndwrk never follows a symbolic link inside `.grndwrk/`, so a file in a pull request cannot point it at anything else on your machine.
 - **Review `.grndwrk/` in pull requests like code.** A colleague's change can add thoughts, answers or questions that look like your agent's; read them before you run commands on them.
 - **The relay cannot read what it carries.** Each phone makes its own key when it joins, and seals every comment with a key made from it, which the relay never gets; a changed or moved envelope is refused, and so is one the relay hands over a second time, or after 30 days. The relay knows only enough to check that a request comes from a phone your team let in. A phone is let in only when someone allows it in the map, with four digits it shows too, and acts only on its own comments. A phone can send at most 60 comments and 100 MB an hour, 300 and 300 MB a day. The keys for your project's mailbox (the team key) and the relay's owner key stay in your user folder, never in the project. A team link opens the project's comments, so send it privately. Envelopes are deleted once fetched, or after 30 days.

@@ -80,7 +80,7 @@ export async function uploadImage(id: string, file: Blob): Promise<{ markdown: s
   return res.json()
 }
 export interface Shot {
-  platform: 'web' | 'ios'
+  platform: 'web' | 'ios' | 'android'
   key: string
   /** How a screen names it in shots: ios/App-2.jpg. */
   file: string

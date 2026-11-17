@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { init } from './init.js'
@@ -26,6 +27,7 @@ const HELP = `Usage:
   grndwrk store [use <url | adapter.mjs> | sync | leave | login | allow | check]
                          a shared store for the map, hosted your own way
                          (docs/store-protocol.md); grndwrk store help says more
+  grndwrk -v          which version of grndwrk this is
   grndwrk build-ios-loader [path]
                          build GrndwrkFeedback for injecting into an app in
                          the iOS Simulator, without changing the app; prints
@@ -61,11 +63,17 @@ async function main() {
       token: { type: 'string' },
       'allow-deletes': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
+      version: { type: 'boolean', short: 'v', default: false },
     },
   })
   const command = positionals[0] ?? 'start'
 
   if (values.help || command === 'help') return void console.log(HELP)
+  if (values.version || command === 'version') {
+    const { version } = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'))
+    // A copy run from its repository (npm link) may hold changes no release has yet.
+    return void console.log(`grndwrk ${version}${existsSync(join(PACKAGE_ROOT, '.git')) ? `, from the source in ${PACKAGE_ROOT}` : ''}`)
+  }
 
   if (command === 'init') {
     console.log(`Setting up ${GW_DIR}/ in ${process.cwd()}\n`)

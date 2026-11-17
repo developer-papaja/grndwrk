@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merged into the app's debug build only, when the app adds GrndwrkFeedback with debugImplementation. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+  <!-- Finding grndwrk on the Wi-Fi: some phones drop the network search's multicast without it. -->
+  <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+  <!-- Speak a comment. Asked for only when Speak is tapped. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <queries>
+    <intent>
+      <action android:name="android.speech.RecognitionService" />
+    </intent>
+  </queries>
+  <!-- grndwrk on the Mac speaks plain http on the local network. -->
+  <application android:usesCleartextTraffic="true">
+    <!-- Shares the file of waiting comments with the app the person picks, read only. -->
+    <provider
+      android:name="grndwrk.feedback.SharedFiles"
+      android:authorities="${applicationId}.grndwrk.share"
+      android:exported="false"
+      android:grantUriPermissions="true" />
+  </application>
+</manifest>

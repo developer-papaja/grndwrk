@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { listShots, readShot, saveIosShot, saveShot } from '../src/store/shots.js'
+import { listShots, readShot, saveAppShot, saveShot } from '../src/store/shots.js'
 import { parseScreenshot } from '../src/server/comments.js'
 import { needsExample, openPath, shotsForScreen } from '../src/shared/screens.js'
 import { listScreens, parseScreen, placeShot } from '../src/store/screens.js'
@@ -51,19 +51,34 @@ describe('pictures of screens', () => {
   it('keeps a picture per screen that looks different when they share a fallback name', async () => {
     const home = { screen: 'App', named: false, texts: ['Good morning', 'Your desk today', 'Desk 12', 'Book again'], ids: [] }
     const planner = { screen: 'App', named: false, texts: ['Planner', 'Monday', 'Tuesday', 'Floor 3'], ids: ['planner-grid'] }
-    expect(await saveIosShot(gw, home, JPEG)).toBe('App')
-    expect(await saveIosShot(gw, planner, JPEG)).toBe('App-2')
+    expect(await saveAppShot(gw, 'ios', home, JPEG)).toBe('App')
+    expect(await saveAppShot(gw, 'ios', planner, JPEG)).toBe('App-2')
     // Home again, with another desk number: the same screen, the same file.
-    expect(await saveIosShot(gw, { ...home, texts: ['Good morning', 'Your desk today', 'Desk 7', 'Book again'] }, JPEG)).toBe('App')
-    expect(await saveIosShot(gw, planner, JPEG)).toBe('App-2')
+    expect(await saveAppShot(gw, 'ios', { ...home, texts: ['Good morning', 'Your desk today', 'Desk 7', 'Book again'] }, JPEG)).toBe('App')
+    expect(await saveAppShot(gw, 'ios', planner, JPEG)).toBe('App-2')
     const shots = await listShots(gw)
     expect(shots.map((s) => s.file).sort()).toEqual(['ios/App-2.jpg', 'ios/App.jpg'])
     expect(shots.find((s) => s.key === 'App-2')?.texts).toContain('planner-grid')
     expect(JSON.parse(await readFile(join(gw, 'shots/ios/App-2.json'), 'utf8')).texts).toContain('Floor 3')
     // A screen with a name of its own keeps one file, however it looks.
     const book = { screen: 'Book', named: true, texts: ['Pick a day'], ids: [] }
-    expect(await saveIosShot(gw, book, JPEG)).toBe('Book')
-    expect(await saveIosShot(gw, { ...book, texts: ['Something else'] }, JPEG)).toBe('Book')
+    expect(await saveAppShot(gw, 'ios', book, JPEG)).toBe('Book')
+    expect(await saveAppShot(gw, 'ios', { ...book, texts: ['Something else'] }, JPEG)).toBe('Book')
+  })
+
+  it('keeps an Android picture apart from iOS ones, with what the screen showed', async () => {
+    const image = `data:image/jpeg;base64,${JPEG.toString('base64')}`
+    const parsed = parseScreenshot({ screen: 'MainActivity', platform: 'android', texts: ['Pick a day'], image })
+    expect(parsed.platform).toBe('android')
+    expect(parseScreenshot({ screen: 'Book', image }).platform).toBe('ios')
+    expect(parseScreenshot({ screen: 'Book', platform: '../web', image }).platform).toBe('ios')
+    expect(await saveAppShot(gw, 'android', parsed.about, parsed.data)).toBe('MainActivity')
+    // MainActivity is a fallback name: a screen that looks different gets a file of its own.
+    expect(await saveAppShot(gw, 'android', { ...parsed.about, texts: ['Settings', 'Notifications'] }, JPEG)).toBe('MainActivity-2')
+    const shots = await listShots(gw)
+    expect(shots.map((s) => s.file).sort()).toEqual(['android/MainActivity-2.jpg', 'android/MainActivity.jpg'])
+    expect(shots.find((s) => s.key === 'MainActivity')?.texts).toContain('Pick a day')
+    expect(await readShot(gw, 'android', 'MainActivity.jpg')).toMatchObject({ type: 'image/jpeg' })
   })
 
   it('gives a picture a screen names in shots: to that screen only', () => {

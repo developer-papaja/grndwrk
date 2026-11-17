@@ -14,7 +14,7 @@
 const PREFIX = /^(?:\.\.\/\.\.\/|\.\.\/|\/)?files\//
 const OWNER = /^(?:n|p|pe|sg)_[A-Za-z0-9_]{1,60}$/
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,100}(?:\.[A-Za-z0-9_-]{1,40}){0,3}\.(?:png|jpe?g|gif|webp)$/i
-const SHOT = /^\/?(?:\.grndwrk\/)?shots\/(web|ios)\/([^/\\]{1,200})$/
+const SHOT = /^\/?(?:\.grndwrk\/)?shots\/(web|ios|android)\/([^/\\]{1,200})$/
 
 /** The picture `src` names, as `files/<id>/<name>` (or `shots/<platform>/<name>` with `shots`), or null when it names none. */
 export function picturePath(src: string, opts: { shots?: boolean } = {}): string | null {

@@ -142,7 +142,9 @@ export async function startServer({ gwDir, port, dev, app, appPort, lan, lanPort
 
 function isLocalHost(host: string | undefined): boolean {
   const name = (host ?? '').replace(/:\d+$/, '')
-  return name === 'localhost' || name === '127.0.0.1' || name === '[::1]'
+  // 10.0.2.2 is this Mac as the Android emulator names it. The server listens on
+  // 127.0.0.1 only, and a page on the Mac that asks for 10.0.2.2 goes elsewhere, never here.
+  return name === 'localhost' || name === '127.0.0.1' || name === '[::1]' || name === '10.0.2.2'
 }
 
 /** Listen on `port`, or the next free one if it is taken. */

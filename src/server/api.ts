@@ -558,7 +558,7 @@ async function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
 /** Serve /files/<node id>/<name> and /shots/<platform>/<name>, and nothing else from disk. */
 export async function handleFiles(req: IncomingMessage, res: ServerResponse, gwDir: string): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost')
-  const shot = url.pathname.match(/^\/shots\/(web|ios)\/([^/]+)$/)
+  const shot = url.pathname.match(/^\/shots\/(web|ios|android)\/([^/]+)$/)
   if (shot && req.method === 'GET') {
     const found = await readShot(gwDir, shot[1], decodeURIComponent(shot[2]))
     if (!found) res.writeHead(404).end()

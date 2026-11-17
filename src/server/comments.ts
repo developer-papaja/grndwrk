@@ -3,7 +3,7 @@ import { BadInput, type NodeStore } from '../store/nodes.js'
 import { broadcast, clientCount, holdForTab, tabAround, type NodeSync } from './events.js'
 import type { ServerEvent } from '../shared/types.js'
 import { type CommentFrom, type CommentVia, createFeedback, feedbackStatus, ownComments, parseFeedback, removeFeedback, testedOnDevice } from './feedback.js'
-import { saveIosShot, type ShotAbout } from '../store/shots.js'
+import { saveAppShot, type AppPlatform, type ShotAbout } from '../store/shots.js'
 import { openTarget } from '../opener.js'
 import { listScreens } from '../store/screens.js'
 import { listPersonas } from '../store/personas.js'
@@ -71,8 +71,8 @@ export async function commentRequest(path: string, body: unknown, ctx: CommentsC
     return { status: 200, body: { screen: contextOf(screenForName(name(b.screen), name(b.component), screens), personas) } }
   }
   if (path === '/api/screenshot') {
-    const { about, data } = parseScreenshot(body)
-    const key = await saveIosShot(ctx.gwDir, about, data)
+    const { about, data, platform } = parseScreenshot(body)
+    const key = await saveAppShot(ctx.gwDir, platform, about, data)
     return { status: 201, body: { saved: key } }
   }
   if (path === '/api/feedback/show') {
@@ -108,7 +108,7 @@ export async function commentRequest(path: string, body: unknown, ctx: CommentsC
  * type when known, else its title, with what the screen showed next to it.
  * The texts come from the app, so they are data: short strings, a few dozen.
  */
-export function parseScreenshot(body: unknown): { about: ShotAbout; data: Buffer } {
+export function parseScreenshot(body: unknown): { about: ShotAbout; data: Buffer; platform: AppPlatform } {
   const b = (body ?? {}) as Record<string, unknown>
   const name = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 120) : '')
   const key = name(b.component) || name(b.screen)
@@ -120,7 +120,9 @@ export function parseScreenshot(body: unknown): { about: ShotAbout; data: Buffer
   const data = Buffer.from(m[1], 'base64')
   // A JPEG starts with FF D8 FF.
   if (data.length < 3 || data[0] !== 0xff || data[1] !== 0xd8 || data[2] !== 0xff) throw new BadInput('That is not a JPEG')
-  return { about: { screen: key, named: b.named === true, texts: strings(b.texts), ids: strings(b.ids) }, data }
+  // iOS sent no platform before Android came; anything but Android is iOS.
+  const platform: AppPlatform = b.platform === 'android' ? 'android' : 'ios'
+  return { about: { screen: key, named: b.named === true, texts: strings(b.texts), ids: strings(b.ids) }, data, platform }
 }
 
 let lastTab = 0

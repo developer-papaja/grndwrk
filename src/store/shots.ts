@@ -6,7 +6,7 @@ import { keepOutOfGit } from './gitignore.js'
  * Pictures of the product's screens, in `.grndwrk/shots/`, kept out of git
  * since they can show real data:
  * - web/<screen id>.png, taken by `grndwrk screenshots`
- * - ios/<view>.jpg, sent by GrndwrkFeedback as the app is used; <view> is
+ * - ios/<view>.jpg and android/<view>.jpg, sent by GrndwrkFeedback as the app is used; <view> is
  *   the view's type or title, matched to a screen through its code. Screens
  *   without a name of their own (App, ContentView) that look different get a
  *   file each: App.jpg, App-2.jpg. Next to each, <view>.json keeps what the
@@ -14,7 +14,10 @@ import { keepOutOfGit } from './gitignore.js'
  * A screen can name its pictures in `shots:` (ios/App-2.jpg), which wins over
  * matching by name.
  */
-export type ShotPlatform = 'web' | 'ios'
+export type ShotPlatform = 'web' | AppPlatform
+/** Pictures sent by an app as it is used, rather than taken by `grndwrk screenshots`. */
+export type AppPlatform = 'ios' | 'android'
+export const APP_PLATFORMS: readonly AppPlatform[] = ['ios', 'android']
 
 export interface Shot {
   platform: ShotPlatform
@@ -30,7 +33,7 @@ export interface Shot {
   taken: string
 }
 
-const EXT: Record<ShotPlatform, string> = { web: '.png', ios: '.jpg' }
+const EXT: Record<ShotPlatform, string> = { web: '.png', ios: '.jpg', android: '.jpg' }
 
 export function shotsDir(gwDir: string, platform?: ShotPlatform): string {
   return platform ? join(gwDir, 'shots', platform) : join(gwDir, 'shots')
@@ -48,7 +51,7 @@ const keyOf = (file: string, platform: ShotPlatform) => {
 
 export async function listShots(gwDir: string): Promise<Shot[]> {
   const out: Shot[] = []
-  for (const platform of ['web', 'ios'] as const) {
+  for (const platform of ['web', ...APP_PLATFORMS] as const) {
     const dir = shotsDir(gwDir, platform)
     for (const file of await readdir(dir).catch(() => [] as string[])) {
       const key = keyOf(file, platform)
@@ -56,8 +59,8 @@ export async function listShots(gwDir: string): Promise<Shot[]> {
       const taken = (await stat(join(dir, file)).catch(() => null))?.mtime
       if (!taken) continue
       const shot: Shot = { platform, key, file: `${platform}/${key}${EXT[platform]}`, url: `/shots/${platform}/${encodeURIComponent(file)}?v=${taken.getTime()}`, taken: taken.toISOString() }
-      if (platform === 'ios') {
-        const about = await readAbout(gwDir, key)
+      if (platform !== 'web') {
+        const about = await readAbout(gwDir, platform, key)
         if (about) shot.texts = [...about.texts, ...about.ids]
       }
       out.push(shot)
@@ -86,11 +89,11 @@ export interface ShotAbout {
   ids: string[]
 }
 
-const aboutPath = (gwDir: string, key: string) => join(shotsDir(gwDir, 'ios'), fileOf(key, 'ios').replace(/\.jpg$/, '.json'))
+const aboutPath = (gwDir: string, platform: AppPlatform, key: string) => join(shotsDir(gwDir, platform), fileOf(key, platform).replace(/\.jpg$/, '.json'))
 
-async function readAbout(gwDir: string, key: string): Promise<ShotAbout | null> {
+async function readAbout(gwDir: string, platform: AppPlatform, key: string): Promise<ShotAbout | null> {
   try {
-    const a = JSON.parse(await readFile(aboutPath(gwDir, key), 'utf8'))
+    const a = JSON.parse(await readFile(aboutPath(gwDir, platform, key), 'utf8'))
     const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
     return { screen: String(a.screen ?? key), named: a.named === true, texts: strings(a.texts), ids: strings(a.ids) }
   } catch {
@@ -99,7 +102,7 @@ async function readAbout(gwDir: string, key: string): Promise<ShotAbout | null> 
 }
 
 /** Names the app falls back to when a screen has no title: they say nothing about which screen it is. */
-const GENERIC_VIEW = /^(app|.*app|contentview|rootview|mainview|appview|tabview|maintabview|homeview|unknown)$/i
+const GENERIC_VIEW = /^(app|.*app|contentview|rootview|mainview|appview|tabview|maintabview|homeview|unknown|.*activity)$/i
 
 /** What a screen shows, comparable: lower case, digits as #, so a clock or a count does not count. */
 export function look(about: Pick<ShotAbout, 'texts' | 'ids'>): Set<string> {
@@ -120,19 +123,19 @@ export function alike(a: Set<string>, b: Set<string>): boolean {
  * picture that looks like it, or gets a file of its own: App-2, App-3.
  * Returns the key it was kept under.
  */
-export async function saveIosShot(gwDir: string, about: ShotAbout, data: Buffer): Promise<string> {
+export async function saveAppShot(gwDir: string, platform: AppPlatform, about: ShotAbout, data: Buffer): Promise<string> {
   let key = about.screen
   const comparable = look(about)
   if (!about.named && GENERIC_VIEW.test(about.screen) && comparable.size) {
-    const files = await readdir(shotsDir(gwDir, 'ios')).catch(() => [] as string[])
+    const files = await readdir(shotsDir(gwDir, platform)).catch(() => [] as string[])
     const same = new RegExp(`^${about.screen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(-\\d+)?$`)
     const siblings = files
-      .map((f) => keyOf(f, 'ios'))
+      .map((f) => keyOf(f, platform))
       .filter((k): k is string => !!k && same.test(k))
       .sort((a, b) => (Number(a.split('-').pop()) || 1) - (Number(b.split('-').pop()) || 1))
     key = ''
     for (const k of siblings) {
-      const before = await readAbout(gwDir, k)
+      const before = await readAbout(gwDir, platform, k)
       // A picture from before the app sent its texts could be any of them: replace it.
       if (!before || (!before.texts.length && !before.ids.length) || alike(look(before), comparable)) {
         key = k
@@ -146,15 +149,15 @@ export async function saveIosShot(gwDir: string, about: ShotAbout, data: Buffer)
       key = n === 1 ? about.screen : `${about.screen}-${n}`
     }
   }
-  await saveShot(gwDir, 'ios', key, data)
-  await writeFile(aboutPath(gwDir, key), JSON.stringify({ ...about, taken: new Date().toISOString() }, null, 2) + '\n')
+  await saveShot(gwDir, platform, key, data)
+  await writeFile(aboutPath(gwDir, platform, key), JSON.stringify({ ...about, taken: new Date().toISOString() }, null, 2) + '\n')
   return key
 }
 
 /** A shot by the name in its URL. Only files that are in the folder, by their exact name. */
 export async function readShot(gwDir: string, platform: string, file: string): Promise<{ data: Buffer; type: string } | null> {
-  if (platform !== 'web' && platform !== 'ios') return null
-  const dir = shotsDir(gwDir, platform)
-  if (!(await readdir(dir).catch(() => [] as string[])).includes(file) || !keyOf(file, platform)) return null
+  if (platform !== 'web' && !APP_PLATFORMS.includes(platform as AppPlatform)) return null
+  const dir = shotsDir(gwDir, platform as ShotPlatform)
+  if (!(await readdir(dir).catch(() => [] as string[])).includes(file) || !keyOf(file, platform as ShotPlatform)) return null
   return { data: await readFile(join(dir, file)), type: platform === 'web' ? 'image/png' : 'image/jpeg' }
 }

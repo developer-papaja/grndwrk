@@ -10,3 +10,11 @@ playground/
 
 # Private notes: decisions and plans, never published
 /notes/
+
+# Android build output and this machine's SDK path
+clients/android/.gradle/
+clients/android/.kotlin/
+clients/android/**/build/
+clients/android/local.properties
+clients/android/.idea/
+*.iml

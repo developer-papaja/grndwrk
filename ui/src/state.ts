@@ -1049,7 +1049,7 @@ export const state = Alpine.reactive({
   needsExample,
   /** Pictures from the app that no screen claims yet: /sitemap places them, or the person drags them onto a screen. */
   get unplacedShots(): Shot[] {
-    return this.shots.filter((s) => s.platform === 'ios' && !this.screens.some((sc) => shotsForScreen(sc, [s], this.screens).length))
+    return this.shots.filter((s) => s.platform !== 'web' && !this.screens.some((sc) => shotsForScreen(sc, [s], this.screens).length))
   },
   shotTray: false,
   /** The picture being dragged onto a screen, and the screen it is over. */
@@ -1087,7 +1087,7 @@ export const state = Alpine.reactive({
   },
   /** Pictures a thread entry shows, as ![name](/shots/ios/App-2.jpg): the ones that exist. */
   entryShots(text: string): Shot[] {
-    const files = [...text.matchAll(/!\[[^\]]*\]\(\/?(?:\.grndwrk\/)?shots\/((?:web|ios)\/[^)\s]+)\)/g)].map((m) => {
+    const files = [...text.matchAll(/!\[[^\]]*\]\(\/?(?:\.grndwrk\/)?shots\/((?:web|ios|android)\/[^)\s]+)\)/g)].map((m) => {
       try {
         return decodeURIComponent(m[1])
       } catch {
@@ -3664,7 +3664,7 @@ export const state = Alpine.reactive({
   /** The width of a box's picture beside its text: narrower for a phone's. */
   sitemapShotStyle(screen: Screen): string {
     if (this.sitemapCompact) return ''
-    const phone = this.shotsOf(screen)[0]?.platform === 'ios'
+    const phone = (this.shotsOf(screen)[0]?.platform ?? 'web') !== 'web'
     return `width: ${Math.round((phone ? 38 : 64) * Math.min(1, this.sitemapZoom))}px`
   },
   /** Whether the open screen has a web route to open. */

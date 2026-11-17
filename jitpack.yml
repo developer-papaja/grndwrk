@@ -1,0 +1,7 @@
+# Builds the Android Comment button (clients/android/feedback) when an app asks JitPack for
+# com.github.developer-papaja:grndwrk:<tag>. Only the library is built and published; the
+# sample app and the rest of the repository are not part of it.
+jdk:
+  - openjdk21
+install:
+  - cd clients/android && ./gradlew :feedback:publishReleasePublicationToMavenLocal -Pversion=$VERSION --no-daemon
