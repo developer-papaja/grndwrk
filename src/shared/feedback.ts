@@ -76,9 +76,15 @@ export interface StepCheck {
 }
 
 export function stepCheck(step: string): { text: string; check: StepCheck | null } {
-  const m = /\s*\[(automated|agent|outdated)(?:\s*:\s*([^[\]\n]{0,300}))?\]\s*$/i.exec(step)
-  if (!m || m.index === 0) return { text: step, check: null }
-  return { text: step.slice(0, m.index).trim(), check: { kind: m[1].toLowerCase() as StepCheckKind, note: (m[2] ?? '').trim() } }
+  // Written exactly as the rules say, lower case with a colon, so a label in brackets ("Tap [Agent]") is never one.
+  // Only the end of the step is searched, and the pattern starts at a literal "[", so a long step stays fast.
+  const end = step.trimEnd()
+  const tail = end.slice(-400)
+  const m = /\[(automated|agent|outdated):([^[\]\n]{0,300})\]$/.exec(tail)
+  if (!m) return { text: step, check: null }
+  const text = end.slice(0, end.length - tail.length + m.index).trim()
+  if (!text) return { text: step, check: null }
+  return { text, check: { kind: m[1] as StepCheckKind, note: m[2].trim() } }
 }
 
 /** One line on how far the steps were checked: "1 tested automatically, 1 checked by your agent, 1 left for you". Empty when none was. */

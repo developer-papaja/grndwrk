@@ -60,13 +60,24 @@ describe('how far the agent checked each step', () => {
   it('says in one line what is left for the person', () => {
     expect(checkSummary(testSteps(entry).checks)).toBe('1 tested automatically, 1 checked by your agent, 1 looks out of date, 1 left for you.')
     expect(checkSummary([{ kind: 'automated', note: '' }, { kind: 'automated', note: 'x' }])).toBe('2 tested automatically, nothing left but a final look from you.')
+  })
+
+  it('stays fast on a step that is very long or ends in a long run of spaces', () => {
+    const t = Date.now()
+    expect(stepCheck(`Open it.${' '.repeat(200_000)}`).check).toBeNull()
+    expect(stepCheck(`${'x'.repeat(200_000)} [agent: looked]`).check).toEqual({ kind: 'agent', note: 'looked' })
+    expect(Date.now() - t).toBeLessThan(200)
     expect(checkSummary([null, null])).toBe('')
   })
 
   it('takes only its own marks, at the very end, and never a whole step', () => {
     expect(stepCheck('Tap [Save] and check the list').check).toBeNull()
-    expect(stepCheck('Tap Save [automated]').check).toEqual({ kind: 'automated', note: '' })
-    expect(stepCheck('Tap Save [AGENT: looked at it]').check).toEqual({ kind: 'agent', note: 'looked at it' })
+    // Exactly as written in the rules: lower case, with a colon. A label in brackets is never one (review of 2026-11-17).
+    expect(stepCheck('Tap the button labelled [Agent]').check).toBeNull()
+    expect(stepCheck('Tap Save [automated]').check).toBeNull()
+    expect(stepCheck('Tap Save [AGENT: looked at it]').check).toBeNull()
+    expect(stepCheck('Tap Save [agent: looked at it]').check).toEqual({ kind: 'agent', note: 'looked at it' })
+    expect(stepCheck('Tap Save [automated:]').check).toEqual({ kind: 'automated', note: '' })
     expect(stepCheck('[automated: x]').check).toBeNull()
     expect(stepCheck('Tap Save [automated: x] then more').check).toBeNull()
     expect(stepCheck('Tap Save [verified: x]').check).toBeNull()

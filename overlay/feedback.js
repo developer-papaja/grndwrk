@@ -1218,7 +1218,7 @@
       const slot = document.createElement('span')
       slot.className = 'chk-slot'
       const c = checks[i]
-      if (c && typeof c === 'object' && CHECKED[c.kind]) {
+      if (c && typeof c === 'object' && Object.hasOwn(CHECKED, c.kind)) {
         const words = typeof c.note === 'string' && c.note ? `${CHECKED[c.kind]}: ${c.note}` : CHECKED[c.kind]
         const icon = document.createElement('button')
         icon.type = 'button'
@@ -1255,7 +1255,7 @@
       }
       li.append(n, s)
       // The column is there only when the agent checked any step.
-      if (checks.some((x) => x && typeof x === 'object' && CHECKED[x.kind])) li.append(slot)
+      if (checks.some((x) => x && typeof x === 'object' && Object.hasOwn(CHECKED, x.kind))) li.append(slot)
       li.append(m)
       list.append(li)
     })
