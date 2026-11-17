@@ -20,9 +20,10 @@ Cards with `source: app` are comments someone made in the product, with the Comm
 
      To test:
      1. Where to go in the running product.
-     2. What to do there.
-     3. What the person should see now.
+     2. What to do there. [automated: the test that covers it, when one ran and passed]
+     3. What the person should see now. [agent: how you checked it, when you did]
      ```
+     A step ends in a mark only when you checked it yourself (see Work to test below); without one it is left for the person.
   The person then sees it as ready to test, tests it on the phone or in the browser, and approves or rejects it there.
 - **A fix you only propose** gets `proposed:` and an entry saying what to change, without `built:`.
 - **Never set `fixed:`** and never settle a comment, unless the person asked you to in this conversation. Fixed means the person tested and approved it.
@@ -33,6 +34,11 @@ Cards with `source: app` are comments someone made in the product, with the Comm
 Not only comments: when you build what any thought asks for, the person tests it before it counts as done.
 
 - **Say so in the card, in the same turn as the work:** `built:` with today's date in its frontmatter, and a `who: claude` entry in its thread, as for a comment above: what changed (with the commit id when there is one), then `To test:` and numbered steps, each one thing to do and what the person should see. Write steps someone can follow without you: where to go, what to click, what is different now.
+- **Say how far you checked each step yourself,** at the end of the step, in brackets, so the person sees where their own test matters most:
+  - `[automated: <test>]` when an automated test that covers the step ran and passed after this change (a unit, UI or end-to-end test in the project; name it: `AppointmentsTest.showsSpecies`, `test/booking.test.ts`).
+  - `[agent: <what you did>]` when you tried the step yourself and saw it work: in the Simulator, the emulator or a browser, with a screenshot or a UI tool (`[agent: checked in the emulator, screenshot]`).
+  - `[outdated: <why>]` on a step that no longer fits, in a round written before: the screen it names changed or is gone.
+  - No mark when you did not check it: it is the person's. Only mark what really ran and passed in this piece of work; a test that exists but did not run, or failed, gets no mark. The person still tests every step and can reject any of them, marked or not.
 - **Leave `status` open.** The thought shows as Ready to test; the person goes through the steps in the map (Works or No on each), then marks it done (settled) or sends it back. Never settle a thought you built, unless the person asked you to in this conversation.
 - **Work asked for in the chat, with no thought behind it,** gets a thought of its own (on the page and topic it belongs to), so it can be tested like the rest.
 - **Sent back:** `built:` is gone and the thread ends in "Tested on the Mac: does not work yet.", with what is still wrong quoted and maybe pictures below it (look at them). Read it, fix it, and mark it built again with new steps.

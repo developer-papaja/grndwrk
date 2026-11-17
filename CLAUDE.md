@@ -16,6 +16,21 @@ This repo uses grndwrk on itself. Its `.grndwrk/` is the map of grndwrk as a pro
 
 In a product's own repo it is the other way around: there the stories are meant to steer the build.
 
+<!-- grndwrk: the map, for your agent. grndwrk init keeps this block up to date unless you change it. -->
+## grndwrk
+
+This project has a grndwrk map in `.grndwrk/`: thoughts, screens, stories, and comments people made in the running product. Read `.grndwrk/CLAUDE.md` before you change anything in the project, and follow it whatever you were asked:
+
+- Mark what you build or fix as built, with steps to test, and end each step you checked yourself in `[automated: <test>]` or `[agent: <how>]`. Never settle it yourself.
+- Put every question you ask the person into the map, as a question in a thread, never only in the chat.
+- Tick the stories you build against, and cite their ids in commit messages.
+- Before you start on a screen or a feature, say the first item in `.grndwrk/readiness/focus/` that is not set aside.
+
+At the end of a piece of work, ask once whether to write the decisions from it into the map (`/decisions`), and write them only if the person says yes.
+<!-- /grndwrk -->
+
+The block above is the one `grndwrk init` writes into every project, used here too: building grndwrk counts as work to test like any other, so what is built or decided in a chat lands in this repo's map, not only in git.
+
 ## Private notes
 
 `notes/decisions.md` is the person's own log of decisions, the reasons behind them, and the plan for publishing. It is git-ignored and never published. Read it before changing anything it covers. Add to it; never rewrite it, drop entries or replace the file.

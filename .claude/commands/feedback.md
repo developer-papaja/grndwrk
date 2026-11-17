@@ -67,8 +67,11 @@ Built in 9b17e02: the Book button is the full width of the card.
 
 To test:
 1. Open Booking and pick any desk.
-2. The Book button now fills the width of the card, and a tap anywhere on it books.
+2. The Book button now fills the width of the card, and a tap anywhere on it books. [automated: BookingUITests.bookButtonFillsCard]
+3. A tap at the far right of the button books too. [agent: checked in the Simulator]
 ```
+
+End a step with `[automated: <test>]` when an automated test covering it ran and passed after the change, `[agent: <how>]` when you tried it yourself in the Simulator, emulator or a browser and saw it work, and `[outdated: <why>]` on a step from an earlier round that no longer fits. A step you did not check has no mark; it is the person's. Never mark a test that did not run or did not pass.
 
 It is ready to test, not fixed, until the person approves it.
 
