@@ -129,6 +129,15 @@
       .steps li.ok .n { background: rgba(20,174,92,.25); color: #6ee7a8; }
       .steps li.bad .n { background: rgba(244,63,94,.25); color: #fda4af; }
       .steps .s { flex: 1; min-width: 0; white-space: pre-wrap; }
+      .steps .chk-slot { flex: none; width: 20px; height: 20px; display: grid; place-items: center; }
+      .steps .chk-icon { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; cursor: pointer; }
+      .steps .chk-icon:hover { background: rgba(255,255,255,.08); }
+      .steps .chk-icon svg { width: 14px; height: 14px; }
+      .steps .chk-note { display: block; margin-top: 2px; font-size: 11px; }
+      .steps .chk-note[hidden] { display: none; }
+      .automated { color: #6ee7b7; }
+      .agent { color: #7dd3fc; }
+      .outdated { color: #fcd34d; }
       .steps .m { flex: none; display: flex; gap: 2px; }
       .steps .m button { padding: 2px 6px; font-size: 11px; border-radius: 5px; background: none; color: rgba(232,230,227,.55); }
       .steps .m button:hover { background: rgba(255,255,255,.08); color: #e8e6e3; }
@@ -1069,7 +1078,7 @@
       const own = await relay.status().catch(() => [])
       tests = own
         .filter((c) => c && c.state === 'ready' && c.web && typeof c.web.path === 'string' && /^\/(?![/\\])/.test(c.web.path))
-        .map((c) => ({ id: c.id, key: c.key, round: c.round, title: c.title || '', fix: c.fix || '', test: c.test || '', steps: Array.isArray(c.steps) ? c.steps : [], ...c.web }))
+        .map((c) => ({ id: c.id, key: c.key, round: c.round, title: c.title || '', fix: c.fix || '', test: c.test || '', steps: Array.isArray(c.steps) ? c.steps : [], checks: Array.isArray(c.checks) ? c.checks : [], check_summary: typeof c.check_summary === 'string' ? c.check_summary : '', ...c.web }))
       return showTestCount()
     }
     try {
@@ -1152,6 +1161,8 @@
     // The steps as a checklist, each marked works or not; the plain text only for a grndwrk that sends no steps.
     marks = {}
     const steps = Array.isArray(t.steps) ? t.steps.filter((s) => typeof s === 'string') : []
+    // How far the agent checked each step itself: a test that ran, a look, or out of date.
+    checks = Array.isArray(t.checks) ? t.checks : []
     $('.t-test').style.display = steps.length ? 'none' : 'block'
     drawSteps(steps)
     rejecting(false)
@@ -1167,6 +1178,28 @@
     placeMark()
   }
   let marks = {}
+  let checks = []
+  const CHECKED = { automated: 'Tested automatically', agent: 'Checked by your agent', outdated: 'Looks out of date' }
+  // The map's icons: a beaker for a test that ran, sparkles for the agent's own look, a clock for out of date.
+  const CHECK_ICON = {
+    automated: 'M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5',
+    agent: 'M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z',
+    outdated: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+  }
+  function checkIcon(kind) {
+    const NS = 'http://www.w3.org/2000/svg'
+    const svg = document.createElementNS(NS, 'svg')
+    svg.setAttribute('viewBox', '0 0 24 24')
+    svg.setAttribute('fill', 'none')
+    svg.setAttribute('stroke', 'currentColor')
+    svg.setAttribute('stroke-width', '1.8')
+    svg.setAttribute('stroke-linecap', 'round')
+    svg.setAttribute('stroke-linejoin', 'round')
+    const path = document.createElementNS(NS, 'path')
+    path.setAttribute('d', CHECK_ICON[kind])
+    svg.append(path)
+    return svg
+  }
   function drawSteps(steps) {
     const list = $('.t-steps')
     list.replaceChildren()
@@ -1181,6 +1214,26 @@
       const s = document.createElement('span')
       s.className = 's'
       s.textContent = step
+      // How far the agent checked this step itself: an icon in a column of its own, so they line up; hover or a click spells it out.
+      const slot = document.createElement('span')
+      slot.className = 'chk-slot'
+      const c = checks[i]
+      if (c && typeof c === 'object' && CHECKED[c.kind]) {
+        const words = typeof c.note === 'string' && c.note ? `${CHECKED[c.kind]}: ${c.note}` : CHECKED[c.kind]
+        const icon = document.createElement('button')
+        icon.type = 'button'
+        icon.className = `chk-icon ${c.kind}`
+        icon.title = words
+        icon.setAttribute('aria-label', words)
+        icon.append(checkIcon(c.kind))
+        const said = document.createElement('span')
+        said.className = `chk-note ${c.kind}`
+        said.textContent = words
+        said.hidden = true
+        icon.addEventListener('click', () => { said.hidden = !said.hidden })
+        s.append(said)
+        slot.append(icon)
+      }
       const m = document.createElement('span')
       m.className = 'm'
       for (const [mark, label, cls] of [['ok', 'Works', 'w'], ['bad', 'No', 'f']]) {
@@ -1200,7 +1253,10 @@
         })
         m.append(b)
       }
-      li.append(n, s, m)
+      li.append(n, s)
+      // The column is there only when the agent checked any step.
+      if (checks.some((x) => x && typeof x === 'object' && CHECKED[x.kind])) li.append(slot)
+      li.append(m)
       list.append(li)
     })
   }

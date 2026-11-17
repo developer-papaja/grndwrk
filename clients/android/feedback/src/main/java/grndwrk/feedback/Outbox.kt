@@ -52,7 +52,22 @@ internal object Outbox {
     val test: String?,
     /** The same, one step each. */
     val steps: List<String>,
+    /** How far the agent checked each step itself, in step order: null where it did not. */
+    val checks: List<Check?> = emptyList(),
+    /** One line on it from grndwrk: "1 tested automatically, 1 left for you." */
+    val checkSummary: String? = null,
   )
+
+  /** A check the agent made: `automated` (a test ran and passed), `agent` (it tried it) or `outdated` (the step no longer fits). */
+  data class Check(val kind: String, val note: String) {
+    val glyph: Glyph get() = when (kind) { "automated" -> Glyph.BEAKER; "agent" -> Glyph.SPARKLE; else -> Glyph.CLOCK }
+    val color: Int get() = when (kind) { "automated" -> 0xFF34D399.toInt(); "agent" -> 0xFF38BDF8.toInt(); else -> 0xFFFBBF24.toInt() }
+    val words: String
+      get() {
+        val what = when (kind) { "automated" -> "Tested automatically"; "agent" -> "Checked by your agent"; else -> "Looks out of date" }
+        return if (note.isEmpty()) what else "$what: $note"
+      }
+  }
 
   private var flushing = false
   private val base: File get() = File(Env.app.filesDir, "GrndwrkFeedback").also { it.mkdirs() }
@@ -232,6 +247,12 @@ internal object Outbox {
     return Item(
       file, node, text, parts.joinToString(" · "), parseIso(c.str("written")), c.str("state"), c.str("fix"), c.str("screen"), c.str("test"),
       c.optJSONArray("steps")?.strings() ?: emptyList(),
+      c.optJSONArray("checks")?.let { a ->
+        (0 until a.length()).map { i ->
+          a.optJSONObject(i)?.let { o -> o.str("kind")?.takeIf { it in setOf("automated", "agent", "outdated") }?.let { Check(it, (o.str("note") ?: "").take(200)) } }
+        }
+      } ?: emptyList(),
+      c.str("check_summary")?.take(200),
     )
   }
 
@@ -263,7 +284,7 @@ internal object Outbox {
     return lines.joinToString("\n")
   }
 
-  private val statusFields = listOf("title", "status", "state", "fix", "test", "steps", "round")
+  private val statusFields = listOf("title", "status", "state", "fix", "test", "steps", "checks", "check_summary", "round")
 
   /**
    * Ask grndwrk what became of the sent comments: their title and status

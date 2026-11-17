@@ -1329,7 +1329,7 @@ export const state = Alpine.reactive({
   },
   // Testing a built fix in the map: Claude's "To test:" steps as a checklist.
   /** What changed and the steps to test it, from a Claude entry. */
-  testSteps(text: string): { fix: string; steps: string[] } {
+  testSteps(text: string): ReturnType<typeof testSteps> {
     return testSteps(this.entryWords(text))
   },
   /** The entry whose steps can be tested now, on something ready to test: Claude's latest entry with steps, even with a note after it. */

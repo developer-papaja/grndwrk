@@ -39,6 +39,22 @@ enum Outbox {
     var test: String?
     /// The same, one step each, from a grndwrk that sends them.
     var steps: [String] = []
+    /// How far the agent checked each step itself, in step order: nil where it did not.
+    var checks: [Check?] = []
+    /// One line on it from grndwrk: "1 tested automatically, 1 left for you."
+    var checkSummary: String?
+  }
+
+  /// A check the agent made: `automated` (a test ran and passed), `agent` (it tried it) or `outdated` (the step no longer fits).
+  struct Check {
+    var kind: String
+    var note: String
+    var symbol: String { kind == "automated" ? "flask" : kind == "agent" ? "sparkles" : "clock" }
+    var color: UIColor { kind == "automated" ? .systemGreen : kind == "agent" ? .systemTeal : .systemYellow }
+    var words: String {
+      let what = kind == "automated" ? "Tested automatically" : kind == "agent" ? "Checked by your agent" : "Looks out of date"
+      return note.isEmpty ? what : "\(what): \(note)"
+    }
   }
 
   static let changed = Notification.Name("GrndwrkFeedback.outbox")
@@ -222,7 +238,12 @@ enum Outbox {
     var text = c["title"] as? String ?? c["text"] as? String ?? ""
     if text.isEmpty, c["on_mac"] as? Bool == true { text = "Written on the Mac" }
     if node == nil, c["relay"] as? Bool == true, file == nil { parts.append("at the relay") }
-    return Item(file: file, node: node, text: text, detail: parts.joined(separator: " · "), written: written, state: c["state"] as? String, fix: c["fix"] as? String, screen: c["screen"] as? String, test: c["test"] as? String, steps: (c["steps"] as? [String]) ?? [])
+    return Item(file: file, node: node, text: text, detail: parts.joined(separator: " · "), written: written, state: c["state"] as? String, fix: c["fix"] as? String, screen: c["screen"] as? String, test: c["test"] as? String, steps: (c["steps"] as? [String]) ?? [],
+      checks: ((c["checks"] as? [Any]) ?? []).map { x in
+        guard let o = x as? [String: Any], let kind = o["kind"] as? String, ["automated", "agent", "outdated"].contains(kind) else { return nil }
+        return Check(kind: kind, note: String((o["note"] as? String ?? "").prefix(200)))
+      },
+      checkSummary: (c["check_summary"] as? String).map { String($0.prefix(200)) })
   }
 
   /// The screen the app shows, as the map has it: what it is for and who it is
@@ -289,6 +310,8 @@ enum Outbox {
       c["fix"] = a["fix"]
       c["test"] = a["test"]
       c["steps"] = a["steps"]
+      c["checks"] = a["checks"]
+      c["check_summary"] = a["check_summary"]
       c["round"] = a["round"]
       next.append(c)
     }
@@ -324,7 +347,7 @@ enum Outbox {
         try? FileManager.default.moveItem(at: from, to: pictures.appendingPathComponent("\(id).png"))
       }
       c["node"] = id
-      for field in ["title", "status", "state", "fix", "test", "steps", "round"] { c[field] = a[field] }
+      for field in ["title", "status", "state", "fix", "test", "steps", "checks", "check_summary", "round"] { c[field] = a[field] }
       next.append(c)
     }
     write(next, to: sentFile)

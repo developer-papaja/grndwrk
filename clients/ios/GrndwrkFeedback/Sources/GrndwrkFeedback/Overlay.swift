@@ -700,7 +700,40 @@ final class OverlayController: UIViewController {
     let buttons = UIStackView(arrangedSubviews: [toggle("Works", true, .systemGreen), toggle("No", false, .systemRed)])
     buttons.spacing = 4
     buttons.setContentHuggingPriority(.required, for: .horizontal)
-    let row = UIStackView(arrangedSubviews: [badge, words, buttons])
+    // How far the agent checked this step itself: an icon in a column of its own before Works and No, so the icons
+    // line up; a tap spells it out under the words. Still the person's to mark.
+    var middle: UIView = words
+    var slot: UIView?
+    if item.checks.contains(where: { $0 != nil }) {
+      let column = UIView()
+      column.widthAnchor.constraint(equalToConstant: 26).isActive = true
+      column.heightAnchor.constraint(equalToConstant: 26).isActive = true
+      slot = column
+    }
+    if let check = item.checks.indices.contains(i) ? item.checks[i] : nil, let slot {
+      let note = UILabel()
+      note.text = check.words
+      note.font = .systemFont(ofSize: 11)
+      note.textColor = check.color
+      note.numberOfLines = 3
+      note.isHidden = true
+      var c = UIButton.Configuration.plain()
+      c.image = UIImage(systemName: check.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold))
+      c.baseForegroundColor = check.color
+      c.contentInsets = .zero
+      let icon = UIButton(configuration: c, primaryAction: UIAction { _ in note.isHidden.toggle() })
+      icon.accessibilityLabel = check.words
+      icon.translatesAutoresizingMaskIntoConstraints = false
+      slot.addSubview(icon)
+      NSLayoutConstraint.activate([icon.topAnchor.constraint(equalTo: slot.topAnchor), icon.bottomAnchor.constraint(equalTo: slot.bottomAnchor), icon.leadingAnchor.constraint(equalTo: slot.leadingAnchor), icon.trailingAnchor.constraint(equalTo: slot.trailingAnchor)])
+      let column = UIStackView(arrangedSubviews: [words, note])
+      column.axis = .vertical
+      column.alignment = .leading
+      column.spacing = 2
+      column.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+      middle = column
+    }
+    let row = UIStackView(arrangedSubviews: [badge, middle] + (slot.map { [$0] } ?? []) + [buttons])
     row.spacing = 8
     row.alignment = .top
     return row

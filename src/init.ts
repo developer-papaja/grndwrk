@@ -102,7 +102,7 @@ export function rootRules(rulesFile: string): string {
     '',
     `This project has a grndwrk map in \`.grndwrk/\`: thoughts, screens, stories, and comments people made in the running product. Read \`.grndwrk/${rulesFile}\` before you change anything in the project, and follow it whatever you were asked:`,
     '',
-    '- Mark what you build or fix as built, with steps to test. Never settle it yourself.',
+    '- Mark what you build or fix as built, with steps to test, and end each step you checked yourself in `[automated: <test>]` or `[agent: <how>]`. Never settle it yourself.',
     '- Put every question you ask the person into the map, as a question in a thread, never only in the chat.',
     '- Tick the stories you build against, and cite their ids in commit messages.',
     '- Before you start on a screen or a feature, say the first item in `.grndwrk/readiness/focus/` that is not set aside.',

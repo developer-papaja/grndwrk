@@ -69,7 +69,7 @@ internal fun circle(color: Int): GradientDrawable = GradientDrawable().apply {
 }
 
 /** The few icons the button and the sheets need, drawn on a 24 by 24 grid, so the package needs no resources. */
-internal enum class Glyph { BUBBLE, TEST, CAMERA, GLOBE, OFFLINE, CLOSE, SMALLER, BIGGER, MIC, STOP, MAC, UP, DOWN, BACK, NEXT, PLAY, TRASH, CHECK, SEND, TRAY, MORE, REFRESH }
+internal enum class Glyph { BUBBLE, TEST, CAMERA, GLOBE, OFFLINE, CLOSE, SMALLER, BIGGER, MIC, STOP, MAC, UP, DOWN, BACK, NEXT, PLAY, TRASH, CHECK, SEND, TRAY, MORE, REFRESH, BEAKER, SPARKLE, CLOCK }
 
 internal class Icon(private val glyph: Glyph, var color: Int, private val size: Int) : Drawable() {
   private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -192,6 +192,19 @@ internal class Icon(private val glyph: Glyph, var color: Int, private val size: 
       Glyph.REFRESH -> {
         c.drawArc(RectF(5f, 5f, 19f, 19f), 40f, 290f, false, p)
         c.drawPath(path(19.5f, 4.5f, 19f, 9.5f, 14f, 9f), p)
+      }
+      // A test that ran: a beaker.
+      Glyph.BEAKER -> {
+        c.drawLine(7.5f, 3f, 16.5f, 3f, p)
+        c.drawPath(path(9.5f, 3f, 9.5f, 9.5f, 4.5f, 19f, 6f, 21f, 18f, 21f, 19.5f, 19f, 14.5f, 9.5f, 14.5f, 3f), p)
+        c.drawLine(6.8f, 15f, 17.2f, 15f, p)
+      }
+      // The agent tried it: a sparkle.
+      Glyph.SPARKLE -> c.drawPath(path(12f, 3f, 14f, 10f, 21f, 12f, 14f, 14f, 12f, 21f, 10f, 14f, 3f, 12f, 10f, 10f, close = true), p)
+      // Out of date: a clock.
+      Glyph.CLOCK -> {
+        c.drawCircle(12f, 12f, 9f, p)
+        c.drawPath(path(12f, 7f, 12f, 12f, 15.5f, 12f), p)
       }
     }
     c.restore()

@@ -194,8 +194,33 @@ Alpine.data('projectCard', () => ({
 Alpine.data('entrySteps', () => ({
   get steps() {
     const e = (this as unknown as { e: { who: string; text: string } }).e
-    return e.who === 'claude' ? state.testSteps(e.text) : { fix: '', steps: [] }
+    return e.who === 'claude' ? state.testSteps(e.text) : { fix: '', steps: [], checks: [] }
   },
+  /** How far the agent checked step n itself, in words for its tag: empty when it did not. */
+  checkLabel(n: number): string {
+    const c = this.steps.checks[n]
+    if (!c) return ''
+    const what = { automated: 'Tested automatically', agent: 'Checked by your agent', outdated: 'Looks out of date' }[c.kind]
+    return c.note ? `${what}: ${c.note}` : what
+  },
+  checkClass(n: number): string {
+    const kind = this.steps.checks[n]?.kind
+    return kind === 'automated' ? 'text-emerald-300' : kind === 'agent' ? 'text-sky-300' : 'text-amber-300'
+  },
+  checkIcon(n: number): string {
+    const kind = this.steps.checks[n]?.kind
+    return kind === 'automated' ? '#i-beaker' : kind === 'agent' ? '#i-sparkles' : '#i-clock'
+  },
+  /** Whether the agent checked any step: only then is there a column for the icons. */
+  anyCheck(): boolean {
+    return this.steps.checks.some(Boolean)
+  },
+  /** The step whose check is spelled out under it, after a click on its icon (for touch, where there is no hover). */
+  openCheck: -1,
+  toggleCheck(n: number) {
+    this.openCheck = this.openCheck === n ? -1 : n
+  },
+
   /** How many steps of entry i are marked as working, of all. */
   working(i: number): string {
     const all = this.steps.steps.length

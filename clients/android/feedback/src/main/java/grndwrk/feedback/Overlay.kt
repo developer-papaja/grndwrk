@@ -28,6 +28,7 @@ import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import kotlinx.coroutines.launch
@@ -1045,7 +1046,24 @@ internal object Overlay {
       background = circle(Colors.alpha(color, 0.18f))
       importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
-    val words = a.label(step, 14f, if (mark == true) Colors.alpha(Colors.light, 0.55f) else Colors.light)
+    val text = a.label(step, 14f, if (mark == true) Colors.alpha(Colors.light, 0.55f) else Colors.light)
+    // How far the agent checked this step itself: an icon in a column of its own before Works and No, so the icons
+    // line up; a tap spells it out under the words. Still the person's to mark.
+    val check = item.checks.getOrNull(i)
+    val note = check?.let { a.label(it.words, 11f, it.color, lines = 3).apply { visibility = View.GONE } }
+    val words: View = if (note == null) text else LinearLayout(a).apply {
+      orientation = LinearLayout.VERTICAL
+      addView(text)
+      addView(note)
+    }
+    val slot: View? = if (item.checks.none { it != null }) null else FrameLayout(a).apply {
+      if (check != null && note != null) addView(ImageView(a).apply {
+        setImageDrawable(Icon(check.glyph, check.color, a.dp(15)))
+        contentDescription = check.words
+        scaleType = ImageView.ScaleType.CENTER
+        setOnClickListener { note.visibility = if (note.visibility == View.GONE) View.VISIBLE else View.GONE }
+      }, FrameLayout.LayoutParams(a.dp(28), a.dp(28)))
+    }
     fun toggle(title: String, value: Boolean, c: Int): TextView {
       val on = mark == value
       return a.pill(title, null, if (on) c else 0x26FFFFFF, if (on) 0xFFFFFFFF.toInt() else Colors.light, "Step ${i + 1} ${if (value) "works" else "does not work"}", sp = 13f) {
@@ -1059,6 +1077,7 @@ internal object Overlay {
     val row = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP }
     row.addView(badge, LinearLayout.LayoutParams(a.dp(22), a.dp(22)).apply { topMargin = a.dp(2) })
     row.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = a.dp(8); marginEnd = a.dp(8) })
+    slot?.let { row.addView(it, LinearLayout.LayoutParams(a.dp(28), a.dp(28)).apply { topMargin = a.dp(6); marginEnd = a.dp(4) }) }
     row.addView(horizontal(a, a.dp(4), toggle("Works", true, Colors.green), toggle("No", false, Colors.red)))
     return row
   }

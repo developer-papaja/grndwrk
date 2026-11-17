@@ -294,6 +294,19 @@ describe('comments a device can follow up on', () => {
     expect(await testedOnDevice(store, { comments: [{ id: node.id, key, round: second }], works: true })).toEqual([{ id: node.id, state: 'fixed' }])
   })
 
+  it('tells the phone which steps the agent already checked, without the marks in the steps', async () => {
+    const { feedbackStatus } = await import('../src/server/feedback.js')
+    const { appendEntry } = await import('../src/shared/thread.js')
+    const node = await createFeedback(gw, store, parseFeedback({ text: 'The ring is too small', key }))
+    const entry = 'Bigger ring.\n\nTo test:\n1. Open Today. [automated: TodayTests.ringSize]\n2. The ring fills the card.'
+    await store.update(node.id, { proposed: '2026-11-17', built: '2026-11-17', body: appendEntry(node.body, 'claude', entry, '2026-11-17') })
+    expect((await feedbackStatus(store, { comments: [{ id: node.id, key }] }))[0]).toMatchObject({
+      steps: ['Open Today.', 'The ring fills the card.'],
+      checks: [{ kind: 'automated', note: 'TodayTests.ringSize' }, null],
+      check_summary: '1 tested automatically, 1 left for you.',
+    })
+  })
+
   it('shows the proposed fix, and lets the key holder mark it fixed or send it back', async () => {
     const { feedbackStatus, testedOnDevice } = await import('../src/server/feedback.js')
     const { appendEntry, splitBody } = await import('../src/shared/thread.js')
