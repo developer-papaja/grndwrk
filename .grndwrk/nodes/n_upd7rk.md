@@ -5,7 +5,7 @@ title: Say when grndwrk or the project's agent rules are out of date
 topic: setup
 altitude: 2
 links: [n_uvdxr1]
-status: open
+status: settled
 created: 2026-11-18
 built: 2026-11-18
 by: Måns Brengesjö

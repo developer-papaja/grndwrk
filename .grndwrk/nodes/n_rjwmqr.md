@@ -6,7 +6,7 @@ topic: working with Claude
 page: Feedback
 altitude: 3
 links: []
-status: open
+status: settled
 created: 2026-11-16
 built: 2026-11-16
 ---

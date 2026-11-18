@@ -212,16 +212,18 @@ Alpine.data('entrySteps', () => ({
     if (!marks.size) return null
     const nums = [...marks.keys()].sort((a, b) => a - b).map((n) => String(n + 1))
     const list = nums.length > 1 ? `${nums.slice(0, -1).join(', ')} and ${nums[nums.length - 1]}` : nums[0]
-    // Each picture with the "Step N" line above it, when there is one.
-    const labels: string[] = []
+    // Each picture with the "Step N" line above it, when there is one: matched by the picture
+    // itself, read the way the pictures are, so a link or a picture it skips never shifts a label.
+    const labelOf = new Map<string, string>()
     let label = ''
     for (const line of e.text.split('\n')) {
       const step = /^\s*Step (\d{1,2})\s*:?\s*$/i.exec(line)
       if (step) label = `Step ${step[1]}`
-      else if (/^\s*!\[[^\]]*\]\([^)]*\)\s*$/.test(line)) labels.push(label)
-      else if (line.trim()) label = ''
+      else if (/^\s*!\[[^\]]*\]\([^)]*\)\s*$/.test(line)) {
+        for (const pic of state.entryPictures(line)) if (!labelOf.has(pic.url)) labelOf.set(pic.url, label)
+      } else if (line.trim()) label = ''
     }
-    const pictures = state.entryPictures(e.text).map((pic, n) => ({ pic, label: labels[n] ?? '' }))
+    const pictures = state.entryPictures(e.text).map((pic) => ({ pic, label: labelOf.get(pic.url) ?? '' }))
     const lead = state.entryWords(e.text).split(/\n\s*\n/)[0].trim()
     return { lead, steps: `Checked step${nums.length > 1 ? 's' : ''} ${list} of the steps to test`, pictures }
   },

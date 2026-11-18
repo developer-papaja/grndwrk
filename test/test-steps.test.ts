@@ -117,3 +117,14 @@ describe('marks given later, by step number', () => {
     expect(f.checks?.[2]?.kind).toBe('agent')
   })
 })
+
+describe('Checked: marks stay fast', () => {
+  it('reads a long line of spaces at once, and still reads the usual forms', () => {
+    const t = performance.now()
+    expect(checkedSteps(`Checked:\n1${' '.repeat(200_000)}x`).size).toBe(0)
+    expect(checkedSteps(`Checked:\n1${' '.repeat(300)}[agent: tried it]`).size).toBe(1)
+    expect(performance.now() - t).toBeLessThan(200)
+    const m = checkedSteps('Checked:\n1. [automated: A.b]\nStep 2: [agent: looked]\n- 3) [outdated: gone]\n4 [agent: too]')
+    expect([...m.keys()]).toEqual([0, 1, 2, 3])
+  })
+})

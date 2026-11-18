@@ -6,7 +6,7 @@ topic: security
 page: Product
 altitude: 2
 links: [n_284d3k]
-status: open
+status: settled
 created: 2026-11-17
 built: 2026-11-17
 ---

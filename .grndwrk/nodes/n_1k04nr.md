@@ -6,7 +6,7 @@ topic: comments
 page: Feedback
 altitude: 2
 links: [n_r9wswb]
-status: open
+status: settled
 created: 2026-11-09
 built: 2026-11-16
 ---

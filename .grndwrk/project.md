@@ -5,6 +5,7 @@ type: developer tool
 pages: [Product, Feedback]
 personal_info: "no"
 start: existing
+ships: versions
 ---
 Step one of an exploratory layer in the dev stack, in the spirit of Ray or the Symfony profiler.
 Later steps write into the same folder: a progress page, review of pages against their stories,

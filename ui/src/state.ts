@@ -17,8 +17,9 @@ import { markSeen as postSeen } from './api'
 import { isPrinciple, PROGRESS, PROGRESS_WORDS, progressOfNode, progressOfStory, showsProgress, type Progress, type ProgressFilter } from '../../src/shared/progress'
 import { parseCapture, sameTitle } from './capture'
 import { fetchProject, fetchWaiting, saveWaiting, savePersonalInfo, type WaitingState } from './api'
-import { PAGE, session, signIn, signOut, acceptHanded, declineHanded, fetchViews, createView, updateView, deleteView, teamProjects, readTeamProject, signInToProject, openProjectPage, SignInThere, type TeamProject, type TeamProjectRead } from './api'
+import { PAGE, session, signIn, signOut, acceptHanded, declineHanded, fetchReleases, fetchViews, createView, updateView, deleteView, teamProjects, readTeamProject, signInToProject, openProjectPage, SignInThere, type TeamProject, type TeamProjectRead } from './api'
 import { searchThoughts } from '../../src/shared/overview'
+import { releaseLabel, releasesOf, type Release } from '../../src/shared/releases'
 import { sameSettings, type SavedView, type ViewSettings } from '../../src/shared/views'
 import { splitQuestions } from '../../src/shared/thread'
 import { waitingKey } from '../../src/shared/waiting'
@@ -27,7 +28,7 @@ import DOMPurify from 'dompurify'
 import { picturePath } from './pictures'
 import { ALTITUDE_WORDS, displayName, topicColumns, topicKey } from './layout'
 import { TYPE_COLORS } from './palette'
-import { flatten, groupForList, type ListGroup } from './list'
+import { byIdOutOfView, flatten, groupForList, matchesQuery, type ListGroup } from './list'
 import { buildBoard, buildOutline, CARD_GROUPS, featureOf, firstLine, MAP_LAYOUTS, screenOf, type Board, type CardGroup, type GroupBy, type MapLayout, type OutlineSection } from './board'
 import { counterpart, inVariant, narrowView, projectVariants, unknownVariants } from '../../src/shared/variants'
 import { inBand, isGuess, looseNames, personaNamed, readEvidence, readSections, screensForPersona, SECTIONS, sizeLabel, themeCounts, type Evidence } from '../../src/shared/personas'
@@ -57,6 +58,8 @@ export interface InboxItem {
   /** Where that sits: the topic, or the screen's place in the tree. */
   where: string
   date: string
+  /** When it was asked, in ms, from its entry file's name (`<ms>-xx.md`); 0 when the thread is in the card's own file. */
+  asked: number
 }
 
 /** A setting in the map's toolbar, shown as a menu. */
@@ -232,7 +235,7 @@ export const state = Alpine.reactive({
   },
   brief: null as string | null,
   starter: null as string | null,
-  deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'starter'>('grndwrk.deliverablesTab', 'brief'),
+  deliverablesTab: readStored<'survey' | 'brief' | 'stories' | 'releases' | 'starter'>('grndwrk.deliverablesTab', 'brief'),
   /** The state of the project, written by /survey. */
   survey: null as string | null,
   openStoryId: null as string | null,
@@ -272,7 +275,7 @@ export const state = Alpine.reactive({
   },
   /** What All holds with the filters in view, so it adds up with the pages and the topics under it. */
   get shownCount() {
-    return cached('shownCount', () => this.nodesMatching('', Object.values(this.nodes).filter((n) => this.inScope(n))).length)
+    return cached('shownCount', () => this.nodesMatching('', Object.values(this.nodes).filter((n) => !isPrinciple(n) && this.inScope(n))).length)
   },
   /** Pages in the person's order, plus any that nodes use. */
   get pageNames(): string[] {
@@ -753,9 +756,9 @@ export const state = Alpine.reactive({
   },
   /** Where the map's content starts: under the toolbar, and the filter row when it shows. */
   get mapTop(): number {
-    return 48 + (this.filterRowShown ? this.filterRowHeight : 0) + (this.principles.length ? this.principlesHeight : 0)
+    return 48 + (this.filterRowShown ? this.filterRowHeight : 0)
   },
-  /** Guiding principles: thoughts that never close but steer everything, oldest first, in the strip above the board. */
+  /** Guiding principles: thoughts that never close but steer everything, oldest first, in the left panel under Pages. */
   get principles(): GNode[] {
     return cached('principles', () =>
       Object.values(this.nodes as Record<string, GNode>)
@@ -763,23 +766,24 @@ export const state = Alpine.reactive({
         .sort((a, b) => a.created.localeCompare(b.created) || a.title.localeCompare(b.title)),
     )
   },
-  /** The strip folds to one line; kept in this browser. */
+  /** Folded by default; kept in this browser. */
   principlesOpen: readStored('grndwrk.principlesOpen', false),
-  principlesHeight: 0,
-  /** The principle whose menu is open in the strip. */
-  principleMenu: '',
   setPrinciplesOpen(open: boolean) {
     this.principlesOpen = open
-    this.principleMenu = ''
     store('grndwrk.principlesOpen', open)
+  },
+  /** The topics in the left panel fold like the principles; kept in this browser. */
+  topicsOpen: readStored('grndwrk.topicsOpen', true),
+  setTopicsOpen(open: boolean) {
+    this.topicsOpen = open
+    store('grndwrk.topicsOpen', open)
   },
   /** Make a thought a guiding principle, or move one back to the map as open. */
   async setPrinciple(id: string, on: boolean) {
-    this.principleMenu = ''
     try {
       this.upsert(await updateNode(id, { status: on ? 'principle' : 'open' }))
       if (this.selectedId === id) this.draft.status = on ? 'principle' : 'open'
-      this.flash(on ? 'A guiding principle now, above the board' : 'Back on the map, open')
+      this.flash(on ? 'A guiding principle now, under Principles in the left panel' : 'Back on the map, open')
     } catch (err) {
       this.flash(errorText(err))
     }
@@ -836,6 +840,49 @@ export const state = Alpine.reactive({
   /** What the Views menu asks below its list: a name for a new view, a new name, or whether to delete. */
   viewsStep: '' as '' | 'save' | 'rename' | 'delete',
   viewName: '',
+  /** What went out when, newest first (src/shared/releases.ts): written by the agent or /release, read here. */
+  releases: [] as Release[],
+  async loadReleases() {
+    this.releases = await fetchReleases()
+  },
+  /** The releases a story or thought shipped in, the first first. */
+  releasesOf(id: string): Release[] {
+    return id ? releasesOf(id, this.releases) : []
+  },
+  /** "Released in 0.4.3 · 2026-11-18", and the later ones after it, or '' when none says so. */
+  releasedLine(id: string): string {
+    const list = this.releasesOf(id)
+    return list.length ? `Released in ${list.map(releaseLabel).join(', then ')}` : ''
+  },
+  /** The title of a story or thought a release names, or why it shows none. */
+  shippedTitle(id: string): string {
+    if (this.nodes[id]) return this.nodes[id].title
+    const st = this.stories.find((s) => s.id === id)
+    return st ? st.title : `${id} (not in the map)`
+  },
+  /** How this project ships (project.md's `ships:`), said above its releases. */
+  get shipsLine(): string {
+    const ships = this.project.ships
+    if (ships === 'deploys') return 'This project ships by deploying: a release is a day something went live. Your agent writes it when it deploys, or run /release.'
+    if (ships === 'not yet') return 'Nothing has gone out yet. Run /release once something ships.'
+    if (ships === 'versions') return 'This project ships versions: a release is a version or a build. Your agent writes it when it ships one, or run /release.'
+    return 'What went out when. Run /release: your agent recommends whether this project ships versions or deploys, and fills in the history.'
+  },
+  /** Releases under Deliverables, at this one. */
+  showRelease(id: string) {
+    this.setView('deliverables')
+    this.setDeliverablesTab('releases')
+    requestAnimationFrame(() => document.getElementById(`release-${id}`)?.scrollIntoView({ block: 'center' }))
+  },
+  /** One row per release, for the panel: "1.0 · 2026-11-04", and where, when it says. */
+  releaseRows(id: string): { id: string; label: string; where: string }[] {
+    return this.releasesOf(id).map((r) => ({ id: r.id, label: releaseLabel(r), where: r.where }))
+  },
+  openShipped(id: string) {
+    if (this.stories.some((s) => s.id === id)) this.selectStory(id)
+    else if (this.nodes[id]) this.goToNode(id)
+    else this.flash(`${id} is not in the map`)
+  },
   async loadViews() {
     this.savedViews = await fetchViews()
     if (this.viewId && !this.savedViews.some((v) => v.id === this.viewId)) this.setViewId('')
@@ -1458,14 +1505,37 @@ export const state = Alpine.reactive({
   },
   /** The thoughts and comments about a screen, whatever the filters say: what working on it gathers. */
   aboutScreen(id: string): GNode[] {
-    const s = this.screens.find((x) => x.id === id)
-    if (!s) return []
-    const nodes = Object.values(this.nodes)
-    return [...new Set([...nodes.filter((n) => n.extra?.screen === id), ...commentsForScreen(s, nodes)])]
+    return this.aboutScreens.get(id) ?? []
+  },
+  /**
+   * Every screen's thoughts (its `screen:`, then the comments made on it), worked out
+   * in one pass until a thought or a screen changes. Counting them per screen went
+   * through every thought for every screen, many times a render: in a big map that
+   * froze typing for half a second after each save.
+   */
+  get aboutScreens(): Map<string, GNode[]> {
+    return cached('aboutScreens', () => {
+      const nodes = Object.values(this.nodes)
+      const comments = nodes.filter((n) => n.extra?.source === 'app')
+      const out = new Map<string, GNode[]>()
+      const own = new Map<string, GNode[]>()
+      for (const n of nodes) {
+        const at = n.extra?.screen
+        if (typeof at === 'string') own.set(at, [...(own.get(at) ?? []), n])
+      }
+      for (const s of this.screens) out.set(s.id, [...new Set([...(own.get(s.id) ?? []), ...commentsForScreen(s, comments)])])
+      return out
+    })
   },
   /** How many of them the board will show when working on it: those the status filter lets through, as the board counts them. */
   thoughtsOn(id: string): number {
-    return this.aboutScreen(id).filter((n) => showsProgress(this.progressFilter, progressOfNode(n))).length
+    return this.thoughtsOnCounts.get(id) ?? 0
+  },
+  get thoughtsOnCounts(): Map<string, number> {
+    return cached('thoughtsOnCounts', () => {
+      const f = this.progressFilter
+      return new Map([...this.aboutScreens].map(([id, list]) => [id, list.filter((n) => showsProgress(f, progressOfNode(n))).length]))
+    })
   },
   /** Working on one part, the thoughts about it the filters keep out of view (done ones, by default). */
   get scopeFilteredOut(): number {
@@ -1696,10 +1766,33 @@ export const state = Alpine.reactive({
   },
   get listGroups(): ListGroup[] {
     return cached('listGroups', () => {
-      const groups = groupForList(this.visibleNodes, this.query)
+      const inView = this.visibleNodes
+      const groups = groupForList([...inView, ...byIdOutOfView(Object.values(this.nodes).filter((n) => !isPrinciple(n) && !(this.hiddenScreens.size && this.hiddenScreens.has(screenOf(n, this.screens)))), inView, this.query)], this.query)
       if (!this.onlyAttention) return groups
       return groups.filter((g) => this.needsAttention(g))
     })
+  },
+  /**
+   * Thoughts the search matches that the filters, the page or the part in view
+   * keep out of the list: offered as "Search everything", which takes them away.
+   * Thoughts of another variant stay out: that is a choice of what the product is, not a filter.
+   */
+  get searchOutOfView(): number {
+    return cached('searchOutOfView', () => {
+      if (!this.query.trim()) return 0
+      const shown = new Set(this.listRows.map((n) => n.id))
+      const hidden = this.hiddenScreens
+      return Object.values(this.nodes).filter((n) => !isPrinciple(n) && !shown.has(n.id) && !(hidden.size && hidden.has(screenOf(n, this.screens))) && matchesQuery(n, this.query)).length
+    })
+  },
+  /** Search the whole map: every filter off, every status, all pages, the whole product. The words stay. */
+  searchEverything() {
+    const n = this.searchOutOfView
+    this.resetFilters()
+    this.setProgressFilter('all')
+    this.onlyAttention = false
+    this.showPage(ALL)
+    this.flash(`Searching everything: no filters, every status, all pages. ${n} more found.`)
   },
   /** A topic is thin with two thoughts or fewer; it needs attention when thin or when gaps sit in it. */
   needsAttention(g: ListGroup): boolean {
@@ -1930,8 +2023,12 @@ export const state = Alpine.reactive({
   screenById(id: string): Screen | undefined {
     return this.screens.find((s) => s.id === id)
   },
+  /** Each screen's stories, worked out once until the screens or stories change. */
+  get storiesByScreen(): Map<string, Story[]> {
+    return cached('storiesByScreen', () => new Map(this.screens.map((s) => [s.id, storiesForScreen(s, this.stories)])))
+  },
   storiesOf(screen: Screen): Story[] {
-    return storiesForScreen(screen, this.stories)
+    return this.storiesByScreen.get(screen.id) ?? storiesForScreen(screen, this.stories)
   },
   commentsOf(screen: Screen): GNode[] {
     return commentsForScreen(screen, Object.values(this.nodes))
@@ -1955,13 +2052,27 @@ export const state = Alpine.reactive({
     return this.viewScreens.reduce((n, s) => n + openQuestions(s.body), 0)
   },
   get sitemapSummary(): { screens: number; noStory: number; questions: number; guesses: number; unreadable: number } {
-    return {
+    return cached('sitemapSummary', () => ({
       screens: this.sitemapScreens.length,
       noStory: this.sitemapScreens.filter((s) => !s.error && s.status !== 'planned' && !this.storiesOf(s).length).length,
       questions: this.sitemapScreens.reduce((n, s) => n + openQuestions(s.body), 0),
       guesses: this.sitemapScreens.filter((s) => s.source === 'inferred').length,
       unreadable: this.screens.filter((s) => s.error).length,
-    }
+    }))
+  },
+  /** The open questions on the screens in view, new ones first, for the list under the Sitemap's title. */
+  get sitemapQuestionItems(): InboxItem[] {
+    const shown = new Set(this.sitemapScreens.map((s) => s.id))
+    const items = this.inbox.filter((i) => i.kind === 'screen' && shown.has(i.id))
+    return [...items.filter((i) => this.isNewQuestion(i)).sort((a, b) => b.asked - a.asked), ...items.filter((i) => !this.isNewQuestion(i))]
+  },
+  /** The list is open when asked for, and by itself while something new is in it. */
+  sitemapQuestionsOpen: null as boolean | null,
+  get sitemapQuestionsShown(): boolean {
+    return this.sitemapQuestionsOpen ?? this.sitemapQuestionItems.some((i) => this.isNewQuestion(i))
+  },
+  toggleSitemapQuestions() {
+    this.sitemapQuestionsOpen = !this.sitemapQuestionsShown
   },
   /** The sitemap as boxes, tree lines, and the links out of the open screen. */
   get sitemapDrawing() {
@@ -2519,7 +2630,8 @@ export const state = Alpine.reactive({
   },
   // Status: everything a good project has, done or not.
   get projectStatus(): ProjectStatus {
-    return buildStatus({
+    // Read by several parts of Status per render: worked out once until what it reads changes.
+    return cached('projectStatus', () => buildStatus({
       foundations: this.readiness?.foundations ?? [],
       screens: this.screens.filter((s) => !this.hiddenIds.has(s.id)),
       stories: this.stories,
@@ -2527,7 +2639,7 @@ export const state = Alpine.reactive({
       blocking: this.blockingCount,
       questions: this.questionIds.length,
       otherGaps: this.openGaps.length - this.blockingCount,
-    })
+    }))
   },
   /** The status row whose details are open. */
   statusRow: null as string | null,
@@ -2594,7 +2706,7 @@ export const state = Alpine.reactive({
     return m ? m[1].split('\n').filter((l) => /^\s*(?:[-*]|\d+\.)\s+/.test(l)).length : 0
   },
   get deliverableTabs(): [string, string][] {
-    const tabs: [string, string][] = [['brief', 'Brief'], ['stories', 'Stories'], ['starter', 'CLAUDE.md to start with']]
+    const tabs: [string, string][] = [['brief', 'Brief'], ['stories', 'Stories'], ...(this.releases.length ? [['releases', 'Releases'] as [string, string]] : []), ['starter', 'CLAUDE.md to start with']]
     return this.survey ? [['survey', 'State of the project'], ...tabs] : tabs
   },
   /** A node id clicked inside a rendered document opens that thought. */
@@ -2605,7 +2717,7 @@ export const state = Alpine.reactive({
     if (this.nodes[id]) this.goToNode(id)
     else this.flash(`${id} is not in the map`)
   },
-  setDeliverablesTab(tab: 'survey' | 'brief' | 'stories' | 'starter') {
+  setDeliverablesTab(tab: 'survey' | 'brief' | 'stories' | 'releases' | 'starter') {
     this.deliverablesTab = tab
     store('grndwrk.deliverablesTab', tab)
   },
@@ -2961,12 +3073,13 @@ export const state = Alpine.reactive({
       const items = (kind: InboxItem['kind'], id: string, about: string, where: string, body: string): InboxItem[] => {
         const open = asked(body)
         // A guess without a question is still one thing to confirm.
-        if (!open.length) return kind === 'guess' ? [{ key: `node:${id}`, kind, id, question: '', options: [], text: '', about, where, date: '', entry: -1, index: 0, of: 1 }] : []
+        if (!open.length) return kind === 'guess' ? [{ key: `node:${id}`, kind, id, question: '', options: [], text: '', about, where, date: '', entry: -1, index: 0, of: 1, asked: 0 }] : []
         return open.map((q, n) => ({
           key: `${kind === 'screen' || kind === 'persona' ? kind : 'node'}:${id}:${q.entry}:${q.index}`,
           kind, id, about, where,
           question: this.entryWords(q.question), options: q.options, text: entries(body)[q.entry]?.text ?? '', date: q.date,
           entry: q.entry, index: q.index, of: open.length, position: n + 1,
+          asked: Number(/^(\d{9,13})-/.exec(entries(body)[q.entry]?.run ?? '')?.[1] ?? 0),
         }))
       }
       const screens = screenTree(this.screens).filter(({ screen }) => !screen.error && !this.hiddenIds.has(screen.id) && (!this.scope || screen.id === this.scope))
@@ -3147,10 +3260,31 @@ export const state = Alpine.reactive({
     if (!w) return false
     return f === 'general' ? !w.for : w.for?.toLowerCase() === f.slice(1).toLowerCase()
   },
-  /** The Inbox as shown: the filter's questions only, and waiting ones after the rest when there is no filter. */
+  /** The Inbox as shown: the filter's questions only; without one, new questions first (the newest first), then the rest, waiting ones last. */
   get inboxShown(): InboxItem[] {
     const items = this.inbox.filter((i) => this.matchesWaiting(this.waitingOf(i)))
-    return this.waitingFilter ? items : [...items.filter((i) => !this.waitingOf(i)), ...items.filter((i) => this.waitingOf(i))]
+    if (this.waitingFilter) return items
+    const fresh = items.filter((i) => this.isNewQuestion(i)).sort((a, b) => b.asked - a.asked)
+    const rest = items.filter((i) => !this.isNewQuestion(i))
+    return [...fresh, ...rest.filter((i) => !this.waitingOf(i)), ...rest.filter((i) => this.waitingOf(i))]
+  },
+  /**
+   * When this browser last left the Inbox, per project: questions asked after
+   * it are New, so a question your agent asked in a long reply is found at the
+   * top, not among forty. Nothing is New the very first time.
+   */
+  inboxSeen: readStored<Record<string, number>>('grndwrk.inboxSeen', {}),
+  isNewQuestion(item: InboxItem): boolean {
+    const since = this.inboxSeen[this.projectLabel]
+    return since !== undefined && item.asked > since
+  },
+  get newQuestionCount(): number {
+    return this.inbox.filter((i) => this.isNewQuestion(i)).length
+  },
+  /** Leaving the Inbox: what was in it has been seen. */
+  markInboxSeen() {
+    this.inboxSeen = { ...this.inboxSeen, [this.projectLabel]: Date.now() }
+    store('grndwrk.inboxSeen', this.inboxSeen)
   },
   /** The filters worth offering: each person someone waits for, and the general one, with how many questions. */
   get waitingFilters(): { key: string; label: string; count: number }[] {
@@ -3264,6 +3398,8 @@ export const state = Alpine.reactive({
       .map(([topic, nodes]) => ({ topic, nodes: nodes.sort((a, b) => b.altitude - a.altitude || a.title.localeCompare(b.title)) }))
   },
   setView(view: View) {
+    // Leaving the Inbox: its questions have been seen, and only later ones are New next time. The first visit starts the clock.
+    if ((this.view === 'focus' && view !== 'focus') || (view === 'focus' && this.inboxSeen[this.projectLabel] === undefined)) this.markInboxSeen()
     // Leaving focus for another page closes the card focus had open. The map keeps it, to see it in place.
     if (this.view === 'focus' && view !== 'focus' && view !== 'map') this.closePanel()
     // Documents are the product's own files, on the Mac: the page on a store has none.
@@ -3498,7 +3634,8 @@ export const state = Alpine.reactive({
   idLinks(text: string): string {
     const t = document.createElement('template')
     t.content.append(String(text ?? ''))
-    return linkIds(t.innerHTML)
+    // `code` as code, as the rest of the thread shows it: on the escaped text, so only the backticks become markup.
+    return linkIds(t.innerHTML.replace(/`([^`\n]+)`/g, '<code class="rounded bg-tint/8 px-1 font-mono">$1</code>'))
   },
   /** Focus the element with this id once it is drawn. */
   focusIdSoon(id: string) {
@@ -3806,14 +3943,16 @@ export const state = Alpine.reactive({
     if (this.reportOpen) return 'Readiness report'
     if (this.selectedGap) return `Missing: ${this.selectedGap.title}`
     if (this.selectedStory) return `Story: ${this.selectedStory.title}`
+    if (this.principleOpen) return `Principle: ${this.selected?.title ?? ''}`
     return this.selected?.title ?? ''
   },
-  principleTitles(): string {
-    return this.principles.map((p) => p.title).join(' · ')
+  /** A guiding principle is what the panel shows: said in its header, in amber like its dot under Principles. */
+  get principleOpen(): boolean {
+    return !this.reportOpen && !this.selectedGap && !this.selectedStory && !!this.selected && isPrinciple(this.selected)
   },
-  changePrinciple(id: string) {
-    this.principleMenu = ''
-    this.select(id)
+  /** A principle's row under Principles: amber when open, where a thought's row is blue. */
+  principleRowClass(id: string): string {
+    return this.selectedId === id ? 'bg-amber-300/15 text-fog' : 'text-fog/70 hover:bg-tint/5'
   },
   relayWaiting() {
     return this.relay.waiting ?? []
@@ -3988,6 +4127,10 @@ export const state = Alpine.reactive({
     else if (this.selected) this.syncDraft()
   },
   upsert(node: GNode) {
+    // The same thought again (a save's answer, then the server saying the file changed): nothing to redraw.
+    // Swapping it in anyway made every view built on the thoughts work itself out again, a pause in a big map.
+    const before = this.nodes[node.id]
+    if (before && JSON.stringify(before) === JSON.stringify(node)) return
     this.nodes[node.id] = node
     if (node.id === this.selectedId) this.syncDraft()
   },
@@ -4192,7 +4335,9 @@ export const state = Alpine.reactive({
     pending.add(f)
     clearTimeout(timers.get(f))
     if (immediate) this.flush(f)
-    else timers.set(f, setTimeout(() => this.flush(f), 400))
+    // After a pause of a little over a second, not 0.4: in a big map taking in a save takes a moment,
+    // and a pause in typing that short fell mid-sentence. Leaving the field, or the tab, saves at once.
+    else timers.set(f, setTimeout(() => this.flush(f), 1200))
   },
   async flush(f: DraftField) {
     clearTimeout(timers.get(f))
@@ -4357,6 +4502,8 @@ export const state = Alpine.reactive({
   /** `/`: show the list if it is collapsed and put the cursor in search. */
   openList() {
     this.setListOpen(true)
+    // The search sits with the topics: folded away, they open with it.
+    if (!this.topicsOpen) this.setTopicsOpen(true)
     this.searchOpen = true
     this.listIndex = 0
     focusWhenVisible('search')

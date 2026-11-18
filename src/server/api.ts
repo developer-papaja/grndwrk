@@ -10,6 +10,7 @@ import { listScreens, placeShot, updateScreen, type ScreenEdit } from '../store/
 import { createPersona, deletePersona, listPersonas, settleAudienceName, updatePersona } from '../store/personas.js'
 import { createSegment, deleteSegment, listSegments, updateSegment } from '../store/segments.js'
 import { createView, deleteView, listViews, updateView, ViewProblem } from '../store/views.js'
+import { listReleases } from '../store/releases.js'
 import { listShots, readShot } from '../store/shots.js'
 import { changeOwnEntry, EntryRefused, removeOwnEntry } from '../store/threads.js'
 import { rememberedApp } from '../store/local.js'
@@ -309,6 +310,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     }
     // Views of the map saved for everyone, one file each in views/.
     if (url.pathname === '/api/views' && method === 'GET') return send(res, 200, await listViews(ctx.gwDir))
+    // What went out when: written by the agent or /release, only read here.
+    if (url.pathname === '/api/releases' && method === 'GET') return send(res, 200, await listReleases(ctx.gwDir))
     if (url.pathname === '/api/views' && method === 'POST') {
       const me = await gitUser(ctx.gwDir)
       try {

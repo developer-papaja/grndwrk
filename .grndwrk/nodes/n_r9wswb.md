@@ -6,7 +6,7 @@ topic: look and feel
 page: Feedback
 altitude: 2
 links: []
-status: open
+status: settled
 created: 2026-11-09
 built: 2026-11-16
 ---

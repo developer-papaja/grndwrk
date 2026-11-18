@@ -15,7 +15,7 @@ export interface Finding {
   message: string
 }
 
-const MATTER_DIRS = ['nodes', 'stories', 'screens', 'personas', 'segments']
+const MATTER_DIRS = ['nodes', 'stories', 'screens', 'personas', 'segments', 'releases']
 const ENTRY_FILE = /^\d{9,13}-[a-z0-9]{2}\.md$/
 
 export async function checkMap(gwDir: string): Promise<Finding[]> {

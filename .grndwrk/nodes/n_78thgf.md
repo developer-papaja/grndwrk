@@ -6,7 +6,7 @@ topic: look and feel
 page: Feedback
 altitude: 2
 links: [n_bz8p, n_wv4e]
-status: open
+status: settled
 created: 2026-11-16
 built: 2026-11-16
 answers: gap_type_scale

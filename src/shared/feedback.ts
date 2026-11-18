@@ -100,7 +100,11 @@ export function checkedSteps(text: string): Map<number, StepCheck> {
   if (!m) return marks
   for (const line of text.slice(m.index + m[0].length).split('\n').slice(0, 60)) {
     if (!line.trim()) continue
-    const r = /^\s*(?:[-*]\s+)?(?:step\s+)?(\d{1,2})\s*[.):]?\s+(\[(?:automated|agent|outdated):[^[\]\n]{0,300}\])\s*$/i.exec(line)
+    // A mark line is short; a long one is something else, and is never matched (a line of
+    // spaces made the pattern below slow enough to stop the map's server).
+    if (line.length > 400) break
+    // One way only to split the space between the number and the mark, so no line is slow.
+    const r = /^[ \t]*(?:[-*][ \t]+)?(?:step[ \t]+)?(\d{1,2})(?:[.):][ \t]*|[ \t]+)(\[(?:automated|agent|outdated):[^[\]\n]{0,300}\])[ \t]*$/i.exec(line)
     if (!r) break
     const check = stepCheck(`step ${r[2]}`).check
     if (check && Number(r[1]) >= 1) marks.set(Number(r[1]) - 1, check)

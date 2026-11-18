@@ -1,4 +1,5 @@
 import type { SavedView, ViewSettings } from '../../src/shared/views'
+import type { Release } from '../../src/shared/releases'
 import type { ProjectOverview } from '../../src/shared/overview'
 import type { GNode, NodeInput, PairRequest, Persona, PersonaInSegment, PersonaList, PersonaSection, Readiness, Screen, Segment, ServerEvent, Story } from '../../src/shared/types'
 
@@ -123,6 +124,8 @@ export const removeFromRelay = (kind: 'phones' | 'invites', id: string) => reque
 /** A comment through the relay was opened here: the server writes `seen:` on it the first time. */
 export const markSeen = (id: string) => request<{ seen: boolean }>('POST', `/api/nodes/${encodeURIComponent(id)}/seen`, {})
 export const deleteNode = (id: string) => request<void>('DELETE', `/api/nodes/${encodeURIComponent(id)}`)
+/** What went out when (src/store/releases.ts). */
+export const fetchReleases = () => request<Release[]>('GET', '/api/releases').catch(() => [] as Release[])
 /** Views of the map saved for everyone (src/store/views.ts). */
 export const fetchViews = () => request<SavedView[]>('GET', '/api/views').catch(() => [] as SavedView[])
 export const createView = (input: ViewSettings & { name: string }) => request<SavedView>('POST', '/api/views', input)

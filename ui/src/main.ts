@@ -167,6 +167,7 @@ const handlers = {
     void state.loadRelay()
     void state.loadAuthors()
     void state.loadViews()
+    void state.loadReleases()
     void state.loadWaiting()
     void state.loadShots()
     void state.loadRuntime()
@@ -207,6 +208,7 @@ const handlers = {
     else if (event.type === 'file:change' && event.path.startsWith('shots/')) void state.loadShots()
     else if (event.type === 'file:change' && event.path.startsWith('waiting/')) void state.loadWaiting()
     else if (event.type === 'file:change' && event.path.startsWith('views/')) void state.loadViews()
+    else if (event.type === 'file:change' && event.path.startsWith('releases/')) void state.loadReleases()
     else if (event.type === 'file:change' && event.path === 'project.md') {
       void fetchProject().then((p) => (state.project = p))
       void state.loadRuntime()
@@ -240,7 +242,11 @@ function disconnect() {
   source?.close()
   source = null
 }
-document.addEventListener('visibilitychange', () => (document.hidden ? disconnect() : connect()))
+document.addEventListener('visibilitychange', () => {
+  // Out of view, maybe closing: what was typed is saved now, not after the pause.
+  if (document.hidden) state.flushAll()
+  document.hidden ? disconnect() : connect()
+})
 // In the background, say now and then that this tab is still open, without a
 // connection: grndwrk then leaves it to this tab after a restart instead of
 // opening another one. (Browsers slow down background timers; often enough.)

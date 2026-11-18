@@ -14,6 +14,8 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 // What the map names an upload (`1794934456930.png`), or a name a project's own tool chose (`uitest-step1.png`):
 // letters, digits, - and _ only, so never a dot or a slash that could climb out of the card's folder.
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,95}\.(png|jpg|gif|webp)$/
+// Windows device names (CON.png opens the console there) are never picture names.
+const DEVICE = /^(con|prn|aux|nul|com\d|lpt\d)\./i
 
 export function filesDir(gwDir: string, nodeId: string): string {
   if (!isValidId(nodeId)) throw new Error(`Invalid id: ${nodeId}`)
@@ -38,7 +40,7 @@ export async function saveImage(gwDir: string, nodeId: string, type: string, dat
 
 /** Read a saved image. Only names this module could have written are accepted. */
 export async function readImage(gwDir: string, nodeId: string, name: string): Promise<{ data: Buffer; type: string } | null> {
-  if (!isValidId(nodeId) || !NAME.test(name)) return null
+  if (!isValidId(nodeId) || !NAME.test(name) || DEVICE.test(name)) return null
   try {
     const data = await readFile(join(filesDir(gwDir, nodeId), name))
     const ext = name.split('.').pop()!

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { topicColumns } from '../ui/src/layout.js'
-import { flatten, groupForList } from '../ui/src/list.js'
+import { byIdOutOfView, flatten, groupForList } from '../ui/src/list.js'
 import type { GNode } from '../src/shared/types.js'
 
 const node = (id: string, title: string, topic = '', altitude = 3, body = ''): GNode => ({
@@ -33,5 +33,17 @@ describe('groupForList', () => {
     expect(flatten(groupForList(nodes, 'LIST')).map((n) => n.id)).toEqual(['b'])
     expect(groupForList(nodes, 'list')[0].total).toBe(2)
     expect(flatten(groupForList(nodes, 'feel')).map((n) => n.id).sort()).toEqual(['a', 'c'])
+  })
+  it('finds a thought by its id or its summary', () => {
+    const ids = [node('n_k2m4ab', 'Booking'), { ...node('n_q8r7st', 'Reminders'), extra: { summary: 'Built: the texts go out at nine' } }]
+    expect(flatten(groupForList(ids, 'K2M4')).map((n) => n.id)).toEqual(['n_k2m4ab'])
+    expect(flatten(groupForList(ids, 'n_q8r7st')).map((n) => n.id)).toEqual(['n_q8r7st'])
+    expect(flatten(groupForList(ids, 'at nine')).map((n) => n.id)).toEqual(['n_q8r7st'])
+  })
+  it('looks an id up outside the filters and the page, from four characters', () => {
+    const all = [node('n_k2m4ab', 'Booking'), node('n_q8r7st', 'Done long ago')]
+    expect(byIdOutOfView(all, [all[0]], 'q8r7').map((n) => n.id)).toEqual(['n_q8r7st'])
+    expect(byIdOutOfView(all, [all[0]], 'k2m4')).toEqual([])
+    expect(byIdOutOfView(all, [all[0]], 'q8r')).toEqual([])
   })
 })

@@ -7,7 +7,7 @@ topic_by: claude
 page: Feedback
 altitude: 2
 links: []
-status: open
+status: settled
 created: 2026-11-05
 built: 2026-11-05
 ---

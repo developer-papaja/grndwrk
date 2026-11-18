@@ -6,7 +6,7 @@ topic: the map
 page: Feedback
 altitude: 4
 links: [n_wncw, n_adhc, n_vypj, n_jtdo]
-status: open
+status: settled
 created: 2026-11-16
 built: 2026-11-16
 ---

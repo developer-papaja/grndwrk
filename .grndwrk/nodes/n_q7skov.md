@@ -6,7 +6,7 @@ topic: panels and list
 page: Feedback
 altitude: 1
 links: [n_kk4fxs]
-status: open
+status: settled
 created: 2026-11-17
 built: 2026-11-17
 ---

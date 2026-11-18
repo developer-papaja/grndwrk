@@ -77,12 +77,17 @@ export function screenParts(screens: Screen[]): { name: string; count: number }[
 /** File names that say nothing about which screen they are, like app/booking/page.tsx. */
 const GENERIC = new Set(['index', 'page', 'layout', 'route', 'main', 'app', 'view', 'screen', 'content', 'contentview', '+page', 'default'])
 
-/** The names a route or file is known by: "/booking", "bookingview", "booking". */
+/** The names a route or file is known by: "/booking", "bookingview", "booking". Kept once worked out: a big map asks for the same paths thousands of times. */
+const NAMES = new Map<string, string[]>()
 function names(entry: string): string[] {
+  const kept = NAMES.get(entry)
+  if (kept) return kept
   const path = entry.trim().toLowerCase()
   const base = path.split('/').pop()?.replace(/\.[a-z]+$/, '') ?? ''
-  if (GENERIC.has(base)) return [path]
-  return [path, base, base.replace(/(viewcontroller|controller|view|screen|page)$/, '')].filter((n) => n && !GENERIC.has(n))
+  const out = GENERIC.has(base) ? [path] : [path, base, base.replace(/(viewcontroller|controller|view|screen|page)$/, '')].filter((n) => n && !GENERIC.has(n))
+  if (NAMES.size > 20000) NAMES.clear()
+  NAMES.set(entry, out)
+  return out
 }
 
 function overlaps(a: string[], b: string[]): boolean {
@@ -92,7 +97,10 @@ function overlaps(a: string[], b: string[]): boolean {
 
 /** Stories the screen names, and stories whose applies_to points at its code. */
 export function storiesForScreen(screen: Screen, stories: Story[]): Story[] {
-  return stories.filter((st) => screen.stories.includes(st.id) || (screen.code.length > 0 && overlaps(screen.code, st.applies_to)))
+  const named = new Set(screen.stories)
+  // The screen's own names once, not once per story.
+  const left = screen.code.length > 0 ? new Set(screen.code.flatMap(names)) : null
+  return stories.filter((st) => named.has(st.id) || (left !== null && st.applies_to.some((x) => names(x).some((n) => left.has(n)))))
 }
 
 /** Comments made in the running product on this screen: in its topic, or seen in its code. */

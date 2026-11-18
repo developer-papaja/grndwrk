@@ -60,6 +60,7 @@ The map shows what to do next. For a new idea: write the purpose, add thoughts, 
 | `/questions` | Puts every question your agent asked you in the chat, or still has, into the map, and writes in the answers you already gave |
 | `/brief` | Writes the brief, the first user stories (with acceptance criteria to tick), and a starter `CLAUDE.md` |
 | `/decisions` | Looks back over a session and its commits, and settles what was decided |
+| `/release [version]` | Writes down what went out in a release (a version, a build, a sprint, a deploy; without one it proposes a name from the project's tag or version, or the day), so the map shows which release each story and thought shipped in. Your agent also does it by itself when it ships one |
 | `/feedback` | Proposes, and when you ask, builds fixes for comments made in the running product |
 | `/import <file or text>` | Turns a document, a file or text pasted after the command, into cards |
 

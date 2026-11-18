@@ -32,6 +32,7 @@ import { readWaiting, setPersonalInfo, setWaiting } from '../../src/store/waitin
 import { today } from '../../src/store/frontmatter'
 import { createView as saveNewView, deleteView as dropView, listViews, updateView as saveView } from '../../src/store/views'
 import type { ViewSettings } from '../../src/shared/views'
+import { listReleases } from '../../src/store/releases'
 import { overviewOf, type MapFiles, type ProjectOverview } from '../../src/shared/overview'
 import * as vfs from './page/vfs'
 import { picturePath } from './pictures'
@@ -755,6 +756,7 @@ export const markSeen = async (id: string) => {
   return { seen: c.upserted.length > 0 }
 }
 export const fetchViews = () => look(() => listViews(ROOT))
+export const fetchReleases = () => look(() => listReleases(ROOT))
 export const createView = (input: ViewSettings & { name: string }) => change(() => saveNewView(ROOT, input as unknown as Record<string, unknown>, session.name ? { by: session.name } : {}))
 export const updateView = (id: string, input: { name?: string; settings?: ViewSettings }) =>
   change(async () => {

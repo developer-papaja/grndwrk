@@ -44,6 +44,7 @@
       <symbol id="i-stack" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v8.25A2.25 2.25 0 0 0 6 16.5h2.25m8.25-8.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-7.5A2.25 2.25 0 0 1 8.25 18v-1.5m8.25-8.25h-6a2.25 2.25 0 0 0-2.25 2.25v6" /></symbol>
       <symbol id="i-adjustments" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></symbol>
       <symbol id="i-arrow-path" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></symbol>
+      <symbol id="i-tag-release" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path d="M6 6h.008v.008H6V6Z" /></symbol>
       <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></symbol>
       <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" /></symbol>
       <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></symbol>
@@ -611,56 +612,6 @@
         </div>
         <button x-show="$store.gw.filterCount" class="menu-btn text-fog/55 hover:text-fog" id="reset-filters" title="Take every filter away: back to everything open" @click="$store.gw.resetFilters()">Reset</button>
       </div>
-      <!-- Guiding principles: thoughts that never close but steer everything. Read here, changed only through their menu. -->
-      <section
-        x-show="$store.gw.principles.length"
-        id="principles"
-        aria-label="Guiding principles"
-        x-init="$trackHeight('principlesHeight')"
-        class="pointer-events-auto relative -mt-2 w-full border-b border-line bg-panel/95 px-3 text-body backdrop-blur"
-        @keydown.escape.stop="$store.gw.principleMenu = ''"
-      >
-        <button
-          id="principles-toggle"
-          class="flex h-8 w-full items-center gap-2 text-left text-fog/60 hover:text-fog"
-          :aria-expanded="$store.gw.principlesOpen"
-          :title="$store.gw.principlesOpen ? 'Fold the guiding principles' : 'Read the guiding principles'"
-          @click="$store.gw.setPrinciplesOpen(!$store.gw.principlesOpen)"
-        >
-          <svg class="size-3.5 shrink-0 transition-transform" :class="$store.gw.principlesOpen && 'rotate-90'"><use href="#i-chevron" /></svg>
-          <span class="shrink-0 font-medium text-fog/80">Guiding principles</span>
-          <span class="shrink-0 text-fog/45" x-text="$store.gw.principles.length"></span>
-          <span x-show="!$store.gw.principlesOpen" class="min-w-0 truncate" x-text="$store.gw.principleTitles()"></span>
-        </button>
-        <ol x-show="$store.gw.principlesOpen" class="max-h-[40vh] overflow-y-auto pb-2 pl-5.5">
-          <template x-for="p in $store.gw.principles" :key="p.id">
-            <li class="group relative flex items-start gap-2 rounded-md py-1 pr-1">
-              <div class="min-w-0 flex-1">
-                <p class="text-fog/90" x-text="p.title"></p>
-                <p x-show="$store.gw.firstLine(p.body)" class="truncate text-fog/50" x-text="$store.gw.firstLine(p.body)"></p>
-              </div>
-              <button
-                class="icon-btn size-6 shrink-0 opacity-60 group-hover:opacity-100"
-                :class="$store.gw.principleMenu === p.id && 'opacity-100'"
-                title="Change or move back"
-                aria-label="Change or move back"
-                :aria-expanded="$store.gw.principleMenu === p.id"
-                @click="$store.gw.principleMenu = $store.gw.principleMenu === p.id ? '' : p.id"
-              >
-                <svg class="size-4" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="18" cy="12" r="1.5" /></svg>
-              </button>
-              <div x-show="$store.gw.principleMenu === p.id" @click.outside="$store.gw.principleMenu = ''" class="menu-pop left-auto right-0 top-7">
-                <button class="menu-item" @click="$store.gw.changePrinciple(p.id)">
-                  <svg class="size-4 text-fog/55"><use href="#i-pencil" /></svg> Change it
-                </button>
-                <button class="menu-item" @click="$store.gw.setPrinciple(p.id, false)">
-                  <svg class="size-4 text-fog/55"><use href="#i-map" /></svg> Move back to the map
-                </button>
-              </div>
-            </li>
-          </template>
-        </ol>
-      </section>
     </div>
 
     <!-- A phone on the network asks to send comments: allow it here, and it gets the pairing code -->
@@ -1088,11 +1039,48 @@
         </form>
       </div>
 
+      <div x-show="$store.gw.principles.length" class="border-t border-line"></div>
+
+      <!-- Guiding principles: thoughts that never close but steer everything. Off the board, listed here like a topic's thoughts; a click opens one in the panel. -->
+      <section x-show="$store.gw.principles.length" id="principles" aria-label="Guiding principles" class="pb-2">
+        <div class="flex items-center justify-between px-4 pb-1 pt-3">
+          <button
+            id="principles-toggle"
+            class="-ml-1 flex items-center gap-1 font-semibold text-fog"
+            :aria-expanded="$store.gw.principlesOpen"
+            :title="$store.gw.principlesOpen ? 'Fold the guiding principles' : 'Show the guiding principles: thoughts that never close but steer everything'"
+            @click="$store.gw.setPrinciplesOpen(!$store.gw.principlesOpen)"
+          >
+            <svg class="size-4 shrink-0 text-fog/40 transition-transform duration-150" :class="$store.gw.principlesOpen && 'rotate-90'"><use href="#i-chevron" /></svg>
+            Principles
+          </button>
+          <span class="text-body text-fog/35" x-text="$store.gw.principles.length"></span>
+        </div>
+        <div x-show="$store.gw.principlesOpen" class="max-h-[30vh] overflow-y-auto px-2">
+          <template x-for="p in $store.gw.principles" :key="p.id">
+            <button class="flex h-8 w-full items-center gap-2 rounded-md pl-6 pr-2 text-left" :class="$store.gw.principleRowClass(p.id)" :title="p.title" @click="$store.gw.select(p.id)">
+              <span class="size-1.5 shrink-0 rounded-full bg-amber-300/80"></span>
+              <span class="min-w-0 flex-1 truncate" x-text="p.title"></span>
+              <span x-show="$store.gw.hasQuestion(p.id)" class="size-1.5 shrink-0 rounded-full bg-question" title="Your agent asked something"></span>
+            </button>
+          </template>
+        </div>
+      </section>
+
       <div class="border-t border-line"></div>
 
       <div class="flex items-center justify-between px-4 pb-1 pt-3">
         <span class="flex items-center gap-2">
-          <span class="font-semibold text-fog">Topics</span>
+          <button
+            id="topics-toggle"
+            class="-ml-1 flex items-center gap-1 font-semibold text-fog"
+            :aria-expanded="$store.gw.topicsOpen"
+            :title="$store.gw.topicsOpen ? 'Fold the topics' : 'Show the topics'"
+            @click="$store.gw.setTopicsOpen(!$store.gw.topicsOpen)"
+          >
+            <svg class="size-4 shrink-0 text-fog/40 transition-transform duration-150" :class="$store.gw.topicsOpen && 'rotate-90'"><use href="#i-chevron" /></svg>
+            Topics
+          </button>
           <button
             x-show="$store.gw.attentionCount || $store.gw.onlyAttention"
             id="attention"
@@ -1131,7 +1119,7 @@
         </span>
       </div>
 
-      <div x-show="$store.gw.searchOpen" class="px-3 pb-2 pt-1">
+      <div x-show="$store.gw.searchOpen && $store.gw.topicsOpen" class="px-3 pb-2 pt-1">
         <input
           id="search"
           x-model="$store.gw.query"
@@ -1142,13 +1130,18 @@
           @keydown.escape.prevent.stop="$do($store.gw.leaveSearch(), $event.target.blur())"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Search titles, notes and topics"
+          placeholder="Search ids, titles, notes and topics"
           class="field w-full"
         />
       </div>
 
-      <div class="flex-1 overflow-y-auto px-2 pb-24" id="list">
-        <p x-show="$store.gw.listRows.length === 0 && $store.gw.query" class="px-3 py-2 text-body text-fog/40">Nothing matches.</p>
+      <div x-show="$store.gw.topicsOpen" class="flex-1 overflow-y-auto px-2 pb-24" id="list">
+        <p x-show="$store.gw.listRows.length === 0 && $store.gw.query && !$store.gw.searchOutOfView" class="px-3 py-2 text-body text-fog/40">Nothing matches.</p>
+        <!-- Matches the filters, the page or the part keep out: offer the whole map instead of saying nothing -->
+        <div x-show="$store.gw.searchOutOfView" id="search-everything" class="mx-1 mb-2 rounded-md border border-line bg-tint/5 px-2.5 py-2 text-body">
+          <p class="text-fog/70" x-text="($store.gw.listRows.length ? $store.gw.searchOutOfView + ' more ' + ($store.gw.searchOutOfView === 1 ? 'match' : 'matches') : ($store.gw.searchOutOfView === 1 ? 'One thought matches' : $store.gw.searchOutOfView + ' thoughts match')) + ' outside the filters and the page in view.'"></p>
+          <button class="mt-1.5 rounded-md border border-line px-2 py-1 font-medium text-accent hover:bg-tint/10" title="Take the filters away and search the whole map" @click="$store.gw.searchEverything()">Search everything</button>
+        </div>
         <template x-for="group in $store.gw.listGroups" :key="group.key">
           <section>
             <button
@@ -1315,8 +1308,22 @@
                 <span x-show="$store.gw.hiddenIds.size"> · <button id="hidden-toggle" class="underline decoration-tint/25 underline-offset-2 hover:text-fog" :aria-pressed="$store.gw.showHidden" :title="$store.gw.showHidden ? 'Leave the hidden screens out again' : 'Show the hidden screens, marked as hidden'" @click="$store.gw.setShowHidden(!$store.gw.showHidden)" x-text="($store.gw.showHidden ? 'Showing ' : '') + $store.gw.hiddenIds.size + ' hidden'"></button></span>
                 <span x-show="$store.gw.unplacedShots.length"> · <button id="unplaced-toggle" class="underline decoration-tint/25 underline-offset-2 hover:text-fog" :aria-expanded="$store.gw.shotTray" title="Pictures from the app that no screen has yet. Drag one onto its screen, or run /sitemap." @click="$store.gw.shotTray = !$store.gw.shotTray" x-text="$store.gw.unplacedShots.length + ($store.gw.unplacedShots.length === 1 ? ' picture' : ' pictures') + ' not placed yet'"></button></span>
                 <span x-show="$store.gw.sitemapSummary.unreadable" class="text-rose-300" x-text="' · ' + $store.gw.sitemapSummary.unreadable + ($store.gw.sitemapSummary.unreadable === 1 ? ' file can\'t be read' : ' files can\'t be read')"></span>
-                <span x-show="$store.gw.sitemapSummary.questions" class="text-question" x-text="' · ' + $store.gw.sitemapSummary.questions + ($store.gw.sitemapSummary.questions === 1 ? ' question' : ' questions')"></span>
+                <span x-show="$store.gw.sitemapSummary.questions"> · <button id="sitemap-questions-toggle" class="text-question underline decoration-question/30 underline-offset-2 hover:decoration-question" :aria-expanded="$store.gw.sitemapQuestionsShown" :title="$store.gw.sitemapQuestionsShown ? 'Hide the questions' : 'Show what your agent asked about these screens'" @click="$store.gw.toggleSitemapQuestions()" x-text="$store.gw.sitemapSummary.questions + ($store.gw.sitemapSummary.questions === 1 ? ' question' : ' questions')"></button></span>
               </p>
+              <!-- What the agent asked about these screens, new first: a click opens the screen, where its thread is answered -->
+              <ul x-show="$store.gw.sitemapQuestionsShown && $store.gw.sitemapQuestionItems.length" id="sitemap-questions" class="mt-2 max-h-56 w-[min(36rem,60vw)] overflow-y-auto rounded-lg border border-line bg-panel p-1 text-body shadow-md shadow-shade/20">
+                <template x-for="q in $store.gw.sitemapQuestionItems" :key="q.key">
+                  <li>
+                    <button class="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-tint/5" :title="'Open ' + q.about + ' and answer in its thread'" @click="$store.gw.selectScreen(q.id)">
+                      <span x-show="$store.gw.isNewQuestion(q)" class="mt-px shrink-0 rounded bg-accent px-1 text-tag font-medium leading-4 text-white">New</span>
+                      <span class="min-w-0 flex-1">
+                        <span class="block font-medium text-fog/85" x-text="q.about"></span>
+                        <span class="line-clamp-2 block text-fog/60" x-text="q.question"></span>
+                      </span>
+                    </button>
+                  </li>
+                </template>
+              </ul>
              </div>
              <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
               <div x-show="$store.gw.sitemapLayout === 'drawn'" class="flex items-center gap-0.5 rounded-lg bg-tint/5 p-0.5 text-body text-fog/60">
@@ -3069,11 +3076,11 @@
           <span class="text-body text-fog/40" x-show="$store.gw.briefWritten" x-text="'Written ' + $store.gw.briefWritten"></span>
         </div>
 
-        <template x-if="!$store.gw.brief && !$store.gw.stories.length && !$store.gw.survey">
+        <template x-if="!$store.gw.brief && !$store.gw.stories.length && !$store.gw.survey && !$store.gw.releases.length">
           <p class="mt-6 rounded-lg border border-line p-4 text-fog/70">Nothing yet. Run <code class="text-fog">/brief</code> in your agent to turn the map into a brief, a site map, the first stories and a CLAUDE.md to start building with.</p>
         </template>
 
-        <template x-if="$store.gw.brief || $store.gw.stories.length || $store.gw.survey">
+        <template x-if="$store.gw.brief || $store.gw.stories.length || $store.gw.survey || $store.gw.releases.length">
           <div>
             <div class="mt-4 flex items-center justify-between gap-4">
               <div class="flex gap-0.5 rounded-lg bg-tint/5 p-0.5" id="deliverables-tabs">
@@ -3115,7 +3122,36 @@
                       </button>
                     </template>
                     <p x-show="s.applies_to.length" class="mt-2 text-body text-fog/45" x-text="'Built in: ' + s.applies_to.join(', ')"></p>
+                    <p x-show="$store.gw.releasedLine(s.id)" class="mt-1 text-body text-fog/45" x-text="$store.gw.releasedLine(s.id)"></p>
                   </div>
+                </section>
+              </template>
+            </div>
+
+            <!-- What went out when, newest first: written by your agent when it ships, or by /release -->
+            <div x-show="$store.gw.deliverablesTab === 'releases'" class="mt-6 space-y-3" id="releases">
+              <p class="text-fog/50" x-text="$store.gw.shipsLine"></p>
+              <template x-for="r in $store.gw.releases" :key="r.id">
+                <section class="rounded-lg border border-line px-4 py-3" :id="'release-' + r.id">
+                  <div class="flex items-baseline gap-3">
+                    <h3 class="min-w-0 flex-1 text-title font-semibold text-fog" x-text="r.name"></h3>
+                    <span x-show="r.where" class="shrink-0 rounded bg-tint/8 px-1.5 py-0.5 text-body text-fog/60" x-text="r.where"></span>
+                    <span class="shrink-0 tabular-nums text-body text-fog/45" x-text="r.date || 'No date'"></span>
+                  </div>
+                  <p x-show="r.error" class="mt-1 text-body text-rose-300" x-text="r.error"></p>
+                  <p x-show="r.notes" class="mt-1 whitespace-pre-line text-fog/70" x-text="r.notes"></p>
+                  <ul x-show="r.shipped.length" class="mt-2">
+                    <template x-for="id in r.shipped" :key="id">
+                      <li>
+                        <button class="flex h-7 w-full items-center gap-2 rounded px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.openShipped(id)">
+                          <span class="w-10 shrink-0 text-tag text-fog/40" x-text="id.startsWith('s_') ? 'Story' : 'Thought'"></span>
+                          <span class="min-w-0 flex-1 truncate" x-text="$store.gw.shippedTitle(id)"></span>
+                          <span class="shrink-0 font-mono text-tag text-fog/30" x-text="id"></span>
+                        </button>
+                      </li>
+                    </template>
+                  </ul>
+                  <p x-show="!r.shipped.length && !r.error" class="mt-1 text-body text-fog/40">Nothing in the map is named as shipped in it.</p>
                 </section>
               </template>
             </div>
@@ -3149,7 +3185,7 @@
       <div class="mx-auto max-w-2xl px-8 pb-24 pt-8">
         <div class="flex items-baseline justify-between gap-4">
           <h1 class="text-heading font-semibold text-fog">Inbox<span x-show="$store.gw.scopeScreen" class="font-normal text-fog/50" x-text="' · ' + (($store.gw.scopeScreen && $store.gw.scopeScreen.title) || '')"></span></h1>
-          <span id="focus-count" class="text-body text-fog/45" x-text="$store.gw.inbox.length ? $store.gw.inbox.length + ($store.gw.inbox.length === 1 ? ' question' : ' questions') : ''"></span>
+          <span id="focus-count" class="text-body text-fog/45"><span x-show="$store.gw.newQuestionCount" class="font-medium text-accent" x-text="$store.gw.newQuestionCount + ' new · '"></span><span x-text="$store.gw.inbox.length ? $store.gw.inbox.length + ($store.gw.inbox.length === 1 ? ' question' : ' questions') : ''"></span></span>
         </div>
         <p class="mt-1 text-body text-fog/50">What your agent asked you. Answer here; it reads the answer the next time a command runs.</p>
 
@@ -3175,9 +3211,10 @@
 
         <ol class="mt-6 flex flex-col gap-3" id="inbox">
           <template x-for="item in $store.gw.inboxShown" :key="item.key">
-            <li class="rounded-xl border border-line bg-panel p-4" :data-inbox="item.key">
+            <li class="rounded-xl border bg-panel p-4" :class="$store.gw.isNewQuestion(item) ? 'border-accent/50' : 'border-line'" :data-inbox="item.key">
               <!-- Waiting for someone else's answer: marked, and after the rest unless filtered -->
               <div class="flex items-center gap-2 text-body">
+                <span x-show="$store.gw.isNewQuestion(item)" class="rounded bg-accent px-1.5 py-0.5 font-medium text-white" title="Asked since you last looked at the Inbox">New</span>
                 <span class="rounded bg-question/15 px-1.5 py-0.5 font-medium text-question" x-text="item.kind === 'guess' ? 'Is this right?' : 'Agent asks'"></span>
                 <span class="min-w-0 flex-1 truncate text-fog/55">
                   <span x-text="item.kind === 'screen' ? 'about the screen' : item.kind === 'persona' ? 'about the persona' : item.kind === 'guess' ? 'a guess from the code' : 'about'"></span>
@@ -3340,7 +3377,11 @@
       class="fixed inset-y-0 right-0 flex w-[360px] max-w-full flex-col border-l border-line bg-panel text-body"
     >
       <div class="flex items-center justify-between px-4 py-3">
-        <span class="font-semibold text-fog" x-text="$store.gw.reportOpen ? 'Readiness' : $store.gw.selectedGap ? 'Missing' : $store.gw.selectedStory ? 'Story' : 'Details'"></span>
+        <!-- A guiding principle says so in amber, as its dot under Principles, so it never reads as a thought on the board -->
+        <span class="flex items-center gap-2 font-semibold" :class="$store.gw.principleOpen ? 'text-amber-300' : 'text-fog'">
+          <span x-show="$store.gw.principleOpen" class="size-2 shrink-0 rounded-full bg-amber-300/80"></span>
+          <span id="panel-kind" x-text="$store.gw.reportOpen ? 'Readiness' : $store.gw.selectedGap ? 'Missing' : $store.gw.selectedStory ? 'Story' : $store.gw.principleOpen ? 'Guiding principle' : 'Details'"></span>
+        </span>
         <span class="-mr-1.5 flex items-center">
           <button id="minimize" class="icon-btn" title="Minimize" @click="$store.gw.setDetailsMinimized(true)">
             <svg class="size-5"><use href="#i-panel-right" /></svg>
@@ -3430,6 +3471,16 @@
               </template>
             </div>
             <p x-show="$store.gw.selectedStory.applies_to.length" class="text-body text-fog/50" x-text="'Built in: ' + $store.gw.selectedStory.applies_to.join(', ')"></p>
+            <div x-show="$store.gw.releaseRows($store.gw.selectedStory.id).length" class="released">
+              <span class="label">Released in</span>
+              <template x-for="r in $store.gw.releaseRows($store.gw.selectedStory.id)" :key="r.id">
+                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" title="Show this release" @click="$store.gw.showRelease(r.id)">
+                  <svg class="size-4 shrink-0 text-fog/40"><use href="#i-tag-release" /></svg>
+                  <span class="min-w-0 flex-1 truncate" x-text="r.label"></span>
+                  <span x-show="r.where" class="shrink-0 text-body text-fog/40" x-text="r.where"></span>
+                </button>
+              </template>
+            </div>
           </div>
         </template>
 
@@ -3534,7 +3585,8 @@
               <!-- The id, to copy into a chat with the agent, and one sentence on where it stands -->
               <div class="mt-1 flex items-start gap-2" x-data="{ editing: false, text: '' }">
                 <button type="button" id="node-id" class="mt-px shrink-0 rounded bg-tint/8 px-1.5 py-0.5 font-mono text-tag text-fog/60 hover:bg-tint/15 hover:text-fog" title="Copy the id, to name this thought to your agent" @click="$store.gw.copyText($store.gw.selected.id)" x-text="$store.gw.selected.id"></button>
-                <p x-show="!editing" id="summary" class="min-w-0 flex-1 cursor-text rounded px-1 text-body" :class="$store.gw.summaryOf($store.gw.selected) ? 'text-fog/75' : 'text-fog/30'" title="Click to change the summary" @click="$do(text = $store.gw.summaryOf($store.gw.selected), editing = true, $focusId('summary-input'))" x-text="$store.gw.summaryOf($store.gw.selected) || 'Add a one-line summary'"></p>
+                <p x-show="$store.gw.principleOpen" id="principle-about" class="min-w-0 flex-1 px-1 text-body text-fog/50" x-text="'Steers every change; your agent checks its work against it.' + ($store.gw.selected.extra && $store.gw.selected.extra.changed ? ' Reworded ' + $store.gw.selected.extra.changed + '.' : '')"></p>
+                <p x-show="!editing && !$store.gw.principleOpen" id="summary" class="min-w-0 flex-1 cursor-text rounded px-1 text-body" :class="$store.gw.summaryOf($store.gw.selected) ? 'text-fog/75' : 'text-fog/30'" title="Click to change the summary" @click="$do(text = $store.gw.summaryOf($store.gw.selected), editing = true, $focusId('summary-input'))" x-text="$store.gw.summaryOf($store.gw.selected) || 'Add a one-line summary'"></p>
                 <input x-show="editing" id="summary-input" x-model="text" maxlength="200" class="field min-w-0 flex-1 py-0.5 text-body" placeholder="Where it stands, in one sentence" @keydown.enter.prevent="$event.target.blur()" @keydown.escape.prevent="editing = false" @blur="$do($store.gw.setSummary(text), editing = false)" />
               </div>
               <template x-if="$store.gw.answeredGap($store.gw.selected)">
@@ -3594,7 +3646,8 @@
               </template>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <!-- A guiding principle is not a thought to settle: none of these fields, only what it means, its thread and what it steers -->
+            <div x-show="!$store.gw.principleOpen" class="grid grid-cols-2 gap-3">
               <label class="block">
                 <span class="label">Type</span>
                 <select id="field-type" x-model="$store.gw.draft.type" @change="$store.gw.edit('type', true)" class="field w-full">
@@ -3612,13 +3665,9 @@
                 </select>
               </label>
             </div>
-            <p x-show="$store.gw.selected.status === 'principle'" id="principle-note" class="-mt-1 text-body text-fog/55">
-              A guiding principle: read above the board, not on it, and by your agent before it builds.
-              <span x-show="$store.gw.selected.extra && $store.gw.selected.extra.changed" x-text="'Changed ' + $store.gw.selected.extra.changed + '.'"></span>
-            </p>
 
             <!-- Stories this thought leads to, and a new one from it -->
-            <div id="thought-stories">
+            <div x-show="!$store.gw.principleOpen" id="thought-stories">
               <template x-for="st in $store.gw.storiesFromSelected()" :key="st.id">
                 <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" @click="$store.gw.selectStory(st.id)">
                   <span class="shrink-0 rounded bg-tint/8 px-1 text-tag text-fog/55">Story</span>
@@ -3629,7 +3678,7 @@
               <button id="story-from" class="mt-1 rounded-md px-2 py-1 text-body text-accent hover:bg-accent/15" title="A user story this thought leads to: what someone can do, and how to tell it is done" @click="$store.gw.storyFrom($store.gw.selected)">Make a story from this</button>
             </div>
 
-            <label class="block">
+            <label x-show="!$store.gw.principleOpen" class="block">
               <span class="label">Page</span>
               <select
                 id="field-page"
@@ -3643,7 +3692,7 @@
               </select>
             </label>
 
-            <label class="block">
+            <label x-show="!$store.gw.principleOpen" class="block">
               <span class="label">Topic</span>
               <input
                 id="field-topic"
@@ -3664,7 +3713,7 @@
             </label>
 
             <!-- The feature of its screen it is about: a section in that screen's column when cards are grouped by feature -->
-            <label class="block" x-show="$store.gw.screenOf($store.gw.selected)">
+            <label class="block" x-show="!$store.gw.principleOpen && $store.gw.screenOf($store.gw.selected)">
               <span class="label">Feature</span>
               <input
                 id="field-feature"
@@ -3681,7 +3730,7 @@
               </datalist>
             </label>
 
-            <div>
+            <div x-show="!$store.gw.principleOpen">
               <span class="label">Altitude</span>
               <div class="flex gap-0.5 rounded-lg bg-tint/5 p-0.5" id="field-altitude">
                 <template x-for="a in [1, 2, 3, 4, 5]" :key="a">
@@ -3699,7 +3748,7 @@
             </div>
 
             <label class="flex flex-1 flex-col">
-              <span class="label">Notes</span>
+              <span class="label" x-text="$store.gw.principleOpen ? 'What it means' : 'Notes'"></span>
               <textarea
                 id="field-body"
                 :value="$store.gw.notesText"
@@ -3709,7 +3758,7 @@
                 @drop.prevent="$store.gw.attachFrom($event, $el)"
                 @focus="$store.gw.focusField('body')"
                 @blur="$store.gw.blurField('body')"
-                placeholder="Thoughts, references, half formed questions. Paste or drop images here"
+                :placeholder="$store.gw.principleOpen ? 'What it asks of the product, and why. Paste or drop images here' : 'Thoughts, references, half formed questions. Paste or drop images here'"
                 class="field min-h-28 flex-1 resize-none leading-relaxed"
               ></textarea>
             </label>
@@ -4005,8 +4054,8 @@
             </div>
 
             <div>
-              <span class="label">Links</span>
-              <p x-show="$store.gw.linkedNodes.length === 0" class="text-body text-fog/35">No links yet.</p>
+              <span class="label" x-text="$store.gw.principleOpen ? 'What it steers' : 'Links'"></span>
+              <p x-show="$store.gw.linkedNodes.length === 0" class="text-body text-fog/35" x-text="$store.gw.principleOpen ? 'Nothing linked yet. Press L to link the thoughts it shapes.' : 'No links yet.'"></p>
               <ul id="links">
                 <template x-for="n in $store.gw.linkedNodes" :key="n.id">
                   <li class="group flex h-8 items-center gap-2 rounded-md px-1 hover:bg-tint/5">
@@ -4020,7 +4069,19 @@
               </ul>
             </div>
 
+            <div x-show="$store.gw.releaseRows($store.gw.selected.id).length" id="released" class="released">
+              <span class="label">Released in</span>
+              <template x-for="r in $store.gw.releaseRows($store.gw.selected.id)" :key="r.id">
+                <button class="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-fog/75 hover:bg-tint/5 hover:text-fog" title="Show this release" @click="$store.gw.showRelease(r.id)">
+                  <svg class="size-4 shrink-0 text-fog/40"><use href="#i-tag-release" /></svg>
+                  <span class="min-w-0 flex-1 truncate" x-text="r.label"></span>
+                  <span x-show="r.where" class="shrink-0 text-body text-fog/40" x-text="r.where"></span>
+                </button>
+              </template>
+            </div>
             <p class="text-body text-fog/35" x-text="'Added ' + $store.gw.selected.created + ($store.gw.authorOf($store.gw.selected) && $store.gw.selected.extra.source !== 'app' ? ' by ' + $store.gw.authorOf($store.gw.selected) : '')"></p>
+            <!-- The only way out: no longer a principle, back on the map as an open thought -->
+            <button x-show="$store.gw.principleOpen" id="principle-back" class="-mt-2 self-start rounded-md px-2 py-1 text-body text-fog/55 hover:bg-tint/8 hover:text-fog" title="It no longer steers everything: back on the map as an open thought" @click="$store.gw.setPrinciple($store.gw.selected.id, false)">No longer a principle</button>
           </div>
         </template>
       </div>

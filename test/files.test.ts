@@ -24,6 +24,8 @@ describe('images', () => {
     await expect(saveImage(root, '../x', 'image/png', Buffer.from('x'))).rejects.toThrow()
     expect(await readImage(root, 'n_abcd', '../../project.md')).toBeNull()
     expect(await readImage(root, '..', '1234567890123.png')).toBeNull()
+    // Windows device names: CON.png would open the console there.
+    for (const name of ['CON.png', 'nul.jpg', 'com1.png', 'LPT9.webp']) expect(await readImage(root, 'n_abcd', name)).toBeNull()
   })
 
   it('removes a node folder', async () => {
