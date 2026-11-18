@@ -109,7 +109,7 @@ Speaking needs two more keys in the debug Info.plist (without them the Speak but
 <string>Turn spoken comments into text for grndwrk.</string>
 ```
 
-Recognition runs on the phone when it can.
+Recognition runs on the phone when it can. When the language is not on the phone for listening offline, it listens online instead, and the sheet says so ("Listening online…"): what is said then goes to Apple's speech service. Android does the same with the phone's speech service.
 
 **Finding elements on a real iPhone.** iOS only builds the list of elements VoiceOver reads while something asks for it. When the package finds none, it asks iOS to build it, the way UI test tools do, and turns that off again when the app leaves the front.
 

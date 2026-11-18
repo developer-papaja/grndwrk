@@ -46,15 +46,24 @@ internal class Dictation(private val context: Context) {
    * Listen, and call `heard` with everything recognized so far. `ended` gets
    * a reason when it could not start or stopped by itself on an error, or
    * null when it simply finished.
+   *
+   * Three ways, each tried when the one before fails before anything was heard:
+   * the phone's offline recognizer, the usual one preferring offline, then the
+   * usual one online. Only then does it say why, in words a person can act on.
    */
-  fun start(heard: (String) -> Unit, ended: (String?) -> Unit, onDevice: Boolean = true) {
+  fun start(heard: (String) -> Unit, ended: (String?) -> Unit, online: () -> Unit = {}, attempt: Int = 0) {
     if (running) return
-    if (!available(context)) return ended("Speech recognition is not available on this phone. The keyboard's own mic works meanwhile.")
-    val local = onDevice && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+    if (!available(context)) return ended("This phone has no speech recognition, or it is turned off. The keyboard's own mic works meanwhile.")
+    val onDevice = attempt == 0 && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+    if (attempt == 0 && !onDevice) return start(heard, ended, online, 1)
+    val preferOffline = attempt <= 1
+    // The last way sends the audio to the phone's speech service: the person is told.
+    if (!preferOffline) online()
     val r = try {
-      if (local) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context)
-    } catch (_: Exception) {
-      return ended("Speech recognition is not available right now.")
+      if (onDevice) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context)
+    } catch (e: Exception) {
+      gwLog.error("Speech recognizer ${attempt + 1} could not be made: ${e.message}")
+      return if (attempt < 2) start(heard, ended, online, attempt + 1) else ended(why(-1))
     }
     recognizer = r
     running = true
@@ -83,31 +92,44 @@ internal class Dictation(private val context: Context) {
       override fun onError(error: Int) {
         if (!running) return
         stop()
-        // The language is not on the phone for listening offline: try the phone's usual recognizer.
-        if (local && Build.VERSION.SDK_INT >= 31 && (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED || error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)) {
-          return start(heard, ended, onDevice = false)
-        }
-        ended(
-          when (error) {
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "The microphone is off for this app. Turn it on in Settings > Apps > ${Env.appName} > Permissions."
-            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> if (last == null) "Nothing was heard." else null
-            SpeechRecognizer.ERROR_AUDIO -> "The microphone could not start."
-            else -> "Speech recognition is not available right now."
-          },
-        )
+        gwLog.info("Speech recognizer ${attempt + 1} of 3 stopped with error $error")
+        val final = error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS || error == SpeechRecognizer.ERROR_NO_MATCH ||
+          error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_AUDIO
+        // Nothing heard yet, and another way may work: try it before saying anything.
+        if (!final && last == null && attempt < 2) return start(heard, ended, online, attempt + 1)
+        ended(if ((error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) && last != null) null else why(error))
       }
     })
     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
       putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
       putExtra(RecognizerIntent.EXTRA_LANGUAGE, language.toLanguageTag())
       putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-      putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+      putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
     }
     try {
       r.startListening(intent)
-    } catch (_: Exception) {
+    } catch (e: Exception) {
       stop()
-      ended("The microphone could not start.")
+      gwLog.error("Speech recognizer ${attempt + 1} could not start: ${e.message}")
+      if (attempt < 2) start(heard, ended, online, attempt + 1) else ended("The microphone could not start.")
+    }
+  }
+
+  /** Why speaking stopped, in words a person can act on. The error number goes to the log too. */
+  private fun why(error: Int): String {
+    val name = language.getDisplayName(language).replaceFirstChar { it.titlecase(language) }
+    return when (error) {
+      SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "The microphone is off for this app. Turn it on in Settings > Apps > ${Env.appName} > Permissions."
+      SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Nothing was heard."
+      SpeechRecognizer.ERROR_AUDIO -> "The microphone could not start."
+      SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech in $name needs the internet here, and none was reached. Download $name for offline speech in the phone's settings, or try again online."
+      SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Something else is listening, maybe the keyboard's mic. Stop it and try again."
+      SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> "The phone's speech service is busy. Try again in a minute."
+      SpeechRecognizer.ERROR_SERVER, SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> "The phone's speech service did not answer. Try again in a moment."
+      SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+        "Speech in $name is not on this phone. Pick another language with the language button, or add $name in the phone's speech settings."
+      SpeechRecognizer.ERROR_CLIENT -> "The phone's speech service could not start. Check that it is turned on: in Settings, search for \"speech\". The keyboard's own mic works meanwhile."
+      else -> "Speaking did not work here (Android's error ${if (error < 0) "on start" else error}). The keyboard's own mic works meanwhile."
     }
   }
 

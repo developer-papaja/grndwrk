@@ -45,15 +45,24 @@ final class Dictation {
 
   /// Listen, and call `heard` with everything recognized so far. `ended` gets
   /// a reason when it could not start or stopped by itself on an error.
-  func start(heard: @escaping (String) -> Void, ended: @escaping (String?) -> Void) async {
+  /// On the device first, when the phone can; when that fails at once, before
+  /// anything was heard (the language is not on the phone for listening
+  /// offline), once more online, as on Android, calling `online` so the person
+  /// is told that what they say goes to Apple's speech service.
+  func start(heard: @escaping (String) -> Void, ended: @escaping (String?) -> Void, online: @escaping () -> Void = {}, onDevice: Bool = true) async {
     guard !running else { return }
     let speech = await withCheckedContinuation { (done: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
       SFSpeechRecognizer.requestAuthorization { done.resume(returning: $0) }
     }
     guard speech == .authorized else { return ended("Speech recognition is off for this app. Turn it on in Settings > Privacy & Security > Speech Recognition.") }
     guard await Self.microphone() else { return ended("The microphone is off for this app. Turn it on in Settings > Privacy & Security > Microphone.") }
-    guard let recognizer = SFSpeechRecognizer(locale: Self.language), recognizer.isAvailable else {
-      return ended("Speech recognition is not available right now.")
+    // Why it cannot listen, in words a person can act on, as on Android.
+    let name = (Self.language.localizedString(forIdentifier: Self.language.identifier) ?? Self.language.identifier).capitalized(with: Self.language)
+    guard let recognizer = SFSpeechRecognizer(locale: Self.language) else {
+      return ended("Speech in \(name) is not on this phone. Pick another language with the language button.")
+    }
+    guard recognizer.isAvailable else {
+      return ended("Speech in \(name) needs the internet here, and none was reached. Try again online, or use the keyboard's own mic meanwhile.")
     }
 
     let session = AVAudioSession.sharedInstance()
@@ -68,7 +77,9 @@ final class Dictation {
 
     let request = SFSpeechAudioBufferRecognitionRequest()
     request.shouldReportPartialResults = true
-    if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
+    let local = onDevice && recognizer.supportsOnDeviceRecognition
+    if local { request.requiresOnDeviceRecognition = true } else { online() }
+    let began = Date()
     self.request = request
     let input = engine.inputNode
     input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0), block: Self.feed(request))
@@ -86,6 +97,11 @@ final class Dictation {
         if let text { heard(text) }
         if final || failed {
           self.stop()
+          // Failed on the device at once, nothing heard: the language is not there for listening offline. Online, once.
+          if local && failed && text == nil && Date().timeIntervalSince(began) < 2 {
+            Task { await self.start(heard: heard, ended: ended, online: online, onDevice: false) }
+            return
+          }
           ended(failed && text == nil ? "Nothing was heard." : nil)
         }
       }

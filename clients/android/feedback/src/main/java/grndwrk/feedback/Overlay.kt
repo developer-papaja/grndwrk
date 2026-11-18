@@ -53,6 +53,7 @@ internal object Overlay {
   private var wm: WindowManager? = null
   private var attached = false
   private var subs = listOf<() -> Unit>()
+  private var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
   private var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
 
   // The button: a capsule reading grndwrk, with the test part on its right when fixes are ready.
@@ -111,7 +112,9 @@ internal object Overlay {
     override fun run() {
       val a = activity ?: return
       if (!attached) return
-      Snapshots.tick(a, busy = picking || composing || dialogs > 0)
+      // A dialog or sheet over the screen is not the screen: no picture of it as one.
+      Snapshots.tick(a, busy = picking || composing || dialogs > 0 || Windows.above(a).isNotEmpty())
+      follow()
       checkKeyboard()
       Env.main.postDelayed(this, 1000)
     }
@@ -157,6 +160,7 @@ internal object Overlay {
   private fun addWindows(a: Activity) {
     wm = a.windowManager
     attached = true
+    anchor = a.window.decorView
     buildButton(a)
     val root = buttonRoot!!
     root.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
@@ -172,11 +176,11 @@ internal object Overlay {
     buttonParams = p
     add(root, p)
     // Grow or shrink to the left (the test part comes and goes), keeping the button where the person put it.
-    // Only when its width changed: moving the window lays it out again too, and snapping back then
-    // kept the button from being dragged sideways or tucked into a side.
+    // Only on its first layout, or when its width changed: moving the window lays it out again too,
+    // and snapping back then kept the button from being dragged sideways or tucked into a side.
     root.addOnLayoutChangeListener { v, l, _, r, _, oldL, _, oldR, _ ->
       val bp = buttonParams ?: return@addOnLayoutChangeListener
-      if (stashed == null && r - l != 0 && oldR - oldL != 0 && r - l != oldR - oldL && bp.x + (r - l) != right) {
+      if (stashed == null && r - l != 0 && r - l != oldR - oldL && bp.x + (r - l) != right) {
         bp.x = right - (r - l)
         update(v, bp)
       }
@@ -186,6 +190,9 @@ internal object Overlay {
     val decor = a.window.decorView
     layoutListener = ViewTreeObserver.OnGlobalLayoutListener { checkKeyboard() }
     decor.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
+    // A dialog or sheet takes the focus when it opens and gives it back when it closes: follow it then, once it is laid out.
+    focusListener = ViewTreeObserver.OnWindowFocusChangeListener { Env.main.postDelayed({ follow() }, 150) }
+    decor.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
     updateBadge()
     testing?.let { buildCard(it, testOpened) }
     Env.main.removeCallbacks(ticker)
@@ -194,11 +201,16 @@ internal object Overlay {
 
   private fun removeWindows() {
     attached = false
+    anchor = null
     Env.main.removeCallbacks(ticker)
     subs.forEach { it() }
     subs = emptyList()
-    activity?.window?.decorView?.viewTreeObserver?.let { o -> layoutListener?.let { if (o.isAlive) o.removeOnGlobalLayoutListener(it) } }
+    activity?.window?.decorView?.viewTreeObserver?.let { o ->
+      layoutListener?.let { if (o.isAlive) o.removeOnGlobalLayoutListener(it) }
+      focusListener?.let { if (o.isAlive) o.removeOnWindowFocusChangeListener(it) }
+    }
     layoutListener = null
+    focusListener = null
     for (v in listOf<View?>(buttonRoot, tab, card, toast, layer)) remove(v)
     buttonRoot = null
     tab = null
@@ -208,12 +220,59 @@ internal object Overlay {
   }
 
   private fun add(v: View, p: WindowManager.LayoutParams) {
-    try { wm?.addView(v, p) } catch (e: Exception) { gwLog.error("Could not show the grndwrk button: ${e.message}") }
+    try { wm?.addView(v, placed(p)) } catch (e: Exception) { gwLog.error("Could not show the grndwrk button: ${e.message}") }
   }
 
   private fun update(v: View?, p: WindowManager.LayoutParams?) {
     if (v == null || p == null || !v.isAttachedToWindow) return
-    try { wm?.updateViewLayout(v, p) } catch (_: Exception) {}
+    try { wm?.updateViewLayout(v, placed(p)) } catch (_: Exception) {}
+  }
+
+  // The window in front
+
+  /** The window grndwrk's own panels sit on: the activity's, or a dialog or bottom sheet in front of it (Windows.kt). */
+  private var anchor: View? = null
+
+  /**
+   * Every position here is in the activity's window. On a dialog in front, a panel is a
+   * panel of the dialog's window instead, so it stays above it: the same place on the
+   * screen, moved into the dialog's own coordinates, and full size where it was.
+   */
+  private fun placed(p: WindowManager.LayoutParams): WindowManager.LayoutParams {
+    val a = activity ?: return p
+    val on = anchor ?: return p
+    val decor = a.window?.decorView ?: return p
+    if (on === decor || on.windowToken == null) return p
+    val at = Windows.offset(a, on)
+    return WindowManager.LayoutParams().apply {
+      copyFrom(p)
+      token = on.windowToken
+      if (p.gravity and Gravity.HORIZONTAL_GRAVITY_MASK == Gravity.START || p.gravity and Gravity.HORIZONTAL_GRAVITY_MASK == Gravity.LEFT) x = p.x - at.x
+      if (p.gravity and Gravity.VERTICAL_GRAVITY_MASK == Gravity.TOP) y = p.y - at.y
+      if (p.width == ViewGroup.LayoutParams.MATCH_PARENT) width = decor.width
+      if (p.height == ViewGroup.LayoutParams.MATCH_PARENT) height = decor.height
+    }
+  }
+
+  /**
+   * A dialog or sheet of the app opened or closed: grndwrk's panels move onto the window in
+   * front, removed and added again there, so they stay above it, as on iOS. A dialog's own
+   * panels go with it when it closes; they come back here on the activity's window.
+   */
+  private fun follow() {
+    val a = activity ?: return
+    // grndwrk's own sheet or menu is up: everything stays where it is under it.
+    if (!attached || dialogs > 0) return
+    val front = Windows.front(a) ?: return
+    val ours = listOf(buttonRoot to buttonParams, tab to tabParams, card to cardParams, layer to layerParams)
+    if (front === anchor && ours.all { (v, p) -> v == null || p == null || v.isAttachedToWindow }) return
+    anchor = front
+    gwLog.info(if (front === a.window?.decorView) "The button is back on the screen" else "The button moved above a dialog or sheet in front")
+    for ((v, p) in ours) {
+      if (v == null || p == null) continue
+      remove(v)
+      add(v, p)
+    }
   }
 
   private fun remove(v: View?) {
@@ -272,6 +331,8 @@ internal object Overlay {
   /** A dialog of grndwrk's is up: the app is busy, so no picture of the screen is taken meanwhile. */
   fun track(dialog: Dialog, onDismiss: (() -> Unit)? = null) {
     dialogs++
+    // grndwrk's own: never taken for a dialog of the app's (Windows.kt).
+    dialog.window?.let { w -> w.attributes = w.attributes.apply { title = Windows.OWN } }
     dialog.setOnDismissListener {
       dialogs = max(0, dialogs - 1)
       onDismiss?.invoke()

@@ -177,6 +177,8 @@ final class ComposeController: UIViewController, UITextViewDelegate, UIAdaptiveP
       }, ended: { [weak self] reason in
         self?.setSpeaking(false)
         self?.say(reason)
+      }, online: { [weak self] in
+        self?.say("Listening online in \(Locale.current.localizedString(forIdentifier: Dictation.language.identifier) ?? Dictation.language.identifier): offline speech is not on this phone, so what you say goes to Apple's speech service. Tap Stop when done.")
       })
     }
   }

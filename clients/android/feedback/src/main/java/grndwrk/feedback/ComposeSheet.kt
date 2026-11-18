@@ -180,6 +180,8 @@ internal class ComposeSheet(
     }, ended = { reason ->
       setSpeaking(false)
       say(reason)
+    }, online = {
+      say("Listening online in ${Dictation.language.getDisplayName(Locale.getDefault())}: offline speech is not on this phone, so what you say goes to its speech service. Tap Stop when done.")
     })
   }
 

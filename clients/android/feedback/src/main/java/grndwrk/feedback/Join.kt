@@ -50,7 +50,9 @@ internal object Join {
         scan(activity, done)
       }
       .setNegativeButton("Cancel", null)
-      .setOnDismissListener { if (!handedOn) done() }
+      .create()
+      // grndwrk's own dialog: never taken for one of the app's (Windows.kt), and no picture of the screen while it is up.
+      .also { Overlay.track(it) { if (!handedOn) done() } }
       .show()
   }
 
@@ -128,6 +130,7 @@ internal object Join {
       .setTitle(digits)
       .setMessage("Tell whoever invited you these four digits. They allow this phone in grndwrk when their map shows the same. Until then, comments wait on the phone.")
       .setPositiveButton("OK", null)
+      .create().also { Overlay.track(it) }
       .show()
   }
 
@@ -140,6 +143,7 @@ internal object Join {
         Store.leave()
         flash(activity, "Left your team's store")
       }
+      .create().also { Overlay.track(it) }
       .show()
   }
 
@@ -152,6 +156,7 @@ internal object Join {
         Relay.leave()
         flash(activity, "Left the relay")
       }
+      .create().also { Overlay.track(it) }
       .show()
   }
 

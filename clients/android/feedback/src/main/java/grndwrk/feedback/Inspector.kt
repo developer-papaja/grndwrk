@@ -12,6 +12,7 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -75,7 +76,8 @@ internal object Inspector {
   private fun read(activity: Activity): Tree {
     val out = mutableListOf<Node>()
     val given = mutableListOf<Pair<String, Rect>>()
-    val root = activity.window?.decorView ?: return Tree(out, given)
+    // What is in front: a dialog or bottom sheet over the screen when one is open (Windows.kt), else the screen.
+    val root = Windows.front(activity) ?: return Tree(out, given)
     var visited = 0
     fun visit(v: View, depth: Int) {
       visited++
@@ -102,6 +104,12 @@ internal object Inspector {
       }
     }
     visit(root, 0)
+    // Positions inside a dialog are its own: moved to the activity's window, where the pick layer draws.
+    val at = Windows.offset(activity, root)
+    if (at.x != 0 || at.y != 0) {
+      out.forEach { it.frame.offset(at.x, at.y) }
+      given.forEach { it.second.offset(at.x, at.y) }
+    }
     return Tree(out, given)
   }
 
@@ -144,7 +152,8 @@ internal object Inspector {
   }
 
   /** Whether this is something a person types into: its text is what they typed. */
-  private fun isTextEntry(v: View): Boolean = v is EditText || (v is TextView && v.onCheckIsTextEditor())
+  /** Something a person types into: a field, or any view that takes the keyboard (a PIN or code view of its own). */
+  private fun isTextEntry(v: View): Boolean = v is EditText || v.onCheckIsTextEditor()
 
   private fun area(r: Rect) = r.width().toLong() * r.height()
 
@@ -301,7 +310,19 @@ internal object Inspector {
    * (too deep, too many views, Compose that will not read): then no picture is taken at all.
    */
   fun textFields(activity: Activity): List<Rect>? {
-    val root = activity.window?.decorView ?: return null
+    val decor = activity.window?.decorView ?: return null
+    val out = mutableListOf<Rect>()
+    // The screen and every dialog or sheet over it: a picture holds them all.
+    for (root in listOf(decor) + Windows.above(activity)) {
+      val fields = textFieldsIn(root) ?: return null
+      val at = Windows.offset(activity, root)
+      fields.forEach { it.offset(at.x, at.y) }
+      out += fields
+    }
+    return out
+  }
+
+  private fun textFieldsIn(root: View): List<Rect>? {
     val out = mutableListOf<Rect>()
     var visited = 0
     var complete = true
@@ -322,6 +343,11 @@ internal object Inspector {
           complete = false
           return
         }
+      } else if (v is android.webkit.WebView) {
+        // A web page's fields cannot be found from here: the whole page is drawn empty.
+        val frame = Rect()
+        if (v.getGlobalVisibleRect(frame) && !frame.isEmpty) out += frame
+        return
       } else if (isTextEntry(v)) {
         val frame = Rect()
         if (v.getGlobalVisibleRect(frame) && !frame.isEmpty) out += frame
@@ -335,10 +361,20 @@ internal object Inspector {
   /** The window as it is now, through PixelCopy, at most 2x the density. Null when it cannot be copied. */
   suspend fun capture(activity: Activity, area: Rect): Bitmap? {
     val window = activity.window ?: return null
+    val decor = window.decorView
     if (area.width() < 2 || area.height() < 2) return null
-    val scale = min(1f, 2f / activity.resources.displayMetrics.density)
-    // Where the fields are, read on the same frame as the copy: what they hold never reaches a picture.
-    val fields = textFields(activity) ?: return null
+    // A screen or a dialog the app marked secure (a payment, a password) is never in a picture.
+    // Drawing a dialog's view would get round the flag, which only a copy of the screen obeys.
+    if (window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0) return null
+    // What is in front, read once: a dialog that opens, closes or moves while the screen is
+    // copied means no picture, so nothing is drawn that was not checked.
+    val above = Windows.above(activity)
+    if (above.any { isSecure(it) }) return null
+    val placed = above.map { it to Windows.offset(activity, it) }
+    val density = activity.resources.displayMetrics.density
+    val scale = min(1f, 2f / density)
+    // The screen's fields, read on the same frame as the copy: what they hold never reaches a picture.
+    val fields = textFieldsIn(decor) ?: return null
     val full = Bitmap.createBitmap(area.width(), area.height(), Bitmap.Config.ARGB_8888)
     val ok = suspendCancellableCoroutine { done ->
       try {
@@ -349,10 +385,31 @@ internal object Inspector {
       }
     }
     if (!ok) return null
-    blank(full, fields, area, activity.resources.displayMetrics.density)
+    if (Windows.above(activity) != above || placed.any { (w, at) -> isSecure(w) || Windows.offset(activity, w) != at }) {
+      gwLog.info("A dialog opened, closed or moved while the screen was copied, so no picture is taken")
+      return null
+    }
+    blank(full, fields, area, density)
+    // PixelCopy copies the activity's window only: each dialog or sheet over it is drawn on top, where
+    // it sits, front last, and its own fields are read right before it is drawn and blanked over it.
+    for ((w, at) in placed) {
+      val own = textFieldsIn(w) ?: return null
+      try {
+        val canvas = Canvas(full)
+        canvas.translate((at.x - area.left).toFloat(), (at.y - area.top).toFloat())
+        w.draw(canvas)
+      } catch (e: Exception) {
+        gwLog.error("A dialog over the screen could not be drawn, so no picture is taken: ${e.message}")
+        return null
+      }
+      blank(full, own.onEach { it.offset(at.x, at.y) }, area, density)
+    }
     if (scale >= 1f) return full
     return Bitmap.createScaledBitmap(full, max(1, (full.width * scale).toInt()), max(1, (full.height * scale).toInt()), true).also { full.recycle() }
   }
+
+  private fun isSecure(window: View): Boolean =
+    ((window.layoutParams as? WindowManager.LayoutParams)?.flags ?: 0) and WindowManager.LayoutParams.FLAG_SECURE != 0
 
   /** A picture of the area around the element, for context in the map, as a PNG. Text fields are drawn empty. */
   suspend fun crop(activity: Activity, frame: Rect): ByteArray? {

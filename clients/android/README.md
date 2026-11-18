@@ -115,7 +115,7 @@ To turn it off: `GrndwrkFeedback.collectsScreenshots = false` after `start()`.
 
 1. Tap **Comment**, then tap what you mean. A blue outline shows what was picked, and a bar at the bottom names it.
 2. Not quite right? The two arrows in the bar make the pick **smaller** or **bigger**. Or drag the **round handles** on the corners of the blue box to frame any area yourself: the bar then says **Your area** and what it holds.
-3. Tap **Comment** in the bar. A sheet opens with a picture of the spot: type, or tap **Speak** and say it (the language button picks which language to listen for), or tap **Write on the Mac** to write it in grndwrk in the browser.
+3. Tap **Comment** in the bar. A sheet opens with a picture of the spot: type, or tap **Speak** and say it (the language button picks which language to listen for), or tap **Write on the Mac** to write it in grndwrk in the browser. Speech is recognized on the phone when it can; when the language is not there for listening offline, it listens online instead and the sheet says so ("Listening online…"): what is said then goes to the phone's speech service, as on iOS with Apple's. When it cannot listen at all, it says why.
 
 Elements are read the way TalkBack reads them: Compose semantics (text, content description, role, test tag) and each View's accessibility details. A text field's contents are never sent, only its label.
 
