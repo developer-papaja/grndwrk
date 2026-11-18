@@ -17,6 +17,8 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.text.InputType
 import android.text.TextUtils
+import android.os.Build
+import android.view.WindowInsets
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -341,6 +343,31 @@ internal fun alert(
   Overlay.track(dialog)
   dialog.show()
   return dialog
+}
+
+/**
+ * A sheet with a text field, kept clear of the keyboard. From Android 15, an app that
+ * targets 35 or later is drawn edge to edge and SOFT_INPUT_ADJUST_RESIZE no longer moves a
+ * dialog, so its bottom padding follows what the keyboard and the bars take instead. With a
+ * hardware keyboard there is no keyboard on screen, only Gboard's small floating toolbar,
+ * which takes no room and floats about two thirds down, right over a sheet at the bottom:
+ * then the sheet goes to the top of the screen.
+ */
+internal fun Dialog.keepAboveKeyboard(context: Context, side: Int, gap: Int) {
+  val w = window ?: return
+  val hardware = context.resources.configuration.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
+  w.setGravity(if (hardware) Gravity.TOP else Gravity.BOTTOM)
+  if (Build.VERSION.SDK_INT < 30) {
+    w.decorView.setPadding(side, if (hardware) gap else 0, side, gap)
+    return
+  }
+  w.setDecorFitsSystemWindows(false)
+  w.decorView.setOnApplyWindowInsetsListener { v, insets ->
+    val ime = insets.getInsets(WindowInsets.Type.ime()).bottom
+    val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+    v.setPadding(side + bars.left, bars.top + (if (hardware) gap else 0), side + bars.right, maxOf(ime, bars.bottom) + gap)
+    WindowInsets.CONSUMED
+  }
 }
 
 /**

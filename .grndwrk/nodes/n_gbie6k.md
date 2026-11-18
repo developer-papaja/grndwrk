@@ -8,7 +8,8 @@ altitude: 3
 links: [n_lk8q2v, n_0fe7zi]
 status: open
 created: 2026-11-17
-built: 2026-11-17
+built: 2026-11-18
+summary: "Built: the sheet clears the keyboard toolbar, and Smaller and Bigger keep the bar in place. Real phone left."
 ---
 The same package as GrndwrkFeedback for iOS, for Android: a floating grndwrk button in debug builds, pick an element and comment with a picture, pairing on the Wi-Fi with signed requests, comments kept on the phone until sent, the comments list, testing fixes with Approve and Reject, pictures of each screen for the Sitemap, the relay with invites and QR codes, the team's store, and speaking a comment.
 

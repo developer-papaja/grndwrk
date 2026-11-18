@@ -191,8 +191,11 @@ internal object Inspector {
       if (abs(sa - sb) > 1) sa.compareTo(sb) else (if (a.role != "area" && b.role == "area") -1 else if (a.role == "area" && b.role != "area") 1 else 0)
     }
     val out = mutableListOf<Found>()
+    // The same box within 3dp on every side, as iOS's 3 points: in pixels, a card and the padding
+    // around it were two steps, and Smaller or Bigger seemed to do nothing.
+    val near = 3 * activity.resources.displayMetrics.density
     for (f in list) {
-      val i = out.indexOfFirst { same(it.frame, f.frame) }
+      val i = out.indexOfFirst { same(it.frame, f.frame, near) }
       if (i >= 0) {
         // The same box seen twice: keep what says most about it.
         out[i] = out[i].copy(identifier = out[i].identifier ?: f.identifier, label = out[i].label ?: f.label)
@@ -207,7 +210,7 @@ internal object Inspector {
     return out
   }
 
-  private fun same(a: Rect, b: Rect) = abs(a.left - b.left) < 3 && abs(a.top - b.top) < 3 && abs(a.right - b.right) < 3 && abs(a.bottom - b.bottom) < 3
+  private fun same(a: Rect, b: Rect, near: Float) = abs(a.left - b.left) < near && abs(a.top - b.top) < near && abs(a.right - b.right) < near && abs(a.bottom - b.bottom) < near
 
   private fun distance(x: Int, y: Int, r: Rect): Float {
     val dx = max(max(r.left - x, 0), x - r.right).toFloat()

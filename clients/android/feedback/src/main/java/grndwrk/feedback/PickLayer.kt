@@ -112,7 +112,8 @@ internal class PickLayer(context: Context, private val events: Events) : FrameLa
   }
 
   /** Show what is picked: the box, its handles, and the bar saying what it is. */
-  fun show(frame: RectF, words: String, canSmaller: Boolean, canBigger: Boolean) {
+  fun show(frame: RectF, words: String, canSmaller: Boolean, canBigger: Boolean, stepping: Boolean = false) {
+    val shown = box != null && bar.visibility == VISIBLE
     box = RectF(frame)
     hint.visibility = GONE
     barLabel.text = words
@@ -120,8 +121,9 @@ internal class PickLayer(context: Context, private val events: Events) : FrameLa
     smaller.alpha = if (canSmaller) 1f else 0.4f
     bigger.isEnabled = canBigger
     bigger.alpha = if (canBigger) 1f else 0.4f
-    // The bar sits at the top or the bottom, away from what is picked.
-    barBelow = frame.centerY() < height / 2f
+    // The bar sits at the top or the bottom, away from what is picked. While stepping with
+    // Smaller and Bigger it stays where it is, so the next tap finds Bigger again instead of the app.
+    if (!stepping || !shown) barBelow = frame.centerY() < height / 2f
     placeBar()
     bar.visibility = if (marking) GONE else VISIBLE
     bar.announceForAccessibility(words)

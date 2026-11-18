@@ -1025,11 +1025,15 @@ final class OverlayController: UIViewController {
     } else {
       chosen = max(0, min(candidates.count - 1, chosen + by))
     }
-    showChosen()
+    showChosen(stepping: true)
   }
 
-  private func showChosen() {
+  /** Which side the pick bar is on: chosen when something is picked, kept while stepping. */
+  private var barBelow = true
+
+  private func showChosen(stepping: Bool = false) {
     guard let found = picked else { return }
+    let shown = !bar.isHidden
     UIView.animate(withDuration: 0.15) {
       self.highlight.frame = found.frame.insetBy(dx: -3, dy: -3)
       self.placeHandles(hidden: false)
@@ -1040,13 +1044,14 @@ final class OverlayController: UIViewController {
     barLabel.text = custom != nil ? "Your area" + (words.map { " \u{201C}\($0)\u{201D}" } ?? "") : found.describe()
     smaller.isEnabled = custom != nil || chosen > 0
     bigger.isEnabled = custom != nil || chosen < candidates.count - 1
-    // The bar sits at the top or the bottom, away from what is picked.
+    // The bar sits at the top or the bottom, away from what is picked. While stepping with
+    // Smaller and Bigger it stays where it is, so the next tap finds Bigger again instead of the app.
     let width = view.bounds.width - 24
     // Two rows: what is picked, then the actions, each at least 44 points.
     let height = bar.systemLayoutSizeFitting(CGSize(width: view.bounds.width - 24, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
     let safe = view.safeAreaInsets
-    let below = found.frame.midY < view.bounds.midY
-    let y = below ? view.bounds.height - safe.bottom - height - 12 : safe.top + 8
+    if !stepping || !shown { barBelow = found.frame.midY < view.bounds.midY }
+    let y = barBelow ? view.bounds.height - safe.bottom - height - 12 : safe.top + 8
     bar.frame = CGRect(x: 12, y: y, width: width, height: height)
     bar.isHidden = false
     view.bringSubviewToFront(bar)

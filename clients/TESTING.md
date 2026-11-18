@@ -41,7 +41,7 @@ Do each on the Simulator and on the emulator. What should happen is the same on 
 
 1. **Connect.** The button reads grndwrk with a green dot.
 2. **Screen pictures.** A small camera blinks once per screen. The Sitemap's "not placed yet" shows them; `.grndwrk/shots/ios/` and `shots/android/` hold each with a `.json` of the texts and ids, never what a text field holds.
-3. **Comment.** Tap grndwrk, tap an element, try Smaller and Bigger, drag a corner handle for Your area, then Comment, write a line, Send. A card lands on the Feedback page with the element, the screen and a picture of the spot, without the button in it and with text fields drawn empty.
+3. **Comment.** Tap grndwrk, tap an element, try Smaller and Bigger (press Bigger until it greys out: the bar stays on its side and every press lands on it), drag a corner handle for Your area, then Comment, write a line, Send. With the emulator's hardware keyboard, Gboard shows only a small floating toolbar: the sheet sits at the top, Send uncovered; with the on-screen keyboard, the sheet sits above it. A card lands on the Feedback page with the element, the screen and a picture of the spot, without the button in it and with text fields drawn empty.
 4. **Write on the Mac.** The comment opens in the map with its title selected.
 5. **Speak** (a device, or a Simulator or emulator with a microphone): Speak fills the field; the language button changes the language.
 6. **Offline.** Stop the test map, comment, start it again: the comment goes by itself. Long press, Show comments, Save waiting comments as a file, then `grndwrk import-feedback <file>` adds it.

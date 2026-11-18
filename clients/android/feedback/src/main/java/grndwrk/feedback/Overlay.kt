@@ -835,16 +835,16 @@ internal object Overlay {
   private fun step(by: Int) {
     // From a framed area, the arrows go back to the picks under the finger.
     if (custom != null) custom = null else chosen = max(0, min(candidates.size - 1, chosen + by))
-    showChosen()
+    showChosen(stepping = true)
   }
 
-  private fun showChosen() {
+  private fun showChosen(stepping: Boolean = false) {
     val found = picked ?: return
     val l = layer ?: return
     // Two lines to show it: cut at a word, never in the middle of a " · ".
     val words = found.label?.take(90)?.replace(Regex("\\s*·\\s*$"), "")
     val text = if (custom != null) "Your area" + (words?.let { " “$it”" } ?: "") else found.describe()
-    l.show(toLayer(found.frame), text, custom != null || chosen > 0, custom != null || chosen < candidates.size - 1)
+    l.show(toLayer(found.frame), text, custom != null || chosen > 0, custom != null || chosen < candidates.size - 1, stepping)
     // The bar has its own way out and its own Comment: the button would only cover them.
     buttonRoot?.visibility = View.INVISIBLE
   }

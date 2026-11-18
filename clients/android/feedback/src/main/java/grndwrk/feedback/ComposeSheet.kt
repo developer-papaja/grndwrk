@@ -113,11 +113,10 @@ internal class ComposeSheet(
     dialog.setContentView(stack)
     dialog.window?.apply {
       setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-      setGravity(Gravity.BOTTOM)
       setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
       setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-      decorView.setPadding(a.dp(8), 0, a.dp(8), a.dp(8))
     }
+    dialog.keepAboveKeyboard(a, a.dp(8), a.dp(8))
     dialog.setOnCancelListener { finish() }
     Overlay.track(dialog) { finish() }
     changed()
