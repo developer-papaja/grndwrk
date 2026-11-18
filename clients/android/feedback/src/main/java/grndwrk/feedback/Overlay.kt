@@ -171,10 +171,12 @@ internal object Overlay {
     p.y = top
     buttonParams = p
     add(root, p)
-    // Grow or shrink to the left, keeping the button where the person put it.
-    root.addOnLayoutChangeListener { v, l, _, r, _, _, _, _, _ ->
+    // Grow or shrink to the left (the test part comes and goes), keeping the button where the person put it.
+    // Only when its width changed: moving the window lays it out again too, and snapping back then
+    // kept the button from being dragged sideways or tucked into a side.
+    root.addOnLayoutChangeListener { v, l, _, r, _, oldL, _, oldR, _ ->
       val bp = buttonParams ?: return@addOnLayoutChangeListener
-      if (stashed == null && r - l != 0 && bp.x + (r - l) != right) {
+      if (stashed == null && r - l != 0 && oldR - oldL != 0 && r - l != oldR - oldL && bp.x + (r - l) != right) {
         bp.x = right - (r - l)
         update(v, bp)
       }

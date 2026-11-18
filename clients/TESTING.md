@@ -39,7 +39,7 @@ The map is at `http://localhost:7790`, the phone listener at port 7792 with the 
 
 Do each on the Simulator and on the emulator. What should happen is the same on both.
 
-1. **Connect.** The button reads grndwrk with a green dot.
+1. **Connect.** The button reads grndwrk with a green dot. Drag it anywhere on the screen, sideways too: it stays where you let go. Flick or push it against a side: it tucks into a small tab at that height; tap the tab or pull it out and the button comes back where it was.
 2. **Screen pictures.** A small camera blinks once per screen. The Sitemap's "not placed yet" shows them; `.grndwrk/shots/ios/` and `shots/android/` hold each with a `.json` of the texts and ids, never what a text field holds.
 3. **Comment.** Tap grndwrk, tap an element, try Smaller and Bigger (press Bigger until it greys out: the bar stays on its side and every press lands on it), drag a corner handle for Your area, then Comment, write a line, Send. With the emulator's hardware keyboard, Gboard shows only a small floating toolbar: the sheet sits at the top, Send uncovered; with the on-screen keyboard, the sheet sits above it. A card lands on the Feedback page with the element, the screen and a picture of the spot, without the button in it and with text fields drawn empty.
 4. **Write on the Mac.** The comment opens in the map with its title selected.
