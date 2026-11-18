@@ -28,6 +28,8 @@ npm install -g grndwrk
 
 Run the same command again to update. Or skip installing and put `npx grndwrk@latest` in place of `grndwrk` in every command below (`npx grndwrk@latest init`), which always runs the newest version.
 
+**Staying up to date.** When the map starts, grndwrk asks npm at most once a day whether a newer version is out and says so; it only asks for the version, sends nothing about your project and never updates itself. `GRNDWRK_NO_UPDATE_CHECK=1` (or `NO_UPDATE_NOTIFIER=1`) turns this off; it is also off in CI. After updating, run `grndwrk init` again in each project: the rules and commands your agent follows are copies in the project. grndwrk says when they are older than the grndwrk you run, at start, on the Status page and in `grndwrk check`, so your agent hears it too.
+
 **Working on grndwrk itself?** Clone the repository, then `npm install`, `npm run build` and `npm link` in it: the `grndwrk` command then runs your copy.
 
 ## Start

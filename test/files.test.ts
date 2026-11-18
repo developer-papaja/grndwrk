@@ -1,4 +1,4 @@
-import { mkdtemp, rm, readdir } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -30,5 +30,14 @@ describe('images', () => {
     await saveImage(root, 'n_abcd', 'image/gif', Buffer.from('gif'))
     await removeFiles(root, 'n_abcd')
     expect(await readdir(join(root, 'files'))).toEqual([])
+  })
+
+  it('serves a picture a project tool named, but no name with a dot or a slash in it', async () => {
+    await mkdir(join(root, 'files', 'n_abcd'), { recursive: true })
+    await writeFile(join(root, 'files', 'n_abcd', 'uitest-1794934456928-step1-0.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    expect((await readImage(root, 'n_abcd', 'uitest-1794934456928-step1-0.png'))?.type).toBe('image/png')
+    expect(await readImage(root, 'n_abcd', 'a.b.png')).toBeNull()
+    expect(await readImage(root, 'n_abcd', '-x.png')).toBeNull()
+    expect(await readImage(root, 'n_abcd', '..png')).toBeNull()
   })
 })

@@ -39,6 +39,15 @@ Not only comments: when you build what any thought asks for, the person tests it
   - `[agent: <what you did>]` when you tried the step yourself and saw it work: in the Simulator, the emulator or a browser, with a screenshot or a UI tool (`[agent: checked in the emulator, screenshot]`).
   - `[outdated: <why>]` on a step that no longer fits, in a round written before: the screen it names changed or is gone.
   - No mark when you did not check it: it is the person's. Only mark what really ran and passed in this piece of work; a test that exists but did not run, or failed, gets no mark. The person still tests every step and can reject any of them, marked or not.
+- **Checked steps you wrote before?** Do not write the steps again: a new `To test:` list starts a new round of testing. Add a `who: claude` entry saying what you ran, then a `Checked:` line and one line per step you checked, its number and the mark, nothing else on the line:
+
+  ```
+  Checked:
+  1. [automated: KeysUITests.otherPlacesRow]
+  2. [agent: tried it in the Simulator, screenshot below]
+  ```
+
+  The map puts those marks on the steps of the latest `To test:` list. Write a new `To test:` list only when you changed what was built.
 - **Leave `status` open.** The thought shows as Ready to test; the person goes through the steps in the map (Works or No on each), then marks it done (settled) or sends it back. Never settle a thought you built, unless the person asked you to in this conversation.
 - **Work asked for in the chat, with no thought behind it,** gets a thought of its own (on the page and topic it belongs to), so it can be tested like the rest.
 - **Sent back:** `built:` is gone and the thread ends in "Tested on the Mac: does not work yet.", with what is still wrong quoted and maybe pictures below it (look at them). Read it, fix it, and mark it built again with new steps.
@@ -82,8 +91,9 @@ The person answers in the map, in the Inbox. A question that is only in the chat
 
 - Write only inside `.grndwrk/` when you work on the map, and change a file only when what it says changed.
 - Frontmatter is YAML: put a value in double quotes when it contains ": " or " #", or starts with a quote, a backtick or one of `{ } [ ] , # & * ! | > % @` (`purpose: "Explain our work: why and how"`). Always quote list items that hold more than plain words, since `{ } [ ] ,` break a `[ ]` list: `applies_to: ["/visits/{visit}", "app/Visits"]`, or a block list with one quoted item per line. Routes with parameters (`{id}`, `[id]`, `:id`) are the common case. A file whose frontmatter is not valid YAML is fixed that way, changing nothing else.
-- After writing map files, run `npx grndwrk check`: it reads every file in `.grndwrk/` as the map does and lists what does not read. Fix what it lists.
+- After writing map files, run `npx grndwrk check`: it reads every file in `.grndwrk/` as the map does and lists what does not read. Fix what it lists. When it ends in Update lines (these rules are older than grndwrk, or a newer grndwrk is out), tell the person once, in plain words; run `grndwrk init` only if they say so.
 - Add to a thread with a new file in `.grndwrk/threads/<id>/`, as above (`who: claude-asks` for a question), leaving the card's own file as it is.
+- **Keep a thought's `summary:` current.** When you add to a thought's thread or change it, set `summary:` in its frontmatter to one short sentence, for a person, on where it stands now (`summary: "Built: Other clinics opens a list of its own; your test of steps 1 and 3 is left."`), at most 120 characters. The map shows it at the top of the thought and in the Inbox. Rewrite it when it no longer fits; if the person changed it, keep their words unless they are out of date.
 - **Changed answers.** An entry file whose frontmatter says `replaces: <run>` is the person's newer answer: the entry `<run>.md` it names is crossed out and no longer counts. An answer with `after_claude: true` was changed after you had already replied to it. Unless a `who: claude` entry with `takes_up: <its run>` was written after its `changed:` time, take it up again: re-read it, redo what the old answer led you to do, and then add a `who: claude` entry with `takes_up: <its run>` in its frontmatter saying what you changed.
 - A reply or an answer can hold pictures (`![](../../files/<id>/<name>)` in an entry file): look at them, they are part of what the person said.
 - Never read `.grndwrk/lan-code` or `local.json`.

@@ -11,7 +11,9 @@ export const IMAGE_TYPES: Record<string, string> = {
 }
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
-const NAME = /^[0-9]{10,16}(-[0-9]+)?\.(png|jpg|gif|webp)$/
+// What the map names an upload (`1794934456930.png`), or a name a project's own tool chose (`uitest-step1.png`):
+// letters, digits, - and _ only, so never a dot or a slash that could climb out of the card's folder.
+const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,95}\.(png|jpg|gif|webp)$/
 
 export function filesDir(gwDir: string, nodeId: string): string {
   if (!isValidId(nodeId)) throw new Error(`Invalid id: ${nodeId}`)

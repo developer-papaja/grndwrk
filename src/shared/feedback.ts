@@ -87,6 +87,45 @@ export function stepCheck(step: string): { text: string; check: StepCheck | null
   return { text, check: { kind: m[1] as StepCheckKind, note: m[2].trim() } }
 }
 
+/**
+ * Marks for steps written in an earlier entry, without writing them again: a
+ * later agent entry with a `Checked:` line, then one line per step, its number
+ * and the mark (`1. [automated: KeysUITests.otherPlaces]`, or `Step 2: [agent:
+ * tried it in the Simulator]`). Read from the `Checked:` line to the first
+ * line that is no such mark.
+ */
+export function checkedSteps(text: string): Map<number, StepCheck> {
+  const marks = new Map<number, StepCheck>()
+  const m = /^[ \t]*checked[ \t]*:[ \t]*$/im.exec(text)
+  if (!m) return marks
+  for (const line of text.slice(m.index + m[0].length).split('\n').slice(0, 60)) {
+    if (!line.trim()) continue
+    const r = /^\s*(?:[-*]\s+)?(?:step\s+)?(\d{1,2})\s*[.):]?\s+(\[(?:automated|agent|outdated):[^[\]\n]{0,300}\])\s*$/i.exec(line)
+    if (!r) break
+    const check = stepCheck(`step ${r[2]}`).check
+    if (check && Number(r[1]) >= 1) marks.set(Number(r[1]) - 1, check)
+  }
+  return marks
+}
+
+/**
+ * How far the agent checked each step of entry `at`'s To test list: the marks
+ * on the steps themselves, then any a later agent entry of the same round gives
+ * in its `Checked:` section (the later one wins). A round ends at the next
+ * entry with steps or at a "Tested ..." entry.
+ */
+export function roundChecks(entries: { who: string; text: string }[], at: number): (StepCheck | null)[] {
+  const own = testSteps(entries[at]?.text ?? '')
+  const checks = [...own.checks]
+  for (const e of entries.slice(at + 1)) {
+    if (e.who === 'you' && /^\s*Tested\b/.test(e.text)) break
+    if (e.who !== 'claude') continue
+    if (testSteps(e.text).steps.length) break
+    for (const [n, c] of checkedSteps(e.text)) if (n < checks.length) checks[n] = c
+  }
+  return checks
+}
+
 /** One line on how far the steps were checked: "1 tested automatically, 1 checked by your agent, 1 left for you". Empty when none was. */
 export function checkSummary(checks: (StepCheck | null)[]): string {
   const count = (k: StepCheckKind) => checks.filter((c) => c?.kind === k).length

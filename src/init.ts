@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { lstat, readdir as readdirRaw, rename } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, writeFile } from './store/fs.js'
@@ -43,10 +44,29 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
   await writeOnce(join(gw, 'readiness', 'checklist.md'), await readFile(join(templates, 'checklist.md'), 'utf8'), say)
   await dropRetiredAreas(join(gw, 'readiness', 'checklist.md'), say)
 
-  const commandsSrc = join(PACKAGE_ROOT, 'commands')
   // What init installed, by hash, so a later run can tell an untouched file from an edited one.
   const manifestPath = join(gw, 'commands.json')
-  const installed: Record<string, string> = await readFile(manifestPath, 'utf8').then(
+  const installed = await readInstalled(gw)
+  const install = (dest: string, shipped: string, key: string, unknown: Unknown) => installManaged({ dest, shipped, key, unknown, installed, gw, say })
+  for (const f of await managedFiles(projectRoot)) await install(f.dest, f.shipped, f.key, f.unknown)
+  await addRootRules(projectRoot, installed, say, options.ask)
+  // Which grndwrk installed them, so a later grndwrk can say they are older than it (src/updates.ts).
+  installed[VERSION_KEY] = packageVersion()
+  await writeFile(manifestPath, JSON.stringify(installed, null, 2) + '\n')
+
+  console.log(`\n${nextSteps(start)}\n\nAfter updating grndwrk, run \`grndwrk init\` again to update the commands and skills.`)
+}
+
+/** The key in commands.json naming the grndwrk version that last installed the files. */
+export const VERSION_KEY = 'grndwrk'
+
+export function packageVersion(): string {
+  return String(JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).version ?? '')
+}
+
+/** What init installed, by hash (`.grndwrk/commands.json`), and which grndwrk did. */
+export async function readInstalled(gw: string): Promise<Record<string, string>> {
+  const installed: Record<string, string> = await readFile(join(gw, 'commands.json'), 'utf8').then(
     (t) => {
       try {
         const data = JSON.parse(t)
@@ -63,27 +83,32 @@ export async function init(projectRoot: string, options: { ask?: (question: stri
     installed['.grndwrk/CLAUDE.md'] ??= installed[OLD_KEY]
     delete installed[OLD_KEY]
   }
-  const install = (dest: string, shipped: string, key: string, unknown: Unknown) => installManaged({ dest, shipped, key, unknown, installed, gw, say })
+  return installed
+}
 
-  // The commands, for Claude Code (.claude/commands) and as skills for Codex,
-  // Cursor and other agents that read .agents/skills (/readiness, or $readiness in Codex).
+/**
+ * Every file init writes and keeps up to date, with what this grndwrk ships
+ * for it: the commands for Claude Code (.claude/commands) and as skills for
+ * Codex, Cursor and other agents that read .agents/skills (/readiness, or
+ * $readiness in Codex), and the rules for working with the map, read whenever
+ * an agent opens a file in .grndwrk/ (Claude Code reads CLAUDE.md there,
+ * Cursor AGENTS.md; Codex reads AGENTS.md only from the root down, so it gets
+ * them as a skill it picks up itself).
+ */
+export async function managedFiles(projectRoot: string): Promise<{ dest: string; shipped: string; key: string; unknown: Unknown }[]> {
+  const gw = join(projectRoot, GW_DIR)
+  const commandsSrc = join(PACKAGE_ROOT, 'commands')
+  const files: { dest: string; shipped: string; key: string; unknown: Unknown }[] = []
   for (const file of (await readdir(commandsSrc)).filter((f) => f.endsWith('.md')).sort()) {
     const shipped = await readFile(join(commandsSrc, file), 'utf8')
-    await install(join(projectRoot, '.claude', 'commands', file), shipped, file, 'backup')
     const name = file.replace(/\.md$/, '')
-    await install(join(projectRoot, '.agents', 'skills', name, 'SKILL.md'), asSkill(name, shipped, false), `.agents/skills/${name}`, 'keep')
+    files.push({ dest: join(projectRoot, '.claude', 'commands', file), shipped, key: file, unknown: 'backup' })
+    files.push({ dest: join(projectRoot, '.agents', 'skills', name, 'SKILL.md'), shipped: asSkill(name, shipped, false), key: `.agents/skills/${name}`, unknown: 'keep' })
   }
-  // The rules for working with the map, read whenever an agent opens a file in
-  // .grndwrk/: a comment fixed without /feedback still becomes ready to test.
-  // Claude Code reads CLAUDE.md there, Cursor AGENTS.md; Codex reads AGENTS.md
-  // only from the root down, so it gets them as a skill it picks up itself.
-  const rules = await readFile(join(templates, 'CLAUDE.md'), 'utf8')
-  for (const file of ['CLAUDE.md', 'AGENTS.md']) await install(join(gw, file), rules, `.grndwrk/${file}`, 'review')
-  await install(join(projectRoot, '.agents', 'skills', 'grndwrk-map', 'SKILL.md'), asSkill('grndwrk-map', rules, true), '.agents/skills/grndwrk-map', 'review')
-  await addRootRules(projectRoot, installed, say, options.ask)
-  await writeFile(manifestPath, JSON.stringify(installed, null, 2) + '\n')
-
-  console.log(`\n${nextSteps(start)}\n\nAfter updating grndwrk, run \`grndwrk init\` again to update the commands and skills.`)
+  const rules = await readFile(join(PACKAGE_ROOT, 'templates', 'CLAUDE.md'), 'utf8')
+  for (const file of ['CLAUDE.md', 'AGENTS.md']) files.push({ dest: join(gw, file), shipped: rules, key: `.grndwrk/${file}`, unknown: 'review' })
+  files.push({ dest: join(projectRoot, '.agents', 'skills', 'grndwrk-map', 'SKILL.md'), shipped: asSkill('grndwrk-map', rules, true), key: '.agents/skills/grndwrk-map', unknown: 'review' })
+  return files
 }
 
 const ROOT_START = '<!-- grndwrk: the map, for your agent. grndwrk init keeps this block up to date unless you change it. -->'
@@ -278,7 +303,7 @@ async function askInTerminal(question: string): Promise<string> {
   }
 }
 
-function hash(text: string): string {
+export function hash(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 16)
 }
 
@@ -338,7 +363,7 @@ async function firstLink(dir: string): Promise<string | null> {
 }
 
 /** What to do with a file init did not write, or one the person changed: back it up and replace it, keep it, or keep it and say it is worth a look. */
-type Unknown = 'backup' | 'keep' | 'review'
+export type Unknown = 'backup' | 'keep' | 'review'
 
 /**
  * Write a file grndwrk ships, unless the person changed it since init put it

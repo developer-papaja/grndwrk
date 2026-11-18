@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkSummary, stepCheck, testEntryIndex, testSteps } from '../src/shared/feedback.js'
+import { checkedSteps, checkSummary, roundChecks, stepCheck, testEntryIndex, testSteps } from '../src/shared/feedback.js'
 import { lastFix } from '../src/server/feedback.js'
 
 describe('testSteps', () => {
@@ -81,5 +81,39 @@ describe('how far the agent checked each step', () => {
     expect(stepCheck('[automated: x]').check).toBeNull()
     expect(stepCheck('Tap Save [automated: x] then more').check).toBeNull()
     expect(stepCheck('Tap Save [verified: x]').check).toBeNull()
+  })
+})
+
+describe('marks given later, by step number', () => {
+  const steps = { who: 'claude', text: 'Other places is a row now.\n\nTo test:\n1. Open Keys: an Other places row.\n2. Tap it: a screen of its own.\n3. Back returns to Keys.' }
+  const later = { who: 'claude', text: 'Ran the UI test on the Simulator.\n\nChecked:\n1. [automated: KeysUITests.otherPlaces]\nStep 3: [agent: tried it, screenshot]\n\n![](../../files/n_x/shot.png)' }
+
+  it('reads a Checked: section, number and mark per line, up to the first other line', () => {
+    const m = checkedSteps(later.text)
+    expect([...m.keys()]).toEqual([0, 2])
+    expect(m.get(0)).toEqual({ kind: 'automated', note: 'KeysUITests.otherPlaces' })
+    expect(checkedSteps('Checked:\n1. [automated: A]\nsomething else\n2. [agent: B]').size).toBe(1)
+    expect(checkedSteps('Checked:\n1. Tap [Agent] in the bar').size).toBe(0)
+    expect(checkedSteps('I checked: 1. [automated: A]').size).toBe(0)
+  })
+
+  it('puts them on the steps of the round, without starting a new one', () => {
+    const entries = [steps, later]
+    expect(testEntryIndex(entries)).toBe(0)
+    expect(roundChecks(entries, 0)).toEqual([{ kind: 'automated', note: 'KeysUITests.otherPlaces' }, null, { kind: 'agent', note: 'tried it, screenshot' }])
+  })
+
+  it('stops at a new round or a test result, and ignores numbers past the steps', () => {
+    expect(roundChecks([steps, { who: 'you', text: 'Tested on the Mac: does not work yet.' }, later], 0)).toEqual([null, null, null])
+    expect(roundChecks([steps, { who: 'claude', text: 'To test:\n1. Something new.' }, later], 0)).toEqual([null, null, null])
+    expect(roundChecks([steps, { who: 'claude', text: 'Checked:\n9. [automated: X]' }], 0)).toEqual([null, null, null])
+  })
+
+  it('reaches the phone and the web button through lastFix', () => {
+    const body = `Notes.\n\n## Thread\n\n**Claude** · 2026-11-17\n${steps.text}\n\n**Claude** · 2026-11-18\n${later.text}\n`
+    const f = lastFix(body)
+    expect(f.test).toContain('Open Keys')
+    expect(f.checks?.[0]?.kind).toBe('automated')
+    expect(f.checks?.[2]?.kind).toBe('agent')
   })
 })

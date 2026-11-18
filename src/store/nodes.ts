@@ -155,6 +155,11 @@ export class NodeStore {
         const { feature: _, ...rest } = next.extra
         next.extra = featureName(input.feature) ? { ...rest, feature: featureName(input.feature) } : rest
       }
+      if (input.summary !== undefined) {
+        const { summary: _, ...rest } = next.extra
+        const line = summaryLine(input.summary)
+        next.extra = line ? { ...rest, summary: line } : rest
+      }
       // Only the person marks a comment fixed, from the panel. A date sets it, empty takes it back.
       if (input.fixed !== undefined) {
         const { fixed: _, ...rest } = next.extra
@@ -336,4 +341,11 @@ export function newId(prefix: string): string {
   // branches pick the same id about once in 460,000 merges.
   for (let i = 0; i < 6; i++) s += ALPHABET[randomInt(ALPHABET.length)]
   return s
+}
+
+/** A summary as kept: one line, no control characters, at most 200 characters. */
+export function summaryLine(v: unknown): string {
+  if (typeof v !== 'string') return ''
+  const line = v.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return line.length > 200 ? line.slice(0, 197) + '...' : line
 }

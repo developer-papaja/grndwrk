@@ -405,7 +405,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
     if (url.pathname === '/api/project' && method === 'GET') {
       const { data, body, pages } = await readProject(ctx.gwDir)
       // folder: the project's folder name, shown when project.md has no name.
-      return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
+      // updates: what is behind, for a line on Status (src/updates.ts).
+      const { outdatedRules, knownLatest, isNewer } = await import('../updates.js')
+      const { packageVersion } = await import('../init.js')
+      const current = packageVersion()
+      const rules = await outdatedRules(dirname(ctx.gwDir)).catch(() => ({ files: [], installedBy: null }))
+      const latest = await knownLatest().catch(() => null)
+      const updates = { current, rules: rules.files.length, installed_by: rules.installedBy, latest: latest && isNewer(latest, current) ? latest : null }
+      return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)), updates })
     }
     if (url.pathname === '/api/project' && method === 'PATCH') {
       const input = (await readBody(req)) as { pages?: unknown; kickoff?: unknown; start?: unknown; purpose?: unknown; name?: unknown; initials?: unknown; color?: unknown }
@@ -453,7 +460,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
       }
       const { data, body, pages } = await readProject(ctx.gwDir)
       // folder: the project's folder name, shown when project.md has no name.
-      return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)) })
+      // updates: what is behind, for a line on Status (src/updates.ts).
+      const { outdatedRules, knownLatest, isNewer } = await import('../updates.js')
+      const { packageVersion } = await import('../init.js')
+      const current = packageVersion()
+      const rules = await outdatedRules(dirname(ctx.gwDir)).catch(() => ({ files: [], installedBy: null }))
+      const latest = await knownLatest().catch(() => null)
+      const updates = { current, rules: rules.files.length, installed_by: rules.installedBy, latest: latest && isNewer(latest, current) ? latest : null }
+      return send(res, 200, { ...data, body, pages, folder: basename(dirname(ctx.gwDir)), updates })
     }
     // Questions waiting for someone's answer, and whether the map may hold their names.
     if (url.pathname === '/api/waiting' && method === 'GET') return send(res, 200, await readWaiting(ctx.gwDir))

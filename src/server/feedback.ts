@@ -3,7 +3,7 @@ import { BadInput, type NodeStore } from '../store/nodes.js'
 import { removeFiles, saveImage } from '../store/files.js'
 import { listStories } from '../store/stories.js'
 import type { GNode, Story } from '../shared/types.js'
-import { checkSummary, feedbackState, isFeedback, testEntryIndex, testSteps } from '../shared/feedback.js'
+import { checkSummary, feedbackState, isFeedback, roundChecks, type StepCheck, testEntryIndex, testSteps } from '../shared/feedback.js'
 import { appendEntry, splitBody } from '../shared/thread.js'
 import { cleanText } from '../shared/text.js'
 import { suspiciousSigns } from '../shared/suspicious.js'
@@ -242,9 +242,9 @@ export async function feedbackStatus(
     if (n?.extra?.source !== 'app' || n.extra?.key !== key) return { id, gone: true as const }
     // The phone shows any status but open as a word next to the comment.
     const state = feedbackState(n) ?? 'incoming'
-    const { fix, test } = state === 'incoming' ? { fix: '', test: '' } : lastFix(n.body)
+    const { fix, test, checks } = state === 'incoming' ? { fix: '', test: '', checks: undefined } : lastFix(n.body)
     const status = { fixed: 'fixed', ready: 'ready to test', proposed: 'fix proposed', incoming: n.status }[state]
-    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test, ...stepsOf(test) } : {}), ...(state === 'ready' ? { round: fixRound(n.body), ...webPlace(n) } : {}) }
+    return { id, title: n.title, status, state, ...(fix ? { fix } : {}), ...(test ? { test, ...stepsOf(test, checks) } : {}), ...(state === 'ready' ? { round: fixRound(n.body), ...webPlace(n) } : {}) }
   })
 }
 
@@ -263,7 +263,7 @@ export function fixRound(body: string): string {
  * Claude's last word in a comment's thread: what it changed or proposes, and
  * after a "To test:" line, how to check it in the app. Plain text, capped.
  */
-export function lastFix(body: string): { fix: string; test: string } {
+export function lastFix(body: string): { fix: string; test: string; checks?: (StepCheck | null)[] } {
   const entries = splitBody(body).entries
   const said = entries.filter((e) => e.who === 'claude')
   // The steps to test may sit in an earlier entry, with a note after it: that entry is the fix to test.
@@ -272,7 +272,9 @@ export function lastFix(body: string): { fix: string; test: string } {
   const m = /^\s*(?:to test|how to test)\s*:\s*/im.exec(text)
   const cap = (t: string, n: number) => (t.length > n ? t.slice(0, n - 3) + '...' : t)
   if (!m) return { fix: cap(text.trim(), 1500), test: '' }
-  return { fix: cap(text.slice(0, m.index).trim(), 1500), test: cap(text.slice(m.index + m[0].length).trim(), 1500) }
+  // Marks a later entry of the round gave by step number (`Checked:`), with the steps' own.
+  const checks = at >= 0 ? roundChecks(entries, at) : undefined
+  return { fix: cap(text.slice(0, m.index).trim(), 1500), test: cap(text.slice(m.index + m[0].length).trim(), 1500), ...(checks?.some(Boolean) ? { checks } : {}) }
 }
 
 /** The steps to test, one each, for the phone's and the page's checklist; `test` stays for older ones. At most 20, each capped. */
@@ -281,10 +283,10 @@ export function lastFix(body: string): { fix: string; test: string } {
  * agent checked each (`checks`, null where it did not), and one line saying so (`check_summary`, only when any was).
  * A device that knows only `steps` shows them as before.
  */
-const stepsOf = (test: string) => {
+const stepsOf = (test: string, round?: (StepCheck | null)[]) => {
   const read = testSteps(`To test:\n${test}`)
   const steps = read.steps.slice(0, 20).map((s) => (s.length > 400 ? s.slice(0, 397) + '...' : s))
-  const checks = read.checks.slice(0, 20).map((c) => (c ? { kind: c.kind, note: c.note.slice(0, 200) } : null))
+  const checks = read.checks.map((c, n) => round?.[n] ?? c).slice(0, 20).map((c) => (c ? { kind: c.kind, note: c.note.slice(0, 200) } : null))
   const summary = checkSummary(checks)
   return { steps, ...(summary ? { checks, check_summary: summary } : {}) }
 }
@@ -420,7 +422,7 @@ export async function webTests(store: NodeStore, origin: string) {
   return (await store.list())
     .filter((n) => webTestOf(n, origin))
     .map((n) => {
-      const { fix, test } = lastFix(n.body)
+      const { fix, test, checks } = lastFix(n.body)
       const words = n.body.split(COMMENT_LABEL)[1]?.split('\n\n').find((b) => b.trim().startsWith('>')) ?? ''
       const seen = Array.isArray(n.extra?.seen_in) ? (n.extra.seen_in as unknown[]).map(String) : []
       return {
@@ -429,7 +431,7 @@ export async function webTests(store: NodeStore, origin: string) {
         text: words.split('\n').map((l) => l.replace(/^>\s?/, '')).join('\n').trim() || n.title,
         fix,
         test,
-        ...stepsOf(test),
+        ...stepsOf(test, checks),
         path: addressOf(n)!.pathname,
         selector: /^Selector: `(.+)`$/m.exec(n.body)?.[1] ?? '',
         label: seen[1] ?? '',

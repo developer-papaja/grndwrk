@@ -1,4 +1,5 @@
 import Alpine from '@alpinejs/csp'
+import { checkedSteps } from '../../src/shared/feedback'
 import { state } from './state'
 
 /**
@@ -193,9 +194,39 @@ Alpine.data('projectCard', () => ({
  */
 Alpine.data('entrySteps', () => ({
   get steps() {
-    const e = (this as unknown as { e: { who: string; text: string } }).e
-    return e.who === 'claude' ? state.testSteps(e.text) : { fix: '', steps: [], checks: [] }
+    const { e, i } = this as unknown as { e: { who: string; text: string }; i: number }
+    if (e.who !== 'claude') return { fix: '', steps: [], checks: [] }
+    const read = state.testSteps(e.text)
+    // A later entry of the round may mark these steps by number (`Checked:`), without writing them again.
+    return read.steps.length ? { ...read, checks: state.roundChecks(i) } : read
   },
+  /**
+   * An agent entry that only reports a check of steps written before (`Checked:`, no
+   * steps of its own): shown folded, its first paragraph, which steps it checked,
+   * and its pictures small with their step, until opened.
+   */
+  get report(): { lead: string; steps: string; pictures: { pic: ReturnType<typeof state.entryPictures>[number]; label: string }[] } | null {
+    const { e } = this as unknown as { e: { who: string; text: string } }
+    if (e.who !== 'claude' || this.steps.steps.length) return null
+    const marks = checkedSteps(state.entryWords(e.text))
+    if (!marks.size) return null
+    const nums = [...marks.keys()].sort((a, b) => a - b).map((n) => String(n + 1))
+    const list = nums.length > 1 ? `${nums.slice(0, -1).join(', ')} and ${nums[nums.length - 1]}` : nums[0]
+    // Each picture with the "Step N" line above it, when there is one.
+    const labels: string[] = []
+    let label = ''
+    for (const line of e.text.split('\n')) {
+      const step = /^\s*Step (\d{1,2})\s*:?\s*$/i.exec(line)
+      if (step) label = `Step ${step[1]}`
+      else if (/^\s*!\[[^\]]*\]\([^)]*\)\s*$/.test(line)) labels.push(label)
+      else if (line.trim()) label = ''
+    }
+    const pictures = state.entryPictures(e.text).map((pic, n) => ({ pic, label: labels[n] ?? '' }))
+    const lead = state.entryWords(e.text).split(/\n\s*\n/)[0].trim()
+    return { lead, steps: `Checked step${nums.length > 1 ? 's' : ''} ${list} of the steps to test`, pictures }
+  },
+  /** A folded report opened in full. */
+  reportOpen: false,
   /** How far the agent checked step n itself, in words for its tag: empty when it did not. */
   checkLabel(n: number): string {
     const c = this.steps.checks[n]

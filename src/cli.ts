@@ -116,6 +116,10 @@ async function main() {
     const { checkMap, formatFindings } = await import('./check.js')
     const findings = await checkMap(join(root, GW_DIR))
     console.log(formatFindings(findings))
+    // Said to the agent that runs this, so it can tell the person; never a reason to fail.
+    const { outdatedRules, rulesNotice, knownLatest, npmNotice } = await import('./updates.js')
+    const notes = [rulesNotice(await outdatedRules(root)), npmNotice(await knownLatest())].filter(Boolean)
+    if (notes.length) console.log(`\n${notes.map((n) => `Update: ${n}`).join('\n')}\nTell the person; run grndwrk init only if they say so.`)
     return void process.exit(findings.length ? 1 : 0)
   }
 
@@ -159,6 +163,9 @@ async function main() {
     // that loads the Comment button keeps pointing at the right grndwrk.
     // A new project gets ports no other project on this Mac keeps, running or not.
     const gwDir = join(root, GW_DIR)
+    // Asked meanwhile, said once the map runs. At most once a day; off with GRNDWRK_NO_UPDATE_CHECK=1.
+    const updates = await import('./updates.js')
+    const latest = updates.latestVersion().catch(() => null)
     const { rememberedPort, rememberPort } = await import('./store/local.js')
     const { readPorts, keepPort, clashesWith, freePort } = await import('./store/ports.js')
     const { answers } = await import('./server/index.js')
@@ -210,7 +217,13 @@ async function main() {
       console.log('  Only comments can be sent from there. The map stays on this Mac.')
     }
     if (relayUrl) console.log(`Colleagues' phones send comments through the relay at ${relayUrl}. Invite them in the map: the globe at the bottom of the rail.`)
+    const behind = updates.rulesNotice(await updates.outdatedRules(root).catch(() => ({ files: [], installedBy: null })))
+    if (behind) console.log(behind)
     console.log('Press Ctrl+C to stop.')
+    void latest.then((v) => {
+      const n = updates.npmNotice(v)
+      if (n) console.log(n)
+    })
     // Whether a map tab is open, kept for the next start: a tab in the
     // background reconnects only when it is looked at again, so it would not
     // be seen in time, and a new tab would open every time.

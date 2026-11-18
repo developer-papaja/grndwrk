@@ -10,7 +10,7 @@ import { answerText, appendAnswer, appendEntry, openQuestions, questionOptions, 
 import { parseAreas, type Area } from '../../src/shared/report'
 import { changeEntry, undoEntry, type ThreadOwner } from './api'
 import { splitAnswer } from '../../src/shared/thread'
-import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, testEntryIndex, testSteps, type FeedbackState } from '../../src/shared/feedback'
+import { FEEDBACK_STATES, feedbackState, isFeedback, isFixed, roundChecks, testEntryIndex, testSteps, type FeedbackState } from '../../src/shared/feedback'
 import { criteriaOf, storyStatusLabel, tickCriterion, type Criterion } from '../../src/shared/story'
 import { isNewComment, isRelayComment, needsSeen } from '../../src/shared/unseen'
 import { markSeen as postSeen } from './api'
@@ -1102,7 +1102,7 @@ export const state = Alpine.reactive({
    * like a screen's picture, so they open large the same way.
    */
   entryPictures(text: string): Shot[] {
-    const pasted = [...text.matchAll(/!\[[^\]]*\]\((?:\.\.\/)+files\/([A-Za-z0-9_-]{1,64})\/([0-9]{10,16}(?:-[0-9]+)?\.(?:png|jpg|gif|webp))\)/g)].map(
+    const pasted = [...text.matchAll(/!\[[^\]]*\]\((?:\.\.\/)+files\/([A-Za-z0-9_-]{1,64})\/([A-Za-z0-9][A-Za-z0-9_-]{0,95}\.(?:png|jpg|gif|webp))\)/g)].map(
       (m): Shot => ({ platform: 'web', key: 'Picture', file: `files/${m[1]}/${m[2]}`, url: `/files/${m[1]}/${m[2]}`, taken: '', pasted: true }),
     )
     return [...pasted, ...this.entryShots(text)]
@@ -1332,6 +1332,10 @@ export const state = Alpine.reactive({
   testSteps(text: string): ReturnType<typeof testSteps> {
     return testSteps(this.entryWords(text))
   },
+  /** How far the agent checked each step of thread entry i: its own marks, and a later entry's `Checked:` ones. */
+  roundChecks(i: number): ReturnType<typeof roundChecks> {
+    return roundChecks(this.thread.map((e) => ({ who: e.who, text: this.entryWords(e.text) })), i)
+  },
   /** The entry whose steps can be tested now, on something ready to test: Claude's latest entry with steps, even with a note after it. */
   get testableEntry(): number {
     if (!this.selected || progressOfNode(this.selected) !== 'ready') return -1
@@ -1537,6 +1541,42 @@ export const state = Alpine.reactive({
   get thread(): Entry[] {
     return splitBody(this.draft.body).entries
   },
+  /**
+   * Where the open thought's thread starts to matter now: the latest To test round
+   * or the first open question, whichever comes first, else the last two entries.
+   * What comes before folds into "Show N earlier entries" (only when that is two or more).
+   */
+  get threadFoldAt(): number {
+    const t = this.thread
+    const starts: number[] = []
+    for (let i = t.length - 1; i >= 0; i--) {
+      if (t[i].who === 'claude' && this.testSteps(t[i].text).steps.length) {
+        starts.push(i)
+        break
+      }
+    }
+    const open = t.findIndex((e) => e.open)
+    if (open >= 0) starts.push(open)
+    const at = starts.length ? Math.min(...starts) : Math.max(0, t.length - 2)
+    return at >= 2 && this.threadUnfolded !== this.selectedId ? at : 0
+  },
+  /** The thought whose earlier entries were unfolded; another thought folds again. */
+  threadUnfolded: '',
+  /** One short sentence on where a thought stands, for a person (`summary:`), or nothing. */
+  summaryOf(n: GNode | null): string {
+    const v = n?.extra?.summary
+    return typeof v === 'string' ? v : ''
+  },
+  /** The summary changed in the panel; empty takes it away. */
+  async setSummary(text: string) {
+    const id = this.selectedId
+    if (!id || text.trim() === this.summaryOf(this.selected)) return
+    try {
+      this.upsert(await updateNode(id, { summary: text }))
+    } catch (err) {
+      this.flash(errorText(err))
+    }
+  },
   /** The questions in one entry of a thread, each with its options and whether it is answered. */
   entryQuestions(body: string, entry: number): Question[] {
     return questions(body).filter((q) => q.entry === entry)
@@ -1584,6 +1624,18 @@ export const state = Alpine.reactive({
         .filter((n) => openQuestions(n.body) > 0)
         .map((n) => n.id)
     })
+  },
+  /** What is behind, from /api/project's updates: the rules init copied into the project, and grndwrk itself (src/updates.ts). */
+  get updateLines(): { id: string; text: string; command: string }[] {
+    const u = (this.project.updates ?? {}) as { current?: unknown; rules?: unknown; installed_by?: unknown; latest?: unknown }
+    const current = typeof u.current === 'string' ? u.current : ''
+    const lines: { id: string; text: string; command: string }[] = []
+    if (typeof u.rules === 'number' && u.rules > 0) {
+      const by = typeof u.installed_by === 'string' && u.installed_by !== current ? `, installed by grndwrk ${u.installed_by}` : ''
+      lines.push({ id: 'rules', text: `Your agent works by rules older than this grndwrk (${current}${by}): ${u.rules} file${u.rules > 1 ? 's' : ''}. Run grndwrk init in this project to update them; files you changed are kept.`, command: 'grndwrk init' })
+    }
+    if (typeof u.latest === 'string' && u.latest) lines.push({ id: 'npm', text: `grndwrk ${u.latest} is out (this is ${current}). Update it, then run grndwrk init in each project.`, command: 'npm install -g grndwrk' })
+    return lines
   },
   /** The project's name for the rail: project.md's name, or the folder's. */
   get projectLabel(): string {
@@ -2597,12 +2649,45 @@ export const state = Alpine.reactive({
   get guessCount(): number {
     return Object.values(this.nodes).filter((n) => n.extra?.source === 'inferred' && n.status !== 'settled').length
   },
-  /** A prompt for Claude, shown in full before it is copied; it can be changed there first. */
+  /**
+   * A prompt for the agent, copied at once (people often read the task in the agent
+   * anyway); the message says so with Show, which opens it in full to read or change
+   * and copy again.
+   */
   prompt: null as { title: string; text: string } | null,
-  showPrompt(title: string, text: string) {
+  copiedPrompt: null as { title: string; text: string; note: string } | null,
+  async showPrompt(title: string, text: string) {
     if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      const note = `Copied: ${title.length > 50 ? title.slice(0, 47) + '...' : title}`
+      this.copiedPrompt = { title, text, note }
+      this.flash(note)
+    } catch {
+      // No clipboard (a page not in focus, or refused): show it to copy by hand.
+      this.openPrompt(title, text)
+    }
+  },
+  /** The prompt in full, to read or change before copying it. */
+  openPrompt(title: string, text: string) {
     this.prompt = { title, text }
     focusWhenVisible('prompt-text')
+  },
+  /** Show in the Copied message: the prompt just copied, in full. */
+  showCopied() {
+    if (this.copiedPrompt) this.openPrompt(this.copiedPrompt.title, this.copiedPrompt.text)
+    this.note = ''
+  },
+  /** How many focus items have a prompt to copy. */
+  focusPromptCount(): number {
+    return this.focusItems.filter((f) => f.prompt).length
+  },
+  /** Copy all in the Focus box: every item's prompt, in order, as one. */
+  copyAllFocus() {
+    const items = this.focusItems.filter((f) => f.prompt)
+    if (!items.length) return
+    const text = items.map((f, i) => `${i + 1}. ${f.title}\n\n${f.prompt}`).join('\n\n---\n\n')
+    return this.showPrompt(`${items.length} focus items`, `Work through these, in this order. Tell me before you move on to the next one.\n\n${text}`)
   },
   async copyPrompt() {
     if (!this.prompt) return

@@ -155,4 +155,14 @@ describe('Guiding principles', () => {
     await store.update(n.id, { title: 'A better thought' })
     expect(await file(n.id)).not.toContain('changed:')
   })
+
+  it('keeps a summary as one line, and takes it away when empty', async () => {
+    const n = (await store.create({ title: 'Other clinics opens a list' })).upserted[0]
+    const set = (await store.update(n.id, { summary: '  Built: steps 1 and 3\nleft for you.  ' })).upserted[0]
+    expect(set.extra.summary).toBe('Built: steps 1 and 3 left for you.')
+    expect(await file(n.id)).toContain('summary: "Built: steps 1 and 3 left for you."')
+    expect((await store.update(n.id, { summary: 'x'.repeat(300) })).upserted[0].extra.summary).toHaveLength(200)
+    expect((await store.update(n.id, { summary: '' })).upserted[0].extra.summary).toBeUndefined()
+    expect(await file(n.id)).not.toContain('summary')
+  })
 })

@@ -39,6 +39,8 @@ export interface GNode {
 
 /** Fields a client may send when creating or updating a node. */
 export type NodeInput = Partial<Pick<GNode, 'type' | 'title' | 'topic' | 'page' | 'altitude' | 'links' | 'status' | 'body'>> & {
+  /** One short sentence on where the thought stands, for a person (`summary:`). Written by the agent, changed in the panel; empty removes it. */
+  summary?: string
   /** On create: the id of the gap this thought answers. Kept as `answers:` in the file. */
   answers?: string
   /** The screen this thought is about, a p_ id from screens/. Empty removes it. Kept as `screen:` in the file. */

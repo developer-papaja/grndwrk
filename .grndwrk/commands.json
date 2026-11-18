@@ -5,8 +5,8 @@
   ".agents/skills/challenge": "e955b037447af850",
   "decisions.md": "f315761b259a438c",
   ".agents/skills/decisions": "9ebe6ebdb45b3c7e",
-  "feedback.md": "e436336253d08c70",
-  ".agents/skills/feedback": "9fa4abc95bffc214",
+  "feedback.md": "d4860e22c6743610",
+  ".agents/skills/feedback": "161ae7fea32b0492",
   "import.md": "e79cd5fb2a1991de",
   ".agents/skills/import": "3338376650ae885a",
   "personas.md": "29b8d752066dabf4",
@@ -21,8 +21,9 @@
   ".agents/skills/survey": "598a77400b302067",
   "topics.md": "2bf77135f85715a3",
   ".agents/skills/topics": "2ff521a2fcec2566",
-  ".grndwrk/CLAUDE.md": "684f37bd9a28ff2d",
-  ".grndwrk/AGENTS.md": "684f37bd9a28ff2d",
-  ".agents/skills/grndwrk-map": "e61e92dfad5d5870",
-  "root:CLAUDE.md": "8d7986fc7d98f1a1"
+  ".grndwrk/CLAUDE.md": "910909b702e8f1ca",
+  ".grndwrk/AGENTS.md": "910909b702e8f1ca",
+  ".agents/skills/grndwrk-map": "ed374227c9581c9a",
+  "root:CLAUDE.md": "8d7986fc7d98f1a1",
+  "grndwrk": "0.4.2"
 }

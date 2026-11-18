@@ -75,6 +75,8 @@ To test:
 
 End a step with `[automated: <test>]` when an automated test covering it ran and passed after the change, `[agent: <how>]` when you tried it yourself in the Simulator, emulator or a browser and saw it work, and `[outdated: <why>]` on a step from an earlier round that no longer fits. A step you did not check has no mark; it is the person's. Never mark a test that did not run or did not pass.
 
+To mark steps of a fix you already wrote, after testing it, do not write the steps again (that starts a new round): add an entry with a `Checked:` line, then one line per step, its number and the mark (`1. [automated: BookingUITests.bookButtonFillsCard]`).
+
 It is ready to test, not fixed, until the person approves it.
 
 **When you cannot tell what the comment means,** do not guess and do not set `proposed:`. Ask in its thread instead, with options when there are sensible ones:
