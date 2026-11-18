@@ -275,7 +275,7 @@ export const state = Alpine.reactive({
   },
   /** What All holds with the filters in view, so it adds up with the pages and the topics under it. */
   get shownCount() {
-    return cached('shownCount', () => this.nodesMatching('', Object.values(this.nodes).filter((n) => !isPrinciple(n) && this.inScope(n))).length)
+    return cached('shownCount', () => this.nodesMatching('', Object.values(this.nodes as Record<string, GNode>).filter((n) => !isPrinciple(n) && this.inScope(n))).length)
   },
   /** Pages in the person's order, plus any that nodes use. */
   get pageNames(): string[] {
@@ -3232,7 +3232,7 @@ export const state = Alpine.reactive({
       key: `thread:${kind}:${id}:${q.entry}:${q.index}`,
       kind, id, about: '', where: '',
       question: this.entryWords(q.question), options: q.options, text: splitBody(body).entries[q.entry]?.text ?? '', date: q.date,
-      entry: q.entry, index: q.index, of: 1,
+      entry: q.entry, index: q.index, of: 1, asked: 0,
     }
   },
   /** Answered from a panel: the question waits for no one any more. */
